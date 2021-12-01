@@ -1,0 +1,12 @@
+env_params:
+  padlen: 11
+  x_lims:
+  - -5.0
+  - 5.0
+  y_lims:
+  - -5.0
+  - 5.0
+im_size: 128
+num_envs: 2
+probs_per_env: 1
+map_types: [tarpit]

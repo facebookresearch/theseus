@@ -1,0 +1,42 @@
+seed: 0
+device: cuda:0
+verbose: true
+plot_trajectories: true
+map_type: tarpit
+batch_size: 2
+img_size: 128
+num_time_steps: 100
+train_data_size: 2
+num_images: 1000
+
+do_learning: true
+num_epochs: 20
+shuffle_each_epoch: false
+model_type: initial_trajectory_model
+model_lr: 0.01
+model_wd: 0
+amsgrad: false
+use_mean_objective_as_loss: true
+include_imitation_loss: true
+clip_grad_norm: 0
+obj_loss_weight: 0.0005
+gp_loss_weight: 0
+collision_loss_weight: 0
+
+total_time: 10
+robot_radius: 0.4
+gp_params:
+  Qc_inv: [[1.0, 0.0], [0.0, 1.0]]
+obs_params:
+  weight: 100.0
+  safety_dist: 0.4
+optim_params:
+  method: levenberg_marquardt
+  max_iters: 2
+  step_size: 0.3
+  kwargs:
+    damping: 0.1
+
+hydra:
+  run: 
+    dir: examples/outputs

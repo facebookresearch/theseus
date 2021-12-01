@@ -1,0 +1,14 @@
+.idea
+.DS_Store
+.vscode
+*.code-workspace
+build/
+.mypy_cache/
+.pytest_cache/
+__pycache__/
+*.egg-info/
+expts/
+*.ipynb_checkpoints
+examples/*.ipynb_checkpoints
+outputs/
+examples/outputs/

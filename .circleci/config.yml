@@ -1,0 +1,109 @@
+version: 2.1
+
+
+# -------------------------------------------------------------------------------------
+# Executors
+# -------------------------------------------------------------------------------------
+executors:
+  gpu:
+    environment:
+      CUDA_VERSION: "10.2"
+      PYTHONUNBUFFERED: 1
+    machine:
+      image: ubuntu-1604:201903-01
+    resource_class: gpu.medium # tesla m60
+
+# -------------------------------------------------------------------------------------
+# Re-usable commands
+# -------------------------------------------------------------------------------------
+install_nox: &install_nox
+  - run:
+      name: "Preparing environment"
+      command: |
+        sudo apt-get install -y expect
+        sudo pip install nox==2020.8.22
+
+install_suitesparse: &install_suitesparse
+  - run:
+      name: "Preparing environment"
+      command: |
+        sudo apt-get install -y libsuitesparse-dev
+
+setupcuda: &setupcuda
+  - run:
+      name: Setup CUDA
+      working_directory: ~/
+      command: |
+        # download and install nvidia drivers, cuda, etc
+        wget --quiet --no-clobber -P ~/nvidia-downloads 'https://s3.amazonaws.com/ossci-linux/nvidia_driver/NVIDIA-Linux-x86_64-440.82.run'
+        time sudo /bin/bash ~/nvidia-downloads/NVIDIA-Linux-x86_64-440.82.run --no-drm -q --ui=none
+        echo "Done installing NVIDIA drivers."
+        pyenv versions
+        nvidia-smi
+        pyenv global 3.7.0
+          
+# -------------------------------------------------------------------------------------
+# Jobs
+# -------------------------------------------------------------------------------------
+jobs:
+  py37_linux:
+    docker:
+      - image: circleci/python:3.7
+    steps:
+      - checkout
+      - <<: *install_suitesparse
+      - <<: *install_nox
+      - run:
+          name: "Testing theseus"
+          command: |
+              export NOX_PYTHON_VERSIONS=3.7
+              pip install nox==2020.8.22
+              nox
+
+  py38_linux:
+    docker:
+      - image: circleci/python:3.8
+    steps:
+      - checkout
+      - <<: *install_suitesparse
+      - <<: *install_nox
+      - run:
+          name: "Testing theseus"
+          command: |
+              export NOX_PYTHON_VERSIONS=3.8
+              pip install nox==2020.8.22
+              nox
+
+  unittests_gpu17:
+    executor: gpu
+    steps:
+      - checkout
+      - <<: *install_suitesparse
+      - <<: *setupcuda
+      - run:
+          name: Installs basic dependencies
+          command: |
+            pyenv versions
+            pyenv global 3.7.0
+            python -m venv ~/theseus_venv
+            echo ". ~/theseus_venv/bin/activate" >> $BASH_ENV
+            . ~/theseus_venv/bin/activate
+            pip install --progress-bar off --upgrade pip
+            pip install --progress-bar off --upgrade setuptools
+            pip install --progress-bar off torch==1.9.0+cu102 torchvision torchaudio -f https://download.pytorch.org/whl/torch_stable.html
+            python -c 'import torch; print("Torch version:", torch.__version__); assert torch.cuda.is_available()'
+            pip install --progress-bar off -e .
+          install_cuda: true
+      - run:
+          name: Run GPU tests
+          command: |
+            pytest theseus/tests/test_theseus_layer.py -s
+
+
+workflows:
+  version: 2
+  build:
+    jobs:
+      - py37_linux
+      - py38_linux
+      - unittests_gpu17

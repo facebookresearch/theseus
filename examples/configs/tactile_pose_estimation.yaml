@@ -1,0 +1,40 @@
+seed: 0
+
+dataset_name: "rectangle-pushing-corners-keypoints"
+sdf_name: "rect"
+
+episode: 0
+max_steps: 100
+
+# 0: disc, 1: rect-edges, 2: rect-corners, 3: ellip
+class_label: 2
+num_classes: 4
+
+shape:
+  rect_len_x: 0.2363
+  rect_len_y: 0.1579
+
+tactile_cost:
+    # window size (min, max, step) over which to add pairwise costs
+    min_win_mf: 10
+    max_win_mf: 40
+    step_win_mf: 5
+
+    init_pretrained_model: True
+
+train:
+  # options: "weights_only" or "weights_and_measurement_nn"
+  mode: "weights_only"
+
+  batch_size: 1
+  num_batches: 1
+
+  num_epochs: 100
+  eps_tracking_loss: 1e-5
+
+options:
+  vis_traj: True
+
+hydra:
+  run: 
+    dir: examples/outputs

@@ -37,7 +37,7 @@ class SO2(LieGroup):
 
     @staticmethod
     def _init_data() -> torch.Tensor:  # type: ignore
-        return torch.empty(1, 2)  # cos and sin
+        return torch.tensor([1.0, 0.0]).view(1, 2)
 
     def update_from_angle(self, theta: torch.Tensor):
         self.update(torch.cat([theta.cos(), theta.sin()], dim=1))

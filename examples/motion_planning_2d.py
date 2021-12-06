@@ -25,7 +25,7 @@ import theseus.utils.examples as theg
 # From the root project folder do:
 #   mkdir expts
 #   cd expts
-#   wget https://dl.fbaipublicfiles.com/theseus/motion_planning_dataset.tar.gz
+#   wget https://dl.fbaipublicfiles.com/theseus/motion_planning_data.tar.gz
 #   tar -xzvf motion_planning_data.tar.gz
 #   cd ..
 #   python examples/motion_planning_2d.py

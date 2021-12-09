@@ -6,6 +6,8 @@
 
 from pathlib import Path
 import setuptools
+import os
+from torch.utils import cpp_extension as torch_cpp_ext
 
 
 def parse_requirements_file(path):
@@ -24,6 +26,20 @@ version = (root_dir / "version.txt").read_text().strip()
 
 with open("README.md", "r") as fh:
     long_description = fh.read()
+
+if "CUDA_HOME" in os.environ:
+    ext_modules = [
+        torch_cpp_ext.CUDAExtension(
+            name="theseus.extlib.cusolver_lu_solver",
+            sources=[
+                "theseus/extlib/cusolver_lu_solver.cpp",
+                "theseus/extlib/cusolver_sp_defs.cpp",
+            ],
+            libraries=["cusolver"],
+        ),
+    ]
+else:
+    ext_modules = []
 
 setuptools.setup(
     name="theseus",
@@ -44,4 +60,6 @@ setuptools.setup(
     python_requires=">=3.7",
     install_requires=reqs_main,
     extras_require={"dev": reqs_main + reqs_dev},
+    cmdclass={"build_ext": torch_cpp_ext.BuildExtension},
+    ext_modules=ext_modules,
 )

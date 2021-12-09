@@ -71,15 +71,15 @@ setup_cuda11_libs: &setup_cuda11_libs
       working_directory: ~/
       command: |
         # download and install nvidia drivers, cuda, etc
-        wget --quiet --no-clobber -P ~/nvidia-downloads https://developer.download.nvidia.com/compute/cuda/11.4.2/local_installers/cuda_11.4.2_470.57.02_linux.run
-        time sudo /bin/bash nvidia-downloads/cuda_11.4.2_470.57.02_linux.run --no-drm --silent --driver --toolkit
+        wget --quiet --no-clobber -P ~/nvidia-downloads https://developer.download.nvidia.com/compute/cuda/11.3.0/local_installers/cuda_11.3.0_465.19.01_linux.run
+        time sudo /bin/bash nvidia-downloads/cuda_11.3.0_465.19.01_linux.run --no-drm --silent --driver --toolkit
         sudo ldconfig /usr/local/cuda/lib64
         echo "Done installing NVIDIA drivers and CUDA libraries."
         nvidia-smi
 
-setup_project: &setup_project
+setup_environment: &setup_environment
   - run:
-      name: Setup project dependencies
+      name: Setup virtualenv and tools
       working_directory: ~/project
       command: |
         virtualenv ~/theseus_venv -p /usr/bin/python3.7
@@ -87,9 +87,36 @@ setup_project: &setup_project
         . ~/theseus_venv/bin/activate
         pip install --progress-bar off --upgrade pip
         pip install --progress-bar off --upgrade setuptools
-        pip install --progress-bar off torch==1.9.0+cu102 torchvision torchaudio -f https://download.pytorch.org/whl/torch_stable.html
+
+install_torch_cuda10: &install_torch_cuda10
+  - run:
+      name: Install Torch for cuda10
+      working_directory: ~/project
+      command: |
+        pip install --progress-bar off torch==1.10.0+cu102 torchvision==1.10.0+cu102 torchaudio==1.10.0+cu102 -f https://download.pytorch.org/whl/cu102/torch_stable.html
         python -c 'import torch; print("Torch version:", torch.__version__); assert torch.cuda.is_available()'
+
+install_torch_cuda11: &install_torch_cuda11
+  - run:
+      name: Install Torch for cuda11
+      working_directory: ~/project
+      command: |
+        pip install --progress-bar off torch==1.10.0+cu113 torchvision==1.10.0+cu113 torchaudio==1.10.0+cu113 -f https://download.pytorch.org/whl/cu113/torch_stable.html
+        python -c 'import torch; print("Torch version:", torch.__version__); assert torch.cuda.is_available()'
+
+setup_project: &setup_project
+  - run:
+      name: Setting up project
+      working_directory: ~/project
+      command: |
         pip install --progress-bar off -e .
+
+run_tests: &run_tests
+  - run:
+      name: Running tests
+      working_directory: ~/project
+      command: |
+        pytest -s theseus/tests/test_theseus_layer.py
 
 # -------------------------------------------------------------------------------------
 # Jobs
@@ -130,12 +157,10 @@ jobs:
       - <<: *update_and_install_python
       - <<: *install_suitesparse
       - <<: *setup_cuda10_libs
+      - <<: *setup_environment
+      - <<: *install_torch_cuda10
       - <<: *setup_project
-      - run:
-          name: Run GPU tests
-          command: |
-            pytest -s theseus/tests/test_theseus_layer.py
-            pytest -s theseus/extlib/test_cusolver_lu_solver.py
+      - <<: *run_tests
 
   unittests_gpu17_cuda11:
     executor: gpu_cuda11
@@ -144,13 +169,10 @@ jobs:
       - <<: *update_and_install_python
       - <<: *install_suitesparse
       - <<: *setup_cuda11_libs
+      - <<: *setup_environment
+      - <<: *install_torch_cuda11
       - <<: *setup_project
-      - run:
-          name: Run GPU tests
-          command: |
-            pytest -s theseus/tests/test_theseus_layer.py
-            pytest -s theseus/extlib/test_cusolver_lu_solver.py
-
+      - <<: *run_tests
 
 workflows:
   version: 2

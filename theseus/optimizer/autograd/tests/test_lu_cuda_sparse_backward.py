@@ -1,0 +1,63 @@
+import pytest  # noqa: F401
+import torch
+from torch.autograd import gradcheck
+
+import theseus.core as theseus
+import theseus.optimizer as thoptim
+import theseus.optimizer.linear as thlin
+
+
+def _build_sparse_mat(batch_size):
+    torch.manual_seed(37)
+    all_cols = list(range(10))
+    col_ind = []
+    row_ptr = [0]
+    for i in range(12):
+        start = max(0, i - 2)
+        end = min(i + 1, 10)
+        col_ind += all_cols[start:end]
+        row_ptr.append(len(col_ind))
+    data = torch.randn(size=(batch_size, len(col_ind)), dtype=torch.double)
+    return 12, 10, data, col_ind, row_ptr
+
+
+def test_sparse_backward_step():
+    if not torch.cuda.is_available():
+        return
+    from theseus.optimizer.autograd import LUCudaSolveFunction
+
+    void_objective = theseus.Objective()
+    void_ordering = thoptim.VariableOrdering(void_objective, default_order=False)
+    solver = thlin.LUCudaSparseSolver(
+        void_objective, linearization_kwargs={"ordering": void_ordering}, damping=0.01
+    )
+    linearization = solver.linearization
+
+    batch_size = 4
+    void_objective._batch_size = batch_size
+    num_rows, num_cols, data, col_ind, row_ptr = _build_sparse_mat(batch_size)
+    linearization.num_rows = num_rows
+    linearization.num_cols = num_cols
+    linearization.A_val = data.cuda()
+    linearization.A_col_ind = col_ind
+    linearization.A_row_ptr = row_ptr
+    linearization.b = torch.randn(
+        size=(batch_size, num_rows), dtype=torch.double
+    ).cuda()
+
+    linearization.A_val.requires_grad = True
+    linearization.b.requires_grad = True
+    # Only need this line for the test since the objective is a mock
+    solver.reset(batch_size=batch_size)
+    inputs = (
+        linearization.A_val,
+        linearization.b,
+        linearization.structure(),
+        solver.A_rowPtr,
+        solver.A_colInd,
+        solver._solver_contexts[solver._last_solver_context],
+        False,
+        # solver._damping,
+    )
+
+    assert gradcheck(LUCudaSolveFunction.apply, inputs, eps=3e-4, atol=1e-3)

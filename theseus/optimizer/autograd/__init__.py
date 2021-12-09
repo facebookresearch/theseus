@@ -8,3 +8,10 @@ from .sparse_autograd import CholmodSolveFunction
 __all__ = [
     "CholmodSolveFunction",
 ]
+
+import torch
+
+if torch.cuda.is_available():
+    from .lu_cuda_sparse_autograd import LUCudaSolveFunction
+
+    __all__.append("LUCudaSolveFunction")

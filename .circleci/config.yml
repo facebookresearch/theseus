@@ -119,6 +119,8 @@ run_tests: &run_tests
         pytest -s theseus/tests/test_theseus_layer.py
         pytest -s theseus/extlib/test_mat_mult.py
         pytest -s theseus/extlib/test_cusolver_lu_solver.py
+        pytest -s theseus/optimizer/autograd/tests/test_lu_cuda_sparse_backward.py
+        pytest -s theseus/optimizer/linear/tests/test_lu_cuda_sparse_solver.py
 
 # -------------------------------------------------------------------------------------
 # Jobs

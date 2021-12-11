@@ -154,6 +154,7 @@ def _run_optimizer_test(
     cost_weight_model,
     use_learnable_error=False,
     verbose=True,
+    learning_method='default'
 ):
     device = "cuda:0" if torch.cuda.is_available() else "cpu"
     print(f"_run_test_for: {device}")
@@ -280,11 +281,35 @@ def _run_optimizer_test(
             | (info.status == th.NonlinearOptimizerStatus.FAIL)
         ).all()
 
-        loss = F.mse_loss(pred_vars["coefficients"], target_vars["coefficients"])
+        if learning_method == 'leo':
+            x_opt = pred_vars["coefficients"].detach()
+            x_gt = target_vars["coefficients"]
+            input_values_opt = {
+                "coefficients": x_opt,
+                cost_weight_param_name: cost_weight_fn(),
+            }
+            input_values_gt = {
+                "coefficients": x_gt,
+                cost_weight_param_name: cost_weight_fn(),
+            }
+            layer_to_learn.objective.update(input_values_opt)
+            cost_opt = torch.sum(layer_to_learn.objective.error(), dim=1)  # B x 1
+            cost_opt = cost_opt.to(device)
+            layer_to_learn.objective.update(input_values_gt)
+            cost_gt = torch.sum(layer_to_learn.objective.error(), dim=1)  # B x 1
+            cost_gt = cost_gt.to(device)
+            l2_reg = F.mse_loss(cost_weight_fn(), torch.zeros((1, 10), device=device))
+            loss = (cost_gt - cost_opt) + 100. * l2_reg
+            loss = torch.mean(loss, dim=0)
+        else:
+            loss = F.mse_loss(pred_vars["coefficients"], target_vars["coefficients"])
+
         loss.backward()
-        print(i, loss.item(), loss.item() / loss0)
         optimizer.step()
-        if loss.item() / loss0 < 5e-3:
+
+        mse_loss = F.mse_loss(pred_vars["coefficients"], target_vars["coefficients"])
+        print(i, mse_loss.item())
+        if mse_loss.item() / loss0 < 5e-3:
             solved = True
             break
     assert solved
@@ -302,6 +327,19 @@ def test_backward_gauss_newton():
                     use_learnable_error=use_learnable_error,
                 )
 
+
+def test_backward_gauss_newton_leo():
+    for use_learnable_error in [True, False]:
+        for linear_solver_cls in [th.CholeskyDenseSolver, th.LUDenseSolver]:
+            for cost_weight_model in ["mlp"]:
+                _run_optimizer_test(
+                    th.GaussNewton,
+                    linear_solver_cls,
+                    {},
+                    cost_weight_model,
+                    use_learnable_error=use_learnable_error,
+                    learning_method='leo'
+                )
 
 def test_backward_gauss_newton_choleskysparse():
     for use_learnable_error in [True, False]:
@@ -327,6 +365,18 @@ def test_backward_levenberg_marquardt():
                     use_learnable_error=use_learnable_error,
                 )
 
+def test_backward_levenberg_marquardt_leo():
+    for use_learnable_error in [True, False]:
+        for linear_solver_cls in [th.CholeskyDenseSolver, th.LUDenseSolver]:
+            for cost_weight_model in ["mlp"]:
+                _run_optimizer_test(
+                    th.LevenbergMarquardt,
+                    linear_solver_cls,
+                    {"damping": 0.01},
+                    cost_weight_model,
+                    use_learnable_error=use_learnable_error,
+                    learning_method='leo'
+                )
 
 def test_backward_levenberg_marquardt_choleskysparse():
     for use_learnable_error in [True, False]:

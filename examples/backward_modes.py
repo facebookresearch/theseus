@@ -74,7 +74,7 @@ updated_inputs, info = theseus_optim.forward(
 
 da_dx = torch.autograd.grad(updated_inputs["a"], data_x, retain_graph=True)[0].squeeze()
 
-print("\n--- backward_mode=FULL")
+print("--- backward_mode=FULL")
 print(da_dx.numpy())
 
 
@@ -116,7 +116,8 @@ def fit_x(data_x_np):
 data_x_np = data_x.detach().clone().numpy()
 dfit_x = nd.Gradient(fit_x)
 g = dfit_x(data_x_np)
-print("--- Numeric derivative")
+
+print("\n--- Numeric derivative")
 print(g)
 
 theseus_inputs["x"] = data_x

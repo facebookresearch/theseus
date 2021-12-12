@@ -29,3 +29,6 @@ class LinearSolver(abc.ABC):
     @abc.abstractmethod
     def solve(self, damping: Optional[float] = None, **kwargs) -> torch.Tensor:
         pass
+
+    def precision(self, **kwargs) -> torch.Tensor:
+        pass

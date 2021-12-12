@@ -134,6 +134,23 @@ def create_qf_theseus_layer(
     return theseus_layer
 
 
+def get_average_sample_cost(x_samples, layer_to_learn, cost_weight_param_name, cost_weight_fn):
+    cost_opt = None
+    n_samples = x_samples.shape[-1]
+    for sidx in range(0, n_samples):
+        input_values_opt = {
+            "coefficients": x_samples[:, :, sidx],
+            cost_weight_param_name: cost_weight_fn(),
+        }
+        layer_to_learn.objective.update(input_values_opt)
+        if cost_opt is not None:
+            cost_opt = cost_opt + torch.sum(layer_to_learn.objective.error(), dim=1)
+        else:
+            cost_opt = torch.sum(layer_to_learn.objective.error(), dim=1)
+    cost_opt = cost_opt / n_samples
+
+    return cost_opt
+
 def test_layer_solver_constructor():
     dummy = torch.ones(1, 1)
     for linear_solver_cls in [th.LUDenseSolver, th.CholeskyDenseSolver]:
@@ -282,24 +299,27 @@ def _run_optimizer_test(
         ).all()
 
         if learning_method == 'leo':
-            x_opt = pred_vars["coefficients"].detach()
+            # groundtruth cost
             x_gt = target_vars["coefficients"]
-            input_values_opt = {
-                "coefficients": x_opt,
-                cost_weight_param_name: cost_weight_fn(),
-            }
             input_values_gt = {
                 "coefficients": x_gt,
                 cost_weight_param_name: cost_weight_fn(),
             }
-            layer_to_learn.objective.update(input_values_opt)
-            cost_opt = torch.sum(layer_to_learn.objective.error(), dim=1)  # B x 1
-            cost_opt = cost_opt.to(device)
             layer_to_learn.objective.update(input_values_gt)
             cost_gt = torch.sum(layer_to_learn.objective.error(), dim=1)  # B x 1
             cost_gt = cost_gt.to(device)
-            l2_reg = F.mse_loss(cost_weight_fn(), torch.zeros((1, 10), device=device))
-            loss = (cost_gt - cost_opt) + 100. * l2_reg
+
+            # optimizer cost
+            x_opt = pred_vars["coefficients"].detach()
+            x_samples = layer_to_learn.optimizer.compute_samples(n_samples=10, T=1.) # B x N x S
+            if x_samples is None:  # use mean solution
+                x_samples = x_opt.reshape(x_opt.shape[0], -1).unsqueeze(-1)  # B x N x 1
+            cost_opt = get_average_sample_cost(x_samples, layer_to_learn, cost_weight_param_name, cost_weight_fn)
+            cost_opt = cost_opt.to(device)
+            
+            # loss value
+            l2_reg = F.mse_loss(cost_weight_fn(), torch.zeros((1, num_points), device=device))
+            loss = (cost_gt - cost_opt) + 10. * l2_reg
             loss = torch.mean(loss, dim=0)
         else:
             loss = F.mse_loss(pred_vars["coefficients"], target_vars["coefficients"])
@@ -327,20 +347,6 @@ def test_backward_gauss_newton():
                     use_learnable_error=use_learnable_error,
                 )
 
-
-def test_backward_gauss_newton_leo():
-    for use_learnable_error in [True, False]:
-        for linear_solver_cls in [th.CholeskyDenseSolver, th.LUDenseSolver]:
-            for cost_weight_model in ["mlp"]:
-                _run_optimizer_test(
-                    th.GaussNewton,
-                    linear_solver_cls,
-                    {},
-                    cost_weight_model,
-                    use_learnable_error=use_learnable_error,
-                    learning_method='leo'
-                )
-
 def test_backward_gauss_newton_choleskysparse():
     for use_learnable_error in [True, False]:
         for cost_weight_model in ["softmax", "mlp"]:
@@ -365,6 +371,31 @@ def test_backward_levenberg_marquardt():
                     use_learnable_error=use_learnable_error,
                 )
 
+def test_backward_levenberg_marquardt_choleskysparse():
+    for use_learnable_error in [True, False]:
+        for cost_weight_model in ["softmax", "mlp"]:
+            _run_optimizer_test(
+                th.LevenbergMarquardt,
+                th.CholmodSparseSolver,
+                {"damping": 0.01, "ellipsoidal_damping": False},
+                cost_weight_model,
+                use_learnable_error=use_learnable_error,
+            )
+
+
+def test_backward_gauss_newton_leo():
+    for use_learnable_error in [True, False]:
+        for linear_solver_cls in [th.CholeskyDenseSolver, th.LUDenseSolver]:
+            for cost_weight_model in ["mlp"]:
+                _run_optimizer_test(
+                    th.GaussNewton,
+                    linear_solver_cls,
+                    {},
+                    cost_weight_model,
+                    use_learnable_error=use_learnable_error,
+                    learning_method='leo'
+                )
+
 def test_backward_levenberg_marquardt_leo():
     for use_learnable_error in [True, False]:
         for linear_solver_cls in [th.CholeskyDenseSolver, th.LUDenseSolver]:
@@ -377,17 +408,6 @@ def test_backward_levenberg_marquardt_leo():
                     use_learnable_error=use_learnable_error,
                     learning_method='leo'
                 )
-
-def test_backward_levenberg_marquardt_choleskysparse():
-    for use_learnable_error in [True, False]:
-        for cost_weight_model in ["softmax", "mlp"]:
-            _run_optimizer_test(
-                th.LevenbergMarquardt,
-                th.CholmodSparseSolver,
-                {"damping": 0.01, "ellipsoidal_damping": False},
-                cost_weight_model,
-                use_learnable_error=use_learnable_error,
-            )
 
 
 def test_send_to_device():

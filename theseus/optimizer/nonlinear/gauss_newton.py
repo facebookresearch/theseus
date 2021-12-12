@@ -41,3 +41,24 @@ class GaussNewton(NonlinearLeastSquares):
 
     def compute_delta(self, **kwargs) -> torch.Tensor:
         return self.linear_solver.solve()
+            
+    def compute_samples(self, n_samples: int = 10, T: float = 1.) -> torch.Tensor:
+        delta = self.linear_solver.solve()
+        AtA = self.linear_solver.precision() / T
+        R = torch.linalg.cholesky(AtA, upper=True)
+
+        B, N = delta.shape
+        y = torch.normal(mean=torch.zeros((N, n_samples), device=delta.device),
+                         std=torch.ones((N, n_samples), device=delta.device))
+        delta_samples = (torch.triangular_solve(y, R).solution) + \
+            (delta.unsqueeze(-1)).repeat(1, 1, n_samples)
+
+        x_samples = torch.zeros((B, N, n_samples), device=delta.device)
+        for sidx in range(0, n_samples):
+            var_idx = 0
+            for var in self.linear_solver.linearization.ordering:
+                new_var = var.retract(delta_samples[:, var_idx : var_idx + var.dof(), sidx])
+                x_samples[:, var_idx : var_idx + var.dof(), sidx] = new_var.data
+                var_idx = var_idx + var.dof()
+
+        return x_samples

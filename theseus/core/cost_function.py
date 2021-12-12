@@ -94,7 +94,8 @@ class ErrFnType(Protocol):
 class AutoDiffCostFunction(CostFunction):
     def __init__(
         self,
-        optim_vars: List[Variable],
+        # optim_vars: List[Variable],
+        optim_vars: list,  # TODO: List[Vector] raises mypy error?
         err_fn: ErrFnType,
         dim: int,
         cost_weight: CostWeight = ScaleCostWeight(1.0),

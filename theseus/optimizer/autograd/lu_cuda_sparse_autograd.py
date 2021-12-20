@@ -1,6 +1,5 @@
 import torch
 
-# if torch.cuda.is_available():
 from theseus.extlib.cusolver_lu_solver import CusolverLUSolver
 from theseus.extlib.mat_mult import apply_damping, mat_vec, mult_MtM, tmat_vec
 

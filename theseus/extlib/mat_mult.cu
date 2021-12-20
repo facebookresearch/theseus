@@ -54,7 +54,6 @@ __global__ void mult_MtM_kernel(int batchSize,
 	const double* srcRow_val = Ms_val + batchIndex * M_nnz + srcRow_offset;
 	double* MtMs_batch_val = MtMs_val + batchIndex * MtM_nnz;
 	for(int i = 0; i < srcRow_len; i++) {
-		//printf("i=%d\n", i);
 		int dstRow = srcRow_colInd[i];
 		int dstRow_offset = MtM_rowPtr[dstRow];
 		int dstRow_len = MtM_rowPtr[dstRow + 1] - MtM_rowPtr[dstRow];

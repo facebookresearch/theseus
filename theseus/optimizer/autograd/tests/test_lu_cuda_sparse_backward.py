@@ -49,6 +49,7 @@ def test_sparse_backward_step():
     linearization.b.requires_grad = True
     # Only need this line for the test since the objective is a mock
     solver.reset(batch_size=batch_size)
+    damping_alpha_beta = (0.5, 1.3)
     inputs = (
         linearization.A_val,
         linearization.b,
@@ -56,8 +57,8 @@ def test_sparse_backward_step():
         solver.A_rowPtr,
         solver.A_colInd,
         solver._solver_contexts[solver._last_solver_context],
-        False,
-        # solver._damping,
+        damping_alpha_beta,
+        False,  # it's the same matrix, so no overwrite problems
     )
 
     assert gradcheck(LUCudaSolveFunction.apply, inputs, eps=3e-4, atol=1e-3)

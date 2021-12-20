@@ -1,11 +1,10 @@
 import torch
 
+# if torch.cuda.is_available():
 from theseus.extlib.cusolver_lu_solver import CusolverLUSolver
-from theseus.extlib.mat_mult import mat_vec, mult_MtM, tmat_vec
+from theseus.extlib.mat_mult import apply_damping, mat_vec, mult_MtM, tmat_vec
 
 from ..linear_system import SparseStructure
-
-# if torch.cuda.is_available():
 
 
 class LUCudaSolveFunction(torch.autograd.Function):
@@ -17,8 +16,8 @@ class LUCudaSolveFunction(torch.autograd.Function):
         A_rowPtr: torch.Tensor = args[3]
         A_colInd: torch.Tensor = args[4]
         solver_context: CusolverLUSolver = args[5]
-        check_factor_id: bool = args[6]
-        # damping: float = args[7]
+        damping_alpha_beta: float = args[6]
+        check_factor_id: bool = args[7]
 
         AtA_rowPtr = solver_context.A_rowPtr
         AtA_colInd = solver_context.A_colInd
@@ -26,11 +25,13 @@ class LUCudaSolveFunction(torch.autograd.Function):
         batch_size = A_val.shape[0]
 
         AtA = mult_MtM(batch_size, A_rowPtr, A_colInd, A_val, AtA_rowPtr, AtA_colInd)
+        if damping_alpha_beta is not None:
+            AtA_args = sparse_structure.num_cols, AtA_rowPtr, AtA_colInd, AtA
+            apply_damping(batch_size, *AtA_args, *damping_alpha_beta)
         solver_context.factor(AtA)
 
-        Atb = tmat_vec(
-            batch_size, sparse_structure.num_cols, A_rowPtr, A_colInd, A_val, b
-        )
+        A_args = sparse_structure.num_cols, A_rowPtr, A_colInd, A_val
+        Atb = tmat_vec(batch_size, *A_args, b)
         x = Atb.clone()
         solver_context.solve(x)  # solve in place
 
@@ -41,6 +42,7 @@ class LUCudaSolveFunction(torch.autograd.Function):
         ctx.A_colInd = A_colInd
         ctx.sparse_structure = sparse_structure
         ctx.solver_context = solver_context
+        ctx.damping_alpha_beta = damping_alpha_beta
 
         # HACK: allows to check if the context has been reused (and overwritten)
         ctx.factor_id = solver_context.factor_id if check_factor_id else None
@@ -89,7 +91,13 @@ class LUCudaSolveFunction(torch.autograd.Function):
     # Here we assume we are provided x and H after the linear solver
     # has been applied to Atb and the gradient G.
 
-    # NOTE: in the torch docs the backward is also marked as "staticmethod", I think it makes sense
+    # With (large) multiplicative damping, as above with extra terms:
+    #      x' = ... - (AtA_damped)^{-1} * alpha*AtA_diag'*x
+    # So multiplying by the row vector G we have
+    #      G*x' = ... - H * alpha * AtA_diag' * x
+    # Note that '...' the part multiplying H[j]*alpha*x[j] is AtA_diag'[j], ie
+    # 2 times the scalar product of A's an (A')'s j-th colum. Therefore
+    # (A')'s j-th colum is multiplying A's j-th colum by 2*H[j]*alpha*x[j]
     @staticmethod
     def backward(ctx, grad_output):
 
@@ -104,39 +112,33 @@ class LUCudaSolveFunction(torch.autograd.Function):
 
         H = grad_output.clone()
         ctx.solver_context.solve(H)  # solve in place
-        AH = mat_vec(
-            batch_size,
-            ctx.sparse_structure.num_cols,
-            ctx.A_rowPtr,
-            ctx.A_colInd,
-            ctx.A_val,
-            H,
-        )
-        b_Ax = ctx.b - mat_vec(
-            batch_size,
-            ctx.sparse_structure.num_cols,
-            ctx.A_rowPtr,
-            ctx.A_colInd,
-            ctx.A_val,
-            ctx.x,
-        )
+
+        A_args = ctx.sparse_structure.num_cols, ctx.A_rowPtr, ctx.A_colInd, ctx.A_val
+        AH = mat_vec(batch_size, *A_args, H)
+        b_Ax = ctx.b - mat_vec(batch_size, *A_args, ctx.x)
 
         # now we fill values of a matrix with structure identical to A with
         # selected entries from the difference of tensor products:
         #   b_Ax (X) H - AH (X) x
         # NOTE: this row-wise manipulation can be much faster in C++ or Cython
-        A_col_ind = ctx.sparse_structure.col_ind
-        A_row_ptr = ctx.sparse_structure.row_ptr
+        A_colInd = ctx.sparse_structure.col_ind
+        A_rowPtr = ctx.sparse_structure.row_ptr
         batch_size = grad_output.shape[0]
         A_grad = torch.empty(
-            size=(batch_size, len(A_col_ind)), **targs
+            size=(batch_size, len(A_colInd)), **targs
         )  # return value, A's grad
-        for r in range(len(A_row_ptr) - 1):
-            start, end = A_row_ptr[r], A_row_ptr[r + 1]
-            columns = A_col_ind[start:end]  # col indices, for this row
+        for r in range(len(A_rowPtr) - 1):
+            start, end = A_rowPtr[r], A_rowPtr[r + 1]
+            columns = A_colInd[start:end]  # col indices, for this row
             A_grad[:, start:end] = (
                 b_Ax[:, r].unsqueeze(1) * H[:, columns]
                 - AH[:, r].unsqueeze(1) * ctx.x[:, columns]
             )
 
-        return A_grad, AH, None, None, None, None, None
+        # apply correction if there is a multiplicative damping
+        if ctx.damping_alpha_beta is not None and ctx.damping_alpha_beta[0] > 0.0:
+            alpha = ctx.damping_alpha_beta[0]
+            alpha2Hx = (alpha * 2.0) * H * ctx.x  # componentwise product
+            A_grad -= ctx.A_val * alpha2Hx[:, ctx.A_colInd.type(torch.long)]
+
+        return A_grad, AH, None, None, None, None, None, None

@@ -65,7 +65,13 @@ class LUCudaSparseSolver(LinearSolver):
         ]
         self._last_solver_context: int = self._num_solver_contexts - 1
 
-    def solve(self, damping: Optional[float] = None, **kwargs) -> torch.Tensor:
+    def solve(
+        self,
+        damping: Optional[float] = None,
+        ellipsoidal_damping: bool = True,
+        damping_eps: float = 1e-8,
+        **kwargs,
+    ) -> torch.Tensor:
         if not isinstance(self.linearization, SparseLinearization):
             raise RuntimeError(
                 "CholmodSparseSolver only works with theseus.optimizer.SparseLinearization."
@@ -75,6 +81,15 @@ class LUCudaSparseSolver(LinearSolver):
             self._last_solver_context + 1
         ) % self._num_solver_contexts
 
+        if damping is None:
+            damping_alpha_beta = None
+        else:
+            # See Nocedal and Wright, Numerical Optimization, pp. 260 and 261
+            # https://www.csie.ntu.edu.tw/~r97002/temp/num_optimization.pdf
+            damping_alpha_beta = (
+                (damping, damping_eps) if ellipsoidal_damping else (0.0, damping)
+            )
+
         return LUCudaSolveFunction.apply(
             self.linearization.A_val,
             self.linearization.b,
@@ -82,6 +97,6 @@ class LUCudaSparseSolver(LinearSolver):
             self.A_rowPtr,
             self.A_colInd,
             self._solver_contexts[self._last_solver_context],
+            damping_alpha_beta,
             True,
-            # self._damping,
         )

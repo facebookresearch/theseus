@@ -1,9 +1,14 @@
+# Copyright (c) Meta Platforms, Inc. and affiliates.
+#
+# This source code is licensed under the MIT license found in the
+# LICENSE file in the root directory of this source tree.
+
 import numpy as np
 import pytest  # noqa: F401
 import torch  # needed for import of Torch C++ extensions to work
 from scipy.sparse import csr_matrix
 
-from theseus.extlib.sparse_matrix_utils import generate_sparse_matrix
+from theseus.utils import generate_mock_sparse_matrix
 
 
 def check_lu_solver(base_batch_size, batch_size, rows, cols, fill, verbose=False):
@@ -14,7 +19,7 @@ def check_lu_solver(base_batch_size, batch_size, rows, cols, fill, verbose=False
         return
     from theseus.extlib.cusolver_lu_solver import CusolverLUSolver
 
-    A_skel = generate_sparse_matrix(rows, cols, fill, min_entries_per_col=3)
+    A_skel = generate_mock_sparse_matrix(rows, cols, fill, min_entries_per_col=3)
     A_cols = cols
     A_rowPtr = torch.tensor(A_skel.indptr, dtype=torch.int).cuda()
     A_colInd = torch.tensor(A_skel.indices, dtype=torch.int).cuda()
@@ -34,7 +39,7 @@ def check_lu_solver(base_batch_size, batch_size, rows, cols, fill, verbose=False
     AtA_csr = [(a.T @ a).tocsr() for a in A_csr]
     AtA_rowPtr = torch.tensor(AtA_csr[0].indptr).cuda()
     AtA_colInd = torch.tensor(AtA_csr[0].indices).cuda()
-    AtA_val = torch.tensor([m.data for m in AtA_csr]).cuda()
+    AtA_val = torch.tensor(np.array([m.data for m in AtA_csr])).cuda()
     AtA_rows = AtA_rowPtr.size(0) - 1
     AtA_cols = AtA_rows
     AtA_nnz = AtA_colInd.size(0)  # noqa: F841
@@ -50,7 +55,7 @@ def check_lu_solver(base_batch_size, batch_size, rows, cols, fill, verbose=False
 
     b = torch.rand((batch_size, A_rows), dtype=torch.double).cuda()
     Atb = torch.tensor(
-        [A_csr[i].T @ b[i].cpu().numpy() for i in range(batch_size)]
+        np.array([A_csr[i].T @ b[i].cpu().numpy() for i in range(batch_size)])
     ).cuda()
     if verbose:
         print("Atb[0]:", Atb[0])

@@ -19,7 +19,7 @@ state_size = 2
 batch_size = 4
 learning_method = "leo"  # "default", "leo"
 
-vis_flag = False
+vis_flag = True
 plt.ion()
 
 

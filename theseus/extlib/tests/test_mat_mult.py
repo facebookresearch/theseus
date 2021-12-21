@@ -1,8 +1,14 @@
+# Copyright (c) Meta Platforms, Inc. and affiliates.
+#
+# This source code is licensed under the MIT license found in the
+# LICENSE file in the root directory of this source tree.
+
+import numpy as np
 import pytest  # noqa: F401
 import torch  # needed for import of Torch C++ extensions to work
 from scipy.sparse import csr_matrix
 
-from theseus.extlib.sparse_matrix_utils import generate_sparse_matrix
+from theseus.utils import generate_mock_sparse_matrix
 
 
 def check_mat_mult(batch_size, rows, cols, fill, verbose=False):
@@ -10,7 +16,7 @@ def check_mat_mult(batch_size, rows, cols, fill, verbose=False):
         return
     from theseus.extlib.mat_mult import apply_damping, mat_vec, mult_MtM, tmat_vec
 
-    A_skel = generate_sparse_matrix(rows, cols, fill, min_entries_per_col=3)
+    A_skel = generate_mock_sparse_matrix(rows, cols, fill, min_entries_per_col=3)
     A_cols = cols
     A_rowPtr = torch.tensor(A_skel.indptr, dtype=torch.int).cuda()
     A_colInd = torch.tensor(A_skel.indices, dtype=torch.int).cuda()
@@ -29,7 +35,7 @@ def check_mat_mult(batch_size, rows, cols, fill, verbose=False):
     AtA_csr = [(a.T @ a).tocsr() for a in A_csr]
     AtA_rowPtr = torch.tensor(AtA_csr[0].indptr).cuda()
     AtA_colInd = torch.tensor(AtA_csr[0].indices).cuda()
-    AtA_val = torch.tensor([m.data for m in AtA_csr]).cuda()
+    AtA_val = torch.tensor(np.array([m.data for m in AtA_csr])).cuda()
     AtA_rows = AtA_rowPtr.size(0) - 1
     AtA_cols = AtA_rows
     AtA_nnz = AtA_colInd.size(0)  # noqa: F841
@@ -50,29 +56,37 @@ def check_mat_mult(batch_size, rows, cols, fill, verbose=False):
 
     # test damping
     old_diagonals = torch.tensor(
-        [
-            csr_matrix(
-                (res[x].cpu(), AtA_colInd.cpu(), AtA_rowPtr.cpu()), (AtA_rows, AtA_cols)
-            ).diagonal()
-            for x in range(batch_size)
-        ]
+        np.array(
+            [
+                csr_matrix(
+                    (res[x].cpu(), AtA_colInd.cpu(), AtA_rowPtr.cpu()),
+                    (AtA_rows, AtA_cols),
+                ).diagonal()
+                for x in range(batch_size)
+            ]
+        )
     )
     alpha = 0.3
     beta = 0.7
     apply_damping(batch_size, AtA_cols, AtA_rowPtr, AtA_colInd, res, alpha, beta)
     new_diagonals = torch.tensor(
-        [
-            csr_matrix(
-                (res[x].cpu(), AtA_colInd.cpu(), AtA_rowPtr.cpu()), (AtA_rows, AtA_cols)
-            ).diagonal()
-            for x in range(batch_size)
-        ]
+        np.array(
+            [
+                csr_matrix(
+                    (res[x].cpu(), AtA_colInd.cpu(), AtA_rowPtr.cpu()),
+                    (AtA_rows, AtA_cols),
+                ).diagonal()
+                for x in range(batch_size)
+            ]
+        )
     )
     assert new_diagonals.isclose(old_diagonals * (1 + alpha) + beta, atol=1e-10).all()
 
     # test A * b
     v = torch.rand((batch_size, A_cols), dtype=torch.double).cuda()
-    A_v = torch.tensor([A_csr[i] @ v[i].cpu() for i in range(batch_size)]).cuda()
+    A_v = torch.tensor(
+        np.array([A_csr[i] @ v[i].cpu() for i in range(batch_size)])
+    ).cuda()
 
     A_v_test = mat_vec(batch_size, A_cols, A_rowPtr, A_colInd, A_val, v)
 
@@ -84,7 +98,9 @@ def check_mat_mult(batch_size, rows, cols, fill, verbose=False):
 
     # test At * b
     w = torch.rand((batch_size, A_rows), dtype=torch.double).cuda()
-    At_w = torch.tensor([A_csr[i].T @ w[i].cpu() for i in range(batch_size)]).cuda()
+    At_w = torch.tensor(
+        np.array([A_csr[i].T @ w[i].cpu() for i in range(batch_size)])
+    ).cuda()
 
     At_w_test = tmat_vec(batch_size, A_cols, A_rowPtr, A_colInd, A_val, w)
 

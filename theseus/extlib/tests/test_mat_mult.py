@@ -8,7 +8,7 @@ import pytest  # noqa: F401
 import torch  # needed for import of Torch C++ extensions to work
 from scipy.sparse import csr_matrix
 
-from theseus.utils import generate_mock_sparse_matrix
+from theseus.utils import random_sparse_binary_matrix
 
 
 def check_mat_mult(batch_size, rows, cols, fill, verbose=False):
@@ -16,7 +16,7 @@ def check_mat_mult(batch_size, rows, cols, fill, verbose=False):
         return
     from theseus.extlib.mat_mult import apply_damping, mat_vec, mult_MtM, tmat_vec
 
-    A_skel = generate_mock_sparse_matrix(rows, cols, fill, min_entries_per_col=3)
+    A_skel = random_sparse_binary_matrix(rows, cols, fill, min_entries_per_col=3)
     A_cols = cols
     A_rowPtr = torch.tensor(A_skel.indptr, dtype=torch.int).cuda()
     A_colInd = torch.tensor(A_skel.indices, dtype=torch.int).cuda()

@@ -7,7 +7,7 @@ import numpy as np
 from scipy.sparse import csr_matrix, lil_matrix
 
 
-def generate_mock_sparse_matrix(rows, cols, fill, min_entries_per_col) -> csr_matrix:
+def random_sparse_binary_matrix(rows, cols, fill, min_entries_per_col) -> csr_matrix:
     retv = lil_matrix((rows, cols))
 
     if min_entries_per_col > 0:

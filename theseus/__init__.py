@@ -43,5 +43,6 @@ from .optimizer.nonlinear import (
     NonlinearOptimizerStatus,
 )
 from .theseus_layer import TheseusLayer
+from .utils import random_sparse_binary_matrix
 
 import theseus.embodied as eb

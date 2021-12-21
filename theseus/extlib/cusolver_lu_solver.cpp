@@ -141,7 +141,8 @@ CusolverLUSolver::CusolverLUSolver(int batchSize,
         double *pB_val_cpu = B_val_cpu.data_ptr<double>();
         // make our model B invertible
         for(int r = 0; r < rows; r++) {
-            for(int i = pB_rowPtr_cpu[r]; i < pB_rowPtr_cpu[r+1]; i++) {
+            // load endpoint `end` at the beginning to avoid recomputation
+            for(int i = pB_rowPtr_cpu[r], end = pB_rowPtr_cpu[r+1]; i < end; i++) {
                 if(pB_colInd_cpu[i] == r) {
                     pB_val_cpu[i] = 1.0;
                 }

@@ -32,12 +32,12 @@ __device__ int bisect_index(const int* values, int len, int needle) {
 }
 
 __global__ void mult_MtM_kernel(int batchSize,
-                                int M_rows,
+                                int M_numRows,
                                 int M_nnz,
                                 const int* M_rowPtr,
                                 const int* M_colInd,
                                 const double* Ms_val,
-                                int MtM_rows,
+                                int MtM_numRows,
                                 int MtM_nnz,
                                 const int* MtM_rowPtr,
                                 const int* MtM_colInd,
@@ -45,7 +45,7 @@ __global__ void mult_MtM_kernel(int batchSize,
 
 	int row = blockIdx.x * blockDim.x + threadIdx.x;
 	int batchIndex = blockIdx.y * blockDim.y + threadIdx.y;
-	if(batchIndex >= batchSize || row >= M_rows) {
+	if(batchIndex >= batchSize || row >= M_numRows) {
 		return;
 	}
 
@@ -83,7 +83,7 @@ torch::Tensor mult_MtM(int batchSize,
                        const torch::Tensor& MtM_rowPtr,
                        const torch::Tensor& MtM_colInd) {
 
-	int64_t M_rows = M_rowPtr.size(0) - 1;
+	int64_t M_numRows = M_rowPtr.size(0) - 1;
 	int64_t M_nnz = M_colInd.size(0);
 
 	TORCH_CHECK(M_rowPtr.device().is_cuda());
@@ -98,7 +98,7 @@ torch::Tensor mult_MtM(int batchSize,
 	TORCH_CHECK(Ms_val.size(0) == batchSize);
 	TORCH_CHECK(Ms_val.size(1) == M_nnz);
 
-	int64_t MtM_rows = MtM_rowPtr.size(0) - 1;
+	int64_t MtM_numRows = MtM_rowPtr.size(0) - 1;
 	int64_t MtM_nnz = MtM_colInd.size(0);
 	
 	TORCH_CHECK(MtM_rowPtr.device().is_cuda());
@@ -111,7 +111,7 @@ torch::Tensor mult_MtM(int batchSize,
 
 	// TODO: do experiments on choice of work group size
 	dim3 wgs(1, 16);
-	dim3 numBlocks((M_rows + wgs.x - 1) / wgs.x, (batchSize + wgs.y - 1) / wgs.y);
+	dim3 numBlocks((M_numRows + wgs.x - 1) / wgs.x, (batchSize + wgs.y - 1) / wgs.y);
 
     M_rowPtr.data_ptr<int>();
     M_colInd.data_ptr<int>();
@@ -122,12 +122,12 @@ torch::Tensor mult_MtM(int batchSize,
 
     // TODO: set stream according to torch
     mult_MtM_kernel<<<numBlocks, wgs>>>(batchSize,
-                                        M_rows,
+                                        M_numRows,
                                         M_nnz,
                                         M_rowPtr.data_ptr<int>(),
                                         M_colInd.data_ptr<int>(),
                                         Ms_val.data_ptr<double>(),
-                                        MtM_rows,
+                                        MtM_numRows,
                                         MtM_nnz,
                                         MtM_rowPtr.data_ptr<int>(),
                                         MtM_colInd.data_ptr<int>(),
@@ -136,8 +136,8 @@ torch::Tensor mult_MtM(int batchSize,
 }
 
 __global__ void mat_vec_kernel(int batchSize,
-                               int M_rows,
-                               int M_cols,
+                               int M_numRows,
+                               int M_numCols,
                                int M_nnz,
                                const int* M_rowPtr,
                                const int* M_colInd,
@@ -147,7 +147,7 @@ __global__ void mat_vec_kernel(int batchSize,
 
 	int row = blockIdx.x * blockDim.x + threadIdx.x;
 	int batchIndex = blockIdx.y * blockDim.y + threadIdx.y;
-	if(batchIndex >= batchSize || row >= M_rows) {
+	if(batchIndex >= batchSize || row >= M_numRows) {
 		return;
 	}
 	
@@ -155,24 +155,24 @@ __global__ void mat_vec_kernel(int batchSize,
 	int srcRow_len = M_rowPtr[row+1] - srcRow_offset;
 	const int* srcRow_colInd = M_colInd + srcRow_offset;
 	const double* srcRow_val = Ms_val + batchIndex * M_nnz + srcRow_offset;
-	const double* srcVec = vec + batchIndex * M_cols;
+	const double* srcVec = vec + batchIndex * M_numCols;
 
 	double value = 0.0;
 	for(int i = 0; i < srcRow_len; i++) {
 		value += srcRow_val[i] * srcVec[srcRow_colInd[i]];
 	}
 
-	*(retv + batchIndex * M_rows + row) = value;
+	*(retv + batchIndex * M_numRows + row) = value;
 }
 
 torch::Tensor mat_vec(int batchSize,
-                      int M_cols,
+                      int M_numCols,
                       const torch::Tensor& M_rowPtr,
                       const torch::Tensor& M_colInd,
                       const torch::Tensor& Ms_val,
                       const torch::Tensor& vec) {
 
-	int64_t M_rows = M_rowPtr.size(0) - 1;
+	int64_t M_numRows = M_rowPtr.size(0) - 1;
 	int64_t M_nnz = M_colInd.size(0);
 
 	TORCH_CHECK(M_rowPtr.device().is_cuda());
@@ -189,18 +189,18 @@ torch::Tensor mat_vec(int batchSize,
 	TORCH_CHECK(vec.device().is_cuda());
 	TORCH_CHECK(vec.dim() == 2);
 	TORCH_CHECK(vec.size(0) == batchSize);
-	TORCH_CHECK(vec.size(1) == M_cols);
+	TORCH_CHECK(vec.size(1) == M_numCols);
 	
 	auto xOptions = torch::TensorOptions().dtype(torch::kDouble).device(Ms_val.device());
-	torch::Tensor retv = torch::empty({(long)batchSize, (long)M_rows}, xOptions);
+	torch::Tensor retv = torch::empty({(long)batchSize, (long)M_numRows}, xOptions);
 
 	// TODO: do experiments on choice of work group size
 	dim3 wgs(1, 16);
-	dim3 numBlocks((M_rows + wgs.x - 1) / wgs.x, (batchSize + wgs.y - 1) / wgs.y);
+	dim3 numBlocks((M_numRows + wgs.x - 1) / wgs.x, (batchSize + wgs.y - 1) / wgs.y);
 
 	mat_vec_kernel<<<numBlocks, wgs>>>(batchSize,
-	                                   M_rows,
-	                                   M_cols,
+	                                   M_numRows,
+	                                   M_numCols,
 	                                   M_nnz,
 	                                   M_rowPtr.data_ptr<int>(),
 	                                   M_colInd.data_ptr<int>(),
@@ -213,8 +213,8 @@ torch::Tensor mat_vec(int batchSize,
 
 
 __global__ void tmat_vec_kernel(int batchSize,
-                                int M_rows,
-                                int M_cols,
+                                int M_numRows,
+                                int M_numCols,
                                 int M_nnz,
                                 const int* M_rowPtr,
                                 const int* M_colInd,
@@ -224,7 +224,7 @@ __global__ void tmat_vec_kernel(int batchSize,
 
 	int row = blockIdx.x * blockDim.x + threadIdx.x;
 	int batchIndex = blockIdx.y * blockDim.y + threadIdx.y;
-	if(batchIndex >= batchSize || row >= M_rows) {
+	if(batchIndex >= batchSize || row >= M_numRows) {
 		return;
 	}
 	
@@ -232,8 +232,8 @@ __global__ void tmat_vec_kernel(int batchSize,
 	int srcRow_len = M_rowPtr[row+1] - srcRow_offset;
 	const int* srcRow_colInd = M_colInd + srcRow_offset;
 	const double* srcRow_val = Ms_val + batchIndex * M_nnz + srcRow_offset;
-	double vecVal = vec[batchIndex * M_rows + row];
-	double* dstVec = retv + batchIndex * M_cols;
+	double vecVal = vec[batchIndex * M_numRows + row];
+	double* dstVec = retv + batchIndex * M_numCols;
 
 	for(int i = 0; i < srcRow_len; i++) {
 		atomicAdd(dstVec + srcRow_colInd[i], vecVal * srcRow_val[i]);
@@ -241,13 +241,13 @@ __global__ void tmat_vec_kernel(int batchSize,
 }
 
 torch::Tensor tmat_vec(int batchSize,
-                       int M_cols,
+                       int M_numCols,
                        const torch::Tensor& M_rowPtr,
                        const torch::Tensor& M_colInd,
                        const torch::Tensor& Ms_val,
                        const torch::Tensor& vec) {
 
-	int64_t M_rows = M_rowPtr.size(0) - 1;
+	int64_t M_numRows = M_rowPtr.size(0) - 1;
 	int64_t M_nnz = M_colInd.size(0);
 
 	TORCH_CHECK(M_rowPtr.device().is_cuda());
@@ -264,18 +264,18 @@ torch::Tensor tmat_vec(int batchSize,
 	TORCH_CHECK(vec.device().is_cuda());
 	TORCH_CHECK(vec.dim() == 2);
 	TORCH_CHECK(vec.size(0) == batchSize);
-	TORCH_CHECK(vec.size(1) == M_rows);
+	TORCH_CHECK(vec.size(1) == M_numRows);
 	
 	auto xOptions = torch::TensorOptions().dtype(torch::kDouble).device(Ms_val.device());
-	torch::Tensor retv = torch::zeros({(long)batchSize, (long)M_cols}, xOptions);
+	torch::Tensor retv = torch::zeros({(long)batchSize, (long)M_numCols}, xOptions);
 
 	// TODO: do experiments on choice of work group size
 	dim3 wgs(1, 16);
-	dim3 numBlocks((M_rows + wgs.x - 1) / wgs.x, (batchSize + wgs.y - 1) / wgs.y);
+	dim3 numBlocks((M_numRows + wgs.x - 1) / wgs.x, (batchSize + wgs.y - 1) / wgs.y);
 
 	tmat_vec_kernel<<<numBlocks, wgs>>>(batchSize,
-	                                    M_rows,
-	                                    M_cols,
+	                                    M_numRows,
+	                                    M_numCols,
 	                                    M_nnz,
 	                                    M_rowPtr.data_ptr<int>(),
 	                                    M_colInd.data_ptr<int>(),
@@ -287,8 +287,8 @@ torch::Tensor tmat_vec(int batchSize,
 
 
 __global__ void apply_damping_kernel(int batchSize,
-                                int M_rows,
-                                int M_cols,
+                                int M_numRows,
+                                int M_numCols,
                                 int M_nnz,
                                 const int* M_rowPtr,
                                 const int* M_colInd,
@@ -298,7 +298,7 @@ __global__ void apply_damping_kernel(int batchSize,
 
 	int row = blockIdx.x * blockDim.x + threadIdx.x;
 	int batchIndex = blockIdx.y * blockDim.y + threadIdx.y;
-	if(batchIndex >= batchSize || row >= M_rows) {
+	if(batchIndex >= batchSize || row >= M_numRows) {
 		return;
 	}
 
@@ -315,14 +315,14 @@ __global__ void apply_damping_kernel(int batchSize,
 }
 
 void apply_damping(int batchSize,
-                   int M_cols,
+                   int M_numCols,
                    const torch::Tensor& M_rowPtr,
                    const torch::Tensor& M_colInd,
                    const torch::Tensor& Ms_val,
                    double alpha,
                    double beta) {
 
-	int64_t M_rows = M_rowPtr.size(0) - 1;
+	int64_t M_numRows = M_rowPtr.size(0) - 1;
 	int64_t M_nnz = M_colInd.size(0);
 
 	TORCH_CHECK(M_rowPtr.device().is_cuda());
@@ -339,11 +339,11 @@ void apply_damping(int batchSize,
 
 	// TODO: do experiments on choice of work group size
 	dim3 wgs(1, 16);
-	dim3 numBlocks((M_rows + wgs.x - 1) / wgs.x, (batchSize + wgs.y - 1) / wgs.y);
+	dim3 numBlocks((M_numRows + wgs.x - 1) / wgs.x, (batchSize + wgs.y - 1) / wgs.y);
 
 	apply_damping_kernel<<<numBlocks, wgs>>>(batchSize,
-	                                         M_rows,
-	                                         M_cols,
+	                                         M_numRows,
+	                                         M_numCols,
 	                                         M_nnz,
 	                                         M_rowPtr.data_ptr<int>(),
 	                                         M_colInd.data_ptr<int>(),
@@ -368,7 +368,7 @@ PYBIND11_MODULE(mat_mult, m) {
     m.def("mat_vec", &mat_vec,
           "Batched multiplication of mat by vector: M * v",
           py::arg("batch_size"),
-          py::arg("M_cols"),
+          py::arg("M_numCols"),
           py::arg("M_rowPtr"),
           py::arg("M_colInd"),
           py::arg("Ms_val"),
@@ -377,7 +377,7 @@ PYBIND11_MODULE(mat_mult, m) {
     m.def("tmat_vec", &tmat_vec,
           "Batched multiplication of transposed mat by vector: Mt * v",
           py::arg("batch_size"),
-          py::arg("M_cols"),
+          py::arg("M_numCols"),
           py::arg("M_rowPtr"),
           py::arg("M_colInd"),
           py::arg("Ms_val"),
@@ -386,7 +386,7 @@ PYBIND11_MODULE(mat_mult, m) {
     m.def("apply_damping", &apply_damping,
           "M.diagonal() += M.diagonal() * alpha + beta",
           py::arg("batch_size"),
-          py::arg("M_cols"),
+          py::arg("M_numCols"),
           py::arg("M_rowPtr"),
           py::arg("M_colInd"),
           py::arg("Ms_val"),

@@ -27,7 +27,7 @@ enum Ordering {
 struct CusolverLUSolver {
 
     CusolverLUSolver(int batchSize,
-                     int64_t cols,
+                     int64_t numCols,
                      const torch::Tensor& A_rowPtr,
                      const torch::Tensor& A_colInd,
                      Ordering ordering = AMD);
@@ -39,8 +39,8 @@ struct CusolverLUSolver {
 
     int batchSize;
     int factoredBatchSize;
-    int64_t cols;
-    int64_t rows;
+    int64_t numCols;
+    int64_t numRows;
     int64_t nnz;
 
     torch::Tensor A_rowPtr;
@@ -54,15 +54,15 @@ struct CusolverLUSolver {
 };
 
 CusolverLUSolver::CusolverLUSolver(int batchSize,
-                                   int64_t cols,
+                                   int64_t numCols,
                                    const torch::Tensor& A_rowPtr,
                                    const torch::Tensor& A_colInd,
                                    Ordering ordering)
-    : batchSize(batchSize), factoredBatchSize(-1), cols(cols), A_rowPtr(A_rowPtr), A_colInd(A_colInd) {
+    : batchSize(batchSize), factoredBatchSize(-1), numCols(numCols), A_rowPtr(A_rowPtr), A_colInd(A_colInd) {
 
-    rows = A_rowPtr.size(0) - 1;
+    numRows = A_rowPtr.size(0) - 1;
     nnz = A_colInd.size(0);
-    TORCH_CHECK(rows == cols); // assume square
+    TORCH_CHECK(numRows == numCols); // assume square
     TORCH_CHECK(A_rowPtr.device().is_cuda());
     TORCH_CHECK(A_colInd.device().is_cuda());
     TORCH_CHECK(A_rowPtr.dtype() == torch::kInt);
@@ -83,19 +83,19 @@ CusolverLUSolver::CusolverLUSolver(int batchSize,
     const int *pA_colInd_cpu = A_colInd_cpu.data_ptr<int>();
 
     // we compute the permutation Q which allows 
-    torch::Tensor Qperm = torch::empty(rows, torch::TensorOptions(torch::kInt));
+    torch::Tensor Qperm = torch::empty(numRows, torch::TensorOptions(torch::kInt));
     int *pQperm = Qperm.data_ptr<int>();
 
     if (ordering == AMD) {
-        CUSOLVER_CHECK(cusolverSpXcsrsymamdHost(cusolverSpH, rows, nnz,
+        CUSOLVER_CHECK(cusolverSpXcsrsymamdHost(cusolverSpH, numRows, nnz,
                                                 A_descr, pA_rowPtr_cpu, pA_colInd_cpu, 
                                                 pQperm));
     } else if (ordering == RCM) {
-        CUSOLVER_CHECK(cusolverSpXcsrsymrcmHost(cusolverSpH, rows, nnz,
+        CUSOLVER_CHECK(cusolverSpXcsrsymrcmHost(cusolverSpH, numRows, nnz,
                                                 A_descr, pA_rowPtr_cpu, pA_colInd_cpu, 
                                                 pQperm));
     } else if (ordering == MDQ) {
-        CUSOLVER_CHECK(cusolverSpXcsrsymmdqHost(cusolverSpH, rows, nnz,
+        CUSOLVER_CHECK(cusolverSpXcsrsymmdqHost(cusolverSpH, numRows, nnz,
                                                 A_descr, pA_rowPtr_cpu, pA_colInd_cpu, 
                                                 pQperm));
     } else {
@@ -110,7 +110,7 @@ CusolverLUSolver::CusolverLUSolver(int batchSize,
 
     {
         size_t size_perm = 0;
-        CUSOLVER_CHECK(cusolverSpXcsrperm_bufferSizeHost(cusolverSpH, rows, cols, nnz,
+        CUSOLVER_CHECK(cusolverSpXcsrperm_bufferSizeHost(cusolverSpH, numRows, numCols, nnz,
                                                          A_descr, pB_rowPtr_cpu, pB_colInd_cpu, 
                                                          pQperm, pQperm, &size_perm));
 
@@ -119,7 +119,7 @@ CusolverLUSolver::CusolverLUSolver(int batchSize,
         torch::Tensor permIndices = torch::empty(nnz, // unused
                                                  torch::TensorOptions(torch::kInt));
 
-        CUSOLVER_CHECK(cusolverSpXcsrpermHost(cusolverSpH, rows, cols, nnz,
+        CUSOLVER_CHECK(cusolverSpXcsrpermHost(cusolverSpH, numRows, numCols, nnz,
                                               A_descr, pB_rowPtr_cpu, pB_colInd_cpu, 
                                               pQperm, pQperm,
                                               permIndices.data_ptr<int>(), permBuffer.data_ptr<uint8_t>()));
@@ -133,14 +133,14 @@ CusolverLUSolver::CusolverLUSolver(int batchSize,
         csrluInfoHost_t info = nullptr;
         CUSOLVER_CHECK(cusolverSpCreateCsrluInfoHost(&info));
 
-        CUSOLVER_CHECK(cusolverSpXcsrluAnalysisHost(cusolverSpH, rows, nnz,
+        CUSOLVER_CHECK(cusolverSpXcsrluAnalysisHost(cusolverSpH, numRows, nnz,
                                                     A_descr, pB_rowPtr_cpu, pB_colInd_cpu, 
                                                     info));
 
         torch::Tensor B_val_cpu = torch::zeros(nnz, torch::TensorOptions(torch::kDouble));
         double *pB_val_cpu = B_val_cpu.data_ptr<double>();
         // make our model B invertible
-        for(int r = 0; r < rows; r++) {
+        for(int r = 0; r < numRows; r++) {
             // load endpoint `end` at the beginning to avoid recomputation
             for(int i = pB_rowPtr_cpu[r], end = pB_rowPtr_cpu[r+1]; i < end; i++) {
                 if(pB_colInd_cpu[i] == r) {
@@ -151,7 +151,7 @@ CusolverLUSolver::CusolverLUSolver(int batchSize,
 
         size_t size_internal = 0; 
         size_t size_lu  = 0;
-        CUSOLVER_CHECK(cusolverSpDcsrluBufferInfoHost(cusolverSpH, rows, nnz,
+        CUSOLVER_CHECK(cusolverSpDcsrluBufferInfoHost(cusolverSpH, numRows, nnz,
                                                       A_descr, pB_val_cpu, pB_rowPtr_cpu, pB_colInd_cpu,
                                                       info,
                                                       &size_internal,
@@ -160,7 +160,7 @@ CusolverLUSolver::CusolverLUSolver(int batchSize,
         torch::Tensor luBuffer = torch::empty(size_lu, torch::TensorOptions(torch::kByte));
         double pivot_threshold = 1.0;
         double tol = 1e-14;
-        CUSOLVER_CHECK(cusolverSpDcsrluFactorHost(cusolverSpH, rows, nnz,
+        CUSOLVER_CHECK(cusolverSpDcsrluFactorHost(cusolverSpH, numRows, nnz,
                                                   A_descr, pB_val_cpu, pB_rowPtr_cpu, pB_colInd_cpu,
                                                   info, pivot_threshold,
                                                   luBuffer.data_ptr<uint8_t>()));
@@ -173,13 +173,13 @@ CusolverLUSolver::CusolverLUSolver(int batchSize,
 
         CUSOLVER_CHECK(cusolverSpXcsrluNnzHost(cusolverSpH, &L_nnz, &U_nnz, info));
 
-        torch::Tensor P_lu = torch::empty(rows, torch::TensorOptions(torch::kInt));
-        torch::Tensor Q_lu = torch::empty(cols, torch::TensorOptions(torch::kInt));
+        torch::Tensor P_lu = torch::empty(numRows, torch::TensorOptions(torch::kInt));
+        torch::Tensor Q_lu = torch::empty(numCols, torch::TensorOptions(torch::kInt));
         L_val = torch::empty(L_nnz, torch::TensorOptions(torch::kDouble));
-        L_rowPtr = torch::empty(rows+1, torch::TensorOptions(torch::kInt));
+        L_rowPtr = torch::empty(numRows+1, torch::TensorOptions(torch::kInt));
         L_colInd = torch::empty(L_nnz, torch::TensorOptions(torch::kInt));
         U_val = torch::empty(U_nnz, torch::TensorOptions(torch::kDouble));
-        U_rowPtr = torch::empty(rows+1, torch::TensorOptions(torch::kInt));
+        U_rowPtr = torch::empty(numRows+1, torch::TensorOptions(torch::kInt));
         U_colInd = torch::empty(U_nnz, torch::TensorOptions(torch::kInt));
 
         CUSOLVER_CHECK(cusolverSpDcsrluExtractHost(cusolverSpH,
@@ -190,14 +190,14 @@ CusolverLUSolver::CusolverLUSolver(int batchSize,
                                                    luBuffer.data_ptr<uint8_t>()));
 
         // P, Q (for A's factorization) are obtained as composition of permutations
-        P_cpu = torch::empty(rows, torch::TensorOptions(torch::kInt));
-        Q_cpu = torch::empty(cols, torch::TensorOptions(torch::kInt));
+        P_cpu = torch::empty(numRows, torch::TensorOptions(torch::kInt));
+        Q_cpu = torch::empty(numCols, torch::TensorOptions(torch::kInt));
         int* pP = P_cpu.data_ptr<int>(), *pP_lu = P_lu.data_ptr<int>();
         int* pQ = Q_cpu.data_ptr<int>(), *pQ_lu = Q_lu.data_ptr<int>();
-        for(int j = 0; j < rows; j++){
+        for(int j = 0; j < numRows; j++){
             pP[j] = pQperm[pP_lu[j]];
         }
-        for(int j = 0; j < cols; j++){
+        for(int j = 0; j < numCols; j++){
             pQ[j] = pQperm[pQ_lu[j]];
         }
 
@@ -225,7 +225,7 @@ CusolverLUSolver::CusolverLUSolver(int batchSize,
     }
 
     CUSOLVER_CHECK(cusolverRfBatchSetupHost(batchSize,
-                                            rows, nnz,
+                                            numRows, nnz,
                                             A_rowPtr_cpu.data_ptr<int>(), A_colInd_cpu.data_ptr<int>(), pA_val_array_cpu,
                                             L_nnz, L_rowPtr.data_ptr<int>(), L_colInd.data_ptr<int>(), L_val.data_ptr<double>(),
                                             U_nnz, U_rowPtr.data_ptr<int>(), U_colInd.data_ptr<int>(), U_val.data_ptr<double>(),
@@ -260,7 +260,7 @@ std::vector<int> CusolverLUSolver::factor(const torch::Tensor& A_val) {
     at::Tensor A_val_array = A_val_array_cpu.cuda();
 
     CUSOLVER_CHECK(cusolverRfBatchResetValues(factoredBatchSize,
-                                              rows, nnz,
+                                              numRows, nnz,
                                               A_rowPtr.data_ptr<int>(), A_colInd.data_ptr<int>(), (double**)A_val_array.data_ptr<uint8_t>(),
                                               P.data_ptr<int>(), Q.data_ptr<int>(),
                                               cusolverRfH));
@@ -283,24 +283,24 @@ void CusolverLUSolver::solve(const torch::Tensor& b) {
     TORCH_CHECK(b.device().is_cuda());
     TORCH_CHECK(b.dim() == 2);
     TORCH_CHECK(b.size(0) == factoredBatchSize);
-    TORCH_CHECK(b.size(1) == rows);
+    TORCH_CHECK(b.size(1) == numRows);
 
     at::Tensor b_array_cpu = torch::empty(factoredBatchSize * sizeof(double*),
                                           torch::TensorOptions(torch::kByte));
     double* pB = b.data_ptr<double>();
     double** pB_array_cpu = (double**)b_array_cpu.data_ptr<uint8_t>();
     for(int i = 0; i < factoredBatchSize; i++) {
-        pB_array_cpu[i] = pB + rows * i;
+        pB_array_cpu[i] = pB + numRows * i;
     }
     at::Tensor b_array = b_array_cpu.cuda();
-    at::Tensor temp = torch::empty(rows * 2 * factoredBatchSize,
+    at::Tensor temp = torch::empty(numRows * 2 * factoredBatchSize,
                                    torch::TensorOptions(torch::kDouble).device(A_rowPtr.device()));
 
     CUSOLVER_CHECK(cusolverRfBatchSolve(cusolverRfH,
                                         P.data_ptr<int>(), Q.data_ptr<int>(),
                                         1, // nrhs
-                                        temp.data_ptr<double>(), rows,
-                                        (double**)b_array.data_ptr<uint8_t>(), rows));
+                                        temp.data_ptr<double>(), numRows,
+                                        (double**)b_array.data_ptr<uint8_t>(), numRows));
 }
 
 PYBIND11_MODULE(cusolver_lu_solver, m) {
@@ -318,7 +318,7 @@ PYBIND11_MODULE(cusolver_lu_solver, m) {
              "Initialization, it computes the fill-reducing permutation,\n"
              "performs the symbolic factorization, preparing the data structures",
              py::arg("batch_size"),
-             py::arg("cols"),
+             py::arg("num_cols"),
              py::arg("A_rowPtr"),
              py::arg("A_colInd"),
              py::arg("ordering") = AMD
@@ -333,8 +333,8 @@ PYBIND11_MODULE(cusolver_lu_solver, m) {
         )
 	    .def_readonly("factor_id", &CusolverLUSolver::factorId)
 	    .def_readonly("batch_size", &CusolverLUSolver::batchSize)
-	    .def_readonly("rows", &CusolverLUSolver::rows)
-	    .def_readonly("cols", &CusolverLUSolver::cols)
+	    .def_readonly("num_rows", &CusolverLUSolver::numRows)
+	    .def_readonly("num_cols", &CusolverLUSolver::numCols)
 	    .def_readonly("nnz", &CusolverLUSolver::nnz)
 	    .def_readonly("A_rowPtr", &CusolverLUSolver::A_rowPtr)
 	    .def_readonly("A_colInd", &CusolverLUSolver::A_colInd);

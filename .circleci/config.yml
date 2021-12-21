@@ -117,8 +117,8 @@ run_tests: &run_tests
       working_directory: ~/project
       command: |
         pytest -s theseus/tests/test_theseus_layer.py
-        pytest -s theseus/extlib/test_mat_mult.py
-        pytest -s theseus/extlib/test_cusolver_lu_solver.py
+        pytest -s theseus/extlib/tests/test_mat_mult.py
+        pytest -s theseus/extlib/tests/test_cusolver_lu_solver.py
 
 # -------------------------------------------------------------------------------------
 # Jobs

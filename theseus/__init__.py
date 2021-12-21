@@ -46,3 +46,8 @@ from .theseus_layer import TheseusLayer
 from .utils import random_sparse_binary_matrix
 
 import theseus.embodied as eb
+
+import torch
+
+if torch.cuda.is_available():
+    from .optimizer.linear import LUCudaSparseSolver

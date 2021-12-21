@@ -1,8 +1,13 @@
+# Copyright (c) Meta Platforms, Inc. and affiliates.
+#
+# This source code is licensed under the MIT license found in the
+# LICENSE file in the root directory of this source tree.
+
 import numpy as np
-from scipy.sparse import lil_matrix
+from scipy.sparse import csr_matrix, lil_matrix
 
 
-def generate_sparse_matrix(rows, cols, fill, min_entries_per_col):
+def generate_mock_sparse_matrix(rows, cols, fill, min_entries_per_col) -> csr_matrix:
     retv = lil_matrix((rows, cols))
 
     if min_entries_per_col > 0:

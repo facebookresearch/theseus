@@ -241,7 +241,10 @@ std::vector<int> CusolverLUSolver::factor(const torch::Tensor& A_val) {
 
     TORCH_CHECK(A_val.device().is_cuda());
     TORCH_CHECK(A_val.dim() == 2);
-    TORCH_CHECK(A_val.size(0) <= batchSize); // currently failing unless "==", cublas bug?!
+
+    // we ideally would like to check "<=" and support irregular (smaller)
+    // batch sizes, but (disappointingly) cuda fails unless "==" holds
+    TORCH_CHECK(A_val.size(0) == batchSize);
     TORCH_CHECK(A_val.size(1) == nnz);
 
     factorId++;

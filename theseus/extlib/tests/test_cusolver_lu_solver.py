@@ -13,7 +13,7 @@ from theseus.utils import generate_mock_sparse_matrix
 
 def check_lu_solver(base_batch_size, batch_size, rows, cols, fill, verbose=False):
     # this is necessary assumption, so that the hessian is full rank
-    assert rows > cols
+    assert rows >= cols
 
     if not torch.cuda.is_available():
         return

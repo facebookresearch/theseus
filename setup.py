@@ -30,6 +30,9 @@ with open("README.md", "r") as fh:
 if "CUDA_HOME" in os.environ:
     ext_modules = [
         torch_cpp_ext.CUDAExtension(
+            name="theseus.extlib.mat_mult", sources=["theseus/extlib/mat_mult.cu"]
+        ),
+        torch_cpp_ext.CUDAExtension(
             name="theseus.extlib.cusolver_lu_solver",
             sources=[
                 "theseus/extlib/cusolver_lu_solver.cpp",

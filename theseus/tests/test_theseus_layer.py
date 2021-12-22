@@ -315,7 +315,7 @@ def _run_optimizer_test(
             # optimizer cost
             x_opt = pred_vars["coefficients"].detach()
             x_samples = layer_to_learn.optimizer.compute_samples(
-                n_samples=10, T=1.0
+                n_samples=10, temperature=1.0
             )  # B x N x S
             if x_samples is None:  # use mean solution
                 x_samples = x_opt.reshape(x_opt.shape[0], -1).unsqueeze(-1)  # B x N x 1

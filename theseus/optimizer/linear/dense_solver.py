@@ -118,9 +118,6 @@ class DenseSolver(LinearSolver):
                 damping_eps=damping_eps,
             )
 
-    def precision(self, **kwargs) -> torch.Tensor:
-        return self.linearization.AtA
-
 
 class LUDenseSolver(DenseSolver):
     def __init__(

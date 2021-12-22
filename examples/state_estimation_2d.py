@@ -306,12 +306,16 @@ def run_learning(mode_, path_data_, gps_targets_, measurements_):
                 print_stuff=epoch % 10 == 0 and i == 0,
             )
 
+        # LEO (Sodhi et al., https://arxiv.org/abs/2108.02274) is a method to learn
+        # models end-to-end within second-order optimizers. The main difference is that
+        # instead of unrolling the optimizer and minimizing the MSE tracking loss,
+        # it uses a NLL energy-based loss that does not backpropagate through the optimizer.
         if learning_method == "leo":
             optimizer_path = get_path_from_values(
                 objective.batch_size, theseus_inputs, path_length
             )
             x_samples = state_estimator.optimizer.compute_samples(
-                n_samples=10, T=1.0
+                n_samples=10, temperature=1.0
             )  # B x N x S
             if x_samples is None:  # use mean solution
                 x_opt_dict = {key: val.detach() for key, val in theseus_inputs.items()}

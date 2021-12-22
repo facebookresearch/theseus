@@ -42,9 +42,11 @@ class GaussNewton(NonlinearLeastSquares):
     def compute_delta(self, **kwargs) -> torch.Tensor:
         return self.linear_solver.solve()
 
-    def compute_samples(self, n_samples: int = 10, T: float = 1.0) -> torch.Tensor:
+    def compute_samples(
+        self, n_samples: int = 10, temperature: float = 1.0
+    ) -> torch.Tensor:
         delta = self.linear_solver.solve()
-        AtA = self.linear_solver.precision() / T
+        AtA = self.linear_solver.linearization.hessian_approx() / temperature
         sqrt_AtA = torch.linalg.cholesky(AtA).permute(0, 2, 1)
 
         batch_size, n_vars = delta.shape

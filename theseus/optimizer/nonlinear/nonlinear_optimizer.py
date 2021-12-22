@@ -220,9 +220,6 @@ class NonlinearOptimizer(Optimizer, abc.ABC):
     def compute_delta(self, **kwargs) -> torch.Tensor:
         pass
 
-    def compute_samples(self, n_samples: int, temperature: float) -> torch.Tensor:
-        pass
-
     # retracts all variables in the given order and updates their values
     # with the result
     def retract_and_update_variables(

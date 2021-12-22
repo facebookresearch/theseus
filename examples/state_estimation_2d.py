@@ -316,9 +316,9 @@ def run_learning(mode_, path_data_, gps_targets_, measurements_):
         # instead of unrolling the optimizer and minimizing the MSE tracking loss,
         # it uses a NLL energy-based loss that does not backpropagate through the optimizer.
         if learning_method == "leo":
-            x_samples = state_estimator.optimizer.compute_samples(
-                n_samples=10, temperature=1.0
-            )  # B x N x S
+            x_samples = state_estimator.compute_samples(
+                optimizer.linear_solver, n_samples=10, temperature=1.0
+            )  # # batch_size x n_vars x n_samples
             if x_samples is None:  # use mean solution
                 x_opt_dict = {key: val.detach() for key, val in theseus_inputs.items()}
                 x_samples = get_path_from_values(
@@ -326,7 +326,7 @@ def run_learning(mode_, path_data_, gps_targets_, measurements_):
                 )
                 x_samples = x_samples.reshape(x_samples.shape[0], -1).unsqueeze(
                     -1
-                )  # B x N x 1
+                )  # # batch_size x n_vars x 1
             cost_opt = get_average_sample_cost(
                 x_samples, cost_weights_model, objective, mode_
             )

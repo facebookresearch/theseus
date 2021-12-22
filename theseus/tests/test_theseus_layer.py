@@ -311,15 +311,17 @@ def _run_optimizer_test(
                 cost_weight_param_name: cost_weight_fn(),
             }
             layer_to_learn.objective.update(input_values_gt)
-            cost_gt = torch.sum(layer_to_learn.objective.error(), dim=1)  # B x 1
+            cost_gt = torch.sum(layer_to_learn.objective.error(), dim=1)
 
             # optimizer cost
             x_opt = pred_vars["coefficients"].detach()
-            x_samples = layer_to_learn.optimizer.compute_samples(
-                n_samples=10, temperature=1.0
-            )  # B x N x S
+            x_samples = layer_to_learn.compute_samples(
+                layer_to_learn.optimizer.linear_solver, n_samples=10, temperature=1.0
+            )  # batch_size x n_vars x n_samples
             if x_samples is None:  # use mean solution
-                x_samples = x_opt.reshape(x_opt.shape[0], -1).unsqueeze(-1)  # B x N x 1
+                x_samples = x_opt.reshape(x_opt.shape[0], -1).unsqueeze(
+                    -1
+                )  # batch_size x n_vars x n_samples
             cost_opt = get_average_sample_cost(
                 x_samples, layer_to_learn, cost_weight_param_name, cost_weight_fn
             )

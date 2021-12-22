@@ -65,31 +65,3 @@ class LevenbergMarquardt(NonlinearLeastSquares):
             ellipsoidal_damping=ellipsoidal_damping,
             damping_eps=damping_eps,
         )
-
-    def compute_samples(
-        self, n_samples: int = 10, temperature: float = 1.0
-    ) -> torch.Tensor:
-        delta = self.linear_solver.solve()
-        AtA = self.linear_solver.linearization.hessian_approx() / temperature
-        sqrt_AtA = torch.linalg.cholesky(AtA).permute(0, 2, 1)
-
-        batch_size, n_vars = delta.shape
-        y = torch.normal(
-            mean=torch.zeros((n_vars, n_samples), device=delta.device),
-            std=torch.ones((n_vars, n_samples), device=delta.device),
-        )
-        delta_samples = (torch.triangular_solve(y, sqrt_AtA).solution) + (
-            delta.unsqueeze(-1)
-        ).repeat(1, 1, n_samples)
-
-        x_samples = torch.zeros((batch_size, n_vars, n_samples), device=delta.device)
-        for sidx in range(0, n_samples):
-            var_idx = 0
-            for var in self.linear_solver.linearization.ordering:
-                new_var = var.retract(
-                    delta_samples[:, var_idx : var_idx + var.dof(), sidx]
-                )
-                x_samples[:, var_idx : var_idx + var.dof(), sidx] = new_var.data
-                var_idx = var_idx + var.dof()
-
-        return x_samples

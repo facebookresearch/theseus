@@ -9,6 +9,7 @@ import torch
 import torch.nn as nn
 
 from theseus.optimizer import Optimizer, OptimizerInfo
+from theseus.optimizer.linear import LinearSolver
 
 
 class TheseusLayer(nn.Module):
@@ -44,6 +45,39 @@ class TheseusLayer(nn.Module):
             ]
         )
         return values, info
+
+    def compute_samples(
+        self,
+        linear_solver: LinearSolver = None,
+        n_samples: int = 10,
+        temperature: float = 1.0,
+    ) -> torch.Tensor:
+        if linear_solver is None:
+            return None
+        delta = linear_solver.solve()
+        AtA = linear_solver.linearization.hessian_approx() / temperature
+        sqrt_AtA = torch.linalg.cholesky(AtA).permute(0, 2, 1)
+
+        batch_size, n_vars = delta.shape
+        y = torch.normal(
+            mean=torch.zeros((n_vars, n_samples), device=delta.device),
+            std=torch.ones((n_vars, n_samples), device=delta.device),
+        )
+        delta_samples = (torch.triangular_solve(y, sqrt_AtA).solution) + (
+            delta.unsqueeze(-1)
+        ).repeat(1, 1, n_samples)
+
+        x_samples = torch.zeros((batch_size, n_vars, n_samples), device=delta.device)
+        for sidx in range(0, n_samples):
+            var_idx = 0
+            for var in linear_solver.linearization.ordering:
+                new_var = var.retract(
+                    delta_samples[:, var_idx : var_idx + var.dof(), sidx]
+                )
+                x_samples[:, var_idx : var_idx + var.dof(), sidx] = new_var.data
+                var_idx = var_idx + var.dof()
+
+        return x_samples
 
     # Applies to() with given args to all tensors in the objective
     def to(self, *args, **kwargs):

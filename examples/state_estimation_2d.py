@@ -306,14 +306,16 @@ def run_learning(mode_, path_data_, gps_targets_, measurements_):
                 print_stuff=epoch % 10 == 0 and i == 0,
             )
 
+        optimizer_path = get_path_from_values(
+            objective.batch_size, theseus_inputs, path_length
+        )
+        mse_loss = F.mse_loss(optimizer_path, groundtruth_path)
+
         # LEO (Sodhi et al., https://arxiv.org/abs/2108.02274) is a method to learn
         # models end-to-end within second-order optimizers. The main difference is that
         # instead of unrolling the optimizer and minimizing the MSE tracking loss,
         # it uses a NLL energy-based loss that does not backpropagate through the optimizer.
         if learning_method == "leo":
-            optimizer_path = get_path_from_values(
-                objective.batch_size, theseus_inputs, path_length
-            )
             x_samples = state_estimator.optimizer.compute_samples(
                 n_samples=10, temperature=1.0
             )  # B x N x S
@@ -340,10 +342,7 @@ def run_learning(mode_, path_data_, gps_targets_, measurements_):
             cost_gt = torch.sum(objective.error(), dim=1)
             loss = cost_gt - cost_opt
         else:
-            optimizer_path = get_path_from_values(
-                objective.batch_size, theseus_inputs, path_length
-            )
-            loss = F.mse_loss(optimizer_path, groundtruth_path)
+            loss = mse_loss
 
         loss = torch.mean(loss, dim=0)
         loss.backward()
@@ -362,8 +361,7 @@ def run_learning(mode_, path_data_, gps_targets_, measurements_):
                     groundtruth_path.detach().cpu().numpy(),
                 )
             print("Loss: ", loss.item())
-            mse_error = F.mse_loss(optimizer_path, groundtruth_path)
-            print("MSE error: ", mse_error.item())
+            print("MSE error: ", mse_loss.item())
             print(f" ---------------- END EPOCH {epoch} -------------- ")
 
     return best_solution, losses

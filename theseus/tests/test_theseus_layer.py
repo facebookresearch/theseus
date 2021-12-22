@@ -301,6 +301,8 @@ def _run_optimizer_test(
             | (info.status == th.NonlinearOptimizerStatus.FAIL)
         ).all()
 
+        mse_loss = F.mse_loss(pred_vars["coefficients"], target_vars["coefficients"])
+
         if learning_method == "leo":
             # groundtruth cost
             x_gt = target_vars["coefficients"]
@@ -310,7 +312,6 @@ def _run_optimizer_test(
             }
             layer_to_learn.objective.update(input_values_gt)
             cost_gt = torch.sum(layer_to_learn.objective.error(), dim=1)  # B x 1
-            cost_gt = cost_gt.to(device)
 
             # optimizer cost
             x_opt = pred_vars["coefficients"].detach()
@@ -322,7 +323,6 @@ def _run_optimizer_test(
             cost_opt = get_average_sample_cost(
                 x_samples, layer_to_learn, cost_weight_param_name, cost_weight_fn
             )
-            cost_opt = cost_opt.to(device)
 
             # loss value
             l2_reg = F.mse_loss(
@@ -331,12 +331,11 @@ def _run_optimizer_test(
             loss = (cost_gt - cost_opt) + 10.0 * l2_reg
             loss = torch.mean(loss, dim=0)
         else:
-            loss = F.mse_loss(pred_vars["coefficients"], target_vars["coefficients"])
+            loss = mse_loss
 
         loss.backward()
         optimizer.step()
 
-        mse_loss = F.mse_loss(pred_vars["coefficients"], target_vars["coefficients"])
         print(i, mse_loss.item())
         if mse_loss.item() / loss0 < 5e-3:
             solved = True

@@ -8,7 +8,6 @@ from typing import Any, Dict, List, Optional, Type
 import torch
 
 from theseus.core import Objective
-from theseus.extlib.cusolver_lu_solver import CusolverLUSolver
 from theseus.optimizer import Linearization, SparseLinearization
 from theseus.optimizer.autograd import LUCudaSolveFunction
 
@@ -26,6 +25,9 @@ class LUCudaSparseSolver(LinearSolver):
         num_solver_contexts=1,
         **kwargs,
     ):
+        if not torch.cuda.is_available():
+            raise RuntimeError("Cuda not available, LUCudaSparseSolver cannot be used")
+
         linearization_cls = linearization_cls or SparseLinearization
         if not linearization_cls == SparseLinearization:
             raise RuntimeError(
@@ -45,6 +47,19 @@ class LUCudaSparseSolver(LinearSolver):
         self._num_solver_contexts: int = num_solver_contexts
 
     def reset(self, batch_size: int = 16):
+        if not torch.cuda.is_available():
+            raise RuntimeError("Cuda not available, LUCudaSparseSolver cannot be used")
+
+        try:
+            from theseus.extlib.cusolver_lu_solver import CusolverLUSolver
+        except Exception as e:
+            raise RuntimeError(
+                "Theseus C++/Cuda extension cannot be loaded\n"
+                "even if Cuda appears to be available. Make sure Theseus\n"
+                "is installed with Cuda support (export CUDA_HOME=...)\n"
+                f"{type(e).__name__}: {e}"
+            )
+
         self.A_rowPtr = torch.tensor(
             self.linearization.structure().row_ptr, dtype=torch.int32
         ).cuda()

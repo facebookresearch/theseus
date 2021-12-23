@@ -33,6 +33,7 @@ from .optimizer.linear import (
     CholmodSparseSolver,
     DenseSolver,
     LinearOptimizer,
+    LUCudaSparseSolver,
     LUDenseSolver,
 )
 from .optimizer.nonlinear import (
@@ -45,8 +46,3 @@ from .optimizer.nonlinear import (
 from .theseus_layer import TheseusLayer
 
 import theseus.embodied as eb
-
-import torch
-
-if torch.cuda.is_available():
-    from .optimizer.linear import LUCudaSparseSolver

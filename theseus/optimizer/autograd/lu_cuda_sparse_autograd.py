@@ -5,15 +5,26 @@
 
 import torch
 
-from theseus.extlib.cusolver_lu_solver import CusolverLUSolver
-from theseus.extlib.mat_mult import apply_damping, mat_vec, mult_MtM, tmat_vec
-
 from ..linear_system import SparseStructure
 
 
 class LUCudaSolveFunction(torch.autograd.Function):
     @staticmethod
     def forward(ctx, *args, **kwargs):
+        if not torch.cuda.is_available():
+            raise RuntimeError("Cuda not available, LUCudaSolveFunction cannot be used")
+
+        try:
+            from theseus.extlib.cusolver_lu_solver import CusolverLUSolver
+            from theseus.extlib.mat_mult import apply_damping, mult_MtM, tmat_vec
+        except Exception as e:
+            raise RuntimeError(
+                "Theseus C++/Cuda extension cannot be loaded\n"
+                "even if Cuda appears to be available. Make sure Theseus\n"
+                "is installed with Cuda support (export CUDA_HOME=...)\n"
+                f"{type(e).__name__}: {e}"
+            )
+
         A_val: torch.Tensor = args[0]
         b: torch.Tensor = args[1]
         sparse_structure: SparseStructure = args[2]
@@ -104,6 +115,19 @@ class LUCudaSolveFunction(torch.autograd.Function):
     # (A')'s j-th colum is multiplying A's j-th colum by 2*H[j]*alpha*x[j]
     @staticmethod
     def backward(ctx, grad_output):
+
+        if not torch.cuda.is_available():
+            raise RuntimeError("Cuda not available, LUCudaSolveFunction cannot be used")
+
+        try:
+            from theseus.extlib.mat_mult import mat_vec
+        except Exception as e:
+            raise RuntimeError(
+                "Theseus C++/Cuda extension cannot be loaded\n"
+                "even if Cuda appears to be available. Make sure Theseus\n"
+                "is installed with Cuda support (export CUDA_HOME=...)\n"
+                f"{type(e).__name__}: {e}"
+            )
 
         # HACK: check if the context has been reused (and overwritten)
         if ctx.factor_id is not None and ctx.factor_id != ctx.solver_context.factor_id:

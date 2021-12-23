@@ -54,6 +54,9 @@ class TheseusLayer(nn.Module):
     ) -> torch.Tensor:
         if linear_solver is None:
             return None
+
+        # Sampling from multivariate normal using a Cholesky decomposition of AtA,
+        # http://www.statsathome.com/2018/10/19/sampling-from-multivariate-normal-precision-and-covariance-parameterizations/
         delta = linear_solver.solve()
         AtA = linear_solver.linearization.hessian_approx() / temperature
         sqrt_AtA = torch.linalg.cholesky(AtA).permute(0, 2, 1)

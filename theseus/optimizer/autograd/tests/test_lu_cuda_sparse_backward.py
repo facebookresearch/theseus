@@ -7,9 +7,7 @@ import pytest  # noqa: F401
 import torch
 from torch.autograd import gradcheck
 
-import theseus.core as theseus
-import theseus.optimizer as thoptim
-import theseus.optimizer.linear as thlin
+import theseus as th
 
 
 def _build_sparse_mat(batch_size):
@@ -31,9 +29,9 @@ def test_sparse_backward_step():
         return
     from theseus.optimizer.autograd import LUCudaSolveFunction
 
-    void_objective = theseus.Objective()
-    void_ordering = thoptim.VariableOrdering(void_objective, default_order=False)
-    solver = thlin.LUCudaSparseSolver(
+    void_objective = th.Objective()
+    void_ordering = th.VariableOrdering(void_objective, default_order=False)
+    solver = th.LUCudaSparseSolver(
         void_objective, linearization_kwargs={"ordering": void_ordering}, damping=0.01
     )
     linearization = solver.linearization

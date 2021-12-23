@@ -52,6 +52,8 @@ class TheseusLayer(nn.Module):
         n_samples: int = 10,
         temperature: float = 1.0,
     ) -> torch.Tensor:
+        # When samples are not available, return None. This makes the outer learning loop default
+        # to a perceptron loss using the mean trajectory solution from the optimizer.
         if linear_solver is None:
             return None
 

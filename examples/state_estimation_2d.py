@@ -319,7 +319,9 @@ def run_learning(mode_, path_data_, gps_targets_, measurements_):
             x_samples = state_estimator.compute_samples(
                 optimizer.linear_solver, n_samples=10, temperature=1.0
             )  # batch_size x n_vars x n_samples
-            if x_samples is None:  # use mean solution
+            # When x_samples is None, this defaults to a perceptron loss
+            # using the mean trajectory solution from the optimizer.
+            if x_samples is None:
                 x_opt_dict = {key: val.detach() for key, val in theseus_inputs.items()}
                 x_samples = get_path_from_values(
                     objective.batch_size, x_opt_dict, path_length

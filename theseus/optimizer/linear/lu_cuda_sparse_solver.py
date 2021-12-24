@@ -20,8 +20,6 @@ class LUCudaSparseSolver(LinearSolver):
         objective: Objective,
         linearization_cls: Optional[Type[Linearization]] = None,
         linearization_kwargs: Optional[Dict[str, Any]] = None,
-        damping: float = 1e-6,
-        batch_size: int = 16,
         num_solver_contexts=1,
         **kwargs,
     ):
@@ -40,9 +38,6 @@ class LUCudaSparseSolver(LinearSolver):
 
         if self.linearization.structure().num_rows:
             self.reset()
-
-        # the `damping` has the purpose of (optionally) improving conditioning
-        # self._damping: float = damping
 
         self._num_solver_contexts: int = num_solver_contexts
 

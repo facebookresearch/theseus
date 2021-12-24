@@ -29,11 +29,9 @@ def test_sparse_solver():
 
     void_objective = th.Objective()
     void_ordering = th.VariableOrdering(void_objective, default_order=False)
-    # damping = 0.2  # set big value for checking
     solver = th.LUCudaSparseSolver(
         void_objective,
         linearization_kwargs={"ordering": void_ordering},
-        # damping=damping,
     )
     linearization = solver.linearization
 
@@ -58,8 +56,8 @@ def test_sparse_solver():
         b = linearization.b[i].cpu()
         atb = torch.Tensor(csrAi.transpose() @ b)
 
-        # the linear system solved is with matrix (AtA + damping*I)
-        atb_check = ata @ solved_x[i].cpu()  # + damping * solved_x[i].cpu()
+        # the linear system solved is with matrix AtA
+        atb_check = ata @ solved_x[i].cpu()
 
         max_offset = torch.norm(atb - atb_check, p=float("inf"))
         assert max_offset < 1e-4
@@ -75,12 +73,10 @@ def check_sparse_solver_multistep(test_exception: bool):
 
     void_objective = th.Objective()
     void_ordering = th.VariableOrdering(void_objective, default_order=False)
-    # damping = 0.2  # set big value for checking
     solver = th.LUCudaSparseSolver(
         void_objective,
         linearization_kwargs={"ordering": void_ordering},
-        num_solver_contexts=(num_steps - 1) if test_exception else num_steps
-        # damping=damping,
+        num_solver_contexts=(num_steps - 1) if test_exception else num_steps,
     )
     linearization = solver.linearization
 

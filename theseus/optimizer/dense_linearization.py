@@ -60,3 +60,6 @@ class DenseLinearization(Linearization):
         At = self.A.transpose(1, 2)
         self.AtA = At.bmm(self.A)
         self.Atb = At.bmm(self.b.unsqueeze(2))
+
+    def hessian_approx(self):
+        return self.AtA

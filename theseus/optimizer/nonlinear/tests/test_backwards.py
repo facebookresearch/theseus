@@ -40,7 +40,11 @@ def quad_error_fn(optim_vars, aux_vars):
 optim_vars = [a, b]
 aux_vars = [x, y]
 cost_function = th.AutoDiffCostFunction(
-    optim_vars, quad_error_fn, num_points, aux_vars=aux_vars, name="quadratic_cost_fn"
+    optim_vars,  # type: ignore
+    quad_error_fn,
+    num_points,
+    aux_vars=aux_vars,
+    name="quadratic_cost_fn",
 )
 objective = th.Objective()
 objective.add(cost_function)

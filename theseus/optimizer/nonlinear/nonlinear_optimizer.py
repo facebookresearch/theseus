@@ -167,7 +167,7 @@ class NonlinearOptimizer(Optimizer, abc.ABC):
         info.converged_indices = self._check_convergence(err, info.last_err)
         info.converged_indices &= ~info.error_increase_indices
         info.status[
-            np.array(info.converged_indices)
+            np.array(info.converged_indices.detach().cpu())
         ] = NonlinearOptimizerStatus.CONVERGED
 
     # loop for the iterative optimizer

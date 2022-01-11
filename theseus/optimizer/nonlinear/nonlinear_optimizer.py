@@ -261,7 +261,9 @@ class NonlinearOptimizer(Optimizer, abc.ABC):
                 backward_num_iterations = 1
             else:
                 if "backward_num_iterations" not in kwargs:
-                    raise ValueError()
+                    raise ValueError(
+                        "backward_num_iterations expected but not received"
+                    )
                 backward_num_iterations = kwargs["backward_num_iterations"]
 
             num_no_grad_iter = self.params.max_iterations - backward_num_iterations
@@ -305,7 +307,7 @@ class NonlinearOptimizer(Optimizer, abc.ABC):
 
             return info
         else:
-            raise ValueError()
+            raise ValueError("Unrecognized backward mode")
 
     @abc.abstractmethod
     def compute_delta(self, **kwargs) -> torch.Tensor:

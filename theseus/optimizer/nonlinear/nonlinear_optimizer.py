@@ -45,7 +45,6 @@ class NonlinearOptimizerStatus(Enum):
 @dataclass
 class NonlinearOptimizerInfo(OptimizerInfo):
     converged_iter: torch.Tensor
-    converged_indices: torch.Tensor
     best_iter: torch.Tensor
     err_history: Optional[torch.Tensor]
     last_err: torch.Tensor
@@ -115,7 +114,6 @@ class NonlinearOptimizer(Optimizer, abc.ABC):
         with torch.no_grad():
             last_err = self.objective.error_squared_norm() / 2
         best_err = last_err.clone() if track_best_solution else None
-        converged_indices = torch.zeros_like(last_err).bool()
         if verbose:
             err_history = (
                 torch.ones(self.objective.batch_size, self.params.max_iterations + 1)
@@ -127,7 +125,6 @@ class NonlinearOptimizer(Optimizer, abc.ABC):
             err_history = None
         return NonlinearOptimizerInfo(
             best_solution=self._maybe_init_best_solution(do_init=track_best_solution),
-            converged_indices=converged_indices,
             last_err=last_err,
             best_err=best_err,
             status=np.array(
@@ -143,8 +140,9 @@ class NonlinearOptimizer(Optimizer, abc.ABC):
         info: NonlinearOptimizerInfo,
         current_iter: int,
         err: torch.Tensor,
+        converged_indices: torch.Tensor,
     ):
-        info.converged_iter += 1 - info.converged_indices.long()
+        info.converged_iter += 1 - converged_indices.long()
         if info.err_history is not None:
             assert err.grad_fn is None
             info.err_history[:, current_iter + 1] = err.clone().cpu()
@@ -161,9 +159,9 @@ class NonlinearOptimizer(Optimizer, abc.ABC):
 
             info.best_err = torch.minimum(info.best_err, err)
 
-        info.converged_indices = self._check_convergence(err, info.last_err)
+        converged_indices = self._check_convergence(err, info.last_err)
         info.status[
-            np.array(info.converged_indices.detach().cpu())
+            np.array(converged_indices.detach().cpu())
         ] = NonlinearOptimizerStatus.CONVERGED
 
     # loop for the iterative optimizer
@@ -177,7 +175,7 @@ class NonlinearOptimizer(Optimizer, abc.ABC):
         force_update,
         **kwargs,
     ):
-
+        converged_indices = torch.zeros_like(info.last_err).bool()
         for it_ in range(start_iter, start_iter + num_iter):
             # do optimizer step
             self.linear_solver.linearization.linearize()
@@ -200,19 +198,23 @@ class NonlinearOptimizer(Optimizer, abc.ABC):
                     return info
 
             self.retract_and_update_variables(
-                delta, info.converged_indices, force_update=force_update
+                delta, converged_indices, force_update=force_update
             )
 
             # check for convergence
             with torch.no_grad():
                 err = self.objective.error_squared_norm() / 2
-                self._update_info(info, it_, err)
+                self._update_info(info, it_, err, converged_indices)
                 if verbose:
                     print(
                         f"Nonlinear optimizer. Iteration: {it_+1}. "
                         f"Error: {err.mean().item()}"
                     )
-                if info.converged_indices.all():
+                converged_indices = self._check_convergence(err, info.last_err)
+                info.status[
+                    converged_indices.cpu().numpy()
+                ] = NonlinearOptimizerStatus.CONVERGED
+                if converged_indices.all():
                     break  # nothing else will happen at this point
                 info.last_err = err
 
@@ -293,7 +295,6 @@ class NonlinearOptimizer(Optimizer, abc.ABC):
                 | (grad_loop_info.status[M] == NonlinearOptimizerStatus.CONVERGED)
             )
             info.status[M] = grad_loop_info.status[M]
-            info.converged_indices[M] = grad_loop_info.converged_indices[M]
             info.converged_iter[M] = (
                 info.converged_iter[M] + grad_loop_info.converged_iter[M]
             )

@@ -10,7 +10,6 @@
 
 import torch
 import theseus as th
-import theseus.optimizer.nonlinear as thnl
 
 import numpy as np
 import numdifftools as nd
@@ -73,7 +72,7 @@ updated_inputs, info = theseus_optim.forward(
     theseus_inputs,
     track_best_solution=True,
     verbose=False,
-    backward_mode=thnl.BackwardMode.FULL,
+    backward_mode=th.BackwardMode.FULL,
 )
 
 da_dx = torch.autograd.grad(updated_inputs["a"], data_x, retain_graph=True)[0].squeeze()
@@ -86,7 +85,7 @@ updated_inputs, info = theseus_optim.forward(
     theseus_inputs,
     track_best_solution=True,
     verbose=False,
-    backward_mode=thnl.BackwardMode.IMPLICIT,
+    backward_mode=th.BackwardMode.IMPLICIT,
 )
 
 da_dx = torch.autograd.grad(updated_inputs["a"], data_x, retain_graph=True)[0].squeeze()
@@ -97,7 +96,7 @@ updated_inputs, info = theseus_optim.forward(
     theseus_inputs,
     track_best_solution=True,
     verbose=False,
-    backward_mode=thnl.BackwardMode.TRUNCATED,
+    backward_mode=th.BackwardMode.TRUNCATED,
     backward_num_iterations=5,
 )
 
@@ -136,7 +135,7 @@ for trial in range(n_trials + 1):
         theseus_inputs,
         track_best_solution=True,
         verbose=False,
-        backward_mode=thnl.BackwardMode.FULL,
+        backward_mode=th.BackwardMode.FULL,
     )
     times["fwd"].append(time.time() - start)
 
@@ -150,7 +149,7 @@ for trial in range(n_trials + 1):
         theseus_inputs,
         track_best_solution=True,
         verbose=False,
-        backward_mode=thnl.BackwardMode.IMPLICIT,
+        backward_mode=th.BackwardMode.IMPLICIT,
     )
     start = time.time()
     da_dx = torch.autograd.grad(updated_inputs["a"], data_x, retain_graph=True)[
@@ -162,7 +161,7 @@ for trial in range(n_trials + 1):
         theseus_inputs,
         track_best_solution=True,
         verbose=False,
-        backward_mode=thnl.BackwardMode.TRUNCATED,
+        backward_mode=th.BackwardMode.TRUNCATED,
         backward_num_iterations=5,
     )
     start = time.time()

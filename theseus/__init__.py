@@ -41,6 +41,7 @@ from .optimizer.nonlinear import (
     NonlinearLeastSquares,
     NonlinearOptimizerParams,
     NonlinearOptimizerStatus,
+    BackwardMode,
 )
 from .theseus_layer import TheseusLayer
 

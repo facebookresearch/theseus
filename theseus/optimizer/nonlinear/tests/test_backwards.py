@@ -8,7 +8,6 @@ import pytest  # noqa: F401
 import torch
 
 import theseus as th
-import theseus.optimizer.nonlinear as thnl
 
 torch.manual_seed(0)
 
@@ -84,7 +83,7 @@ def test_backwards():
         theseus_inputs,
         track_best_solution=True,
         verbose=False,
-        backward_mode=thnl.BackwardMode.FULL,
+        backward_mode=th.BackwardMode.FULL,
     )
     da_dx_full = torch.autograd.grad(updated_inputs["a"], data_x, retain_graph=True)[
         0
@@ -95,7 +94,7 @@ def test_backwards():
     # updated_inputs, info = theseus_optim.forward(
     #     theseus_inputs,
     #     track_best_solution=True, verbose=False,
-    #     backward_mode=thnl.BackwardMode.IMPLICIT,
+    #     backward_mode=th.BackwardMode.IMPLICIT,
     # )
     # da_dx_implicit = torch.autograd.grad(
     #     updated_inputs['a'], data_x,
@@ -107,7 +106,7 @@ def test_backwards():
         theseus_inputs,
         track_best_solution=True,
         verbose=False,
-        backward_mode=thnl.BackwardMode.TRUNCATED,
+        backward_mode=th.BackwardMode.TRUNCATED,
         backward_num_iterations=5,
     )
     da_dx_truncated = torch.autograd.grad(

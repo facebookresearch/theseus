@@ -46,7 +46,6 @@ class NonlinearOptimizerStatus(Enum):
 class NonlinearOptimizerInfo(OptimizerInfo):
     converged_iter: torch.Tensor
     converged_indices: torch.Tensor
-    error_increase_indices: torch.Tensor
     best_iter: torch.Tensor
     err_history: Optional[torch.Tensor]
     last_err: torch.Tensor
@@ -117,7 +116,6 @@ class NonlinearOptimizer(Optimizer, abc.ABC):
             last_err = self.objective.error_squared_norm() / 2
         best_err = last_err.clone() if track_best_solution else None
         converged_indices = torch.zeros_like(last_err).bool()
-        error_increase_indices = torch.zeros_like(last_err).bool()
         if verbose:
             err_history = (
                 torch.ones(self.objective.batch_size, self.params.max_iterations + 1)
@@ -132,7 +130,6 @@ class NonlinearOptimizer(Optimizer, abc.ABC):
             converged_indices=converged_indices,
             last_err=last_err,
             best_err=best_err,
-            error_increase_indices=error_increase_indices,
             status=np.array(
                 [NonlinearOptimizerStatus.START] * self.objective.batch_size
             ),
@@ -165,7 +162,6 @@ class NonlinearOptimizer(Optimizer, abc.ABC):
             info.best_err = torch.minimum(info.best_err, err)
 
         info.converged_indices = self._check_convergence(err, info.last_err)
-        info.converged_indices &= ~info.error_increase_indices
         info.status[
             np.array(info.converged_indices.detach().cpu())
         ] = NonlinearOptimizerStatus.CONVERGED
@@ -288,9 +284,6 @@ class NonlinearOptimizer(Optimizer, abc.ABC):
                 force_update=True,
                 **kwargs,
             )
-
-            if any(grad_loop_info.error_increase_indices):
-                raise RuntimeError("Grad loop error increased")
 
             # Merge the converged status into the info from the detached loop,
             # and for now, don't update the best err tracking or best solution.

@@ -172,7 +172,7 @@ class NonlinearOptimizer(Optimizer, abc.ABC):
         info,
         track_best_solution,
         verbose,
-        force_update,
+        truncated_grad_loop,
         **kwargs,
     ):
         converged_indices = torch.zeros_like(info.last_err).bool()
@@ -197,8 +197,15 @@ class NonlinearOptimizer(Optimizer, abc.ABC):
                     info.status[:] = NonlinearOptimizerStatus.FAIL
                     return info
 
+            if truncated_grad_loop:
+                step_size = 1.0
+                force_update = True
+            else:
+                step_size = self.params.step_size
+                force_update = False
+
             self.retract_and_update_variables(
-                delta, converged_indices, force_update=force_update
+                delta, converged_indices, step_size, force_update=force_update
             )
 
             # check for convergence
@@ -251,7 +258,7 @@ class NonlinearOptimizer(Optimizer, abc.ABC):
                 info=info,
                 track_best_solution=track_best_solution,
                 verbose=verbose,
-                force_update=False,
+                truncated_grad_loop=False,
                 **kwargs,
             )
         elif backward_mode in [BackwardMode.IMPLICIT, BackwardMode.TRUNCATED]:
@@ -272,7 +279,7 @@ class NonlinearOptimizer(Optimizer, abc.ABC):
                     info=info,
                     track_best_solution=track_best_solution,
                     verbose=verbose,
-                    force_update=False,
+                    truncated_grad_loop=False,
                     **kwargs,
                 )
 
@@ -283,7 +290,7 @@ class NonlinearOptimizer(Optimizer, abc.ABC):
                 info=grad_loop_info,
                 track_best_solution=False,
                 verbose=verbose,
-                force_update=True,
+                truncated_grad_loop=True,
                 **kwargs,
             )
 
@@ -313,10 +320,11 @@ class NonlinearOptimizer(Optimizer, abc.ABC):
         self,
         delta: torch.Tensor,
         converged_indices: torch.Tensor,
+        step_size: float,
         force_update: bool = False,
     ):
         var_idx = 0
-        delta = self.params.step_size * delta
+        delta = step_size * delta
         for var in self.linear_solver.linearization.ordering:
             new_var = var.retract(delta[:, var_idx : var_idx + var.dof()])
             var.update(new_var.data, batch_ignore_mask=converged_indices)

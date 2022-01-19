@@ -323,7 +323,6 @@ class NonlinearOptimizer(Optimizer, abc.ABC):
         delta = step_size * delta
         for var in self.linear_solver.linearization.ordering:
             new_var = var.retract(delta[:, var_idx : var_idx + var.dof()])
-            var.update(new_var.data, batch_ignore_mask=converged_indices)
             if force_update:
                 var.update(new_var.data)
             else:

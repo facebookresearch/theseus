@@ -90,17 +90,16 @@ def test_backwards():
     ].squeeze()
     assert torch.allclose(da_dx_numeric, da_dx_full, atol=1e-3)
 
-    # TODO: Debug a little more
-    # updated_inputs, info = theseus_optim.forward(
-    #     theseus_inputs,
-    #     track_best_solution=True, verbose=False,
-    #     backward_mode=th.BackwardMode.IMPLICIT,
-    # )
-    # da_dx_implicit = torch.autograd.grad(
-    #     updated_inputs['a'], data_x,
-    #     retain_graph=True)[0].squeeze()
-    # EPS=1e-3
-    # assert torch.allclose(da_dx_numeric, da_dx_implicit, atol=EPS)
+    updated_inputs, info = theseus_optim.forward(
+        theseus_inputs,
+        track_best_solution=True,
+        verbose=False,
+        backward_mode=th.BackwardMode.IMPLICIT,
+    )
+    da_dx_implicit = torch.autograd.grad(
+        updated_inputs["a"], data_x, retain_graph=True
+    )[0].squeeze()
+    assert torch.allclose(da_dx_numeric, da_dx_implicit, atol=1e-4)
 
     updated_inputs, info = theseus_optim.forward(
         theseus_inputs,
@@ -112,7 +111,7 @@ def test_backwards():
     da_dx_truncated = torch.autograd.grad(
         updated_inputs["a"], data_x, retain_graph=True
     )[0].squeeze()
-    assert torch.allclose(da_dx_numeric, da_dx_truncated, atol=1e-1)
+    assert torch.allclose(da_dx_numeric, da_dx_truncated, atol=1e-4)
 
 
 test_backwards()

@@ -167,12 +167,11 @@ class NonlinearOptimizer(Optimizer, abc.ABC):
     # loop for the iterative optimizer
     def _optimize_loop(
         self,
-        start_iter,
-        num_iter,
-        info,
-        track_best_solution,
-        verbose,
-        truncated_grad_loop,
+        start_iter: int,
+        num_iter: int,
+        info: NonlinearOptimizerInfo,
+        verbose: bool,
+        truncated_grad_loop: bool,
         **kwargs,
     ):
         converged_indices = torch.zeros_like(info.last_err).bool()
@@ -256,7 +255,6 @@ class NonlinearOptimizer(Optimizer, abc.ABC):
                 start_iter=0,
                 num_iter=self.params.max_iterations,
                 info=info,
-                track_best_solution=track_best_solution,
                 verbose=verbose,
                 truncated_grad_loop=False,
                 **kwargs,
@@ -277,7 +275,6 @@ class NonlinearOptimizer(Optimizer, abc.ABC):
                     start_iter=0,
                     num_iter=num_no_grad_iter,
                     info=info,
-                    track_best_solution=track_best_solution,
                     verbose=verbose,
                     truncated_grad_loop=False,
                     **kwargs,
@@ -288,7 +285,6 @@ class NonlinearOptimizer(Optimizer, abc.ABC):
                 start_iter=0,
                 num_iter=backward_num_iterations,
                 info=grad_loop_info,
-                track_best_solution=False,
                 verbose=verbose,
                 truncated_grad_loop=True,
                 **kwargs,

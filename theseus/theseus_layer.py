@@ -3,7 +3,7 @@
 # This source code is licensed under the MIT license found in the
 # LICENSE file in the root directory of this source tree.
 
-from typing import Dict, Optional, Tuple
+from typing import Any, Dict, Optional, Tuple
 
 import torch
 import torch.nn as nn
@@ -25,9 +25,7 @@ class TheseusLayer(nn.Module):
     def forward(
         self,
         input_data: Optional[Dict[str, torch.Tensor]] = None,
-        track_best_solution: bool = False,
-        verbose: bool = False,
-        **optimizer_kwargs
+        optimizer_kwargs: Optional[Dict[str, Any]] = None,
     ) -> Tuple[Dict[str, torch.Tensor], OptimizerInfo]:
         if self._objectives_version != self.objective.current_version:
             raise RuntimeError(
@@ -35,9 +33,8 @@ class TheseusLayer(nn.Module):
                 "currently not supported."
             )
         self.objective.update(input_data)
-        info = self.optimizer.optimize(
-            track_best_solution=track_best_solution, verbose=verbose, **optimizer_kwargs
-        )
+        optimizer_kwargs = optimizer_kwargs or {}
+        info = self.optimizer.optimize(**optimizer_kwargs)
         values = dict(
             [
                 (var_name, var.data)

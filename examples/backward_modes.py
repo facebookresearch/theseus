@@ -79,9 +79,11 @@ theseus_inputs = {
 theseus_optim = th.TheseusLayer(optimizer)
 updated_inputs, info = theseus_optim.forward(
     theseus_inputs,
-    track_best_solution=True,
-    verbose=False,
-    backward_mode=th.BackwardMode.FULL,
+    optimizer_kwargs={
+        "track_best_solution": True,
+        "verbose": False,
+        "backward_mode": th.BackwardMode.FULL,
+    },
 )
 
 # The quadratic \hat y is now fit and we can also use Theseus
@@ -98,9 +100,11 @@ print(da_dx.numpy())
 # forward again and changing the backward_mode flag.
 updated_inputs, info = theseus_optim.forward(
     theseus_inputs,
-    track_best_solution=True,
-    verbose=False,
-    backward_mode=th.BackwardMode.IMPLICIT,
+    optimizer_kwargs={
+        "track_best_solution": True,
+        "verbose": False,
+        "backward_mode": th.BackwardMode.IMPLICIT,
+    },
 )
 
 da_dx = torch.autograd.grad(updated_inputs["a"], data_x, retain_graph=True)[0].squeeze()
@@ -110,10 +114,12 @@ print(da_dx.numpy())
 # We can also use truncated unrolling to compute the derivative:
 updated_inputs, info = theseus_optim.forward(
     theseus_inputs,
-    track_best_solution=True,
-    verbose=False,
-    backward_mode=th.BackwardMode.TRUNCATED,
-    backward_num_iterations=5,
+    optimizer_kwargs={
+        "track_best_solution": True,
+        "verbose": False,
+        "backward_mode": th.BackwardMode.TRUNCATED,
+        "backward_num_iterations": 5,
+    },
 )
 
 da_dx = torch.autograd.grad(updated_inputs["a"], data_x, retain_graph=True)[0].squeeze()
@@ -127,8 +133,8 @@ def fit_x(data_x_np):
     theseus_inputs["x"] = (
         torch.from_numpy(data_x_np).float().clone().requires_grad_().unsqueeze(0)
     )
-    updated_inputs, info = theseus_optim.forward(
-        theseus_inputs, track_best_solution=True, verbose=False
+    updated_inputs, _ = theseus_optim.forward(
+        theseus_inputs, optimizer_kwargs={"track_best_solution": True, "verbose": False}
     )
     return updated_inputs["a"].item()
 
@@ -150,9 +156,11 @@ for trial in range(n_trials + 1):
     start = time.time()
     updated_inputs, info = theseus_optim.forward(
         theseus_inputs,
-        track_best_solution=True,
-        verbose=False,
-        backward_mode=th.BackwardMode.FULL,
+        optimizer_kwargs={
+            "track_best_solution": True,
+            "verbose": False,
+            "backward_mode": th.BackwardMode.FULL,
+        },
     )
     times["fwd"].append(time.time() - start)
 
@@ -164,9 +172,11 @@ for trial in range(n_trials + 1):
 
     updated_inputs, info = theseus_optim.forward(
         theseus_inputs,
-        track_best_solution=True,
-        verbose=False,
-        backward_mode=th.BackwardMode.IMPLICIT,
+        optimizer_kwargs={
+            "track_best_solution": True,
+            "verbose": False,
+            "backward_mode": th.BackwardMode.IMPLICIT,
+        },
     )
     start = time.time()
     da_dx = torch.autograd.grad(updated_inputs["a"], data_x, retain_graph=True)[
@@ -176,10 +186,12 @@ for trial in range(n_trials + 1):
 
     updated_inputs, info = theseus_optim.forward(
         theseus_inputs,
-        track_best_solution=True,
-        verbose=False,
-        backward_mode=th.BackwardMode.TRUNCATED,
-        backward_num_iterations=5,
+        optimizer_kwargs={
+            "track_best_solution": True,
+            "verbose": False,
+            "backward_mode": th.BackwardMode.TRUNCATED,
+            "backward_num_iterations": 5,
+        },
     )
     start = time.time()
     da_dx = torch.autograd.grad(updated_inputs["a"], data_x, retain_graph=True)[

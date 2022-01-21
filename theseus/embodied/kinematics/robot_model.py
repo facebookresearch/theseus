@@ -39,3 +39,15 @@ class IdentityModel(RobotModel):
 
     def dim(self) -> int:
         return 1
+
+class UrdfRobotModel(RobotModel):
+    def __init__(self, urdf_path: str):
+        pass # to be implemented
+    
+    def forward_kinematics(self, joint_states: torch.Tensor) -> Dict[str, SE3]:
+        pass # to be implemented
+    
+    def dim(self) -> int:
+        pass # to be implemented
+    
+    

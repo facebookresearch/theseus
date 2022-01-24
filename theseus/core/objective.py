@@ -422,6 +422,7 @@ class Objective:
                     return max_bs
             raise ValueError("Provided data tensors must be broadcastable.")
 
+        input_data = input_data or {}
         for var_name, data in input_data.items():
             if data.ndim < 2:
                 raise ValueError(

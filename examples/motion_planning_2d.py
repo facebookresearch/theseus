@@ -149,9 +149,13 @@ def run_learning_loop(cfg):
 
             _, info = motion_planner.layer.forward(
                 planner_inputs,
-                track_best_solution=True,
-                verbose=cfg.verbose,
-                **cfg.optim_params.kwargs,
+                optimizer_kwargs={
+                    **{
+                        "track_best_solution": True,
+                        "verbose": cfg.verbose,
+                    },
+                    **cfg.optim_params.kwargs,
+                },
             )
             if cfg.do_learning and cfg.include_imitation_loss:
                 solution_trajectory = motion_planner.get_trajectory()

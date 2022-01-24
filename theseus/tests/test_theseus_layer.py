@@ -519,3 +519,31 @@ def test_pass_optimizer_kwargs():
         # If fake_arg is passed correctly, the mock of compute_delta will trigger
         with pytest.raises(ValueError):
             layer_2.forward(input_values, {"fake_arg": True})
+
+
+def test_no_layer_kwargs():
+    # Create the dataset to fit, model(x) is the true data generation process
+    batch_size = 16
+    num_points = 10
+    xs = torch.linspace(0, 10, num_points).repeat(batch_size, 1)
+    ys = model(xs, torch.ones(batch_size, 2))
+
+    layer = create_qf_theseus_layer(
+        xs,
+        ys,
+        nonlinear_optimizer_cls=th.GaussNewton,
+        linear_solver_cls=th.CholmodSparseSolver,
+    )
+    layer.to("cpu")
+    input_values = {"coefficients": torch.ones(batch_size, 2) * 0.5}
+
+    # Trying a few variations of aux_vars. In general, no kwargs should be accepted
+    # beyong input_data and optimization_kwargs, but I'm not sure how to test for this
+    with pytest.raises(TypeError):
+        layer.forward(input_values, aux_vars=None)
+
+    with pytest.raises(TypeError):
+        layer.forward(input_values, aux_variables=None)
+
+    with pytest.raises(TypeError):
+        layer.forward(input_values, auxiliary_vars=None)

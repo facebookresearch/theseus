@@ -24,7 +24,7 @@ class SO3(LieGroup):
         raise NotImplementedError
 
     def dof(self) -> int:
-        raise NotImplementedError
+        return 3
 
     def __repr__(self) -> str:
         return f"SO3(data={self.data}, name={self.name})"

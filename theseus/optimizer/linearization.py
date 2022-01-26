@@ -52,3 +52,6 @@ class Linearization(abc.ABC):
                 "Attempted to linearize an objective with an incomplete variable order."
             )
         self._linearize_hessian_impl()
+
+    def hessian_approx(self):
+        raise NotImplementedError

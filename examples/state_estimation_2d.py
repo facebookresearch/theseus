@@ -10,17 +10,51 @@ import torch.nn as nn
 import torch.nn.functional as F
 
 import theseus as th
+import matplotlib.pyplot as plt
 
 device = "cpu"
 torch.manual_seed(0)
 path_length = 50
 state_size = 2
 batch_size = 4
+learning_method = "leo"  # "default", "leo"
+
+vis_flag = True
+plt.ion()
 
 
 # --------------------------------------------------- #
 # --------------------- Utilities ------------------- #
 # --------------------------------------------------- #
+def plot_path(optimizer_path, groundtruth_path):
+    plt.cla()
+    plt.gca().axis("equal")
+
+    plt.xlim(-250, 250)
+    plt.ylim(-100, 400)
+
+    batch_idx = 0
+    plt.plot(
+        optimizer_path[batch_idx, :, 0],
+        optimizer_path[batch_idx, :, 1],
+        linewidth=2,
+        linestyle="-",
+        color="tab:orange",
+        label="optimizer",
+    )
+    plt.plot(
+        groundtruth_path[batch_idx, :, 0],
+        groundtruth_path[batch_idx, :, 1],
+        linewidth=2,
+        linestyle="-",
+        color="tab:green",
+        label="groundtruth",
+    )
+
+    plt.show()
+    plt.pause(1e-12)
+
+
 def generate_path_data(
     batch_size_,
     num_measurements_,
@@ -120,6 +154,42 @@ def get_path_from_values(batch_size_, values_, path_length_):
     return path
 
 
+def get_values_from_path(path_):
+    """
+    :param path_: tensor of dim batch_size_ x path_length_ x 2
+    :return: values: dict of (x,y) pos values
+    """
+    [batch_size_, path_length_, dim] = path_.shape
+    values = {}
+    for i in range(path_length_):
+        values[f"pose_{i}"] = path_[:, i, :2]
+    return values
+
+
+def get_average_sample_cost(x_samples, cost_weights_model, objective, mode_):
+    cost_opt = None
+    n_samples = x_samples.shape[-1]
+    for sidx in range(0, n_samples):
+        x_sample_vals = get_values_from_path(
+            x_samples[:, :, sidx].reshape(x_samples.shape[0], -1, 2)
+        )
+        theseus_inputs = run_model(
+            mode_,
+            cost_weights_model,
+            x_sample_vals,
+            path_length,
+            print_stuff=False,
+        )
+        objective.update(theseus_inputs)
+        if cost_opt is not None:
+            cost_opt = cost_opt + torch.sum(objective.error(), dim=1)
+        else:
+            cost_opt = torch.sum(objective.error(), dim=1)
+    cost_opt = cost_opt / n_samples
+
+    return cost_opt
+
+
 # ------------------------------------------------------------- #
 # --------------------------- Learning ------------------------ #
 # ------------------------------------------------------------- #
@@ -132,7 +202,7 @@ def run_learning(mode_, path_data_, gps_targets_, measurements_):
         def cost_weights_model():
             return model_params * torch.ones(1)
 
-        model_optimizer = torch.optim.Adam([model_params], lr=3e-2)
+        model_optimizer = torch.optim.Adam([model_params], lr=5e-2)
     else:
         cost_weights_model = SimpleNN(state_size, 2, hid_size=100, use_offset=False).to(
             device
@@ -201,14 +271,14 @@ def run_learning(mode_, path_data_, gps_targets_, measurements_):
     state_estimator.to(device)
 
     # ## Learning loop
-    path_tensor = torch.stack(path_data_).permute(1, 0, 2)
     best_loss = 1000.0
+    inner_loop_iters = 3
+    groundtruth_path = torch.stack(path_data_).permute(1, 0, 2)
     best_solution = None
     losses = []
-    for epoch in range(200):
+    for epoch in range(500):
         model_optimizer.zero_grad()
 
-        inner_loop_iters = 3
         theseus_inputs = get_initial_inputs(gps_targets_)
         theseus_inputs = run_model(
             mode_,
@@ -223,10 +293,12 @@ def run_learning(mode_, path_data_, gps_targets_, measurements_):
                 print("Initial error:", objective.error_squared_norm().mean().item())
 
         for i in range(inner_loop_iters):
-            theseus_inputs, info = state_estimator.forward(
+            theseus_inputs, _ = state_estimator.forward(
                 theseus_inputs,
-                track_best_solution=True,
-                verbose=epoch % 10 == 0,
+                optimizer_kwargs={
+                    "track_best_solution": True,
+                    "verbose": epoch % 10 == 0,
+                },
             )
             theseus_inputs = run_model(
                 mode_,
@@ -236,21 +308,64 @@ def run_learning(mode_, path_data_, gps_targets_, measurements_):
                 print_stuff=epoch % 10 == 0 and i == 0,
             )
 
-        solution_path = get_path_from_values(
+        optimizer_path = get_path_from_values(
             objective.batch_size, theseus_inputs, path_length
         )
+        mse_loss = F.mse_loss(optimizer_path, groundtruth_path)
 
-        loss = F.mse_loss(solution_path, path_tensor)
+        # LEO (Sodhi et al., https://arxiv.org/abs/2108.02274) is a method to learn
+        # models end-to-end within second-order optimizers. The main difference is that
+        # instead of unrolling the optimizer and minimizing the MSE tracking loss,
+        # it uses a NLL energy-based loss that does not backpropagate through the optimizer.
+        if learning_method == "leo":
+            x_samples = state_estimator.compute_samples(
+                optimizer.linear_solver, n_samples=10, temperature=1.0
+            )  # batch_size x n_vars x n_samples
+            # When x_samples is None, this defaults to a perceptron loss
+            # using the mean trajectory solution from the optimizer.
+            if x_samples is None:
+                x_opt_dict = {key: val.detach() for key, val in theseus_inputs.items()}
+                x_samples = get_path_from_values(
+                    objective.batch_size, x_opt_dict, path_length
+                )
+                x_samples = x_samples.reshape(x_samples.shape[0], -1).unsqueeze(
+                    -1
+                )  # batch_size x n_vars x 1
+            cost_opt = get_average_sample_cost(
+                x_samples, cost_weights_model, objective, mode_
+            )
+            x_gt = get_values_from_path(groundtruth_path)
+            theseus_inputs_gt = run_model(
+                mode_,
+                cost_weights_model,
+                x_gt,
+                path_length,
+                print_stuff=False,
+            )
+            objective.update(theseus_inputs_gt)
+            cost_gt = torch.sum(objective.error(), dim=1)
+            loss = cost_gt - cost_opt
+        else:
+            loss = mse_loss
+
+        loss = torch.mean(loss, dim=0)
         loss.backward()
         model_optimizer.step()
+
         loss_value = loss.item()
         losses.append(loss_value)
         if loss_value < best_loss:
             best_loss = loss_value
-            best_solution = solution_path.detach()
+            best_solution = optimizer_path.detach()
 
         if epoch % 10 == 0:
-            print("TOTAL LOSS: ", loss.item())
+            if vis_flag:
+                plot_path(
+                    optimizer_path.detach().cpu().numpy(),
+                    groundtruth_path.detach().cpu().numpy(),
+                )
+            print("Loss: ", loss.item())
+            print("MSE error: ", mse_loss.item())
             print(f" ---------------- END EPOCH {epoch} -------------- ")
 
     return best_solution, losses
@@ -269,8 +384,6 @@ for i in range(path_length):
         measurement_noise = 0.005 * torch.randn(batch_size, 2).view(batch_size, 2)
         measurements.append(measurement + measurement_noise)
 
-mlp_solution, mlp_losses = run_learning("mlp", path_data, gps_targets, measurements)
-print(" -------------------------------------------------------------- ")
 constant_solution, constant_losses = run_learning(
     "constant", path_data, gps_targets, measurements
 )

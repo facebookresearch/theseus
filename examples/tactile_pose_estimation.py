@@ -325,7 +325,9 @@ def run_learning_loop(cfg):
                 (sdf_tensor.data).repeat(batch_size, 1, 1).to(device)
             )
 
-            theseus_inputs, _ = theseus_layer.forward(theseus_inputs, verbose=True)
+            theseus_inputs, _ = theseus_layer.forward(
+                theseus_inputs, optimizer_kwargs={"verbose": True}
+            )
 
             obj_poses_opt = theg.get_tactile_poses_from_values(
                 batch_size=batch_size,

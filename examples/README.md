@@ -7,12 +7,14 @@ learn the cost weight as a function of pose.
 problem, inspired by [Bhardwaj et al. 2020](https://arxiv.org/pdf/1907.09591.pdf).
 - tactile_pose_estimation.py: Is an example of how to set up learning models for
 tactile pose estimation, as described in [Sodhi et al. 2021](https://arxiv.org/abs/1705.10664)
+- backward_modes.py: Shows how to compute derivatives through Theseus solves and switch between backward modes.
 
 These can be run from your root `theseus` directory by doing
 
     python examples/state_estimation_2d.py
     python examples/motion_planning_2d.py
     python examples/tactile_pose_estimation.py
+    python examples/backward_modes.py
 
 The motion planning and tactile estimation examples require `hydra` installation which you can obtain
 by running.

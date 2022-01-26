@@ -108,7 +108,6 @@ def check_sparse_solver_multistep(test_exception: bool):
     def iterate_solver(As, bs):
         accum = None
         for A, b in zip(As, bs):
-            # print("it1...", linearization.b.shape)
             linearization.A_val = A
             linearization.b = b
             res = solver.solve()

@@ -60,10 +60,9 @@ class SO3(LieGroup):
     def _SO3_matrix_check(matrix: torch.Tensor):
         if matrix.ndim != 3 or matrix.shape[1:] != (3, 3):
             raise ValueError("3D rotations can only be 3x3 matrices.")
-        # _check = (
-        #     torch.linalg.matmul(matrix, matrix.transpose(1, 2)) - torch.eye(3, 3)
-        # ).abs().max().item() < SO3.SO3_EPS
-        _check = True
+        _check = (
+            torch.matmul(matrix, matrix.transpose(1, 2)) - torch.eye(3, 3)
+        ).abs().max().item() < SO3.SO3_EPS
         _check &= (torch.linalg.det(matrix) - 1).abs().max().item() < SO3.SO3_EPS
 
         if not _check:

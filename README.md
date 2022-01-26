@@ -26,6 +26,7 @@ The current focus is on nonlinear least squares with support for sparsity, batch
     ```bash
     pytest theseus
     ```
+  By default both cuda and non-cuda tests are run, add the option `-m "not cuda"` to skip cuda tests when installing without cuda support.
 - See [tutorials](tutorials/) and [examples](examples/) to learn about the API and usage.
 
 

@@ -24,6 +24,7 @@ def _build_sparse_mat(batch_size):
     return 12, 10, data, col_ind, row_ptr
 
 
+@pytest.mark.cuda
 def test_sparse_backward_step():
     if not torch.cuda.is_available():
         return

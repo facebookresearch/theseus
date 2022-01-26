@@ -22,6 +22,7 @@ def _build_sparse_mat(batch_size):
     return 12, 10, data, col_ind, row_ptr
 
 
+@pytest.mark.cuda
 def test_sparse_solver():
 
     if not torch.cuda.is_available():
@@ -155,9 +156,11 @@ def check_sparse_solver_multistep(test_exception: bool):
                 assert numeric_der.isclose(analytic_der, rtol=3e-2, atol=5e-2).all()
 
 
+@pytest.mark.cuda
 def test_sparse_solver_multistep_gradient():
     check_sparse_solver_multistep(False)
 
 
+@pytest.mark.cuda
 def test_sparse_solver_multistep_exception():
     check_sparse_solver_multistep(True)

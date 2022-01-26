@@ -117,10 +117,7 @@ run_tests: &run_tests
       working_directory: ~/project
       command: |
         pytest -s theseus/tests/test_theseus_layer.py
-        pytest -s theseus/extlib/tests/test_mat_mult.py
-        pytest -s theseus/extlib/tests/test_cusolver_lu_solver.py
-        pytest -s theseus/optimizer/autograd/tests/test_lu_cuda_sparse_backward.py
-        pytest -s theseus/optimizer/linear/tests/test_lu_cuda_sparse_solver.py
+        pytest -s theseus -m "cuda"
 
 # -------------------------------------------------------------------------------------
 # Jobs

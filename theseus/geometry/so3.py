@@ -52,7 +52,7 @@ class SO3(LieGroup):
             return f"SO3(matrix={self.data}), name={self.name})"
 
     def _adjoint_impl(self) -> torch.Tensor:
-        raise self.data
+        return self.data
 
     @staticmethod
     def _SO3_matrix_check(matrix: torch.Tensor):

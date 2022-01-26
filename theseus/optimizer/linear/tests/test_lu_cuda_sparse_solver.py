@@ -129,7 +129,7 @@ def check_sparse_solver_multistep(test_exception: bool):
     # otherwise, compute and check gradient
     result.backward(torch.ones_like(result))
 
-    epsilon = 1e-4
+    epsilon = 1e-7
     num_checks = 10
     for i in range(num_checks):
         for perturb_A in [False, True]:
@@ -152,7 +152,7 @@ def check_sparse_solver_multistep(test_exception: bool):
 
                 perturbed_result = iterate_solver(perturbed_As, perturbed_bs)
                 numeric_der = (perturbed_result - result) / epsilon
-                assert numeric_der.isclose(analytic_der, rtol=3e-2, atol=5e-2).all()
+                assert numeric_der.isclose(analytic_der, rtol=1e-4, atol=1e-4).all()
 
 
 @pytest.mark.cuda

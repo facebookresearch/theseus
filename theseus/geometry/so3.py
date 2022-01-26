@@ -23,18 +23,23 @@ class SO3(LieGroup):
     ):
         if quaternion is not None and data is not None:
             raise ValueError("Please provide only one of theta or data.")
-
         if quaternion is not None:
             dtype = quaternion.dtype
+        if data is not None:
+            self._SO3_matrix_check(data)
         super().__init__(data=data, name=name, dtype=dtype)
-
         if quaternion is not None:
             if quaternion.ndim == 1:
                 quaternion = quaternion.unsqueeze(0)
+            self.update_from_unit_quaternion(quaternion)
 
     @staticmethod
     def _init_data() -> torch.Tensor:  # type: ignore
-        raise torch.eye(3, 3).veiw(1, 3, 3)
+        return torch.eye(3, 3).view(1, 3, 3)
+
+    def update_from_unit_quaternion(self, quaternion: torch.Tensor):
+        self._unit_quaternion_check(quaternion)
+        raise NotImplementedError
 
     def dof(self) -> int:
         return 3

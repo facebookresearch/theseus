@@ -102,9 +102,11 @@ def check_sparse_solver_multistep(test_exception: bool):
     ]
     c = torch.randn((batch_size, num_cols), dtype=torch.double).cuda()
 
+    # batched dot product
     def batched_dot(a, b):
         return torch.sum(a * b, dim=1)
 
+    # computes accum = sum(A_i \ b_i), returns dot(accum, c)
     def iterate_solver(As, bs):
         accum = None
         for A, b in zip(As, bs):
@@ -129,6 +131,8 @@ def check_sparse_solver_multistep(test_exception: bool):
     # otherwise, compute and check gradient
     result.backward(torch.ones_like(result))
 
+    # we select random vectors `perturb` and check if the (numerically
+    # approximated) directional derivative matches with dot(perturb, grad)
     epsilon = 1e-7
     num_checks = 10
     for i in range(num_checks):

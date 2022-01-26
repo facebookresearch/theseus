@@ -61,7 +61,8 @@ class SO3(LieGroup):
         if matrix.ndim != 3 or matrix.shape[1:] != (3, 3):
             raise ValueError("3D rotations can only be 3x3 matrices.")
         _check = (
-            torch.matmul(matrix, matrix.transpose(1, 2)) - torch.eye(3, 3)
+            torch.matmul(matrix, matrix.transpose(1, 2))
+            - torch.eye(3, 3, dtype=matrix.dtype, device=matrix.device)
         ).abs().max().item() < SO3.SO3_EPS
         _check &= (torch.linalg.det(matrix) - 1).abs().max().item() < SO3.SO3_EPS
 
@@ -78,7 +79,28 @@ class SO3(LieGroup):
 
     @staticmethod
     def exp_map(tangent_vector: torch.Tensor) -> LieGroup:
-        raise NotImplementedError
+        if tangent_vector.ndim != 2 or tangent_vector.shape[1] != 3:
+            raise ValueError("Invalid input for SO3.exp_map.")
+        theta = torch.linalg.norm(tangent_vector, dim=1, keepdim=True).unsqueeze(1)
+        theta2 = theta ** 2
+        sel = theta >= 0.01
+        a = torch.where(sel, theta.cos(), 8 / (4 + theta2) - 1)
+        b = torch.where(sel, theta.sin() / theta, 0.5 * a + 0.5)
+        c = torch.where(sel, (1 - a) / theta2, 0.5 * b)
+        xi = tangent_vector.unsqueeze(2)
+        ret = c * xi @ xi.transpose(1, 2)
+        ret[:, 0, 0] += a.view(-1)
+        ret[:, 1, 1] += a.view(-1)
+        ret[:, 2, 2] += a.view(-1)
+        sxi = xi.view(-1, 3) * b.view(-1, 1)
+        ret[:, 0, 1] -= sxi[:, 2]
+        ret[:, 1, 0] += sxi[:, 2]
+        ret[:, 0, 2] += sxi[:, 1]
+        ret[:, 2, 0] -= sxi[:, 1]
+        ret[:, 1, 2] -= sxi[:, 0]
+        ret[:, 2, 1] += sxi[:, 0]
+
+        return SO3(data=ret)
 
     def _log_map_impl(self) -> torch.Tensor:
         raise NotImplementedError

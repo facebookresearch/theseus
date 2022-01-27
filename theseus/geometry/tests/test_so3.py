@@ -3,6 +3,7 @@
 # This source code is licensed under the MIT license found in the
 # LICENSE file in the root directory of this source tree.
 
+import numpy as np
 import pytest  # noqa: F401
 import torch
 
@@ -29,12 +30,17 @@ def test_log_map():
         tangent_vector = torch.rand(batch_size, 3).double() - 0.5
         check_log_map(tangent_vector, th.SO3)
 
+    for batch_size in [1, 2, 100]:
+        tangent_vector = torch.rand(batch_size, 3).double() - 0.5
+        tangent_vector /= torch.linalg.norm(tangent_vector, dim=1, keepdim=True)
+        tangent_vector *= 1e-5
+        check_log_map(tangent_vector, th.SO3)
 
-# def test_inverse():
-#     rng = torch.Generator()
-#     for batch_size in [1, 20, 100]:
-#         so3 = _create_random_so3(batch_size, rng)
-#         check_inverse(so3)
+    for batch_size in [1, 2, 100]:
+        tangent_vector = torch.rand(batch_size, 3).double() - 0.5
+        tangent_vector /= torch.linalg.norm(tangent_vector, dim=1, keepdim=True)
+        tangent_vector *= np.pi - 0.1
+        check_log_map(tangent_vector, th.SO3)
 
 
 def test_adjoint():

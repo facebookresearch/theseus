@@ -105,7 +105,7 @@ class SO3(LieGroup):
     def _log_map_impl(self) -> torch.Tensor:
         cth = 0.5 * (self.data[:, 0, 0] + self.data[:, 1, 1] + self.data[:, 2, 2] - 1)
         theta = cth.acos()
-        sel = theta > 1e-4
+        sel = theta >= 5e-3
         ret1 = torch.zeros(
             self.data.shape[0], 3, dtype=self.data.dtype, device=self.data.device
         )
@@ -113,7 +113,7 @@ class SO3(LieGroup):
         ret1[:, 1] = 0.5 * (self.data[:, 0, 2] - self.data[:, 2, 0])
         ret1[:, 2] = 0.5 * (self.data[:, 1, 0] - self.data[:, 0, 1])
         sth = ret1.norm(dim=1)
-        scale = torch.where(sel, sth / theta, 1 + sth ** 2 / 6)
+        scale = torch.where(sel, theta / sth, 1 + sth ** 2 / 6)
         ret1 *= scale.view(-1, 1)
         m00 = self.data[:, 0, 0]
         m11 = self.data[:, 1, 1]
@@ -126,7 +126,7 @@ class SO3(LieGroup):
         ret2.view(-1)[major] -= cth
         ret2 *= (theta ** 2 / (1 - cth)).view(-1, 1)
         ret2 /= ret2.view(-1)[major].sqrt().view(-1, 1)
-        return torch.where(1 + cth < 1e-9, ret1, ret2)
+        return torch.where((1 + cth > 1e-9).view(-1, 1), ret1, ret2)
 
     def _compose_impl(self, so3_2: LieGroup) -> "SO3":
         raise NotImplementedError

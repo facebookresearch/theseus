@@ -166,11 +166,7 @@ class SO3(LieGroup):
         ).abs().max().item() < theseus.constants.EPS
         if not _check:
             raise ValueError("Invalid hat matrix for SO3.")
-        vec = torch.zeros(matrix.shape[0], 3, dtype=matrix.dtype, device=matrix.device)
-        vec[:, 0] = matrix[:, 2, 1]
-        vec[:, 1] = matrix[:, 0, 2]
-        vec[:, 2] = matrix[:, 1, 0]
-        return vec
+        return torch.stack((matrix[:, 2, 1], matrix[:, 0, 2], matrix[:, 1, 0]), dim=1)
 
     def _rotate_shape_check(self, point: Union[Point3, torch.Tensor]):
         err_msg = "SO3 can only rotate 3-D vectors."

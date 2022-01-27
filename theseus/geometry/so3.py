@@ -126,11 +126,10 @@ class SO3(LieGroup):
         major2 = torch.logical_and(
             ddiag[:, 1] > ddiag[:, 0], ddiag[:, 1] > ddiag[:, 2]
         ) + 2 * torch.logical_and(ddiag[:, 2] > ddiag[:, 0], ddiag[:, 2] > ddiag[:, 1])
-        major2 += torch.arange(0, ret.numel(), 3, device=major2.device)[sel2]
-        ret[sel2] = self.data.view(-1, 3)[major2]
-        ret.view(-1)[major2] -= cth[sel2]
+        ret[sel2] = self.data[sel2, major2]
+        ret[sel2, major2] -= cth[sel2]
         ret[sel2] *= (theta[sel2] ** 2 / (1 - cth[sel2])).view(-1, 1)
-        ret[sel2] /= ret.view(-1)[major2].sqrt().view(-1, 1)
+        ret[sel2] /= ret[sel2, major2].sqrt().view(-1, 1)
         return ret
 
     def _compose_impl(self, so3_2: LieGroup) -> "SO3":

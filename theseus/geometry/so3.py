@@ -84,22 +84,22 @@ class SO3(LieGroup):
         ret = SO3(dtype=tangent_vector.dtype)
         theta = torch.linalg.norm(tangent_vector, dim=1, keepdim=True).unsqueeze(1)
         theta2 = theta ** 2
+        # Compute the approximations when theta ~ 0
         sel = theta >= 0.005
         a = torch.where(sel, theta.cos(), 8 / (4 + theta2) - 1)
         b = torch.where(sel, theta.sin() / theta, 0.5 * a + 0.5)
         c = torch.where(sel, (1 - a) / theta2, 0.5 * b)
-        xi = tangent_vector.unsqueeze(2)
-        ret.data = c * xi @ xi.transpose(1, 2)
+        ret.data = c * tangent_vector.view(-1, 3, 1) @ tangent_vector.view(-1, 1, 3)
         ret.data[:, 0, 0] += a.view(-1)
         ret.data[:, 1, 1] += a.view(-1)
         ret.data[:, 2, 2] += a.view(-1)
-        sxi = xi.view(-1, 3) * b.view(-1, 1)
-        ret.data[:, 0, 1] -= sxi[:, 2]
-        ret.data[:, 1, 0] += sxi[:, 2]
-        ret.data[:, 0, 2] += sxi[:, 1]
-        ret.data[:, 2, 0] -= sxi[:, 1]
-        ret.data[:, 1, 2] -= sxi[:, 0]
-        ret.data[:, 2, 1] += sxi[:, 0]
+        temp = b.view(-1, 1) * tangent_vector
+        ret.data[:, 0, 1] -= temp[:, 2]
+        ret.data[:, 1, 0] += temp[:, 2]
+        ret.data[:, 0, 2] += temp[:, 1]
+        ret.data[:, 2, 0] -= temp[:, 1]
+        ret.data[:, 1, 2] -= temp[:, 0]
+        ret.data[:, 2, 1] += temp[:, 0]
         return ret
 
     def _log_map_impl(self) -> torch.Tensor:
@@ -112,18 +112,20 @@ class SO3(LieGroup):
         cth = 0.5 * (self.data[:, 0, 0] + self.data[:, 1, 1] + self.data[:, 2, 2] - 1)
         sth = ret.norm(dim=1)
         theta = torch.atan2(sth, cth)
+        # theta != pi
         sel1 = 1 + cth > 1e-9
+        # Compute the approximation of theta / sin(theta) when theta ~ 0
         scale1 = torch.where(
-            theta[sel1] >= 5e-3, theta[sel1] / sth[sel1], 1 + sth[sel1] ** 2 / 6
+            theta[sel1] >= 0.005, theta[sel1] / sth[sel1], 1 + sth[sel1] ** 2 / 6
         )
         ret[sel1] *= scale1.view(-1, 1)
+        # theta ~ pi
         sel2 = ~sel1
-        m00 = self.data[sel2, 0, 0]
-        m11 = self.data[sel2, 1, 1]
-        m22 = self.data[sel2, 2, 2]
-        major2 = torch.logical_and(m11 > m00, m11 > m22) + 2 * torch.logical_and(
-            m22 > m00, m22 > m11
-        )
+        ddiag = torch.diagonal(self.data[sel2], dim1=1, dim2=2)
+        # Find the index of major coloumns and diagonals
+        major2 = torch.logical_and(
+            ddiag[:, 1] > ddiag[:, 0], ddiag[:, 1] > ddiag[:, 2]
+        ) + 2 * torch.logical_and(ddiag[:, 2] > ddiag[:, 0], ddiag[:, 2] > ddiag[:, 1])
         major2 += torch.arange(0, ret.numel(), 3, device=major2.device)[sel2]
         ret[sel2] = self.data.view(-1, 3)[major2]
         ret.view(-1)[major2] -= cth[sel2]

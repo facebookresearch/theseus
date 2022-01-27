@@ -81,29 +81,45 @@ class SO3(LieGroup):
     def exp_map(tangent_vector: torch.Tensor) -> LieGroup:
         if tangent_vector.ndim != 2 or tangent_vector.shape[1] != 3:
             raise ValueError("Invalid input for SO3.exp_map.")
+        ret = SO3(dtype=tangent_vector.dtype)
         theta = torch.linalg.norm(tangent_vector, dim=1, keepdim=True).unsqueeze(1)
         theta2 = theta ** 2
-        sel = theta >= 0.01
+        sel = theta >= 0.005
         a = torch.where(sel, theta.cos(), 8 / (4 + theta2) - 1)
         b = torch.where(sel, theta.sin() / theta, 0.5 * a + 0.5)
         c = torch.where(sel, (1 - a) / theta2, 0.5 * b)
         xi = tangent_vector.unsqueeze(2)
-        ret = c * xi @ xi.transpose(1, 2)
-        ret[:, 0, 0] += a.view(-1)
-        ret[:, 1, 1] += a.view(-1)
-        ret[:, 2, 2] += a.view(-1)
+        ret.data = c * xi @ xi.transpose(1, 2)
+        ret.data[:, 0, 0] += a.view(-1)
+        ret.data[:, 1, 1] += a.view(-1)
+        ret.data[:, 2, 2] += a.view(-1)
         sxi = xi.view(-1, 3) * b.view(-1, 1)
-        ret[:, 0, 1] -= sxi[:, 2]
-        ret[:, 1, 0] += sxi[:, 2]
-        ret[:, 0, 2] += sxi[:, 1]
-        ret[:, 2, 0] -= sxi[:, 1]
-        ret[:, 1, 2] -= sxi[:, 0]
-        ret[:, 2, 1] += sxi[:, 0]
-
-        return SO3(data=ret)
+        ret.data[:, 0, 1] -= sxi[:, 2]
+        ret.data[:, 1, 0] += sxi[:, 2]
+        ret.data[:, 0, 2] += sxi[:, 1]
+        ret.data[:, 2, 0] -= sxi[:, 1]
+        ret.data[:, 1, 2] -= sxi[:, 0]
+        ret.data[:, 2, 1] += sxi[:, 0]
+        return ret
 
     def _log_map_impl(self) -> torch.Tensor:
-        raise NotImplementedError
+        m00 = self.data[:, 0, 0]
+        m11 = self.data[:, 1, 1]
+        m22 = self.data[:, 2, 2]
+        ret = torch.zeros(
+            self.data.shape[0], 3, dtype=self.data.dtype, device=self.data.device
+        )
+        ret[:, 0] = 1 + m00 - m11 - m22
+        ret[:, 1] = 1 - m00 + m11 - m22
+        ret[:, 2] = 1 - m00 - m11 + m22
+        ret *= ret >= 0
+        ret = ret.sqrt()
+        ret[:, 0] *= 2 * (self.data[:, 2, 1] >= self.data[:, 1, 2]) - 1
+        ret[:, 1] *= 2 * (self.data[:, 0, 2] >= self.data[:, 2, 0]) - 1
+        ret[:, 2] *= 2 * (self.data[:, 1, 0] >= self.data[:, 0, 1]) - 1
+        sth = 0.5 * torch.linalg.norm(ret, dim=1, keepdim=True)
+        scale = torch.where(sth > 1e-3, sth.asin() / sth, 1 + sth ** 2 / 6)
+        return ret * scale
 
     def _compose_impl(self, so3_2: LieGroup) -> "SO3":
         raise NotImplementedError

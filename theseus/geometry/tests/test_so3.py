@@ -8,9 +8,7 @@ import torch
 
 import theseus as th
 
-from .common import (  # check_inverse,; check_compose,; check_exp_map,; check_log_map,
-    check_adjoint,
-)
+from .common import check_adjoint, check_exp_map, check_log_map
 
 
 def _create_random_so3(batch_size, rng):
@@ -18,6 +16,18 @@ def _create_random_so3(batch_size, rng):
     qnorm = torch.linalg.norm(q, dim=1, keepdim=True)
     q = q / qnorm
     return th.SO3(quaternion=q)
+
+
+def test_exp_map():
+    for batch_size in [1, 20, 100]:
+        tangent_vector = torch.rand(batch_size, 3).double() - 0.5
+        check_exp_map(tangent_vector, th.SO3)
+
+
+def test_log_map():
+    for batch_size in [1, 2, 100]:
+        tangent_vector = torch.rand(batch_size, 3).double() - 0.5
+        check_log_map(tangent_vector, th.SO3)
 
 
 # def test_inverse():

@@ -28,7 +28,6 @@ class SO3(LieGroup):
         if quaternion is not None:
             dtype = quaternion.dtype
         if data is not None:
-            dtype = data.dtype
             self._SO3_matrix_check(data)
         super().__init__(data=data, name=name, dtype=dtype)
         if quaternion is not None:
@@ -90,26 +89,24 @@ class SO3(LieGroup):
         b = torch.where(sel, theta.sin() / theta, 0.5 * a + 0.5)
         c = torch.where(sel, (1 - a) / theta2, 0.5 * b)
         ret.data = c * tangent_vector.view(-1, 3, 1) @ tangent_vector.view(-1, 1, 3)
-        ret.data[:, 0, 0] += a.view(-1)
-        ret.data[:, 1, 1] += a.view(-1)
-        ret.data[:, 2, 2] += a.view(-1)
+        ret[:, 0, 0] += a.view(-1)
+        ret[:, 1, 1] += a.view(-1)
+        ret[:, 2, 2] += a.view(-1)
         temp = b.view(-1, 1) * tangent_vector
-        ret.data[:, 0, 1] -= temp[:, 2]
-        ret.data[:, 1, 0] += temp[:, 2]
-        ret.data[:, 0, 2] += temp[:, 1]
-        ret.data[:, 2, 0] -= temp[:, 1]
-        ret.data[:, 1, 2] -= temp[:, 0]
-        ret.data[:, 2, 1] += temp[:, 0]
+        ret[:, 0, 1] -= temp[:, 2]
+        ret[:, 1, 0] += temp[:, 2]
+        ret[:, 0, 2] += temp[:, 1]
+        ret[:, 2, 0] -= temp[:, 1]
+        ret[:, 1, 2] -= temp[:, 0]
+        ret[:, 2, 1] += temp[:, 0]
         return ret
 
     def _log_map_impl(self) -> torch.Tensor:
-        ret = torch.zeros(
-            self.data.shape[0], 3, dtype=self.data.dtype, device=self.data.device
-        )
-        ret[:, 0] = 0.5 * (self.data[:, 2, 1] - self.data[:, 1, 2])
-        ret[:, 1] = 0.5 * (self.data[:, 0, 2] - self.data[:, 2, 0])
-        ret[:, 2] = 0.5 * (self.data[:, 1, 0] - self.data[:, 0, 1])
-        cth = 0.5 * (self.data[:, 0, 0] + self.data[:, 1, 1] + self.data[:, 2, 2] - 1)
+        ret = torch.zeros(self.shape[0], 3, dtype=self.dtype, device=self.device)
+        ret[:, 0] = 0.5 * (self[:, 2, 1] - self[:, 1, 2])
+        ret[:, 1] = 0.5 * (self[:, 0, 2] - self[:, 2, 0])
+        ret[:, 2] = 0.5 * (self[:, 1, 0] - self[:, 0, 1])
+        cth = 0.5 * (self[:, 0, 0] + self[:, 1, 1] + self[:, 2, 2] - 1)
         sth = ret.norm(dim=1)
         theta = torch.atan2(sth, cth)
         # theta != pi
@@ -121,12 +118,12 @@ class SO3(LieGroup):
         ret[sel1] *= scale1.view(-1, 1)
         # theta ~ pi
         sel2 = ~sel1
-        ddiag = torch.diagonal(self.data[sel2], dim1=1, dim2=2)
+        ddiag = torch.diagonal(self[sel2], dim1=1, dim2=2)
         # Find the index of major coloumns and diagonals
         major2 = torch.logical_and(
             ddiag[:, 1] > ddiag[:, 0], ddiag[:, 1] > ddiag[:, 2]
         ) + 2 * torch.logical_and(ddiag[:, 2] > ddiag[:, 0], ddiag[:, 2] > ddiag[:, 1])
-        ret[sel2] = self.data[sel2, major2]
+        ret[sel2] = self[sel2, major2]
         ret[sel2, major2] -= cth[sel2]
         ret[sel2] *= (theta[sel2] ** 2 / (1 - cth[sel2])).view(-1, 1)
         ret[sel2] /= ret[sel2, major2].sqrt().view(-1, 1)

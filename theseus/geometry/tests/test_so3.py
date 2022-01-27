@@ -8,8 +8,9 @@ import pytest  # noqa: F401
 import torch
 
 import theseus as th
+from theseus.constants import EPS
 
-from .common import check_adjoint, check_exp_map, check_log_map
+from .common import check_adjoint, check_exp_map
 
 
 def _create_random_so3(batch_size, rng):
@@ -17,6 +18,12 @@ def _create_random_so3(batch_size, rng):
     qnorm = torch.linalg.norm(q, dim=1, keepdim=True)
     q = q / qnorm
     return th.SO3(quaternion=q)
+
+
+def check_SO3_log_map(tangent_vector, group_cls):
+    error = (tangent_vector - group_cls.exp_map(tangent_vector).log_map()).norm(dim=1)
+    error = torch.minimum(error, (error - 2 * np.pi).abs())
+    assert torch.allclose(error, torch.zeros_like(error), atol=EPS)
 
 
 def test_exp_map():
@@ -28,19 +35,19 @@ def test_exp_map():
 def test_log_map():
     for batch_size in [1, 2, 100]:
         tangent_vector = torch.rand(batch_size, 3).double() - 0.5
-        check_log_map(tangent_vector, th.SO3)
+        check_SO3_log_map(tangent_vector, th.SO3)
 
     for batch_size in [1, 2, 100]:
         tangent_vector = torch.rand(batch_size, 3).double() - 0.5
         tangent_vector /= torch.linalg.norm(tangent_vector, dim=1, keepdim=True)
         tangent_vector *= 1e-5
-        check_log_map(tangent_vector, th.SO3)
+        check_SO3_log_map(tangent_vector, th.SO3)
 
     for batch_size in [1, 2, 100]:
         tangent_vector = torch.rand(batch_size, 3).double() - 0.5
         tangent_vector /= torch.linalg.norm(tangent_vector, dim=1, keepdim=True)
-        tangent_vector *= np.pi - 0.1
-        check_log_map(tangent_vector, th.SO3)
+        tangent_vector *= np.pi - 1e-11
+        check_SO3_log_map(tangent_vector, th.SO3)
 
 
 def test_adjoint():

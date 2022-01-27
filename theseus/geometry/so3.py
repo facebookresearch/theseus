@@ -113,7 +113,7 @@ class SO3(LieGroup):
         sth = ret.norm(dim=1)
         theta = torch.atan2(sth, cth)
         # theta != pi
-        sel1 = 1 + cth > 1e-9
+        sel1 = 1 + cth > 1e-7
         # Compute the approximation of theta / sin(theta) when theta ~ 0
         scale1 = torch.where(
             theta[sel1] >= 0.005, theta[sel1] / sth[sel1], 1 + sth[sel1] ** 2 / 6

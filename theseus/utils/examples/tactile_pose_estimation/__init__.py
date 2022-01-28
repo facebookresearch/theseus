@@ -9,3 +9,4 @@ from .models import (
     get_tactile_poses_from_values,
     init_tactile_model_from_file,
 )
+from .pose_estimator import TactilePoseEstimator

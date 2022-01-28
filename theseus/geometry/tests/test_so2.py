@@ -91,13 +91,19 @@ def test_rotate_and_unrotate():
                     [so2, th.Point2(point_tensor)],
                     function_dim=2,
                 )
+
+                assert jacobians_rotate[0].shape == expected_jac[0].shape
+                assert jacobians_rotate[1].shape == expected_jac[1].shape
                 assert torch.allclose(jacobians_rotate[0], expected_jac[0])
                 assert torch.allclose(jacobians_rotate[1], expected_jac[1])
+
                 expected_jac = numeric_jacobian(
                     lambda groups: groups[0].unrotate(groups[1]),
                     [so2, rotated_point],
                     function_dim=2,
                 )
+                assert jacobians_unrotate[0].shape == expected_jac[0].shape
+                assert jacobians_unrotate[1].shape == expected_jac[1].shape
                 assert torch.allclose(jacobians_unrotate[0], expected_jac[0])
                 assert torch.allclose(jacobians_unrotate[1], expected_jac[1])
 

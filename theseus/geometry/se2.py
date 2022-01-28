@@ -95,18 +95,18 @@ class SE2(LieGroup):
     def _log_map_impl(self) -> torch.Tensor:
         rotation = self.rotation
         theta = rotation.log_map().view(-1)
-        cth, sth = rotation.to_cos_sin()
+        cosine, sine = rotation.to_cos_sin()
         small_theta = theta.abs() < 1e-7
 
         # Computer the approximations when theta is near to 0
         non_zero = torch.ones(1, dtype=self.dtype, device=self.device)
         a = (
             0.5
-            * (1 + cth)
+            * (1 + cosine)
             * torch.where(
                 small_theta,
-                1 + sth ** 2 / 6,
-                theta / torch.where(small_theta, non_zero, sth),
+                1 + sine ** 2 / 6,
+                theta / torch.where(small_theta, non_zero, sine),
             )
         )
         b = 0.5 * theta

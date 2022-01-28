@@ -17,6 +17,8 @@ from .so2 import SO2
 # If data is passed, must be x, y, cos, sin
 # If x_y_theta is passed, must be tensor with shape batch_size x 3
 class SE2(LieGroup):
+    SE2_EPS = 5e-7
+
     def __init__(
         self,
         x_y_theta: Optional[torch.Tensor] = None,
@@ -92,37 +94,27 @@ class SE2(LieGroup):
     # From https://github.com/strasdat/Sophus/blob/master/sophus/se2.hpp#L160
     def _log_map_impl(self) -> torch.Tensor:
         rotation = self.rotation
+        theta = rotation.log_map().view(-1)
+        cth, sth = rotation.to_cos_sin()
+        small_theta = theta.abs() < 1e-7
 
-        theta = rotation.log_map()
-        half_theta = 0.5 * theta.view(-1)
-
-        cosine, sine = rotation.to_cos_sin()
-        cos_minus_one = cosine - 1
-        halftheta_by_tan_of_halftheta = torch.zeros_like(cos_minus_one)
-
-        # Compute halftheta_by_tan_of_halftheta when theta is not near zero
-        idx_regular_vals = cos_minus_one.abs() > theseus.constants.EPS
-        halftheta_by_tan_of_halftheta[idx_regular_vals] = (
-            -(half_theta * sine)[idx_regular_vals] / cos_minus_one[idx_regular_vals]
-        )
-        # Same as above three lines but for small values
-        idx_small_vals = cos_minus_one.abs() < theseus.constants.EPS
-        if idx_small_vals.any():
-            theta_sq_at_idx = theta[idx_small_vals] ** 2
-            halftheta_by_tan_of_halftheta[idx_small_vals] = (
-                -theta_sq_at_idx.view(-1) / 12 + 1
+        # Computer the approximations when theta is near to 0
+        non_zero = torch.ones(1, dtype=self.dtype, device=self.device)
+        a = (
+            0.5
+            * (1 + cth)
+            * torch.where(
+                small_theta,
+                1 + sth ** 2 / 6,
+                theta / torch.where(small_theta, non_zero, sth),
             )
-
-        v_inv = torch.empty(self.shape[0], 2, 2).to(
-            device=self.device, dtype=self.dtype
         )
-        v_inv[:, 0, 0] = halftheta_by_tan_of_halftheta
-        v_inv[:, 0, 1] = half_theta
-        v_inv[:, 1, 0] = -half_theta
-        v_inv[:, 1, 1] = halftheta_by_tan_of_halftheta
-        tangent_translation = torch.matmul(v_inv, self[:, :2].unsqueeze(-1))
+        b = 0.5 * theta
 
-        return torch.cat([tangent_translation.view(-1, 2), theta], dim=1)
+        return torch.stack(
+            (a * self[:, 0] + b * self[:, 1], a * self[:, 1] - b * self[:, 0], theta),
+            dim=1,
+        )
 
     # From https://github.com/strasdat/Sophus/blob/master/sophus/se2.hpp#L558
     @staticmethod

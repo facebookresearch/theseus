@@ -1,3 +1,5 @@
+from typing import Dict, Tuple
+
 import matplotlib.patches as mpatches
 import matplotlib.pyplot as plt
 import numpy as np
@@ -8,58 +10,86 @@ import torch
 # ----------------------------------------------------------------------------------- #
 
 
-def load_tactile_dataset_from_file(filename, episode, device=None):
+class TactilePushingDataset:
+    def __init__(
+        self,
+        data_fname: str,
+        sdf_fname: str,
+        episode: int,
+        device: torch.device,
+    ):
+        data = TactilePushingDataset._load_dataset_from_file(
+            data_fname, episode, device
+        )
+        (
+            self.sdf_data_tensor,
+            self.sdf_cell_size,
+            self.sdf_origin,
+        ) = TactilePushingDataset._load_tactile_sdf_from_file(sdf_fname, device)
 
-    with open(filename) as f:
-        import json
+        for key, val in data.items():
+            setattr(self, key, val)
 
-        data_from_file = json.load(f)
+    @staticmethod
+    def _load_dataset_from_file(
+        filename: str, episode: int, device: torch.device
+    ) -> Dict[str, torch.Tensor]:
+        with open(filename) as f:
+            import json
 
-    dataset_all = {}
-    dataset_all["obj_poses"] = torch.tensor(
-        data_from_file["obj_poses_2d"], device=device
-    )
-    dataset_all["eff_poses"] = torch.tensor(
-        data_from_file["ee_poses_2d"], device=device
-    )
-    dataset_all["img_feats"] = torch.tensor(data_from_file["img_feats"], device=device)
-    dataset_all["contact_episode"] = torch.tensor(
-        data_from_file["contact_episode"], device=device
-    )
-    dataset_all["contact_flag"] = torch.tensor(
-        data_from_file["contact_flag"], device=device
-    )
+            data_from_file = json.load(f)
 
-    dataset = {}
-    ds_idxs = torch.nonzero(dataset_all["contact_episode"] == episode).squeeze()
-    for key, val in dataset_all.items():
-        dataset[key] = val[ds_idxs]
+        dataset_all = {}
+        dataset_all["obj_poses"] = torch.tensor(
+            data_from_file["obj_poses_2d"], device=device
+        )
+        dataset_all["eff_poses"] = torch.tensor(
+            data_from_file["ee_poses_2d"], device=device
+        )
+        dataset_all["img_feats"] = torch.tensor(
+            data_from_file["img_feats"], device=device
+        )
+        dataset_all["contact_episode"] = torch.tensor(
+            data_from_file["contact_episode"], device=device
+        )
+        dataset_all["contact_flag"] = torch.tensor(
+            data_from_file["contact_flag"], device=device
+        )
 
-    return dataset
+        data = {}
+        ds_idxs = torch.nonzero(dataset_all["contact_episode"] == episode).squeeze()
+        for key, val in dataset_all.items():
+            data[key] = val[ds_idxs]
+        return data
 
+    @staticmethod
+    def _load_tactile_sdf_from_file(
+        filename: str, device: torch.device
+    ) -> Tuple[torch.Tensor, torch.Tensor, torch.Tensor]:
 
-def load_tactile_sdf_from_file(filename, device=None):
+        with open(filename) as f:
+            import json
 
-    with open(filename) as f:
-        import json
+            sdf_from_file = json.load(f)
+        sdf_data_vec = sdf_from_file["grid_data"]
 
-        sdf_from_file = json.load(f)
-    sdf_data_vec = sdf_from_file["grid_data"]
+        sdf_data_mat = np.zeros(
+            (sdf_from_file["grid_size_y"], sdf_from_file["grid_size_x"])
+        )
+        for i in range(sdf_data_mat.shape[0]):
+            for j in range(sdf_data_mat.shape[1]):
+                sdf_data_mat[i, j] = sdf_data_vec[i][j]
 
-    sdf_data_mat = np.zeros(
-        (sdf_from_file["grid_size_y"], sdf_from_file["grid_size_x"])
-    )
-    for i in range(sdf_data_mat.shape[0]):
-        for j in range(sdf_data_mat.shape[1]):
-            sdf_data_mat[i, j] = sdf_data_vec[i][j]
+        sdf_data_tensor = torch.tensor(sdf_data_mat, device=device).unsqueeze(0)
+        cell_size = torch.tensor([sdf_from_file["grid_res"]], device=device).unsqueeze(
+            0
+        )
+        origin = torch.tensor(
+            [sdf_from_file["grid_origin_x"], sdf_from_file["grid_origin_y"]],
+            device=device,
+        ).unsqueeze(0)
 
-    sdf_data_mat = torch.tensor(sdf_data_mat, device=device).unsqueeze(0)
-    cell_size = torch.tensor([sdf_from_file["grid_res"]], device=device).unsqueeze(0)
-    origin = torch.tensor(
-        [sdf_from_file["grid_origin_x"], sdf_from_file["grid_origin_y"]], device=device
-    ).unsqueeze(0)
-
-    return sdf_data_mat, cell_size, origin
+        return sdf_data_tensor, cell_size, origin
 
 
 # ----------------------------------------------------------------------------------- #

@@ -1,8 +1,4 @@
-from .misc import (
-    load_tactile_dataset_from_file,
-    load_tactile_sdf_from_file,
-    visualize_tactile_push2d,
-)
+from .misc import TactilePushingDataset, visualize_tactile_push2d
 from .models import (
     TactileMeasModel,
     TactileWeightModel,

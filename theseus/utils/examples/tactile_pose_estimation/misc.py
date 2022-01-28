@@ -1,4 +1,4 @@
-from typing import Dict, Tuple
+from typing import Dict, List, Tuple
 
 import matplotlib.patches as mpatches
 import matplotlib.pyplot as plt
@@ -27,6 +27,11 @@ class TactilePushingDataset:
             self.sdf_origin,
         ) = TactilePushingDataset._load_tactile_sdf_from_file(sdf_fname, device)
 
+        self.img_feats = data["img_feats"]
+        self.eff_poses = data["eff_poses"]
+        self.obj_poses = data["obj_poses"]
+        self.contact_episode = data["contact_episode"]
+        self.contact_flag = data["contact_flag"]
         for key, val in data.items():
             setattr(self, key, val)
 
@@ -90,6 +95,21 @@ class TactilePushingDataset:
         ).unsqueeze(0)
 
         return sdf_data_tensor, cell_size, origin
+
+    def get_measurements(
+        self, batch_size: int, num_batches: int, time_steps: int
+    ) -> List[Tuple[torch.Tensor, torch.Tensor, torch.Tensor]]:
+        def _process(tensor: torch.Tensor) -> torch.Tensor:
+            return tensor.unsqueeze(0).repeat(batch_size, 1, 1)
+
+        return [
+            (
+                _process(self.img_feats[0:time_steps]),
+                _process(self.eff_poses[0:time_steps]),
+                _process(self.obj_poses[0:time_steps]),
+            )
+            for _ in range(num_batches)
+        ]
 
 
 # ----------------------------------------------------------------------------------- #

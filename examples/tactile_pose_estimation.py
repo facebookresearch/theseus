@@ -275,16 +275,9 @@ def run_learning_loop(cfg):
 
     outer_optim = optim.Adam(learnable_params, lr=learning_rate)
     batch_size = cfg.train.batch_size
-    num_batches = cfg.train.num_batches
-    measurements = [
-        (
-            dataset.img_feats[0:time_steps].unsqueeze(0).repeat(batch_size, 1, 1),
-            dataset.eff_poses[0:time_steps].unsqueeze(0).repeat(batch_size, 1, 1),
-            dataset.obj_poses[0:time_steps].unsqueeze(0).repeat(batch_size, 1, 1),
-        )
-        for _ in range(num_batches)
-    ]
-
+    measurements = dataset.get_measurements(
+        cfg.train.batch_size, cfg.train.num_batches, time_steps
+    )
     obj_poses_gt = dataset.obj_poses[0:time_steps, :].clone().requires_grad_(True)
     eff_poses_gt = dataset.eff_poses[0:time_steps, :].clone().requires_grad_(True)
 

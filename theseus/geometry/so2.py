@@ -132,7 +132,7 @@ class SO2(LieGroup):
         if jacobians is not None:
             self._check_jacobians_list(jacobians)
             J1 = torch.stack([-rotation.y(), rotation.x()], dim=1).view(-1, 2, 1)
-            J2 = self.to_matrix()
+            J2 = self.to_matrix().expand(rotation.shape[0], -1, -1)
             jacobians.extend([J1, J2])
         return rotation
 
@@ -147,7 +147,7 @@ class SO2(LieGroup):
         if jacobians is not None:
             self._check_jacobians_list(jacobians)
             J1 = torch.stack([rotation.y(), -rotation.x()], dim=1).view(-1, 2, 1)
-            J2 = self.to_matrix().transpose(2, 1)
+            J2 = self.to_matrix().transpose(2, 1).expand(rotation.shape[0], -1, -1)
             jacobians.extend([J1, J2])
         return rotation
 

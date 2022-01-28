@@ -76,7 +76,7 @@ def numeric_jacobian(
     function_dim: Optional[int] = None,
     delta_mag: float = 1e-3,
 ):
-    batch_size = group_args[0].shape[0]
+    batch_size = max([group_arg.shape[0] for group_arg in group_args])
 
     def _compute(group_idx):
         dof = group_args[group_idx].dof()

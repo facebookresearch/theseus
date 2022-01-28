@@ -110,23 +110,26 @@ class SO3(LieGroup):
         sth = ret.norm(dim=1)
         theta = torch.atan2(sth, cth)
         # theta != pi
-        sel1 = 1 + cth > 1e-7
-        # Compute the approximation of theta / sin(theta) when theta ~ 0
-        scale1 = torch.where(
-            theta[sel1] >= 0.005, theta[sel1] / sth[sel1], 1 + sth[sel1] ** 2 / 6
+        not_near_pi = 1 + cth > 1e-7
+        # Compute the approximation of theta / sin(theta) when theta is near to 0
+        non_zero = torch.ones(1, dtype=self.dtype, device=self.device)
+        small_theta = theta[not_near_pi] < 5e-3
+        sth_nz = torch.where(small_theta, non_zero, sth[not_near_pi])
+        scale = torch.where(
+            small_theta, 1 + sth[not_near_pi] ** 2 / 6, theta[not_near_pi] / sth_nz
         )
-        ret[sel1] *= scale1.view(-1, 1)
+        ret[not_near_pi] *= scale.view(-1, 1)
         # theta ~ pi
-        sel2 = ~sel1
-        ddiag = torch.diagonal(self[sel2], dim1=1, dim2=2)
+        near_pi = ~not_near_pi
+        ddiag = torch.diagonal(self[near_pi], dim1=1, dim2=2)
         # Find the index of major coloumns and diagonals
-        major2 = torch.logical_and(
+        major = torch.logical_and(
             ddiag[:, 1] > ddiag[:, 0], ddiag[:, 1] > ddiag[:, 2]
         ) + 2 * torch.logical_and(ddiag[:, 2] > ddiag[:, 0], ddiag[:, 2] > ddiag[:, 1])
-        ret[sel2] = self[sel2, major2]
-        ret[sel2, major2] -= cth[sel2]
-        ret[sel2] *= (theta[sel2] ** 2 / (1 - cth[sel2])).view(-1, 1)
-        ret[sel2] /= ret[sel2, major2].sqrt().view(-1, 1)
+        ret[near_pi] = self[near_pi, major]
+        ret[near_pi, major] -= cth[near_pi]
+        ret[near_pi] *= (theta[near_pi] ** 2 / (1 - cth[near_pi])).view(-1, 1)
+        ret[near_pi] /= ret[near_pi, major].sqrt().view(-1, 1)
         return ret
 
     def _compose_impl(self, so3_2: LieGroup) -> "SO3":

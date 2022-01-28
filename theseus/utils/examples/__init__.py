@@ -13,6 +13,7 @@ from .motion_planning import (
 )
 from .tactile_pose_estimation import (
     TactileMeasModel,
+    TactilePoseEstimator,
     TactilePushingDataset,
     TactileWeightModel,
     get_tactile_cost_weight_inputs,

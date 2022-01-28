@@ -256,9 +256,33 @@ class SO3(LieGroup):
             Jrot[:, 2, 0] = ret[:, 1]
             Jrot[:, 1, 2] = ret[:, 0]
             Jrot[:, 2, 1] = -ret[:, 0]
-
             # Jacobians for point
             Jpnt = self.to_matrix().expand(batch_size, 3, 3)
+
+            jacobians.extend([Jrot, Jpnt])
+
+        return ret
+
+    def unrotate(
+        self,
+        point: Union[Point3, torch.Tensor],
+        jacobians: Optional[List[torch.Tensor]] = None,
+    ) -> Point3:
+        self._rotate_shape_check(point)
+        batch_size = max(self.shape[0], point.shape[0])
+        if isinstance(point, torch.Tensor):
+            p = point
+        else:
+            p = point.data
+
+        ret = Point3(data=self.data.transpose(1, 2) * p)
+        if jacobians is not None:
+            self._check_jacobians_list(jacobians)
+            # Jacobians for SO3: left-invariant jacobians are computed
+            Jrot = self.data.transpose(1, 2) @ SO3.hat(p)
+            # Jacobians for point
+            Jpnt = self.to_matrix().expand(batch_size, 3, 3)
+
             jacobians.extend([Jrot, Jpnt])
 
         return ret

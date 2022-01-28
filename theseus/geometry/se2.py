@@ -96,9 +96,9 @@ class SE2(LieGroup):
         rotation = self.rotation
         theta = rotation.log_map().view(-1)
         cosine, sine = rotation.to_cos_sin()
-        small_theta = theta.abs() < 1e-7
 
         # Computer the approximations when theta is near to 0
+        small_theta = theta.abs() < SE2.SE2_EPS
         non_zero = torch.ones(1, dtype=self.dtype, device=self.device)
         a = (
             0.5
@@ -125,32 +125,22 @@ class SE2(LieGroup):
 
         cosine, sine = rotation.to_cos_sin()
 
-        sin_theta_by_theta = torch.zeros_like(sine)
-        one_minus_cos_theta_by_theta = torch.zeros_like(sine)
+        # Computer the approximations when theta is near to 0
+        small_theta = theta.abs() < SE2.SE2_EPS
+        non_zero = torch.ones(
+            1, dtype=tangent_vector.dtype, device=tangent_vector.device
+        )
+        theta_mask = torch.where(small_theta, non_zero, theta)
+        a = torch.where(
+            small_theta, -theta / 2 + theta ** 3 / 24, (cosine - 1) / theta_mask
+        )
+        b = torch.where(small_theta, 1 - theta ** 2 / 6, sine / theta_mask)
 
-        # Compute above quantities when theta is not near zero
-        idx_regular_thetas = theta.abs() > theseus.constants.EPS
-        if idx_regular_thetas.any():
-            sin_theta_by_theta[idx_regular_thetas] = (
-                sine[idx_regular_thetas] / theta[idx_regular_thetas]
+        translation = Point2(
+            data=torch.stack(
+                (b * u[:, 0] + a * u[:, 1], b * u[:, 1] - a * u[:, 0]), dim=1
             )
-            one_minus_cos_theta_by_theta[idx_regular_thetas] = (
-                -cosine[idx_regular_thetas] + 1
-            ) / theta[idx_regular_thetas]
-
-        # Same as above three lines but for small angles
-        idx_small_thetas = theta.abs() < theseus.constants.EPS
-        if idx_small_thetas.any():
-            small_theta = theta[idx_small_thetas]
-            small_theta_sq = small_theta ** 2
-            sin_theta_by_theta[idx_small_thetas] = -small_theta_sq / 6 + 1
-            one_minus_cos_theta_by_theta[idx_small_thetas] = (
-                0.5 * small_theta - small_theta / 24 * small_theta_sq
-            )
-
-        new_x = sin_theta_by_theta * u[:, 0] - one_minus_cos_theta_by_theta * u[:, 1]
-        new_y = one_minus_cos_theta_by_theta * u[:, 0] + sin_theta_by_theta * u[:, 1]
-        translation = Point2(data=torch.stack([new_x, new_y], dim=1))
+        )
 
         se2 = SE2(dtype=tangent_vector.dtype)
         se2.update_from_rot_and_trans(rotation, translation)

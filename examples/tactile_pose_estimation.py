@@ -63,12 +63,11 @@ plt.ion()
 
 
 def run_learning_loop(cfg):
-    dataset_file = EXP_PATH / "datasets" / f"{cfg.dataset_name}.json"
-    dataset = theg.load_tactile_dataset_from_file(
-        filename=dataset_file, device=device, episode=cfg.episode
-    )
+    dataset_path = EXP_PATH / "datasets" / f"{cfg.dataset_name}.json"
+    sdf_path = EXP_PATH / "sdfs" / f"{cfg.sdf_name}.json"
+    dataset = theg.TactilePushingDataset(dataset_path, sdf_path, cfg.episode, device)
 
-    time_steps = np.minimum(cfg.max_steps, len(dataset["obj_poses"]))
+    time_steps = np.minimum(cfg.max_steps, len(dataset.obj_poses))
 
     min_win_mf, max_win_mf, step_win_mf = (
         cfg.tactile_cost.min_win_mf,
@@ -95,14 +94,14 @@ def run_learning_loop(cfg):
     #  - sdf_data, sdf_cell_size, sdf_origin: signed distance field data,
     #    cell_size and origin
     obj_start_pose = th.SE2(
-        x_y_theta=dataset["obj_poses"][0].unsqueeze(0), name="obj_start_pose"
+        x_y_theta=dataset.obj_poses[0].unsqueeze(0), name="obj_start_pose"
     )
 
     motion_captures = []
     for i in range(time_steps):
         motion_captures.append(
             th.SE2(
-                x_y_theta=dataset["eff_poses"][i].unsqueeze(0),
+                x_y_theta=dataset.eff_poses[i].unsqueeze(0),
                 name=f"motion_capture_{i}",
             )
         )
@@ -112,14 +111,9 @@ def run_learning_loop(cfg):
         for offset in range(min_win_mf, np.minimum(i, max_win_mf), step_win_mf):
             nn_measurements.append(th.SE2(name=f"nn_measurement_{i-offset}_{i}"))
 
-    sdf_tensor, sdf_cell_size, sdf_origin = theg.load_tactile_sdf_from_file(
-        filename=EXP_PATH / "sdfs" / f"{cfg.sdf_name}.json",
-        device=device,
-    )
-
-    sdf_data = th.Variable(sdf_tensor, name="sdf_data")
-    sdf_cell_size = th.Variable(sdf_cell_size, name="sdf_cell_size")
-    sdf_origin = th.Variable(sdf_origin, name="sdf_origin")
+    sdf_data = th.Variable(dataset.sdf_data_tensor, name="sdf_data")
+    sdf_cell_size = th.Variable(dataset.sdf_cell_size, name="sdf_cell_size")
+    sdf_origin = th.Variable(dataset.sdf_origin, name="sdf_origin")
     eff_radius = th.Variable(torch.zeros(1, 1), name="eff_radius")
 
     # -------------------------------------------------------------------- #
@@ -284,15 +278,15 @@ def run_learning_loop(cfg):
     num_batches = cfg.train.num_batches
     measurements = [
         (
-            dataset["img_feats"][0:time_steps].unsqueeze(0).repeat(batch_size, 1, 1),
-            dataset["eff_poses"][0:time_steps].unsqueeze(0).repeat(batch_size, 1, 1),
-            dataset["obj_poses"][0:time_steps].unsqueeze(0).repeat(batch_size, 1, 1),
+            dataset.img_feats[0:time_steps].unsqueeze(0).repeat(batch_size, 1, 1),
+            dataset.eff_poses[0:time_steps].unsqueeze(0).repeat(batch_size, 1, 1),
+            dataset.obj_poses[0:time_steps].unsqueeze(0).repeat(batch_size, 1, 1),
         )
         for _ in range(num_batches)
     ]
 
-    obj_poses_gt = dataset["obj_poses"][0:time_steps, :].clone().requires_grad_(True)
-    eff_poses_gt = dataset["eff_poses"][0:time_steps, :].clone().requires_grad_(True)
+    obj_poses_gt = dataset.obj_poses[0:time_steps, :].clone().requires_grad_(True)
+    eff_poses_gt = dataset.eff_poses[0:time_steps, :].clone().requires_grad_(True)
 
     theseus_inputs = {}
     for epoch in range(cfg.train.num_epochs):
@@ -322,7 +316,7 @@ def run_learning_loop(cfg):
             )
 
             theseus_inputs["sdf_data"] = (
-                (sdf_tensor.data).repeat(batch_size, 1, 1).to(device)
+                (dataset.sdf_data_tensor.data).repeat(batch_size, 1, 1).to(device)
             )
 
             theseus_inputs, _ = theseus_layer.forward(

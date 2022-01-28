@@ -10,7 +10,7 @@ import torch
 import theseus as th
 from theseus.constants import EPS
 
-from .common import check_adjoint, check_exp_map
+from .common import check_adjoint, check_compose, check_exp_map
 
 
 def _create_random_so3(batch_size, rng):
@@ -99,3 +99,12 @@ def test_adjoint():
         so3 = _create_random_so3(batch_size, rng)
         tangent = torch.randn(batch_size, 3).double()
         check_adjoint(so3, tangent)
+
+
+def test_compose():
+    rng = torch.Generator()
+    rng.manual_seed(0)
+    for batch_size in [1, 20, 100]:
+        so3_1 = _create_random_so3(batch_size, rng)
+        so3_2 = _create_random_so3(batch_size, rng)
+        check_compose(so3_1, so3_2)

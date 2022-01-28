@@ -138,7 +138,10 @@ class SO3(LieGroup):
         return ret
 
     def _compose_impl(self, so3_2: LieGroup) -> "SO3":
-        raise NotImplementedError
+        so3_2 = cast(SO3, so3_2)
+        ret = SO3()
+        ret.data = self.data @ so3_2.data
+        return ret
 
     def _inverse_impl(self, get_jacobian: bool = False) -> "SO3":
         return SO3(data=self.data.transpose(1, 2).clone())

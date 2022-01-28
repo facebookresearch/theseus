@@ -28,7 +28,6 @@ class SO3(LieGroup):
         if quaternion is not None:
             dtype = quaternion.dtype
         if data is not None:
-            dtype = data.dtype
             self._SO3_matrix_check(data)
         super().__init__(data=data, name=name, dtype=dtype)
         if quaternion is not None:
@@ -61,7 +60,8 @@ class SO3(LieGroup):
         if matrix.ndim != 3 or matrix.shape[1:] != (3, 3):
             raise ValueError("3D rotations can only be 3x3 matrices.")
         _check = (
-            torch.matmul(matrix, matrix.transpose(1, 2)) - torch.eye(3, 3)
+            torch.matmul(matrix, matrix.transpose(1, 2))
+            - torch.eye(3, 3, dtype=matrix.dtype, device=matrix.device)
         ).abs().max().item() < SO3.SO3_EPS
         _check &= (torch.linalg.det(matrix) - 1).abs().max().item() < SO3.SO3_EPS
 
@@ -78,10 +78,64 @@ class SO3(LieGroup):
 
     @staticmethod
     def exp_map(tangent_vector: torch.Tensor) -> LieGroup:
-        raise NotImplementedError
+        if tangent_vector.ndim != 2 or tangent_vector.shape[1] != 3:
+            raise ValueError("Invalid input for SO3.exp_map.")
+        ret = SO3(dtype=tangent_vector.dtype)
+        theta = torch.linalg.norm(tangent_vector, dim=1, keepdim=True).unsqueeze(1)
+        theta2 = theta ** 2
+        # Compute the approximations when theta ~ 0
+        small_theta = theta < 0.005
+        non_zero = torch.ones(
+            1, dtype=tangent_vector.dtype, device=tangent_vector.device
+        )
+        theta_nz = torch.where(small_theta, non_zero, theta)
+        theta2_nz = torch.where(small_theta, non_zero, theta2)
+        a = torch.where(small_theta, 8 / (4 + theta2) - 1, theta.cos())
+        b = torch.where(small_theta, 0.5 * a + 0.5, theta.sin() / theta_nz)
+        c = torch.where(small_theta, 0.5 * b, (1 - a) / theta2_nz)
+        ret.data = c * tangent_vector.view(-1, 3, 1) @ tangent_vector.view(-1, 1, 3)
+        ret[:, 0, 0] += a.view(-1)
+        ret[:, 1, 1] += a.view(-1)
+        ret[:, 2, 2] += a.view(-1)
+        temp = b.view(-1, 1) * tangent_vector
+        ret[:, 0, 1] -= temp[:, 2]
+        ret[:, 1, 0] += temp[:, 2]
+        ret[:, 0, 2] += temp[:, 1]
+        ret[:, 2, 0] -= temp[:, 1]
+        ret[:, 1, 2] -= temp[:, 0]
+        ret[:, 2, 1] += temp[:, 0]
+        return ret
 
     def _log_map_impl(self) -> torch.Tensor:
-        raise NotImplementedError
+        ret = torch.zeros(self.shape[0], 3, dtype=self.dtype, device=self.device)
+        ret[:, 0] = 0.5 * (self[:, 2, 1] - self[:, 1, 2])
+        ret[:, 1] = 0.5 * (self[:, 0, 2] - self[:, 2, 0])
+        ret[:, 2] = 0.5 * (self[:, 1, 0] - self[:, 0, 1])
+        cth = 0.5 * (self[:, 0, 0] + self[:, 1, 1] + self[:, 2, 2] - 1)
+        sth = ret.norm(dim=1)
+        theta = torch.atan2(sth, cth)
+        # theta != pi
+        not_near_pi = 1 + cth > 1e-7
+        # Compute the approximation of theta / sin(theta) when theta is near to 0
+        small_theta = theta[not_near_pi] < 5e-3
+        non_zero = torch.ones(1, dtype=self.dtype, device=self.device)
+        sth_nz = torch.where(small_theta, non_zero, sth[not_near_pi])
+        scale = torch.where(
+            small_theta, 1 + sth[not_near_pi] ** 2 / 6, theta[not_near_pi] / sth_nz
+        )
+        ret[not_near_pi] *= scale.view(-1, 1)
+        # theta ~ pi
+        near_pi = ~not_near_pi
+        ddiag = torch.diagonal(self[near_pi], dim1=1, dim2=2)
+        # Find the index of major coloumns and diagonals
+        major = torch.logical_and(
+            ddiag[:, 1] > ddiag[:, 0], ddiag[:, 1] > ddiag[:, 2]
+        ) + 2 * torch.logical_and(ddiag[:, 2] > ddiag[:, 0], ddiag[:, 2] > ddiag[:, 1])
+        ret[near_pi] = self[near_pi, major]
+        ret[near_pi, major] -= cth[near_pi]
+        ret[near_pi] *= (theta[near_pi] ** 2 / (1 - cth[near_pi])).view(-1, 1)
+        ret[near_pi] /= ret[near_pi, major].sqrt().view(-1, 1)
+        return ret
 
     def _compose_impl(self, so3_2: LieGroup) -> "SO3":
         raise NotImplementedError
@@ -120,11 +174,7 @@ class SO3(LieGroup):
         ).abs().max().item() < theseus.constants.EPS
         if not _check:
             raise ValueError("Invalid hat matrix for SO3.")
-        vec = torch.zeros(matrix.shape[0], 3, dtype=matrix.dtype, device=matrix.device)
-        vec[:, 0] = matrix[:, 2, 1]
-        vec[:, 1] = matrix[:, 0, 2]
-        vec[:, 2] = matrix[:, 1, 0]
-        return vec
+        return torch.stack((matrix[:, 2, 1], matrix[:, 0, 2], matrix[:, 1, 0]), dim=1)
 
     def _rotate_shape_check(self, point: Union[Point3, torch.Tensor]):
         err_msg = "SO3 can only rotate 3-D vectors."

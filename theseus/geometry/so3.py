@@ -3,7 +3,7 @@
 # This source code is licensed under the MIT license found in the
 # LICENSE file in the root directory of this source tree.
 
-from typing import Optional, Union, cast
+from typing import List, Optional, Union, cast
 
 import torch
 
@@ -232,3 +232,33 @@ class SO3(LieGroup):
     # only added to avoid casting downstream
     def copy(self, new_name: Optional[str] = None) -> "SO3":
         return cast(SO3, super().copy(new_name=new_name))
+
+    def rotate(
+        self,
+        point: Union[Point3, torch.Tensor],
+        jacobians: Optional[List[torch.Tensor]] = None,
+    ) -> Point3:
+        self._rotate_shape_check(point)
+        batch_size = max(self.shape[0], point.shape[0])
+        if isinstance(point, torch.Tensor):
+            p = point
+        else:
+            p = point.data
+
+        ret = Point3(data=self.data * p)
+        if jacobians is not None:
+            self._check_jacobians_list(jacobians)
+            # Jacobians for SO3: left-invariant jacobians are computed
+            Jrot = torch.zeros(batch_size, 3, 3, dtype=self.dtype, device=self.device)
+            Jrot[:, 0, 1] = ret[:, 2]
+            Jrot[:, 1, 0] = -ret[:, 2]
+            Jrot[:, 0, 2] = -ret[:, 1]
+            Jrot[:, 2, 0] = ret[:, 1]
+            Jrot[:, 1, 2] = ret[:, 0]
+            Jrot[:, 2, 1] = -ret[:, 0]
+
+            # Jacobians for point
+            Jpnt = self.to_matrix().expand(batch_size, 3, 3)
+            jacobians.extend([Jrot, Jpnt])
+
+        return ret

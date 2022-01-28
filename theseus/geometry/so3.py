@@ -241,11 +241,11 @@ class SO3(LieGroup):
         self._rotate_shape_check(point)
         batch_size = max(self.shape[0], point.shape[0])
         if isinstance(point, torch.Tensor):
-            p = point
+            p = point.view(-1, 3, 1)
         else:
-            p = point.data
+            p = point.data.view(-1, 3, 1)
 
-        ret = Point3(data=self.data * p)
+        ret = Point3(data=(self.data @ p).view(-1, 3))
         if jacobians is not None:
             self._check_jacobians_list(jacobians)
             # Jacobians for SO3: left-invariant jacobians are computed
@@ -271,11 +271,11 @@ class SO3(LieGroup):
         self._rotate_shape_check(point)
         batch_size = max(self.shape[0], point.shape[0])
         if isinstance(point, torch.Tensor):
-            p = point
+            p = point.view(-1, 3, 1)
         else:
-            p = point.data
+            p = point.data.view(-1, 3, 1)
 
-        ret = Point3(data=self.data.transpose(1, 2) * p)
+        ret = Point3(data=(self.data.transpose(1, 2) @ p).view(-1, 3))
         if jacobians is not None:
             self._check_jacobians_list(jacobians)
             # Jacobians for SO3: left-invariant jacobians are computed

@@ -16,6 +16,7 @@ from .tactile_pose_estimation import (
     TactilePoseEstimator,
     TactilePushingDataset,
     TactileWeightModel,
+    create_tactile_models,
     get_tactile_cost_weight_inputs,
     get_tactile_initial_optim_vars,
     get_tactile_motion_capture_inputs,

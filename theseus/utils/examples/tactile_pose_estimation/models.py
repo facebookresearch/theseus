@@ -1,4 +1,5 @@
 import collections
+import pathlib
 from typing import Dict, List, Optional, Tuple, cast
 
 import numpy as np
@@ -27,7 +28,7 @@ class TactileMeasModel(nn.Module):
         return x
 
 
-def init_tactile_model_from_file(model: nn.Module, filename: str):
+def init_tactile_model_from_file(model: nn.Module, filename: pathlib.Path):
 
     model_saved = torch.jit.load(filename)
     state_dict_saved = model_saved.state_dict()
@@ -43,7 +44,7 @@ def init_tactile_model_from_file(model: nn.Module, filename: str):
 # Set some parameters for the cost weights
 class TactileWeightModel(nn.Module):
     def __init__(
-        self, device: str, dim: int = 3, wt_init: Optional[torch.Tensor] = None
+        self, device: torch.device, dim: int = 3, wt_init: Optional[torch.Tensor] = None
     ):
         super().__init__()
 
@@ -51,9 +52,61 @@ class TactileWeightModel(nn.Module):
         if wt_init is not None:
             wt_init_ = wt_init
         self.param = nn.Parameter(wt_init_.to(device))
+        self.to(device)
 
     def forward(self):
         return self.param.clone()
+
+
+def create_tactile_models(
+    model_type: str,
+    device: torch.device,
+    measurements_model_path: Optional[pathlib.Path] = None,
+) -> Tuple[nn.Module, nn.Module, nn.Module, List[nn.Parameter], Dict[str, float]]:
+    hyperparams = {}
+    if model_type == "weights_only":
+        qsp_model = TactileWeightModel(
+            device, wt_init=torch.tensor([[50.0, 50.0, 50.0]])
+        )
+        mf_between_model = TactileWeightModel(
+            device, wt_init=torch.tensor([[0.0, 0.0, 10.0]])
+        )
+        measurements_model = None
+
+        hyperparams["learning_rate"] = 5.0
+        learnable_params = list(qsp_model.parameters()) + list(
+            mf_between_model.parameters()
+        )
+    elif model_type == "weights_and_measurement_nn":
+        qsp_model = TactileWeightModel(device, wt_init=torch.tensor([[5.0, 5.0, 5.0]]))
+        mf_between_model = TactileWeightModel(
+            device, wt_init=torch.tensor([[0.0, 0.0, 5.0]])
+        )
+        measurements_model = TactileMeasModel(2 * 2 * 4, 4)
+        if measurements_model_path is not None:
+            measurements_model = init_tactile_model_from_file(
+                model=measurements_model,
+                filename=measurements_model_path,
+            )
+        measurements_model.to(device)
+
+        hyperparams["learning_rate"] = 1.0e-3
+        hyperparams["eps_tracking_loss"] = 5.0e-4  # early stopping
+        learnable_params = (
+            list(measurements_model.parameters())
+            + list(qsp_model.parameters())
+            + list(mf_between_model.parameters())
+        )
+    else:
+        print("Learning mode {cfg.train.mode} not found")
+
+    return (
+        measurements_model,
+        qsp_model,
+        mf_between_model,
+        learnable_params,
+        hyperparams,
+    )
 
 
 # ----------------------------------------------------------------------------------- #

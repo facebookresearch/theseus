@@ -29,7 +29,7 @@ def check_SO3_log_map(tangent_vector):
 def check_SO3_to_quaternion(so3: th.SO3):
     quaternions = so3.to_quaternion()
     assert torch.allclose(
-        th.SO3(quaternion=quaternions).to_matrix(), so3.to_matrix(), atol=EPS
+        th.SO3(quaternion=quaternions).to_matrix(), so3.to_matrix(), atol=1e-8
     )
 
 

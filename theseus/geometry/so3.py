@@ -161,7 +161,7 @@ class SO3(LieGroup):
             0.5 * (1 + self[:, 0, 0] + self[:, 1, 1] + self[:, 2, 2]).clamp(0, 4).sqrt()
         )
         # theta != pi
-        not_near_pi = ret[:, 0] > 1e-4
+        not_near_pi = ret[:, 0] > 1e-5
         ret[not_near_pi, 1] = (
             0.25
             * (self[not_near_pi, 2, 1] - self[not_near_pi, 1, 2])

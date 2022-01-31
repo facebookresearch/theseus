@@ -155,7 +155,44 @@ class SO3(LieGroup):
         return self.data.clone()
 
     def to_quaternion(self) -> torch.Tensor:
-        raise NotImplementedError
+        ret = torch.zeros(self.shape[0], 4, dtype=self.dtype, device=self.device)
+        # ret[:, 4] computes the cos(0.5 * theta)
+        ret[:, 0] = (
+            0.5 * (1 + self[:, 0, 0] + self[:, 1, 1] + self[:, 2, 2]).clamp(0, 4).sqrt()
+        )
+        # theta != pi
+        not_near_pi = ret[:, 0] > 1e-4
+        ret[not_near_pi, 1] = (
+            0.25
+            * (self[not_near_pi, 2, 1] - self[not_near_pi, 1, 2])
+            / ret[not_near_pi, 0]
+        )
+        ret[not_near_pi, 2] = (
+            0.25
+            * (self[not_near_pi, 0, 2] - self[not_near_pi, 2, 0])
+            / ret[not_near_pi, 0]
+        )
+        ret[not_near_pi, 3] = (
+            0.25
+            * (self[not_near_pi, 1, 0] - self[not_near_pi, 0, 1])
+            / ret[not_near_pi, 0]
+        )
+        # theta ~ pi
+        near_pi = ~not_near_pi
+        ddiag = torch.diagonal(self[near_pi], dim1=1, dim2=2)
+        # Find the index of major coloumns and diagonals
+        major = torch.logical_and(
+            ddiag[:, 1] > ddiag[:, 0], ddiag[:, 1] > ddiag[:, 2]
+        ) + 2 * torch.logical_and(ddiag[:, 2] > ddiag[:, 0], ddiag[:, 2] > ddiag[:, 1])
+        ret[near_pi, 1:] = self[near_pi, major]
+        cosine_near_pi = 0.5 * (
+            self[near_pi, 0, 0] + self[near_pi, 1, 1] + self[near_pi, 2, 2] - 1
+        )
+        ret[near_pi, major + 1] -= cosine_near_pi
+        ret[near_pi, 1:] /= ret[near_pi, 1:].norm(dim=1, keepdim=True)
+        ret[near_pi, 1:] *= (0.5 * (1 - cosine_near_pi)).clamp(0, 1).sqrt().view(-1, 1)
+        ret /= ret.norm(dim=1, keepdim=True)
+        return ret
 
     @staticmethod
     def hat(tangent_vector: torch.Tensor) -> torch.Tensor:

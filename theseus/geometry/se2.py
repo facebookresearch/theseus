@@ -150,7 +150,7 @@ class SE2(LieGroup):
         idx_small_thetas = theta.abs() < theseus.constants.EPS
         if idx_small_thetas.any():
             small_theta = theta[idx_small_thetas]
-            small_theta_sq = small_theta ** 2
+            small_theta_sq = small_theta**2
             sin_theta_by_theta[idx_small_thetas] = -small_theta_sq / 6 + 1
             one_minus_cos_theta_by_theta[idx_small_thetas] = (
                 0.5 * small_theta - small_theta / 24 * small_theta_sq

@@ -82,7 +82,7 @@ class SO3(LieGroup):
             raise ValueError("Invalid input for SO3.exp_map.")
         ret = SO3(dtype=tangent_vector.dtype)
         theta = torch.linalg.norm(tangent_vector, dim=1, keepdim=True).unsqueeze(1)
-        theta2 = theta ** 2
+        theta2 = theta**2
         # Compute the approximations when theta ~ 0
         small_theta = theta < 0.005
         non_zero = torch.ones(

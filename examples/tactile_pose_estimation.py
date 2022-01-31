@@ -107,7 +107,6 @@ def run_learning_loop(cfg):
     # -------------------------------------------------------------------- #
     # Use theseus_layer in an outer learning loop to learn different cost
     # function parameters:
-    batch_size = cfg.train.batch_size
     measurements = dataset.get_measurements(
         cfg.train.batch_size, cfg.train.num_batches, time_steps
     )
@@ -133,19 +132,8 @@ def run_learning_loop(cfg):
                 theseus_inputs, optimizer_kwargs={"verbose": True}
             )
 
-            obj_poses_opt = theg.get_tactile_poses_from_values(
-                batch_size=batch_size,
-                values=theseus_inputs,
-                time_steps=time_steps,
-                device=device,
-                key="obj_pose",
-            )
-            eff_poses_opt = theg.get_tactile_poses_from_values(
-                batch_size=batch_size,
-                values=theseus_inputs,
-                time_steps=time_steps,
-                device=device,
-                key="eff_pose",
+            obj_poses_opt, eff_poses_opt = theg.get_tactile_poses_from_values(
+                values=theseus_inputs, time_steps=time_steps
             )
 
             loss = F.mse_loss(obj_poses_opt[batch_idx, :], obj_poses_gt)

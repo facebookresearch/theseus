@@ -264,22 +264,6 @@ def get_tactile_initial_optim_vars(
     return inputs_
 
 
-def get_tactile_poses_from_values(
-    batch_size: int,
-    values: Dict[str, torch.Tensor],
-    time_steps,
-    device: str,
-    key: str = "pose",
-):
-    poses = torch.empty(batch_size, time_steps, 3, device=device)
-    for t_ in range(time_steps):
-        poses[:, t_, :2] = values[f"{key}_{t_}"][:, 0:2]
-        poses[:, t_, 2] = torch.atan2(
-            values[f"{key}_{t_}"][:, 3], values[f"{key}_{t_}"][:, 2]
-        )
-    return poses
-
-
 def update_tactile_pushing_inputs(
     dataset: TactilePushingDataset,
     batch: Tuple[torch.Tensor, torch.Tensor, torch.Tensor],
@@ -311,3 +295,22 @@ def update_tactile_pushing_inputs(
     theseus_inputs.update(get_tactile_motion_capture_inputs(batch, device, time_steps))
     theseus_inputs.update(get_tactile_cost_weight_inputs(qsp_model, mf_between_model))
     theseus_inputs.update(get_tactile_initial_optim_vars(batch, device, time_steps))
+
+
+def get_tactile_poses_from_values(
+    values: Dict[str, torch.Tensor], time_steps
+) -> Tuple[torch.Tensor, torch.Tensor]:
+    batch_size = values["obj_pose_0"].shape[0]
+    device = values["obj_pose_0"].device
+
+    obj_poses = torch.empty(batch_size, time_steps, 3, device=device)
+    eff_poses = torch.empty(batch_size, time_steps, 3, device=device)
+
+    for key in ["obj", "eff"]:
+        ret_tensor = obj_poses if key == "obj" else eff_poses
+        for t_ in range(time_steps):
+            ret_tensor[:, t_, :2] = values[f"{key}_pose_{t_}"][:, 0:2]
+            ret_tensor[:, t_, 2] = torch.atan2(
+                values[f"{key}_pose_{t_}"][:, 3], values[f"{key}_pose_{t_}"][:, 2]
+            )
+    return obj_poses, eff_poses

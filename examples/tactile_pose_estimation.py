@@ -113,36 +113,20 @@ def run_learning_loop(cfg):
     )
     obj_poses_gt = dataset.obj_poses[0:time_steps, :].clone().requires_grad_(True)
     eff_poses_gt = dataset.eff_poses[0:time_steps, :].clone().requires_grad_(True)
-
     theseus_inputs = {}
-    for epoch in range(cfg.train.num_epochs):
+    for _ in range(cfg.train.num_epochs):
         losses = []
         for batch_idx, batch in enumerate(measurements):
-            theseus_inputs.update(
-                theg.get_tactile_nn_measurements_inputs(
-                    batch=batch,
-                    device=device,
-                    class_label=cfg.class_label,
-                    num_classes=cfg.num_classes,
-                    min_win_mf=cfg.tactile_cost.min_win_mf,
-                    max_win_mf=cfg.tactile_cost.max_win_mf,
-                    step_win_mf=cfg.tactile_cost.step_win_mf,
-                    time_steps=time_steps,
-                    model=measurements_model,
-                )
-            )
-            theseus_inputs.update(
-                theg.get_tactile_motion_capture_inputs(batch, device, time_steps)
-            )
-            theseus_inputs.update(
-                theg.get_tactile_cost_weight_inputs(qsp_model, mf_between_model)
-            )
-            theseus_inputs.update(
-                theg.get_tactile_initial_optim_vars(batch, device, time_steps)
-            )
-
-            theseus_inputs["sdf_data"] = (
-                (dataset.sdf_data_tensor.data).repeat(batch_size, 1, 1).to(device)
+            theg.update_tactile_pushing_inputs(
+                dataset=dataset,
+                batch=batch,
+                measurements_model=measurements_model,
+                qsp_model=qsp_model,
+                mf_between_model=mf_between_model,
+                device=device,
+                cfg=cfg,
+                time_steps=time_steps,
+                theseus_inputs=theseus_inputs,
             )
 
             theseus_inputs, _ = pose_estimator.forward(

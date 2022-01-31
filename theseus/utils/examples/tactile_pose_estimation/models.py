@@ -3,10 +3,13 @@ import pathlib
 from typing import Dict, List, Optional, Tuple, cast
 
 import numpy as np
+import omegaconf
 import torch
 import torch.nn as nn
 
 import theseus as th
+
+from .misc import TactilePushingDataset
 
 
 class TactileMeasModel(nn.Module):
@@ -116,7 +119,7 @@ def create_tactile_models(
 
 def get_tactile_nn_measurements_inputs(
     batch: Tuple[torch.Tensor, torch.Tensor, torch.Tensor],
-    device: str,
+    device: torch.device,
     class_label: int,
     num_classes: int,
     min_win_mf: int,
@@ -200,7 +203,9 @@ def get_tactile_nn_measurements_inputs(
 
 
 def get_tactile_motion_capture_inputs(
-    batch: Tuple[torch.Tensor, torch.Tensor, torch.Tensor], device: str, time_steps: int
+    batch: Tuple[torch.Tensor, torch.Tensor, torch.Tensor],
+    device: torch.device,
+    time_steps: int,
 ):
     inputs = {}
     captures = batch[1].to(device)
@@ -219,7 +224,9 @@ def get_tactile_cost_weight_inputs(qsp_model, mf_between_model):
 
 
 def get_tactile_initial_optim_vars(
-    batch: Tuple[torch.Tensor, torch.Tensor, torch.Tensor], device: str, time_steps: int
+    batch: Tuple[torch.Tensor, torch.Tensor, torch.Tensor],
+    device: torch.device,
+    time_steps: int,
 ):
     inputs_ = {}
     eff_captures_ = batch[1].to(device)
@@ -271,3 +278,36 @@ def get_tactile_poses_from_values(
             values[f"{key}_{t_}"][:, 3], values[f"{key}_{t_}"][:, 2]
         )
     return poses
+
+
+def update_tactile_pushing_inputs(
+    dataset: TactilePushingDataset,
+    batch: Tuple[torch.Tensor, torch.Tensor, torch.Tensor],
+    measurements_model: nn.Module,
+    qsp_model: nn.Module,
+    mf_between_model: nn.Module,
+    device: torch.device,
+    cfg: omegaconf.DictConfig,
+    time_steps: int,
+    theseus_inputs: Dict[str, torch.Tensor],
+):
+    theseus_inputs["sdf_data"] = (
+        (dataset.sdf_data_tensor.data).repeat(cfg.train.batch_size, 1, 1).to(device)
+    )
+
+    theseus_inputs.update(
+        get_tactile_nn_measurements_inputs(
+            batch=batch,
+            device=device,
+            class_label=cfg.class_label,
+            num_classes=cfg.num_classes,
+            min_win_mf=cfg.tactile_cost.min_win_mf,
+            max_win_mf=cfg.tactile_cost.max_win_mf,
+            step_win_mf=cfg.tactile_cost.step_win_mf,
+            time_steps=time_steps,
+            model=measurements_model,
+        )
+    )
+    theseus_inputs.update(get_tactile_motion_capture_inputs(batch, device, time_steps))
+    theseus_inputs.update(get_tactile_cost_weight_inputs(qsp_model, mf_between_model))
+    theseus_inputs.update(get_tactile_initial_optim_vars(batch, device, time_steps))

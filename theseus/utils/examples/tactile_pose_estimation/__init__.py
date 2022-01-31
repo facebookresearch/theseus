@@ -9,5 +9,6 @@ from .models import (
     get_tactile_nn_measurements_inputs,
     get_tactile_poses_from_values,
     init_tactile_model_from_file,
+    update_tactile_pushing_inputs,
 )
 from .pose_estimator import TactilePoseEstimator

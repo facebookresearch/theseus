@@ -103,7 +103,7 @@ class SE2(LieGroup):
         half_theta_by_tan_half_theta = (
             0.5
             * (1 + cosine)
-            * torch.where(small_theta, 1 + sine ** 2 / 6, theta / sine_nz)
+            * torch.where(small_theta, 1 + sine**2 / 6, theta / sine_nz)
         )
         half_theta = 0.5 * theta
 
@@ -127,9 +127,9 @@ class SE2(LieGroup):
             1, dtype=tangent_vector.dtype, device=tangent_vector.device
         )
         theta_nz = torch.where(small_theta, non_zero, theta)
-        sine_by_theta = torch.where(small_theta, 1 - theta ** 2 / 6, sine / theta_nz)
+        sine_by_theta = torch.where(small_theta, 1 - theta**2 / 6, sine / theta_nz)
         cosine_minus_one_by_theta = torch.where(
-            small_theta, -theta / 2 + theta ** 3 / 24, (cosine - 1) / theta_nz
+            small_theta, -theta / 2 + theta**3 / 24, (cosine - 1) / theta_nz
         )
 
         # Compute the translation

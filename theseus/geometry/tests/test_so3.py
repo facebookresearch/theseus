@@ -9,6 +9,7 @@ import torch
 
 import theseus as th
 from theseus.constants import EPS
+from theseus.utils import numeric_jacobian
 
 from .common import check_adjoint, check_compose, check_exp_map
 
@@ -159,23 +160,40 @@ def test_compose():
         check_compose(so3_1, so3_2)
 
 
-# def test_rotate_and_unrotate():
-#     rng = torch.Generator()
-#     rng.manual_seed(0)
-#     for _ in range(10):  # repeat a few times
-#         for batch_size in [1, 20, 100]:
-#             so3 = _create_random_so3(batch_size, rng)
-#             # Tests that rotate works from tensor. unrotate() would work similarly), but
-#             # it's also tested indirectly by test_transform_to() for SE2
-#             point_tensor = torch.randn(batch_size, 3).double()
-#             jacobians_rotate = []
-#             rotated_point = so3.rotate(point_tensor, jacobians=jacobians_rotate)
-#             expected_rotated_data = so3.to_matrix() @ point_tensor.unsqueeze(2)
-#             jacobians_unrotate = []
-#             unrotated_point = so3.unrotate(rotated_point, jacobians_unrotate)
+def test_rotate_and_unrotate():
+    rng = torch.Generator()
+    rng.manual_seed(0)
+    for _ in range(10):  # repeat a few times
+        for batch_size in [1, 20, 100]:
+            so3 = _create_random_so3(batch_size, rng)
+            # Tests that rotate works from tensor. unrotate() would work similarly), but
+            # it's also tested indirectly by test_transform_to() for SE2
+            point_tensor = torch.randn(batch_size, 3).double()
+            jacobians_rotate = []
+            rotated_point = so3.rotate(point_tensor, jacobians=jacobians_rotate)
+            expected_rotated_data = so3.to_matrix() @ point_tensor.unsqueeze(2)
+            jacobians_unrotate = []
+            unrotated_point = so3.unrotate(rotated_point, jacobians_unrotate)
 
-#             # Check the operation result
-#             assert torch.allclose(
-#                 expected_rotated_data.squeeze(2), rotated_point.data, atol=EPS
-#             )
-#             assert torch.allclose(point_tensor, unrotated_point.data, atol=EPS)
+            # Check the operation result
+            assert torch.allclose(
+                expected_rotated_data.squeeze(2), rotated_point.data, atol=EPS
+            )
+            assert torch.allclose(point_tensor, unrotated_point.data, atol=EPS)
+
+            # Check the jacobians
+            # function_dim = 3 because rotate(so3, (x, y, z)) --> (x_new, y_new, z_new)
+            expected_jac = numeric_jacobian(
+                lambda groups: groups[0].rotate(groups[1]),
+                [so3, th.Point3(point_tensor)],
+                function_dim=3,
+            )
+            assert torch.allclose(jacobians_rotate[0], expected_jac[0])
+            assert torch.allclose(jacobians_rotate[1], expected_jac[1])
+            expected_jac = numeric_jacobian(
+                lambda groups: groups[0].unrotate(groups[1]),
+                [so3, rotated_point],
+                function_dim=3,
+            )
+            print((jacobians_unrotate[0] - expected_jac[0]).norm(dim=[1, 2]))
+            print((jacobians_unrotate[1] - expected_jac[1]).norm(dim=[1, 2]))

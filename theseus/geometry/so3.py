@@ -1,8 +1,3 @@
-# Copyright (c) Meta Platforms, Inc. and affiliates.
-#
-# This source code is licensed under the MIT license found in the
-# LICENSE file in the root directory of this source tree.
-
 from typing import List, Optional, Union, cast
 
 import torch
@@ -11,6 +6,11 @@ import theseus.constants
 
 from .lie_group import LieGroup
 from .point_types import Point3
+
+# Copyright (c) Meta Platforms, Inc. and affiliates.
+#
+# This source code is licensed under the MIT license found in the
+# LICENSE file in the root directory of this source tree.
 
 
 class SO3(LieGroup):
@@ -294,13 +294,7 @@ class SO3(LieGroup):
         if jacobians is not None:
             self._check_jacobians_list(jacobians)
             # Jacobians for SO3: left-invariant jacobians are computed
-            Jrot = torch.zeros(batch_size, 3, 3, dtype=self.dtype, device=self.device)
-            Jrot[:, 0, 1] = ret[:, 2]
-            Jrot[:, 1, 0] = -ret[:, 2]
-            Jrot[:, 0, 2] = -ret[:, 1]
-            Jrot[:, 2, 0] = ret[:, 1]
-            Jrot[:, 1, 2] = ret[:, 0]
-            Jrot[:, 2, 1] = -ret[:, 0]
+            Jrot = -self.data @ SO3.hat(p)
             # Jacobians for point
             Jpnt = self.to_matrix().expand(batch_size, 3, 3)
 
@@ -324,7 +318,13 @@ class SO3(LieGroup):
         if jacobians is not None:
             self._check_jacobians_list(jacobians)
             # Jacobians for SO3: left-invariant jacobians are computed
-            Jrot = self.data.transpose(1, 2) @ SO3.hat(p)
+            Jrot = torch.zeros(batch_size, 3, 3, dtype=self.dtype, device=self.device)
+            Jrot[:, 0, 1] = -ret[:, 2]
+            Jrot[:, 1, 0] = ret[:, 2]
+            Jrot[:, 0, 2] = ret[:, 1]
+            Jrot[:, 2, 0] = -ret[:, 1]
+            Jrot[:, 1, 2] = -ret[:, 0]
+            Jrot[:, 2, 1] = ret[:, 0]
             # Jacobians for point
             Jpnt = self.to_matrix().expand(batch_size, 3, 3)
 

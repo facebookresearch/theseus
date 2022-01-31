@@ -193,7 +193,8 @@ def test_rotate_and_unrotate():
             expected_jac = numeric_jacobian(
                 lambda groups: groups[0].unrotate(groups[1]),
                 [so3, rotated_point],
+                delta_mag=1e-5,
                 function_dim=3,
             )
-            print((jacobians_unrotate[0] - expected_jac[0]).norm(dim=[1, 2]))
-            print((jacobians_unrotate[1] - expected_jac[1]).norm(dim=[1, 2]))
+            assert torch.allclose(jacobians_unrotate[0], expected_jac[0])
+            assert torch.allclose(jacobians_unrotate[1], expected_jac[1])

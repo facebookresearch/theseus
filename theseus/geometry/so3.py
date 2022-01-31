@@ -326,7 +326,7 @@ class SO3(LieGroup):
             Jrot[:, 1, 2] = -ret[:, 0]
             Jrot[:, 2, 1] = ret[:, 0]
             # Jacobians for point
-            Jpnt = self.to_matrix().expand(batch_size, 3, 3)
+            Jpnt = self.to_matrix().transpose(1, 2).expand(batch_size, 3, 3)
 
             jacobians.extend([Jrot, Jpnt])
 

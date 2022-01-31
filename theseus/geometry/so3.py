@@ -77,6 +77,14 @@ class SO3(LieGroup):
             raise ValueError("Not unit quaternions.")
 
     @staticmethod
+    def _hat_matrix_check(matrix: torch.Tensor):
+        if matrix.ndim != 3 or matrix.shape[1:] != (3, 3):
+            raise ValueError("Hat matrices of SO(3) can only be 3x3 matrices")
+
+        if (matrix.transpose(1, 2) + matrix).abs().max().item() > theseus.constants.EPS:
+            raise ValueError("Hat matrices of SO(3) can only be skew-symmetric.")
+
+    @staticmethod
     def exp_map(tangent_vector: torch.Tensor) -> LieGroup:
         if tangent_vector.ndim != 2 or tangent_vector.shape[1] != 3:
             raise ValueError("Invalid input for SO3.exp_map.")
@@ -216,12 +224,7 @@ class SO3(LieGroup):
 
     @staticmethod
     def vee(matrix: torch.Tensor) -> torch.Tensor:
-        _check = matrix.ndim == 3 and matrix.shape[1:] == (3, 3)
-        _check &= (
-            matrix.transpose(1, 2) + matrix
-        ).abs().max().item() < theseus.constants.EPS
-        if not _check:
-            raise ValueError("Invalid hat matrix for SO3.")
+        SO3._hat_matrix_check(matrix)
         return torch.stack((matrix[:, 2, 1], matrix[:, 0, 2], matrix[:, 1, 0]), dim=1)
 
     def _rotate_shape_check(self, point: Union[Point3, torch.Tensor]):

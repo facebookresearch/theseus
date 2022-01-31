@@ -1,3 +1,8 @@
+# Copyright (c) Meta Platforms, Inc. and affiliates.
+#
+# This source code is licensed under the MIT license found in the
+# LICENSE file in the root directory of this source tree.
+
 from typing import List, Optional, Union, cast
 
 import torch
@@ -6,11 +11,6 @@ import theseus.constants
 
 from .lie_group import LieGroup
 from .point_types import Point3
-
-# Copyright (c) Meta Platforms, Inc. and affiliates.
-#
-# This source code is licensed under the MIT license found in the
-# LICENSE file in the root directory of this source tree.
 
 
 class SO3(LieGroup):
@@ -82,7 +82,7 @@ class SO3(LieGroup):
             raise ValueError("Invalid input for SO3.exp_map.")
         ret = SO3(dtype=tangent_vector.dtype)
         theta = torch.linalg.norm(tangent_vector, dim=1, keepdim=True).unsqueeze(1)
-        theta2 = theta ** 2
+        theta2 = theta**2
         # Compute the approximations when theta ~ 0
         small_theta = theta < 0.005
         non_zero = torch.ones(

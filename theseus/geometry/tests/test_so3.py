@@ -166,9 +166,8 @@ def test_rotate_and_unrotate():
     for _ in range(10):  # repeat a few times
         for batch_size in [1, 20, 100]:
             so3 = _create_random_so3(batch_size, rng)
-            # Tests that rotate works from tensor. unrotate() would work similarly), but
-            # it's also tested indirectly by test_transform_to() for SE2
             point_tensor = torch.randn(batch_size, 3).double()
+
             jacobians_rotate = []
             rotated_point = so3.rotate(point_tensor, jacobians=jacobians_rotate)
             expected_rotated_data = so3.to_matrix() @ point_tensor.unsqueeze(2)

@@ -83,7 +83,7 @@ def run_learning_loop(cfg):
     # -------------------------------------------------------------------- #
     # Creating parameters to learn
     # -------------------------------------------------------------------- #
-    if cfg.tactile_cost.init_pretrained_model is True:
+    if cfg.tactile_cost.init_pretrained_model:
         measurements_model_path = (
             EXP_PATH / "models" / "transform_prediction_keypoints.pt"
         )
@@ -98,8 +98,9 @@ def run_learning_loop(cfg):
     ) = theg.create_tactile_models(
         cfg.train.mode, device, measurements_model_path=measurements_model_path
     )
-    if "eps_tracking_loss" in hyperparameters:
-        cfg.train.eps_tracking_loss = 5e-4  # early stopping
+    eps_tracking_loss = hyperparameters.get(
+        "eps_tracking_loss", cfg.train.eps_tracking_loss
+    )
     outer_optim = optim.Adam(learnable_params, lr=hyperparameters["learning_rate"])
 
     # -------------------------------------------------------------------- #
@@ -173,7 +174,7 @@ def run_learning_loop(cfg):
 
         print(f"AVG. LOSS: {np.mean(losses)}")
 
-        if np.mean(losses) < cfg.train.eps_tracking_loss:
+        if np.mean(losses) < eps_tracking_loss:
             break
 
 

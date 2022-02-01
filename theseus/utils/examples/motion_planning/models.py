@@ -183,7 +183,7 @@ class InitialTrajectoryModel(nn.Module):
         for t_step in range(1, trajectory_len):
             idx = 4 * t_step
             cur_t += start_goal_dist / (trajectory_len - 1)
-            add = 2 * bend_factor * ((cur_t**2 - c) / c).view(-1, 1)
+            add = 2 * bend_factor * ((cur_t ** 2 - c) / c).view(-1, 1)
             trajectory[:, idx : idx + 2] += normal_vector * add
 
         # Compute resulting velocities

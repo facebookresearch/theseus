@@ -91,6 +91,7 @@ class SE2(LieGroup):
         self[:, 2] = cosine
         self[:, 3] = sine
 
+    # From https://github.com/strasdat/Sophus/blob/master/sophus/se2.hpp#L160
     def _log_map_impl(self) -> torch.Tensor:
         rotation = self.rotation
         theta = rotation.log_map().view(-1)
@@ -100,19 +101,20 @@ class SE2(LieGroup):
         small_theta = theta.abs() < SE2.SE2_EPS
         non_zero = torch.ones(1, dtype=self.dtype, device=self.device)
         sine_nz = torch.where(small_theta, non_zero, sine)
-        half_theta_by_tan_half_theta = (
+        a = (
             0.5
             * (1 + cosine)
-            * torch.where(small_theta, 1 + sine**2 / 6, theta / sine_nz)
+            * torch.where(small_theta, 1 + sine ** 2 / 6, theta / sine_nz)
         )
-        half_theta = 0.5 * theta
+        b = 0.5 * theta
 
         # Compute the translation
-        ux = half_theta_by_tan_half_theta * self[:, 0] + half_theta * self[:, 1]
-        uy = half_theta_by_tan_half_theta * self[:, 1] - half_theta * self[:, 0]
+        ux = a * self[:, 0] + b * self[:, 1]
+        uy = a * self[:, 1] - b * self[:, 0]
 
         return torch.stack((ux, uy, theta), dim=1)
 
+    # From https://github.com/strasdat/Sophus/blob/master/sophus/se2.hpp#L558
     @staticmethod
     def exp_map(tangent_vector: torch.Tensor) -> LieGroup:
         u = tangent_vector[:, :2]
@@ -127,14 +129,14 @@ class SE2(LieGroup):
             1, dtype=tangent_vector.dtype, device=tangent_vector.device
         )
         theta_nz = torch.where(small_theta, non_zero, theta)
-        sine_by_theta = torch.where(small_theta, 1 - theta**2 / 6, sine / theta_nz)
-        cosine_minus_one_by_theta = torch.where(
-            small_theta, -theta / 2 + theta**3 / 24, (cosine - 1) / theta_nz
+        a = torch.where(
+            small_theta, -theta / 2 + theta ** 3 / 24, (cosine - 1) / theta_nz
         )
+        b = torch.where(small_theta, 1 - theta ** 2 / 6, sine / theta_nz)
 
         # Compute the translation
-        x = sine_by_theta * u[:, 0] + cosine_minus_one_by_theta * u[:, 1]
-        y = sine_by_theta * u[:, 1] - cosine_minus_one_by_theta * u[:, 0]
+        x = b * u[:, 0] + a * u[:, 1]
+        y = b * u[:, 1] - a * u[:, 0]
         translation = Point2(data=torch.stack((x, y), dim=1))
 
         se2 = SE2(dtype=tangent_vector.dtype)

@@ -34,6 +34,7 @@ from .optimizer.linear import (
     CholmodSparseSolver,
     DenseSolver,
     LinearOptimizer,
+    LUCudaSparseSolver,
     LUDenseSolver,
 )
 from .optimizer.nonlinear import (

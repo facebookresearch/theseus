@@ -83,32 +83,38 @@ def check_lu_solver(
     assert all(np.linalg.norm(res) < 1e-10 for res in residuals)
 
 
+@pytest.mark.cuda
 def test_lu_solver_1():
     check_lu_solver(init_batch_size=5, batch_size=5, num_rows=50, num_cols=30, fill=0.2)
 
 
+@pytest.mark.cuda
 def test_lu_solver_2():
     check_lu_solver(
         init_batch_size=5, batch_size=5, num_rows=150, num_cols=60, fill=0.2
     )
 
 
+@pytest.mark.cuda
 def test_lu_solver_3():
     check_lu_solver(
         init_batch_size=10, batch_size=10, num_rows=300, num_cols=90, fill=0.2
     )
 
 
+@pytest.mark.cuda
 def test_lu_solver_4():
     check_lu_solver(init_batch_size=5, batch_size=5, num_rows=50, num_cols=30, fill=0.1)
 
 
+@pytest.mark.cuda
 def test_lu_solver_5():
     check_lu_solver(
         init_batch_size=5, batch_size=5, num_rows=150, num_cols=60, fill=0.1
     )
 
 
+@pytest.mark.cuda
 def test_lu_solver_6():
     check_lu_solver(
         init_batch_size=10, batch_size=10, num_rows=300, num_cols=90, fill=0.1

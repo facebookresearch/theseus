@@ -281,7 +281,7 @@ def test_objective_error():
     np.testing.assert_almost_equal(error, expected_objective_error)
 
     # Test the squared error function
-    squared_error = np.sum(expected_objective_error ** 2)
+    squared_error = np.sum(expected_objective_error**2)
     np.testing.assert_almost_equal(
         objective.error_squared_norm().numpy(), squared_error
     )

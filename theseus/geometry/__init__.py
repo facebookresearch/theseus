@@ -8,4 +8,5 @@ from .manifold import Manifold, OptionalJacobians, local, retract
 from .point_types import Point2, Point3
 from .se2 import SE2
 from .so2 import SO2
+from .so3 import SO3
 from .vector import Vector

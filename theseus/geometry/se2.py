@@ -104,7 +104,7 @@ class SE2(LieGroup):
         a = (
             0.5
             * (1 + cosine)
-            * torch.where(small_theta, 1 + sine ** 2 / 6, theta / sine_nz)
+            * torch.where(small_theta, 1 + sine**2 / 6, theta / sine_nz)
         )
         b = 0.5 * theta
 
@@ -130,9 +130,9 @@ class SE2(LieGroup):
         )
         theta_nz = torch.where(small_theta, non_zero, theta)
         a = torch.where(
-            small_theta, -theta / 2 + theta ** 3 / 24, (cosine - 1) / theta_nz
+            small_theta, -theta / 2 + theta**3 / 24, (cosine - 1) / theta_nz
         )
-        b = torch.where(small_theta, 1 - theta ** 2 / 6, sine / theta_nz)
+        b = torch.where(small_theta, 1 - theta**2 / 6, sine / theta_nz)
 
         # Compute the translation
         x = b * u[:, 0] + a * u[:, 1]

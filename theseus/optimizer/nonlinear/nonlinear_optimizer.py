@@ -31,7 +31,7 @@ class NonlinearOptimizerParams:
             if hasattr(self, param):
                 setattr(self, param, value)
             else:
-                raise ValueError(f"Invalid nonlinear least squares parameter {param}.")
+                raise ValueError(f"Invalid nonlinear optimizer parameter {param}.")
 
 
 class NonlinearOptimizerStatus(Enum):

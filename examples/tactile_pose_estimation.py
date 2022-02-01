@@ -163,7 +163,7 @@ def run_learning_loop(cfg):
     # cost weights, and their auxiliary variables
     objective = th.Objective()
     nn_meas_idx = 0
-    c_square = (np.sqrt(cfg.shape.rect_len_x ** 2 + cfg.shape.rect_len_y ** 2)) ** 2
+    c_square = (np.sqrt(cfg.shape.rect_len_x**2 + cfg.shape.rect_len_y**2)) ** 2
     for i in range(time_steps):
         if i == 0:
             objective.add(

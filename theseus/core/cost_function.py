@@ -187,3 +187,9 @@ class AutoDiffCostFunction(CostFunction):
             cost_weight=self.weight.copy(),
             name=new_name,
         )
+
+    def to(self, *args, **kwargs):
+        # calls to() on the cost weight, variables and any internal tensors
+        super().to(*args, **kwargs)
+        for var in self._tmp_optim_vars:
+            var.to(*args, **kwargs)

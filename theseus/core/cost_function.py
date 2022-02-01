@@ -97,12 +97,14 @@ class AutoDiffCostFunction(CostFunction):
         optim_vars: List[Variable],
         err_fn: ErrFnType,
         dim: int,
-        cost_weight: CostWeight = ScaleCostWeight(1.0),
+        cost_weight: Optional[CostWeight] = None,
         aux_vars: Optional[List[Variable]] = None,
         name: Optional[str] = None,
         autograd_strict: bool = False,
         autograd_vectorize: bool = False,
     ):
+        if cost_weight is None:
+            cost_weight = ScaleCostWeight(1.0)
         super().__init__(cost_weight, name=name)
         # this avoids doing aux_vars=[], which is a bad default since [] is mutable
         aux_vars = aux_vars or []

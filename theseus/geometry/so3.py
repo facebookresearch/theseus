@@ -3,7 +3,7 @@
 # This source code is licensed under the MIT license found in the
 # LICENSE file in the root directory of this source tree.
 
-from typing import Optional, Union, cast
+from typing import List, Optional, Union, cast
 
 import torch
 
@@ -146,7 +146,10 @@ class SO3(LieGroup):
         return ret
 
     def _compose_impl(self, so3_2: LieGroup) -> "SO3":
-        raise NotImplementedError
+        so3_2 = cast(SO3, so3_2)
+        ret = SO3()
+        ret.data = self.data @ so3_2.data
+        return ret
 
     def _inverse_impl(self, get_jacobian: bool = False) -> "SO3":
         return SO3(data=self.data.transpose(1, 2).clone())
@@ -274,3 +277,57 @@ class SO3(LieGroup):
     # only added to avoid casting downstream
     def copy(self, new_name: Optional[str] = None) -> "SO3":
         return cast(SO3, super().copy(new_name=new_name))
+
+    def rotate(
+        self,
+        point: Union[Point3, torch.Tensor],
+        jacobians: Optional[List[torch.Tensor]] = None,
+    ) -> Point3:
+        self._rotate_shape_check(point)
+        batch_size = max(self.shape[0], point.shape[0])
+        if isinstance(point, torch.Tensor):
+            p = point.view(-1, 3, 1)
+        else:
+            p = point.data.view(-1, 3, 1)
+
+        ret = Point3(data=(self.data @ p).view(-1, 3))
+        if jacobians is not None:
+            self._check_jacobians_list(jacobians)
+            # Jacobians for SO3: left-invariant jacobians are computed
+            Jrot = -self.data @ SO3.hat(p)
+            # Jacobians for point
+            Jpnt = self.to_matrix().expand(batch_size, 3, 3)
+
+            jacobians.extend([Jrot, Jpnt])
+
+        return ret
+
+    def unrotate(
+        self,
+        point: Union[Point3, torch.Tensor],
+        jacobians: Optional[List[torch.Tensor]] = None,
+    ) -> Point3:
+        self._rotate_shape_check(point)
+        batch_size = max(self.shape[0], point.shape[0])
+        if isinstance(point, torch.Tensor):
+            p = point.view(-1, 3, 1)
+        else:
+            p = point.data.view(-1, 3, 1)
+
+        ret = Point3(data=(self.data.transpose(1, 2) @ p).view(-1, 3))
+        if jacobians is not None:
+            self._check_jacobians_list(jacobians)
+            # Jacobians for SO3: left-invariant jacobians are computed
+            Jrot = torch.zeros(batch_size, 3, 3, dtype=self.dtype, device=self.device)
+            Jrot[:, 0, 1] = -ret[:, 2]
+            Jrot[:, 1, 0] = ret[:, 2]
+            Jrot[:, 0, 2] = ret[:, 1]
+            Jrot[:, 2, 0] = -ret[:, 1]
+            Jrot[:, 1, 2] = -ret[:, 0]
+            Jrot[:, 2, 1] = ret[:, 0]
+            # Jacobians for point
+            Jpnt = self.to_matrix().transpose(1, 2).expand(batch_size, 3, 3)
+
+            jacobians.extend([Jrot, Jpnt])
+
+        return ret

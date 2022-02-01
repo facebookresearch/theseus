@@ -105,7 +105,6 @@ class SE2(LieGroup):
             * (1 + cosine)
             * torch.where(small_theta, 1 + sine**2 / 6, theta / sine_nz)
         )
-
         half_theta = 0.5 * theta
 
         # Compute the translation

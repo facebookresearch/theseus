@@ -81,7 +81,14 @@ class SE3(LieGroup):
 
     @staticmethod
     def exp_map(tangent_vector: torch.Tensor) -> LieGroup:
+        if tangent_vector.ndim != 2 or tangent_vector.shape[1] != 6:
+            raise ValueError("The tangent vectors can only be 6-D vectors.")
+        ret = SE3(dtype=tangent_vector.dtype)
+
+        # TODO: Not Implemented yet
         raise NotImplementedError
+
+        return ret
 
     def _log_map_impl(self) -> torch.Tensor:
         raise NotImplementedError

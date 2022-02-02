@@ -7,6 +7,9 @@ from typing import List, Optional, Union, cast
 
 import torch
 
+import theseus
+import theseus.constants
+
 from .lie_group import LieGroup
 from .point_types import Point3
 from .so3 import SO3
@@ -58,7 +61,18 @@ class SE3(LieGroup):
 
     @staticmethod
     def _hat_matrix_check(matrix: torch.Tensor):
-        raise NotImplementedError
+        if matrix.ndim != 3 or matrix.shape[1:] != (4, 4):
+            raise ValueError("Hat matrices of SE(3) can only be 4x4 matrices")
+
+        if matrix[:, 3].abs().max().item() > theseus.constants.EPS:
+            raise ValueError("The last row of hat matrices of SE(3) can only be zero.")
+
+        if (
+            matrix[:, :3, :3].transpose(1, 2) + matrix[:, :3, :3]
+        ).abs().max().item() > theseus.constants.EPS:
+            raise ValueError(
+                "The 3x3 top-left corner of hat matrices of SE(3) can only be skew-symmetric."
+            )
 
     @staticmethod
     def exp_map(tangent_vector: torch.Tensor) -> LieGroup:
@@ -78,7 +92,7 @@ class SE3(LieGroup):
 
     def update_from_x_y_z_quaternion(self, x_y_z_quaternion: torch.Tensor):
         if x_y_z_quaternion.ndim != 2 and x_y_z_quaternion.shape[1] != 7:
-            raise ValueError("x_y_z_quaternion can only be 4-D vectors.")
+            raise ValueError("x_y_z_quaternion can only be 7-D vectors.")
 
         batch_size = x_y_z_quaternion.shape[0]
         self.data = torch.empty(batch_size, 3, 4).to(
@@ -87,34 +101,39 @@ class SE3(LieGroup):
         self[:, :3, :3] = SO3.unit_quaternion_to_matrix(x_y_z_quaternion[3:])
         self[:, :, 3] = x_y_z_quaternion[:, :3]
 
-    def update_from_rot_and_trans(
-        self, rotation: SO3, translation: Union[Point3, torch.Tensor]
-    ):
-        raise NotImplementedError
+    def update_from_rot_and_trans(self, rotation: SO3, translation: Point3):
+        if rotation.shape[0] != translation.shape[0]:
+            raise ValueError("rotation and translation must have the same size.")
+
+        if rotation.dtype != translation.dtype:
+            raise ValueError("rotation and translation must be of the same type.")
+
+        if rotation.device != translation.device:
+            raise ValueError("rotation and translation must be on the same device.")
+
+        self.data = torch.cat((rotation.data, translation.data.unsqueeze(2)), dim=2)
 
     @staticmethod
     def hat(tangent_vector: torch.Tensor) -> torch.Tensor:
-        raise NotImplementedError
+        _check = tangent_vector.ndim == 3 and tangent_vector.shape[1:] == (6, 1)
+        _check |= tangent_vector.ndim == 2 and tangent_vector.shape[1] == 3
+        if not _check:
+            raise ValueError("Invalid vee matrix for SO3.")
+        matrix = torch.zeros(tangent_vector.shape[0], 4, 4).to(
+            dtype=tangent_vector.dtype, device=tangent_vector.device
+        )
+        matrix[:, :3, :3] = SO3.hat(tangent_vector[3:])
+        matrix[:, :3, 3] = tangent_vector[:3]
+
+        return matrix
 
     @staticmethod
     def vee(matrix: torch.Tensor) -> torch.Tensor:
-        raise NotImplementedError
+        SE3._hat_matrix_check(matrix)
+        return torch.stack((matrix[:, :3, 3], SO3.vee(matrix[:, :3, :3])), dim=1)
 
     def _transform_shape_check(self, point: Union[Point3, torch.Tensor]):
-        err_msg = "SE(3) can only transform 3-D vectors."
-        if isinstance(point, torch.Tensor):
-            if not point.ndim == 2 or point.shape[1] != 3:
-                raise ValueError(err_msg)
-        elif point.dof() != 3:
-            raise ValueError(err_msg)
-        if (
-            point.shape[0] != self.shape[0]
-            and point.shape[0] != 1
-            and self.shape[0] != 1
-        ):
-            raise ValueError(
-                "Input point batch size is not broadcastable with group batch size."
-            )
+        raise NotImplementedError
 
     def _copy_impl(self, new_name: Optional[str] = None) -> "SE3":
         return SE3(data=self.data.clone(), name=new_name)

@@ -34,7 +34,7 @@ class SE3(LieGroup):
             if x_y_z_quaternion is not None:
                 if x_y_z_quaternion.ndim == 1:
                     x_y_z_quaternion = x_y_z_quaternion.unsqueeze(0)
-        self.update_from_x_y_z_quaternion(x_y_z_quaternion=x_y_z_quaternion)
+                self.update_from_x_y_z_quaternion(x_y_z_quaternion=x_y_z_quaternion)
 
     @staticmethod
     def _init_data() -> torch.Tensor:  # type: ignore
@@ -90,10 +90,16 @@ class SE3(LieGroup):
         raise NotImplementedError
 
     def _inverse_impl(self, get_jacobian: bool = False) -> "SE3":
-        raise NotImplementedError
+        ret = torch.zeros(self.shape[0], 3, 4).to(dtype=self.dtype, device=self.device)
+        ret[:, :, :3] = self.data[:, :3, :3].transpose(1, 2)
+        ret[:, :, 3] = -(ret[:, :3, :3] @ self.data[:, :3, 3].unsqueeze(2)).view(-1, 3)
+        return SE3(data=ret)
 
     def to_matrix(self) -> torch.Tensor:
-        raise NotImplementedError
+        ret = torch.zeros(self.shape[0], 4, 4).to(dtype=self.dtype, device=self.device)
+        ret[:, :3] = self.data
+        ret[:, 3, 3] = 1
+        return ret
 
     def update_from_x_y_z_quaternion(self, x_y_z_quaternion: torch.Tensor):
         if x_y_z_quaternion.ndim != 2 and x_y_z_quaternion.shape[1] != 7:
@@ -103,8 +109,8 @@ class SE3(LieGroup):
         self.data = torch.empty(batch_size, 3, 4).to(
             device=x_y_z_quaternion.device, dtype=x_y_z_quaternion.dtype
         )
-        self[:, :3, :3] = SO3.unit_quaternion_to_matrix(x_y_z_quaternion[3:])
-        self[:, :, 3] = x_y_z_quaternion[:, :3]
+        self[:, :3, :3] = SO3.unit_quaternion_to_matrix(x_y_z_quaternion[:, 3:])
+        self[:, :3, 3] = x_y_z_quaternion[:, :3]
 
     def update_from_rot_and_trans(self, rotation: SO3, translation: Point3):
         if rotation.shape[0] != translation.shape[0]:
@@ -120,22 +126,21 @@ class SE3(LieGroup):
 
     @staticmethod
     def hat(tangent_vector: torch.Tensor) -> torch.Tensor:
-        _check = tangent_vector.ndim == 3 and tangent_vector.shape[1:] == (6, 1)
-        _check |= tangent_vector.ndim == 2 and tangent_vector.shape[1] == 3
+        _check = tangent_vector.ndim == 2 and tangent_vector.shape[1] == 6
         if not _check:
-            raise ValueError("Invalid vee matrix for SO3.")
+            raise ValueError("Invalid vee matrix for SE(3).")
         matrix = torch.zeros(tangent_vector.shape[0], 4, 4).to(
             dtype=tangent_vector.dtype, device=tangent_vector.device
         )
-        matrix[:, :3, :3] = SO3.hat(tangent_vector[3:])
-        matrix[:, :3, 3] = tangent_vector[:3]
+        matrix[:, :3, :3] = SO3.hat(tangent_vector[:, 3:])
+        matrix[:, :3, 3] = tangent_vector[:, :3]
 
         return matrix
 
     @staticmethod
     def vee(matrix: torch.Tensor) -> torch.Tensor:
         SE3._hat_matrix_check(matrix)
-        return torch.stack((matrix[:, :3, 3], SO3.vee(matrix[:, :3, :3])), dim=1)
+        return torch.cat((matrix[:, :3, 3], SO3.vee(matrix[:, :3, :3])), dim=1)
 
     def _transform_shape_check(self, point: Union[Point3, torch.Tensor]):
         raise NotImplementedError

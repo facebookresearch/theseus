@@ -83,102 +83,58 @@ def run_learning_loop(cfg):
     # -------------------------------------------------------------------- #
     # Creating parameters to learn
     # -------------------------------------------------------------------- #
-    # Use theseus_layer in an outer learning loop to learn different cost
-    # function parameters:
-    if cfg.train.mode == "weights_only":
-        qsp_model = theg.TactileWeightModel(
-            device, wt_init=torch.tensor([[50.0, 50.0, 50.0]])
-        ).to(device)
-        mf_between_model = theg.TactileWeightModel(
-            device, wt_init=torch.tensor([[0.0, 0.0, 10.0]])
-        ).to(device)
-        measurements_model = None
-
-        learning_rate = 5
-        learnable_params = list(qsp_model.parameters()) + list(
-            mf_between_model.parameters()
-        )
-    elif cfg.train.mode == "weights_and_measurement_nn":
-        qsp_model = theg.TactileWeightModel(
-            device, wt_init=torch.tensor([[5.0, 5.0, 5.0]])
-        ).to(device)
-        mf_between_model = theg.TactileWeightModel(
-            device, wt_init=torch.tensor([[0.0, 0.0, 5.0]])
-        ).to(device)
-        measurements_model = theg.TactileMeasModel(2 * 2 * 4, 4)
-        if cfg.tactile_cost.init_pretrained_model is True:
-            measurements_model = theg.init_tactile_model_from_file(
-                model=measurements_model,
-                filename=EXP_PATH / "models" / "transform_prediction_keypoints.pt",
-            )
-        measurements_model.to(device)
-
-        learning_rate = 1e-3
-        cfg.train.eps_tracking_loss = 5e-4  # early stopping
-        learnable_params = (
-            list(measurements_model.parameters())
-            + list(qsp_model.parameters())
-            + list(mf_between_model.parameters())
+    if cfg.tactile_cost.init_pretrained_model:
+        measurements_model_path = (
+            EXP_PATH / "models" / "transform_prediction_keypoints.pt"
         )
     else:
-        print("Learning mode {cfg.train.mode} not found")
+        measurements_model_path = None
+    (
+        measurements_model,
+        qsp_model,
+        mf_between_model,
+        learnable_params,
+        hyperparameters,
+    ) = theg.create_tactile_models(
+        cfg.train.mode, device, measurements_model_path=measurements_model_path
+    )
+    eps_tracking_loss = hyperparameters.get(
+        "eps_tracking_loss", cfg.train.eps_tracking_loss
+    )
+    outer_optim = optim.Adam(learnable_params, lr=hyperparameters["learning_rate"])
 
-    outer_optim = optim.Adam(learnable_params, lr=learning_rate)
-    batch_size = cfg.train.batch_size
+    # -------------------------------------------------------------------- #
+    # Main learning loop
+    # -------------------------------------------------------------------- #
+    # Use theseus_layer in an outer learning loop to learn different cost
+    # function parameters:
     measurements = dataset.get_measurements(
         cfg.train.batch_size, cfg.train.num_batches, time_steps
     )
     obj_poses_gt = dataset.obj_poses[0:time_steps, :].clone().requires_grad_(True)
     eff_poses_gt = dataset.eff_poses[0:time_steps, :].clone().requires_grad_(True)
-
     theseus_inputs = {}
-    for epoch in range(cfg.train.num_epochs):
+    for _ in range(cfg.train.num_epochs):
         losses = []
         for batch_idx, batch in enumerate(measurements):
-            theseus_inputs.update(
-                theg.get_tactile_nn_measurements_inputs(
-                    batch=batch,
-                    device=device,
-                    class_label=cfg.class_label,
-                    num_classes=cfg.num_classes,
-                    min_win_mf=cfg.tactile_cost.min_win_mf,
-                    max_win_mf=cfg.tactile_cost.max_win_mf,
-                    step_win_mf=cfg.tactile_cost.step_win_mf,
-                    time_steps=time_steps,
-                    model=measurements_model,
-                )
-            )
-            theseus_inputs.update(
-                theg.get_tactile_motion_capture_inputs(batch, device, time_steps)
-            )
-            theseus_inputs.update(
-                theg.get_tactile_cost_weight_inputs(qsp_model, mf_between_model)
-            )
-            theseus_inputs.update(
-                theg.get_tactile_initial_optim_vars(batch, device, time_steps)
-            )
-
-            theseus_inputs["sdf_data"] = (
-                (dataset.sdf_data_tensor.data).repeat(batch_size, 1, 1).to(device)
+            theg.update_tactile_pushing_inputs(
+                dataset=dataset,
+                batch=batch,
+                measurements_model=measurements_model,
+                qsp_model=qsp_model,
+                mf_between_model=mf_between_model,
+                device=device,
+                cfg=cfg,
+                time_steps=time_steps,
+                theseus_inputs=theseus_inputs,
             )
 
             theseus_inputs, _ = pose_estimator.forward(
                 theseus_inputs, optimizer_kwargs={"verbose": True}
             )
 
-            obj_poses_opt = theg.get_tactile_poses_from_values(
-                batch_size=batch_size,
-                values=theseus_inputs,
-                time_steps=time_steps,
-                device=device,
-                key="obj_pose",
-            )
-            eff_poses_opt = theg.get_tactile_poses_from_values(
-                batch_size=batch_size,
-                values=theseus_inputs,
-                time_steps=time_steps,
-                device=device,
-                key="eff_pose",
+            obj_poses_opt, eff_poses_opt = theg.get_tactile_poses_from_values(
+                values=theseus_inputs, time_steps=time_steps
             )
 
             loss = F.mse_loss(obj_poses_opt[batch_idx, :], obj_poses_gt)
@@ -218,7 +174,7 @@ def run_learning_loop(cfg):
 
         print(f"AVG. LOSS: {np.mean(losses)}")
 
-        if np.mean(losses) < cfg.train.eps_tracking_loss:
+        if np.mean(losses) < eps_tracking_loss:
             break
 
 

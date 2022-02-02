@@ -24,8 +24,6 @@ def _create_random_se3(batch_size, rng):
 
 def check_SE3_log_map(tangent_vector, atol=EPS):
     g = th.SE3.exp_map(tangent_vector)
-    err = (th.SE3.exp_map(g.log_map()).data - g.data).abs().max().item()
-    print(err)
     assert torch.allclose(th.SE3.exp_map(g.log_map()).data, g.data, atol=atol)
 
 

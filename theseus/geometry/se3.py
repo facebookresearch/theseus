@@ -31,8 +31,7 @@ class SE3(LieGroup):
             self._SE3_matrix_check(data)
         super().__init__(data=data, name=name, dtype=dtype)
         if x_y_z_quaternion is not None:
-            if x_y_z_quaternion is not None:
-                self.update_from_x_y_z_quaternion(x_y_z_quaternion=x_y_z_quaternion)
+            self.update_from_x_y_z_quaternion(x_y_z_quaternion=x_y_z_quaternion)
 
     @staticmethod
     def _init_data() -> torch.Tensor:  # type: ignore
@@ -123,7 +122,7 @@ class SE3(LieGroup):
 
     def update_from_rot_and_trans(self, rotation: SO3, translation: Point3):
         if rotation.shape[0] != translation.shape[0]:
-            raise ValueError("rotation and translation must have the same size.")
+            raise ValueError("rotation and translation must have the same batch size.")
 
         if rotation.dtype != translation.dtype:
             raise ValueError("rotation and translation must be of the same type.")

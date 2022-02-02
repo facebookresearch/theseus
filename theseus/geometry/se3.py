@@ -32,8 +32,6 @@ class SE3(LieGroup):
         super().__init__(data=data, name=name, dtype=dtype)
         if x_y_z_quaternion is not None:
             if x_y_z_quaternion is not None:
-                if x_y_z_quaternion.ndim == 1:
-                    x_y_z_quaternion = x_y_z_quaternion.unsqueeze(0)
                 self.update_from_x_y_z_quaternion(x_y_z_quaternion=x_y_z_quaternion)
 
     @staticmethod
@@ -65,6 +63,25 @@ class SE3(LieGroup):
         SO3._SO3_matrix_check(matrix.data[:, :3, :3])
 
     @staticmethod
+    def x_y_z_unit_quaternion_to_SE3(x_y_z_quaternion: torch.Tensor) -> "SE3":
+        if x_y_z_quaternion.ndim == 1:
+            x_y_z_quaternion = x_y_z_quaternion.unsqueeze(0)
+
+        if x_y_z_quaternion.ndim != 2 and x_y_z_quaternion.shape[1] != 7:
+            raise ValueError("x_y_z_quaternion can only be 7-D vectors.")
+
+        ret = SE3()
+
+        batch_size = x_y_z_quaternion.shape[0]
+        ret.data = torch.empty(batch_size, 3, 4).to(
+            device=x_y_z_quaternion.device, dtype=x_y_z_quaternion.dtype
+        )
+        ret[:, :3, :3] = SO3.unit_quaternion_to_SO3(x_y_z_quaternion[:, 3:]).data
+        ret[:, :3, 3] = x_y_z_quaternion[:, :3]
+
+        return ret
+
+    @staticmethod
     def _hat_matrix_check(matrix: torch.Tensor):
         if matrix.ndim != 3 or matrix.shape[1:] != (4, 4):
             raise ValueError("Hat matrices of SE(3) can only be 4x4 matrices")
@@ -81,14 +98,7 @@ class SE3(LieGroup):
 
     @staticmethod
     def exp_map(tangent_vector: torch.Tensor) -> LieGroup:
-        if tangent_vector.ndim != 2 or tangent_vector.shape[1] != 6:
-            raise ValueError("The tangent vectors can only be 6-D vectors.")
-        ret = SE3(dtype=tangent_vector.dtype)
-
-        # TODO: Not Implemented yet
         raise NotImplementedError
-
-        return ret
 
     def _log_map_impl(self) -> torch.Tensor:
         raise NotImplementedError
@@ -109,15 +119,7 @@ class SE3(LieGroup):
         return ret
 
     def update_from_x_y_z_quaternion(self, x_y_z_quaternion: torch.Tensor):
-        if x_y_z_quaternion.ndim != 2 and x_y_z_quaternion.shape[1] != 7:
-            raise ValueError("x_y_z_quaternion can only be 7-D vectors.")
-
-        batch_size = x_y_z_quaternion.shape[0]
-        self.data = torch.empty(batch_size, 3, 4).to(
-            device=x_y_z_quaternion.device, dtype=x_y_z_quaternion.dtype
-        )
-        self[:, :3, :3] = SO3.unit_quaternion_to_matrix(x_y_z_quaternion[:, 3:])
-        self[:, :3, 3] = x_y_z_quaternion[:, :3]
+        self.update(SE3.x_y_z_unit_quaternion_to_SE3(x_y_z_quaternion))
 
     def update_from_rot_and_trans(self, rotation: SO3, translation: Point3):
         if rotation.shape[0] != translation.shape[0]:
@@ -166,7 +168,7 @@ class SE3(LieGroup):
     ) -> Point3:
         raise NotImplementedError
 
-    def untransform_to(
+    def transform_from(
         self,
         point: Union[Point3, torch.Tensor],
         jacobians: Optional[List[torch.Tensor]] = None,

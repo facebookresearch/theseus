@@ -31,8 +31,6 @@ class SO3(LieGroup):
             self._SO3_matrix_check(data)
         super().__init__(data=data, name=name, dtype=dtype)
         if quaternion is not None:
-            if quaternion.ndim == 1:
-                quaternion = quaternion.unsqueeze(0)
             self.update_from_unit_quaternion(quaternion)
 
     @staticmethod
@@ -40,7 +38,7 @@ class SO3(LieGroup):
         return torch.eye(3, 3).view(1, 3, 3)
 
     def update_from_unit_quaternion(self, quaternion: torch.Tensor):
-        self.update(self.unit_quaternion_to_matrix(quaternion))
+        self.update(self.unit_quaternion_to_SO3(quaternion))
 
     def dof(self) -> int:
         return 3
@@ -244,8 +242,11 @@ class SO3(LieGroup):
             )
 
     @staticmethod
-    def unit_quaternion_to_matrix(quaternion: torch.torch.Tensor):
+    def unit_quaternion_to_SO3(quaternion: torch.torch.Tensor):
+        if quaternion.ndim == 1:
+            quaternion = quaternion.unsqueeze(0)
         SO3._unit_quaternion_check(quaternion)
+
         q0 = quaternion[:, 0]
         q1 = quaternion[:, 1]
         q2 = quaternion[:, 2]
@@ -260,7 +261,9 @@ class SO3(LieGroup):
         q22 = q2 * q2
         q23 = q2 * q3
         q33 = q3 * q3
-        ret = torch.zeros(quaternion.shape[0], 3, 3).to(
+
+        ret = SO3()
+        ret.data = torch.zeros(quaternion.shape[0], 3, 3).to(
             dtype=quaternion.dtype, device=quaternion.device
         )
         ret[:, 0, 0] = 2 * (q00 + q11) - 1

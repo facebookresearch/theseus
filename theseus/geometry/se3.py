@@ -75,8 +75,8 @@ class SE3(LieGroup):
         ret.data = torch.empty(batch_size, 3, 4).to(
             device=x_y_z_quaternion.device, dtype=x_y_z_quaternion.dtype
         )
-        ret[:, :3, :3] = SO3.unit_quaternion_to_SO3(x_y_z_quaternion[:, 3:]).data
-        ret[:, :3, 3] = x_y_z_quaternion[:, :3]
+        ret[:, :, :3] = SO3.unit_quaternion_to_SO3(x_y_z_quaternion[:, 3:]).data
+        ret[:, :, 3] = x_y_z_quaternion[:, :3]
 
         return ret
 
@@ -99,9 +99,11 @@ class SE3(LieGroup):
     def exp_map(tangent_vector: torch.Tensor) -> LieGroup:
         if tangent_vector.ndim != 2 or tangent_vector.shape[1] != 6:
             raise ValueError("Tangent vectors of SE(3) can only be 6-D vectors.")
-        ret = SE3(dtype=tangent_vector.dtype)
 
         NEAR_ZERO_EPS = 5e-3
+
+        ret = SE3(dtype=tangent_vector.dtype)
+
         tangent_vector_lin = tangent_vector[:, :3].view(-1, 3, 1)
         tangent_vector_ang = tangent_vector[:, 3:].view(-1, 3, 1)
 
@@ -167,7 +169,66 @@ class SE3(LieGroup):
         return ret
 
     def _log_map_impl(self) -> torch.Tensor:
-        raise NotImplementedError
+        NEAR_PI_EPS = 1e-7
+        NEAR_ZERO_EPS = 5e-3
+
+        ret = torch.zeros(self.shape[0], 6, dtype=self.dtype, device=self.device)
+
+        ret[:, 3] = 0.5 * (self[:, 2, 1] - self[:, 1, 2])
+        ret[:, 4] = 0.5 * (self[:, 0, 2] - self[:, 2, 0])
+        ret[:, 5] = 0.5 * (self[:, 1, 0] - self[:, 0, 1])
+        cosine = 0.5 * (self[:, 0, 0] + self[:, 1, 1] + self[:, 2, 2] - 1)
+        sine = ret[:, 3:].norm(dim=1)
+        theta = torch.atan2(sine, cosine)
+        theta2 = theta**2
+        non_zero = torch.ones(1, dtype=self.dtype, device=self.device)
+
+        # Compute the rotation
+        # theta is not near pi
+        not_near_pi = 1 + cosine > NEAR_PI_EPS
+        # Compute the approximation of theta / sin(theta) when theta is near to 0
+        near_zero = theta[not_near_pi] < NEAR_ZERO_EPS
+        sine_nz = torch.where(near_zero, non_zero, sine[not_near_pi])
+        scale = torch.where(
+            near_zero, 1 + sine[not_near_pi] ** 2 / 6, theta[not_near_pi] / sine_nz
+        )
+        ret[not_near_pi, 3:] *= scale.view(-1, 1)
+        # theta is near pi
+        near_pi = ~not_near_pi
+        ddiag = torch.diagonal(self[near_pi], dim1=1, dim2=2)
+        # Find the index of major coloumns and diagonals
+        major = torch.logical_and(
+            ddiag[:, 1] > ddiag[:, 0], ddiag[:, 1] > ddiag[:, 2]
+        ) + 2 * torch.logical_and(ddiag[:, 2] > ddiag[:, 0], ddiag[:, 2] > ddiag[:, 1])
+        ret[near_pi, 3:] = self[near_pi, major, :3]
+        ret[near_pi, major + 3] -= cosine[near_pi]
+        ret[near_pi, 3:] *= (theta[near_pi] ** 2 / (1 - cosine[near_pi])).view(-1, 1)
+        ret[near_pi, 3:] /= ret[near_pi, major + 3].sqrt().view(-1, 1)
+
+        # Compute the translation
+        near_zero = theta < NEAR_ZERO_EPS
+        sine_theta = sine * theta
+        two_cosine_minus_two = 2 * cosine - 2
+        two_cosine_minus_two_nz = torch.where(near_zero, non_zero, two_cosine_minus_two)
+        theta2_nz = torch.where(near_zero, non_zero, theta2)
+        a = torch.where(
+            near_zero, 1 - theta2 / 12, -sine_theta / two_cosine_minus_two_nz
+        )
+        b = torch.where(
+            near_zero,
+            1.0 / 12 + theta2 / 720,
+            (sine_theta + two_cosine_minus_two) / (theta2_nz * two_cosine_minus_two_nz),
+        )
+
+        translation = self[:, :, 3].view(-1, 3, 1)
+        tangent_vector_ang = ret[:, 3:].view(-1, 3, 1)
+        ret[:, :3] = a.view(-1, 1) * self[:, :, 3]
+        ret[:, :3] -= 0.5 * torch.cross(ret[:, 3:], self[:, :, 3])
+        ret[:, :3] += b.view(-1, 1) * (
+            tangent_vector_ang @ (tangent_vector_ang.transpose(1, 2) @ translation)
+        ).view(-1, 3)
+
+        return ret
 
     def _compose_impl(self, so3_2: LieGroup) -> "SE3":
         raise NotImplementedError

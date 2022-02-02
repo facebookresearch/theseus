@@ -116,25 +116,31 @@ def check_mat_mult(batch_size, num_rows, num_cols, fill, verbose=False):
     assert At_w.isclose(At_w_test, atol=1e-10).all()
 
 
+@pytest.mark.cuda
 def test_mat_mult_1():
     check_mat_mult(batch_size=5, num_rows=50, num_cols=30, fill=0.2)
 
 
+@pytest.mark.cuda
 def test_mat_mult_2():
     check_mat_mult(batch_size=5, num_rows=150, num_cols=60, fill=0.2)
 
 
+@pytest.mark.cuda
 def test_mat_mult_3():
     check_mat_mult(batch_size=10, num_rows=300, num_cols=90, fill=0.2)
 
 
+@pytest.mark.cuda
 def test_mat_mult_4():
     check_mat_mult(batch_size=5, num_rows=50, num_cols=30, fill=0.1)
 
 
+@pytest.mark.cuda
 def test_mat_mult_5():
     check_mat_mult(batch_size=5, num_rows=150, num_cols=60, fill=0.1)
 
 
+@pytest.mark.cuda
 def test_mat_mult_6():
     check_mat_mult(batch_size=10, num_rows=300, num_cols=90, fill=0.1)

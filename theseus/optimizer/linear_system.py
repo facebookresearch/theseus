@@ -40,7 +40,7 @@ class SparseStructure(abc.ABC):
 
     def mock_csc_transpose(self):
         return csc_matrix(
-            (np.zeros(len(self.col_ind), dtype=self.dtype), self.col_ind, self.row_ptr),
+            (np.ones(len(self.col_ind), dtype=self.dtype), self.col_ind, self.row_ptr),
             (self.num_cols, self.num_rows),
             dtype=self.dtype,
         )

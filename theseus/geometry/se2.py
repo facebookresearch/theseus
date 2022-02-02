@@ -17,6 +17,8 @@ from .so2 import SO2
 # If data is passed, must be x, y, cos, sin
 # If x_y_theta is passed, must be tensor with shape batch_size x 3
 class SE2(LieGroup):
+    SE2_EPS = 5e-7
+
     def __init__(
         self,
         x_y_theta: Optional[torch.Tensor] = None,
@@ -89,42 +91,28 @@ class SE2(LieGroup):
         self[:, 2] = cosine
         self[:, 3] = sine
 
-    # From https://github.com/strasdat/Sophus/blob/master/sophus/se2.hpp#L160
     def _log_map_impl(self) -> torch.Tensor:
         rotation = self.rotation
-
-        theta = rotation.log_map()
-        half_theta = 0.5 * theta.view(-1)
-
+        theta = rotation.log_map().view(-1)
         cosine, sine = rotation.to_cos_sin()
-        cos_minus_one = cosine - 1
-        halftheta_by_tan_of_halftheta = torch.zeros_like(cos_minus_one)
 
-        # Compute halftheta_by_tan_of_halftheta when theta is not near zero
-        idx_regular_vals = cos_minus_one.abs() > theseus.constants.EPS
-        halftheta_by_tan_of_halftheta[idx_regular_vals] = (
-            -(half_theta * sine)[idx_regular_vals] / cos_minus_one[idx_regular_vals]
+        # Compute the approximations when theta is near to 0
+        small_theta = theta.abs() < SE2.SE2_EPS
+        non_zero = torch.ones(1, dtype=self.dtype, device=self.device)
+        sine_nz = torch.where(small_theta, non_zero, sine)
+        half_theta_by_tan_half_theta = (
+            0.5
+            * (1 + cosine)
+            * torch.where(small_theta, 1 + sine**2 / 6, theta / sine_nz)
         )
-        # Same as above three lines but for small values
-        idx_small_vals = cos_minus_one.abs() < theseus.constants.EPS
-        if idx_small_vals.any():
-            theta_sq_at_idx = theta[idx_small_vals] ** 2
-            halftheta_by_tan_of_halftheta[idx_small_vals] = (
-                -theta_sq_at_idx.view(-1) / 12 + 1
-            )
+        half_theta = 0.5 * theta
 
-        v_inv = torch.empty(self.shape[0], 2, 2).to(
-            device=self.device, dtype=self.dtype
-        )
-        v_inv[:, 0, 0] = halftheta_by_tan_of_halftheta
-        v_inv[:, 0, 1] = half_theta
-        v_inv[:, 1, 0] = -half_theta
-        v_inv[:, 1, 1] = halftheta_by_tan_of_halftheta
-        tangent_translation = torch.matmul(v_inv, self[:, :2].unsqueeze(-1))
+        # Compute the translation
+        ux = half_theta_by_tan_half_theta * self[:, 0] + half_theta * self[:, 1]
+        uy = half_theta_by_tan_half_theta * self[:, 1] - half_theta * self[:, 0]
 
-        return torch.cat([tangent_translation.view(-1, 2), theta], dim=1)
+        return torch.stack((ux, uy, theta), dim=1)
 
-    # From https://github.com/strasdat/Sophus/blob/master/sophus/se2.hpp#L558
     @staticmethod
     def exp_map(tangent_vector: torch.Tensor) -> LieGroup:
         u = tangent_vector[:, :2]
@@ -133,32 +121,21 @@ class SE2(LieGroup):
 
         cosine, sine = rotation.to_cos_sin()
 
-        sin_theta_by_theta = torch.zeros_like(sine)
-        one_minus_cos_theta_by_theta = torch.zeros_like(sine)
+        # Compute the approximations when theta is near to 0
+        small_theta = theta.abs() < SE2.SE2_EPS
+        non_zero = torch.ones(
+            1, dtype=tangent_vector.dtype, device=tangent_vector.device
+        )
+        theta_nz = torch.where(small_theta, non_zero, theta)
+        sine_by_theta = torch.where(small_theta, 1 - theta**2 / 6, sine / theta_nz)
+        cosine_minus_one_by_theta = torch.where(
+            small_theta, -theta / 2 + theta**3 / 24, (cosine - 1) / theta_nz
+        )
 
-        # Compute above quantities when theta is not near zero
-        idx_regular_thetas = theta.abs() > theseus.constants.EPS
-        if idx_regular_thetas.any():
-            sin_theta_by_theta[idx_regular_thetas] = (
-                sine[idx_regular_thetas] / theta[idx_regular_thetas]
-            )
-            one_minus_cos_theta_by_theta[idx_regular_thetas] = (
-                -cosine[idx_regular_thetas] + 1
-            ) / theta[idx_regular_thetas]
-
-        # Same as above three lines but for small angles
-        idx_small_thetas = theta.abs() < theseus.constants.EPS
-        if idx_small_thetas.any():
-            small_theta = theta[idx_small_thetas]
-            small_theta_sq = small_theta ** 2
-            sin_theta_by_theta[idx_small_thetas] = -small_theta_sq / 6 + 1
-            one_minus_cos_theta_by_theta[idx_small_thetas] = (
-                0.5 * small_theta - small_theta / 24 * small_theta_sq
-            )
-
-        new_x = sin_theta_by_theta * u[:, 0] - one_minus_cos_theta_by_theta * u[:, 1]
-        new_y = one_minus_cos_theta_by_theta * u[:, 0] + sin_theta_by_theta * u[:, 1]
-        translation = Point2(data=torch.stack([new_x, new_y], dim=1))
+        # Compute the translation
+        x = sine_by_theta * u[:, 0] + cosine_minus_one_by_theta * u[:, 1]
+        y = sine_by_theta * u[:, 1] - cosine_minus_one_by_theta * u[:, 0]
+        translation = Point2(data=torch.stack((x, y), dim=1))
 
         se2 = SE2(dtype=tangent_vector.dtype)
         se2.update_from_rot_and_trans(rotation, translation)

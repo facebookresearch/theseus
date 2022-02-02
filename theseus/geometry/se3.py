@@ -51,7 +51,12 @@ class SE3(LieGroup):
             return f"SE3(matrix={self.data}), name={self.name})"
 
     def _adjoint_impl(self) -> torch.Tensor:
-        raise NotImplementedError
+        ret = torch.zeros(self.shape[0], 6, 6).to(dtype=self.dtype, device=self.device)
+        ret[:, :3, :3] = self[:, :3, :3]
+        ret[:, 3:, 3:] = self[:, :3, :3]
+        ret[:, :3, 3:] = SO3.hat(self[:, :3, 3]) @ self[:, :3, :3]
+
+        return ret
 
     @staticmethod
     def _SE3_matrix_check(matrix: torch.Tensor):

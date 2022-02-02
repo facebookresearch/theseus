@@ -15,6 +15,7 @@ from .core import (
 from .geometry import (
     SE2,
     SO2,
+    SO3,
     LieGroup,
     Manifold,
     Point2,

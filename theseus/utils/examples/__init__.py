@@ -13,6 +13,7 @@ from .motion_planning import (
 )
 from .tactile_pose_estimation import (
     TactileMeasModel,
+    TactilePushingDataset,
     TactileWeightModel,
     get_tactile_cost_weight_inputs,
     get_tactile_initial_optim_vars,
@@ -20,7 +21,5 @@ from .tactile_pose_estimation import (
     get_tactile_nn_measurements_inputs,
     get_tactile_poses_from_values,
     init_tactile_model_from_file,
-    load_tactile_dataset_from_file,
-    load_tactile_sdf_from_file,
     visualize_tactile_push2d,
 )

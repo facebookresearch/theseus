@@ -242,7 +242,7 @@ class SO3(LieGroup):
             )
 
     @staticmethod
-    def unit_quaternion_to_SO3(quaternion: torch.torch.Tensor):
+    def unit_quaternion_to_SO3(quaternion: torch.torch.Tensor) -> "SO3":
         if quaternion.ndim == 1:
             quaternion = quaternion.unsqueeze(0)
         SO3._unit_quaternion_check(quaternion)

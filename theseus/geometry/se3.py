@@ -220,18 +220,24 @@ class SE3(LieGroup):
             (sine_theta + two_cosine_minus_two) / (theta2_nz * two_cosine_minus_two_nz),
         )
 
-        translation = self[:, :, 3].view(-1, 3, 1)
-        tangent_vector_ang = ret[:, 3:].view(-1, 3, 1)
         ret[:, :3] = a.view(-1, 1) * self[:, :, 3]
         ret[:, :3] -= 0.5 * torch.cross(ret[:, 3:], self[:, :, 3])
         ret[:, :3] += b.view(-1, 1) * (
-            tangent_vector_ang @ (tangent_vector_ang.transpose(1, 2) @ translation)
+            ret[:, 3:].view(-1, 3, 1) @ (ret[:, 3:].view(-1, 1, 3) @ self[:, :, 3:])
         ).view(-1, 3)
 
         return ret
 
-    def _compose_impl(self, so3_2: LieGroup) -> "SE3":
-        raise NotImplementedError
+    def _compose_impl(self, se3_2: LieGroup) -> "SE3":
+        se3_2 = cast(SE3, se3_2)
+        batch_size = max(self.shape[0], se3_2.shape[0])
+        ret = SE3()
+        ret.data = torch.zeros(batch_size, 3, 4, dtype=self.dtype, device=self.device)
+        ret[:, :, :3] = self[:, :, :3] @ se3_2[:, :, :3]
+        ret[:, :, 3] = self[:, :, 3]
+        ret[:, :, 3:] += self[:, :, :3] @ se3_2[:, :, 3:]
+
+        return ret
 
     def _inverse_impl(self, get_jacobian: bool = False) -> "SE3":
         ret = torch.zeros(self.shape[0], 3, 4).to(dtype=self.dtype, device=self.device)

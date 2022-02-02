@@ -10,7 +10,7 @@ import torch
 import theseus as th
 from theseus.constants import EPS
 
-from .common import check_adjoint, check_exp_map
+from .common import check_adjoint, check_compose, check_exp_map, check_inverse
 
 
 def _create_random_se3(batch_size, rng):
@@ -121,6 +121,23 @@ def test_log_map():
         tangent_vector = torch.cat([tangent_vector_lin, tangent_vector_ang], dim=1)
 
         check_SE3_log_map(tangent_vector)
+
+
+def test_compose():
+    rng = torch.Generator()
+    rng.manual_seed(0)
+    for batch_size in [1, 20, 100]:
+        se3_1 = _create_random_se3(batch_size, rng)
+        se3_2 = _create_random_se3(batch_size, rng)
+        check_compose(se3_1, se3_2)
+
+
+def test_inverse():
+    rng = torch.Generator()
+    rng.manual_seed(0)
+    for batch_size in [1, 20, 100]:
+        se3 = _create_random_se3(batch_size, rng)
+        check_inverse(se3)
 
 
 def test_adjoint():

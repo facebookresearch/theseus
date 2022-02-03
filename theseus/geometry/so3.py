@@ -299,7 +299,7 @@ class SO3(LieGroup):
         ret = Point3(data=(self.data @ p).view(-1, 3))
         if jacobians is not None:
             self._check_jacobians_list(jacobians)
-            # Jacobians for SO3: left-invariant jacobians are computed
+            # Right jacobians for SO(3) are computed
             Jrot = -self.data @ SO3.hat(p)
             # Jacobians for point
             Jpnt = self.to_matrix().expand(batch_size, 3, 3)
@@ -323,7 +323,7 @@ class SO3(LieGroup):
         ret = Point3(data=(self.data.transpose(1, 2) @ p).view(-1, 3))
         if jacobians is not None:
             self._check_jacobians_list(jacobians)
-            # Jacobians for SO3: left-invariant jacobians are computed
+            # Left jacobians for SO3 are computed
             Jrot = torch.zeros(batch_size, 3, 3, dtype=self.dtype, device=self.device)
             Jrot[:, 0, 1] = -ret[:, 2]
             Jrot[:, 1, 0] = ret[:, 2]

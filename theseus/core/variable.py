@@ -52,8 +52,8 @@ class Variable:
             )
         if data.dtype != self.dtype:
             raise ValueError(
-                f"Tried to update used tensor of dtype {data.dtype} but Variable has "
-                f"type {self.dtype}."
+                f"Tried to update used tensor of dtype {data.dtype} but Variable "
+                f"{self.name} has dtype {self.dtype}."
             )
         if batch_ignore_mask is not None and batch_ignore_mask.any():
             good_indices = ~batch_ignore_mask

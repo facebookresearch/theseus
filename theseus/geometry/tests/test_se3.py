@@ -14,12 +14,12 @@ from .common import check_adjoint, check_compose, check_exp_map, check_inverse
 
 
 def _create_random_se3(batch_size, rng):
-    tangent_vector_ang = torch.rand(batch_size, 3) - 0.5
+    tangent_vector_ang = torch.rand(batch_size, 3).double() - 0.5
     tangent_vector_ang /= tangent_vector_ang.norm(dim=1, keepdim=True)
-    tangent_vector_ang *= torch.rand(batch_size, 1) * 2 * np.pi - np.pi
-    tangent_vector_lin = torch.randn(batch_size, 3)
+    tangent_vector_ang *= torch.rand(batch_size, 1).double() * 2 * np.pi - np.pi
+    tangent_vector_lin = torch.randn(batch_size, 3).double()
     tangent_vector = torch.cat([tangent_vector_lin, tangent_vector_ang], dim=1)
-    return th.SE3.exp_map(tangent_vector.double())
+    return th.SE3.exp_map(tangent_vector)
 
 
 def check_SE3_log_map(tangent_vector, atol=EPS):

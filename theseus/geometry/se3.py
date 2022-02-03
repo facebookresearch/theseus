@@ -320,12 +320,12 @@ class SE3(LieGroup):
             p = point.data.view(-1, 3, 1)
 
         ret = Point3(data=(self[:, :, :3] @ p).view(-1, 3))
-        ret[:, 3:] += self[:, :, 3:]
+        ret += self[:, :, 3]
 
         if jacobians is not None:
             self._check_jacobians_list(jacobians)
             # Right jacobians for SE(3) are computed
-            Jg = torch.zeros(batch_size, 3, 6)
+            Jg = torch.zeros(batch_size, 3, 6, dtype=self.dtype, device=self.device)
             Jg[:, :, :3] = self[:, :, :3]
             Jg[:, :, 3:] = -self[:, :, :3] @ SO3.hat(p)
             # Jacobians for point
@@ -353,7 +353,7 @@ class SE3(LieGroup):
         if jacobians is not None:
             self._check_jacobians_list(jacobians)
             # Right jacobians for SE(3) are computed
-            Jg = torch.zeros(batch_size, 3, 6)
+            Jg = torch.zeros(batch_size, 3, 6, dtype=self.dtype, device=self.device)
             Jg[:, 0, 0] = -1
             Jg[:, 1, 1] = -1
             Jg[:, 2, 2] = -1

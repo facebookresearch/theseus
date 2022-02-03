@@ -9,6 +9,7 @@ import torch
 
 import theseus as th
 from theseus.constants import EPS
+from theseus.utils import numeric_jacobian
 
 from .common import check_adjoint, check_compose, check_exp_map, check_inverse
 
@@ -145,3 +146,42 @@ def test_adjoint():
         se3 = _create_random_se3(batch_size, rng)
         tangent = torch.randn(batch_size, 6).double()
         check_adjoint(se3, tangent)
+
+
+def test_transform_from_and_to():
+    rng = torch.Generator()
+    rng.manual_seed(0)
+    for _ in range(10):  # repeat a few times
+        for batch_size in [1, 20, 100]:
+            se3 = _create_random_se3(batch_size, rng)
+            point_tensor = torch.randn(batch_size, 3).double()
+            point_tensor_ext = torch.cat(
+                (point_tensor, torch.ones(batch_size, 1).double()), dim=1
+            )
+
+            jacobians_to = []
+            point_to = se3.transform_to(point_tensor, jacobians=jacobians_to)
+            expected_to = (se3.to_matrix() @ point_tensor_ext.unsqueeze(2))[:, :3]
+            jacobians_from = []
+            point_from = se3.transform_from(point_to, jacobians_from)
+
+            # Check the operation result
+            assert torch.allclose(expected_to.squeeze(2), point_to.data, atol=EPS)
+            assert torch.allclose(point_tensor, point_from.data, atol=EPS)
+
+            # Check the jacobians
+            expected_jac = numeric_jacobian(
+                lambda groups: groups[0].transform_to(groups[1]),
+                [se3, th.Point3(point_tensor)],
+                function_dim=3,
+            )
+            assert torch.allclose(jacobians_to[0], expected_jac[0])
+            assert torch.allclose(jacobians_to[1], expected_jac[1])
+            expected_jac = numeric_jacobian(
+                lambda groups: groups[0].transform_from(groups[1]),
+                [se3, point_to],
+                delta_mag=1e-5,
+                function_dim=3,
+            )
+            assert torch.allclose(jacobians_from[0], expected_jac[0])
+            assert torch.allclose(jacobians_from[1], expected_jac[1])

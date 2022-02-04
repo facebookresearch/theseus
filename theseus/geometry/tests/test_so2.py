@@ -108,3 +108,44 @@ def test_copy():
     rng.manual_seed(0)
     so2 = _create_random_so2(1, rng)
     check_copy_var(so2)
+
+
+def test_projection():
+    rng = torch.Generator()
+    rng.manual_seed(0)
+    for _ in range(10):  # repeat a few times
+        for batch_size in [1, 20, 100]:
+            so2 = _create_random_so2(batch_size, rng)
+            point = th.Point2(data=torch.randn(batch_size, 2).double())
+
+            # Test SO3.rotate
+            def rotate_sum(R, p):
+                return th.SO2(data=R).rotate(p).data.sum(dim=0)
+
+            jac = torch.autograd.functional.jacobian(rotate_sum, (so2.data, point.data))
+
+            actual = [
+                so2.project(jac[0]).transpose(0, 1),
+                point.project(jac[1]).transpose(0, 1),
+            ]
+            expected = []
+            _ = so2.rotate(point, expected)
+            assert torch.allclose(actual[0], expected[0])
+            assert torch.allclose(actual[1], expected[1])
+
+            # Test SO3.unrotate
+            def unrotate_sum(R, p):
+                return th.SO2(data=R).unrotate(p).data.sum(dim=0)
+
+            jac = torch.autograd.functional.jacobian(
+                unrotate_sum, (so2.data, point.data)
+            )
+
+            actual = [
+                so2.project(jac[0]).transpose(0, 1),
+                point.project(jac[1]).transpose(0, 1),
+            ]
+            expected = []
+            _ = so2.unrotate(point, expected)
+            assert torch.allclose(actual[0], expected[0])
+            assert torch.allclose(actual[1], expected[1])

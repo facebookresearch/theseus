@@ -120,3 +120,29 @@ def test_theta_jacobian():
             lambda groups: th.Vector(data=groups[0].theta()), [se2], function_dim=1
         )
         torch.allclose(jacobian[0], expected_jac[0])
+
+
+def test_projection():
+    rng = torch.Generator()
+    rng.manual_seed(0)
+    for _ in range(10):  # repeat a few times
+        for batch_size in [1, 20, 100]:
+            se2 = create_random_se2(batch_size, rng)
+            point = th.Point2(data=torch.randn(batch_size, 2).double())
+
+            # Test SE2.transform_to
+            def transform_to_sum(g, p):
+                return th.SE2(data=g).transform_to(p).data.sum(dim=0)
+
+            jac = torch.autograd.functional.jacobian(
+                transform_to_sum, (se2.data, point.data)
+            )
+
+            actual = [
+                se2.project(jac[0]).transpose(0, 1),
+                point.project(jac[1]).transpose(0, 1),
+            ]
+            expected = []
+            _ = se2.transform_to(point, expected)
+            assert torch.allclose(actual[0], expected[0])
+            assert torch.allclose(actual[1], expected[1])

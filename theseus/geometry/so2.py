@@ -59,6 +59,11 @@ class SO2(LieGroup):
     def _adjoint_impl(self) -> torch.Tensor:
         return torch.ones(self.shape[0], 1, 1, device=self.device, dtype=self.dtype)
 
+    def _project_impl(self, euclidean_grad: torch.Tensor) -> torch.Tensor:
+        self._project_check(euclidean_grad)
+        temp = torch.cat((-self[:, 1:], self[:, :1]), dim=1)
+        return torch.einsum("...k,...k", euclidean_grad, temp).unsqueeze(-1)
+
     @staticmethod
     def exp_map(tangent_vector: torch.Tensor) -> LieGroup:
         so2 = SO2(dtype=tangent_vector.dtype)

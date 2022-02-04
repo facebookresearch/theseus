@@ -157,6 +157,10 @@ class Vector(LieGroup):
             .to(self.device)
         )
 
+    def _project_impl(self, euclidean_grad: torch.Tensor) -> torch.Tensor:
+        self._project_check(euclidean_grad)
+        return euclidean_grad.clone()
+
     @staticmethod
     def exp_map(tangent_vector: torch.Tensor) -> LieGroup:
         return Vector(data=tangent_vector.clone())

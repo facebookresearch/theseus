@@ -170,6 +170,9 @@ class SE2(LieGroup):
         se2_inverse.update_from_rot_and_trans(inverse_rotation, inverse_translation)
         return se2_inverse
 
+    def _project_impl(self, euclidean_grad: torch.Tensor) -> torch.Tensor:
+        raise NotImplementedError
+
     def to_matrix(self) -> torch.Tensor:
         matrix = torch.zeros(self.shape[0], 3, 3).to(
             device=self.device, dtype=self.dtype

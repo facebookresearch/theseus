@@ -61,7 +61,7 @@ class SO2(LieGroup):
 
     def _project_impl(self, euclidean_grad: torch.Tensor) -> torch.Tensor:
         self._project_check(euclidean_grad)
-        temp = torch.cat((-self[:, 1:], self[:, :1]), dim=1)
+        temp = torch.stack((-self[:, 1], self[:, 0]), dim=1)
         return torch.einsum("...k,...k", euclidean_grad, temp).unsqueeze(-1)
 
     @staticmethod

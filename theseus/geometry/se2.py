@@ -171,7 +171,17 @@ class SE2(LieGroup):
         return se2_inverse
 
     def _project_impl(self, euclidean_grad: torch.Tensor) -> torch.Tensor:
-        raise NotImplementedError
+        self._project_check(euclidean_grad)
+        ret = torch.zeros(
+            euclidean_grad.shape[:-1] + torch.Size([3]),
+            dtype=self.dtype,
+            device=self.device,
+        )
+        temp = torch.stack((-self[:, 3], self[:, 2]), dim=1)
+        ret[..., 0] = torch.einsum("...k,...k", euclidean_grad[..., :2], self[:, 2:])
+        ret[..., 1] = torch.einsum("...k,...k", euclidean_grad[..., :2], temp)
+        ret[..., 2] = torch.einsum("...k,...k", euclidean_grad[..., 2:], temp)
+        return ret
 
     def to_matrix(self) -> torch.Tensor:
         matrix = torch.zeros(self.shape[0], 3, 3).to(

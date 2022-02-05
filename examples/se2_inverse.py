@@ -45,13 +45,13 @@ def run(x1, x2, num_iters=10, use_proj=True):
     )
 
 
-print("===============================================")
-print("Graident on the Lie Group Tangent Space")
-print("-----------------------------------------------")
+print("=========================================================")
+print("Automatic Differentiation on the Lie Group Tangent Space")
+print("---------------------------------------------------------")
 run(x1.copy(), x2.copy(), num_iters=1000, use_proj=True)
 
 print("\n")
-print("===============================================")
-print("Graident on the Euclidean Space")
-print("-----------------------------------------------")
+print("=========================================================")
+print("torch.autograd on the Euclidean Space")
+print("--------------------------------------------------------")
 run(x1.copy(), x2.copy(), num_iters=1000, use_proj=False)

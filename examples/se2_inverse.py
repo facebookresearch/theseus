@@ -52,6 +52,6 @@ run(x1.copy(), x2.copy(), num_iters=1000, use_proj=True)
 
 print("\n")
 print("=========================================================")
-print("torch.autograd on the Euclidean Space")
-print("--------------------------------------------------------")
+print("Automatic Differentiation on the Euclidean Space")
+print("---------------------------------------------------------")
 run(x1.copy(), x2.copy(), num_iters=1000, use_proj=False)

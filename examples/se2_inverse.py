@@ -22,7 +22,7 @@ def run(x1, x2, num_iters=10, use_proj=True):
     for i in range(num_iters):
         optim.zero_grad()
         cf = th.eb.VariableDifference(x1.inverse(), th.ScaleCostWeight(1.0), x2)
-        loss = cf.error().norm()
+        loss = cf.error().norm() ** 2
         print(
             "loss is {:.10f}, cos(theta)^2 + sin(theta)^2 is {:.10f}".format(
                 loss.item(), x1[0, 2:].norm().item() ** 2

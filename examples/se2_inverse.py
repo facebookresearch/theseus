@@ -16,7 +16,7 @@ x2 = create_random_se2(1, rng)
 
 def lift(x: LieGroup):
     x.data.__class__ = torch.Tensor
-    x.data.__dict__ = {}
+    x.data.__dict__.pop("group_cls", None)
     return x
 
 

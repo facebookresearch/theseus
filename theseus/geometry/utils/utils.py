@@ -11,8 +11,8 @@ class LieGroupTensor(torch.Tensor):
 
     __torch_function__ = _disabled_torch_function_impl
 
-    def __new__(cls, group, requires_grad=True):
-        return torch.Tensor._make_subclass(cls, group.data, requires_grad)
+    def __new__(cls, group):
+        return torch.Tensor._make_subclass(cls, group.data)
 
     def __init__(self, group):
         self.group_cls = type(group)

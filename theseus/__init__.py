@@ -28,6 +28,7 @@ from .geometry import (
     inverse,
     log_map,
     exp_map,
+    LieGroupTensor,
 )
 from .optimizer import DenseLinearization, SparseLinearization, VariableOrdering
 from .optimizer.linear import (

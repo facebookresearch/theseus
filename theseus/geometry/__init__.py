@@ -10,4 +10,5 @@ from .se2 import SE2
 from .se3 import SE3
 from .so2 import SO2
 from .so3 import SO3
+from .utils import LieGroupTensor
 from .vector import Vector

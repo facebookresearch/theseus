@@ -23,13 +23,21 @@ def run(x1, x2, num_iters=10, use_proj=True):
         optim.zero_grad()
         cf = th.eb.VariableDifference(x1.inverse(), th.ScaleCostWeight(1.0), x2)
         loss = cf.error().norm()
-        loss.backward()
-        optim.step()
         print(
-            "loss: {:.10f},  cos(theta)^2 + sin(theta)^2 is {:.10f}".format(
-                loss.item(), x1[0, 2:].norm().item()
+            "loss is {:.10f}, cos(theta)^2 + sin(theta)^2 is {:.10f}".format(
+                loss.item(), x1[0, 2:].norm().item() ** 2
             )
         )
+        loss.backward()
+        optim.step()
+
+    cf = th.eb.VariableDifference(x1.inverse(), th.ScaleCostWeight(1.0), x2)
+    loss = cf.error().norm()
+    print(
+        "loss is {:.10f}, cos(theta)^2 + sin(theta)^2 is {:.10f}".format(
+            loss.item(), x1[0, 2:].norm().item() ** 2
+        )
+    )
 
 
 print("===============================================")
@@ -37,7 +45,7 @@ print("Graident on the Lie Group Tangent Space")
 print("-----------------------------------------------")
 run(x1.copy(), x2.copy(), num_iters=10, use_proj=True)
 
-
+print("\n")
 print("===============================================")
 print("Graident on the Euclidean Space")
 print("-----------------------------------------------")

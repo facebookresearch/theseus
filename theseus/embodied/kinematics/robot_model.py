@@ -6,8 +6,9 @@
 import abc
 
 import torch
+import differentiable_robot_model as drm
 
-from theseus.geometry import SE2, LieGroup, Point2, Vector
+from theseus.geometry import SE2, SE3, LieGroup, Point2, Vector
 
 
 class RobotModel(abc.ABC):
@@ -42,12 +43,16 @@ class IdentityModel(RobotModel):
 
 class UrdfRobotModel(RobotModel):
     def __init__(self, urdf_path: str):
-        pass # to be implemented
+        self.robot_model = drm.DifferentiableRobotModel(urdf_path)
     
     def forward_kinematics(self, joint_states: torch.Tensor) -> Dict[str, SE3]:
-        pass # to be implemented
+        link_poses = {}
+        for link_name in self.robot_model.get_link_names():
+            pos, quat = self.robot_model.forward_kinematics(joint_states, link_name)
+            link_poses[link_name] = SE3(x_y_z_quaternion=torch.cat(pos, quat))
+
+        return link_poses
     
     def dim(self) -> int:
-        pass # to be implemented
-    
+        return len(self.robot_model.get_joint_limits())
     

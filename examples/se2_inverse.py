@@ -52,13 +52,14 @@ def run(x1: LieGroup, x2: LieGroup, num_iters=10, use_lie_tangent=True):
     )
 
 
-print("=========================================================")
-print("PyTorch Optimization on the Lie Group Tangent Space")
-print("---------------------------------------------------------")
-run(x1.copy(), x2.copy(), num_iters=1000, use_lie_tangent=True)
-
 print("\n")
 print("=========================================================")
 print("PyTorch Optimization on the Euclidean Space")
 print("---------------------------------------------------------")
 run(x1.copy(), x2.copy(), num_iters=1000, use_lie_tangent=False)
+print("\n")
+
+print("=========================================================")
+print("PyTorch Optimization on the Lie Group Tangent Space (Ours)")
+print("---------------------------------------------------------")
+run(x1.copy(), x2.copy(), num_iters=1000, use_lie_tangent=True)

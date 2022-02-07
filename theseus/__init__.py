@@ -15,6 +15,7 @@ from .core import (
 from .geometry import (
     SE2,
     SO2,
+    SO3,
     LieGroup,
     Manifold,
     Point2,
@@ -33,6 +34,7 @@ from .optimizer.linear import (
     CholmodSparseSolver,
     DenseSolver,
     LinearOptimizer,
+    LUCudaSparseSolver,
     LUDenseSolver,
 )
 from .optimizer.nonlinear import (

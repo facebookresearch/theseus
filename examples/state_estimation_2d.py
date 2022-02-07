@@ -293,10 +293,12 @@ def run_learning(mode_, path_data_, gps_targets_, measurements_):
                 print("Initial error:", objective.error_squared_norm().mean().item())
 
         for i in range(inner_loop_iters):
-            theseus_inputs, info = state_estimator.forward(
+            theseus_inputs, _ = state_estimator.forward(
                 theseus_inputs,
-                track_best_solution=True,
-                verbose=epoch % 10 == 0,
+                optimizer_kwargs={
+                    "track_best_solution": True,
+                    "verbose": epoch % 10 == 0,
+                },
             )
             theseus_inputs = run_model(
                 mode_,

@@ -31,7 +31,7 @@ class NonlinearOptimizerParams:
             if hasattr(self, param):
                 setattr(self, param, value)
             else:
-                raise ValueError(f"Invalid nonlinear least squares parameter {param}.")
+                raise ValueError(f"Invalid nonlinear optimizer parameter {param}.")
 
 
 class NonlinearOptimizerStatus(Enum):
@@ -251,7 +251,7 @@ class NonlinearOptimizer(Optimizer, abc.ABC):
             )
 
         if backward_mode == BackwardMode.FULL:
-            return self._optimize_loop(
+            info = self._optimize_loop(
                 start_iter=0,
                 num_iter=self.params.max_iterations,
                 info=info,
@@ -259,6 +259,11 @@ class NonlinearOptimizer(Optimizer, abc.ABC):
                 truncated_grad_loop=False,
                 **kwargs,
             )
+            # If didn't coverge, remove misleading converged_iter value
+            info.converged_iter[
+                info.status == NonlinearOptimizerStatus.MAX_ITERATIONS
+            ] = -1
+            return info
         elif backward_mode in [BackwardMode.IMPLICIT, BackwardMode.TRUNCATED]:
             if backward_mode == BackwardMode.IMPLICIT:
                 backward_num_iterations = 1
@@ -301,6 +306,10 @@ class NonlinearOptimizer(Optimizer, abc.ABC):
             info.converged_iter[M] = (
                 info.converged_iter[M] + grad_loop_info.converged_iter[M]
             )
+            # If didn't coverge in either loop, remove misleading converged_iter value
+            info.converged_iter[
+                M & (grad_loop_info.status == NonlinearOptimizerStatus.MAX_ITERATIONS)
+            ] = -1
 
             return info
         else:

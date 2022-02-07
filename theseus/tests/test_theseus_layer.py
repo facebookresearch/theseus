@@ -5,6 +5,7 @@
 
 import math
 
+import mock
 import pytest  # noqa: F401
 import torch
 import torch.nn as nn
@@ -214,7 +215,7 @@ def _run_optimizer_test(
     with torch.no_grad():
         input_values = {"coefficients": torch.ones(batch_size, 2, device=device) * 0.75}
         target_vars, _ = layer_ref.forward(
-            input_values, verbose=verbose, **optimizer_kwargs
+            input_values, optimizer_kwargs={**optimizer_kwargs, **{"verbose": verbose}}
         )
 
     # Now create another that starts with a random cost weight and use backpropagation to
@@ -275,7 +276,9 @@ def _run_optimizer_test(
     }
 
     with torch.no_grad():
-        pred_vars, info = layer_to_learn.forward(input_values, **optimizer_kwargs)
+        pred_vars, info = layer_to_learn.forward(
+            input_values, optimizer_kwargs=optimizer_kwargs
+        )
         loss0 = F.mse_loss(
             pred_vars["coefficients"], target_vars["coefficients"]
         ).item()
@@ -294,7 +297,7 @@ def _run_optimizer_test(
             cost_weight_param_name: cost_weight_fn(),
         }
         pred_vars, info = layer_to_learn.forward(
-            input_values, verbose=verbose, **optimizer_kwargs
+            input_values, optimizer_kwargs={**optimizer_kwargs, **{"verbose": verbose}}
         )
         assert not (
             (info.status == th.NonlinearOptimizerStatus.START)
@@ -433,14 +436,14 @@ def test_send_to_device():
     xs = torch.linspace(0, 10, num_points).repeat(batch_size, 1)
     ys = model(xs, torch.ones(batch_size, 2))
 
-    objective = create_qf_theseus_layer(xs, ys)
+    layer = create_qf_theseus_layer(xs, ys)
     input_values = {"coefficients": torch.ones(batch_size, 2, device=device) * 0.5}
     with torch.no_grad():
         if device != "cpu":
             with pytest.raises(RuntimeError):
-                objective.forward(input_values)
-            objective.to(device)
-            output_values, _ = objective.forward(input_values)
+                layer.forward(input_values)
+            layer.to(device)
+            output_values, _ = layer.forward(input_values)
             for k, v in output_values.items():
                 assert v.device == input_values[k].device
 
@@ -470,3 +473,77 @@ def test_check_objective_consistency():
     optimizer = th.GaussNewton(objective, th.CholeskyDenseSolver)
     objective.erase(cost_functions[0].name)
     _do_check(layer, optimizer)
+
+
+def test_pass_optimizer_kwargs():
+    # Create the dataset to fit, model(x) is the true data generation process
+    batch_size = 16
+    num_points = 10
+    xs = torch.linspace(0, 10, num_points).repeat(batch_size, 1)
+    ys = model(xs, torch.ones(batch_size, 2))
+
+    layer = create_qf_theseus_layer(
+        xs,
+        ys,
+        nonlinear_optimizer_cls=th.GaussNewton,
+        linear_solver_cls=th.CholmodSparseSolver,
+    )
+    layer.to("cpu")
+    input_values = {"coefficients": torch.ones(batch_size, 2) * 0.5}
+    for tbs in [True, False]:
+        _, info = layer.forward(
+            input_values, optimizer_kwargs={"track_best_solution": tbs}
+        )
+        if tbs:
+            assert (
+                isinstance(info.best_solution, dict)
+                and "coefficients" in info.best_solution
+            )
+        else:
+            assert info.best_solution is None
+
+    # Pass invalid backward mode to trigger exception
+    with pytest.raises(ValueError):
+        layer.forward(input_values, optimizer_kwargs={"backward_mode": -1})
+
+    # Now test that compute_delta() args passed correctly
+    # Path compute_delta() to receive args we control
+    def _mock_compute_delta(cls, fake_arg=None, **kwargs):
+        if fake_arg is not None:
+            raise ValueError
+        return layer.optimizer.linear_solver.solve()
+
+    with mock.patch.object(th.GaussNewton, "compute_delta", _mock_compute_delta):
+        layer_2 = create_qf_theseus_layer(xs, ys)
+        layer_2.forward(input_values)
+        # If fake_arg is passed correctly, the mock of compute_delta will trigger
+        with pytest.raises(ValueError):
+            layer_2.forward(input_values, {"fake_arg": True})
+
+
+def test_no_layer_kwargs():
+    # Create the dataset to fit, model(x) is the true data generation process
+    batch_size = 16
+    num_points = 10
+    xs = torch.linspace(0, 10, num_points).repeat(batch_size, 1)
+    ys = model(xs, torch.ones(batch_size, 2))
+
+    layer = create_qf_theseus_layer(
+        xs,
+        ys,
+        nonlinear_optimizer_cls=th.GaussNewton,
+        linear_solver_cls=th.CholmodSparseSolver,
+    )
+    layer.to("cpu")
+    input_values = {"coefficients": torch.ones(batch_size, 2) * 0.5}
+
+    # Trying a few variations of aux_vars. In general, no kwargs should be accepted
+    # beyong input_data and optimization_kwargs, but I'm not sure how to test for this
+    with pytest.raises(TypeError):
+        layer.forward(input_values, aux_vars=None)
+
+    with pytest.raises(TypeError):
+        layer.forward(input_values, aux_variables=None)
+
+    with pytest.raises(TypeError):
+        layer.forward(input_values, auxiliary_vars=None)

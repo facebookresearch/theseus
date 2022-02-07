@@ -14,25 +14,16 @@ x1 = create_random_se2(1, rng)
 x2 = create_random_se2(1, rng)
 
 
-def lift(x: LieGroup):
-    x.data.__class__ = torch.Tensor
-    x.data.__dict__.pop("group_cls", None)
-    return x
-
-
-def embed(x: LieGroup):
-    x.data.__class__ = LieGroupTensor
-    x.data.__dict__["group_cls"] = type(x)
-    return x
-
-
-def run(x1, x2, num_iters=10, embeded=True):
-    if embeded:
+def run(x1: LieGroup, x2: LieGroup, num_iters=10, use_lie_tangent=True):
+    if use_lie_tangent:
         # update x1 with the Lie group tangent gradient
-        x1 = embed(x1)
+        x1.data.__class__ = LieGroupTensor
+        x1.data.__dict__["group_cls"] = type(x1)
     else:
         # update x1 with the Euclidean gradient
-        x1 = lift(x1)
+        x1.data.__class__ = torch.Tensor
+        x1.data.__dict__.pop("group_cls", None)
+
     x1.data.requires_grad = True
     optim = torch.optim.Adam([x1.data], lr=1e-1)
     scheduler = torch.optim.lr_scheduler.MultiStepLR(
@@ -62,12 +53,12 @@ def run(x1, x2, num_iters=10, embeded=True):
 
 
 print("=========================================================")
-print("Automatic Differentiation on the Lie Group Tangent Space")
+print("Optimization on the Lie Group Tangent Space")
 print("---------------------------------------------------------")
-run(x1.copy(), x2.copy(), num_iters=1000, embeded=True)
+run(x1.copy(), x2.copy(), num_iters=1000, use_lie_tangent=True)
 
 print("\n")
 print("=========================================================")
-print("Automatic Differentiation on the Euclidean Space")
+print("Optimization on the Euclidean Space")
 print("---------------------------------------------------------")
-run(x1.copy(), x2.copy(), num_iters=1000, embeded=False)
+run(x1.copy(), x2.copy(), num_iters=1000, use_lie_tangent=False)

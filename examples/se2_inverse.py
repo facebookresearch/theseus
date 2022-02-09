@@ -15,16 +15,9 @@ x2 = create_random_se2(1, rng)
 
 
 def run(x1: LieGroup, x2: LieGroup, num_iters=10, use_lie_tangent=True):
-    if use_lie_tangent:
-        # update x1 with the Lie group tangent gradient
-        x1.data.__class__ = LieGroupTensor
-        x1.data.__dict__["group_cls"] = type(x1)
-    else:
-        # update x1 with the Euclidean gradient
-        x1.data.__class__ = torch.Tensor
-        x1.data.__dict__.pop("group_cls", None)
-
+    x1.data = LieGroupTensor(x1)
     x1.data.requires_grad = True
+
     optim = torch.optim.Adam([x1.data], lr=1e-1)
     scheduler = torch.optim.lr_scheduler.MultiStepLR(
         optim, milestones=[250, 600], gamma=0.01
@@ -40,7 +33,14 @@ def run(x1: LieGroup, x2: LieGroup, num_iters=10, use_lie_tangent=True):
                 )
             )
         loss.backward()
-        optim.step()
+
+        if use_lie_tangent:
+            with th.lie_tangent():
+                optim.step()
+        else:
+            with th.no_lie_tangent():
+                optim.step()
+
         scheduler.step()
 
     cf = th.eb.VariableDifference(x1.inverse(), th.ScaleCostWeight(1.0), x2)
@@ -52,7 +52,6 @@ def run(x1: LieGroup, x2: LieGroup, num_iters=10, use_lie_tangent=True):
     )
 
 
-print("\n")
 print("=========================================================")
 print("PyTorch Optimization on the Euclidean Space")
 print("---------------------------------------------------------")
@@ -63,3 +62,4 @@ print("=========================================================")
 print("PyTorch Optimization on the Lie Group Tangent Space (Ours)")
 print("---------------------------------------------------------")
 run(x1.copy(), x2.copy(), num_iters=1000, use_lie_tangent=True)
+print("\n")

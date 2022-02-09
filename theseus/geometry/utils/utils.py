@@ -4,6 +4,7 @@
 # LICENSE file in the root directory of this source tree.
 
 import threading
+from typing import Any
 
 import torch
 
@@ -12,34 +13,45 @@ class LieGroupContext(object):
     contexts = threading.local()
 
     @classmethod
-    def get_contexts(cls):
+    def get_context(cls):
         if not hasattr(cls.contexts, "use_lie_tangent"):
             cls.contexts.use_lie_tangent = False
         return cls.contexts.use_lie_tangent
 
     @classmethod
-    def set_contexts(cls, use_lie_tangent: bool):
+    def set_context(cls, use_lie_tangent: bool):
         cls.contexts.use_lie_tangent = use_lie_tangent
 
 
-class lie_tangent(LieGroupContext):
-    def __enter__(self):
-        self.prev = super().get_contexts()
-        super().set_contexts(True)
-        return self
+class set_lie_tangent_enabled(object):
+    def __init__(self, mode: bool) -> None:
+        self.prev = LieGroupContext.get_context()
+        LieGroupContext.set_context(mode)
 
-    def __exit__(self, typ, value, traceback):
-        super().set_contexts(self.prev)
+    def __enter__(self) -> None:
+        pass
+
+    def __exit__(self, exc_type: Any, exc_value: Any, traceback: Any) -> None:
+        LieGroupContext.set_context(self.prev)
+
+
+class enable_lie_tangent(object):
+    def __enter__(self) -> None:
+        self.prev = LieGroupContext.get_context()
+        LieGroupContext.set_context(True)
+
+    def __exit__(self, typ, value, traceback) -> None:
+        LieGroupContext.set_context(self.prev)
 
 
 class no_lie_tangent(LieGroupContext):
     def __enter__(self):
-        self.prev = super().get_contexts()
-        super().set_contexts(False)
+        self.prev = super().get_context()
+        LieGroupContext.set_context(False)
         return self
 
     def __exit__(self, typ, value, traceback):
-        super().set_contexts(self.prev)
+        LieGroupContext.set_context(self.prev)
 
 
 class LieGroupTensor(torch.Tensor):
@@ -54,7 +66,7 @@ class LieGroupTensor(torch.Tensor):
         self.group_cls = type(group)
 
     def add_(self, update, alpha=1):
-        if LieGroupContext.get_contexts:
+        if LieGroupContext.get_context():
             group = self.group_cls(data=self.data)
             grad = group.project(update)
             self.set_(group.retract(alpha * grad).data)
@@ -64,15 +76,17 @@ class LieGroupTensor(torch.Tensor):
         return self
 
     def addcdiv_(self, tensor1, tensor2, value=1):
-        return (
-            self.add_(value * tensor1 / tensor2)
-            if LieGroupContext.get_contexts()
-            else super().addcdiv_(tensor1, tensor2, value=value)
+        self.add_(
+            value * tensor1 / tensor2
+        ) if LieGroupContext.get_context() else super().addcdiv_(
+            tensor1, tensor2, value=value
         )
+        return self
 
     def addcmul_(self, tensor1, tensor2, value=1):
-        return (
-            self.add_(value * tensor1 * tensor2)
-            if LieGroupContext.get_contexts()
-            else super().addcmul_(tensor1, tensor2, value=value)
+        self.add_(
+            value * tensor1 * tensor2
+        ) if LieGroupContext.get_context() else super().addcmul_(
+            tensor1, tensor2, value=value
         )
+        return self

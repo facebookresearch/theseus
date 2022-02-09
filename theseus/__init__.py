@@ -29,7 +29,8 @@ from .geometry import (
     log_map,
     exp_map,
     LieGroupTensor,
-    lie_tangent,
+    set_lie_tangent_enabled,
+    enable_lie_tangent,
     no_lie_tangent,
 )
 from .optimizer import DenseLinearization, SparseLinearization, VariableOrdering

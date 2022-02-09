@@ -34,12 +34,8 @@ def run(x1: LieGroup, x2: LieGroup, num_iters=10, use_lie_tangent=True):
             )
         loss.backward()
 
-        if use_lie_tangent:
-            with th.lie_tangent():
-                optim.step()
-        else:
-            with th.no_lie_tangent():
-                optim.step()
+        with th.set_lie_tangent_enabled(use_lie_tangent):
+            optim.step()
 
         scheduler.step()
 

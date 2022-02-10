@@ -292,7 +292,8 @@ class SE3(LieGroup):
         return cast(SE3, super().copy(new_name=new_name))
 
     def _transform_shape_check(self, point: Union[Point3, torch.Tensor]):
-        err_msg = "SE3 can only transform 3-D vectors."
+        err_msg = f"SE3 can only transform vectors of shape [{self.shape[0]}, 3], \
+            but input has shape {point.shape}."
         if isinstance(point, torch.Tensor):
             if not point.ndim == 2 or point.shape[1] != 3:
                 raise ValueError(err_msg)

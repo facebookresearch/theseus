@@ -286,9 +286,6 @@ class SE3(LieGroup):
         SE3._hat_matrix_check(matrix)
         return torch.cat((matrix[:, :3, 3], SO3.vee(matrix[:, :3, :3])), dim=1)
 
-    def _transform_shape_check(self, point: Union[Point3, torch.Tensor]):
-        raise NotImplementedError
-
     def _copy_impl(self, new_name: Optional[str] = None) -> "SE3":
         return SE3(data=self.data.clone(), name=new_name)
 
@@ -296,16 +293,83 @@ class SE3(LieGroup):
     def copy(self, new_name: Optional[str] = None) -> "SE3":
         return cast(SE3, super().copy(new_name=new_name))
 
+    def _transform_shape_check(self, point: Union[Point3, torch.Tensor]):
+        err_msg = (
+            f"SE3 can only transform vectors of shape [{self.shape[0]}, 3] or [1, 3], "
+            f"but the input has shape {point.shape}."
+        )
+
+        if isinstance(point, torch.Tensor):
+            if not point.ndim == 2 or point.shape[1] != 3:
+                raise ValueError(err_msg)
+        elif point.dof() != 3:
+            raise ValueError(err_msg)
+        if (
+            point.shape[0] != self.shape[0]
+            and point.shape[0] != 1
+            and self.shape[0] != 1
+        ):
+            raise ValueError(err_msg)
+
     def transform_to(
         self,
         point: Union[Point3, torch.Tensor],
         jacobians: Optional[List[torch.Tensor]] = None,
     ) -> Point3:
-        raise NotImplementedError
+        self._transform_shape_check(point)
+        batch_size = max(self.shape[0], point.shape[0])
+        if isinstance(point, torch.Tensor):
+            p = point.view(-1, 3, 1)
+        else:
+            p = point.data.view(-1, 3, 1)
+
+        ret = Point3(data=(self[:, :, :3] @ p).view(-1, 3))
+        ret += self[:, :, 3]
+
+        if jacobians is not None:
+            self._check_jacobians_list(jacobians)
+            # Right jacobians for SE(3) are computed
+            Jg = torch.zeros(batch_size, 3, 6, dtype=self.dtype, device=self.device)
+            Jg[:, :, :3] = self[:, :, :3]
+            Jg[:, :, 3:] = -self[:, :, :3] @ SO3.hat(p)
+            # Jacobians for point
+            Jpnt = Jg[:, :, :3]
+
+            jacobians.extend([Jg, Jpnt])
+
+        return ret
 
     def transform_from(
         self,
         point: Union[Point3, torch.Tensor],
         jacobians: Optional[List[torch.Tensor]] = None,
     ) -> Point3:
-        raise NotImplementedError
+        self._transform_shape_check(point)
+        batch_size = max(self.shape[0], point.shape[0])
+        if isinstance(point, torch.Tensor):
+            p = point.view(-1, 3, 1)
+        else:
+            p = point.data.view(-1, 3, 1)
+
+        temp = p - self[:, :, 3:]
+        ret = Point3(data=(self[:, :, :3].transpose(1, 2) @ temp).view(-1, 3))
+
+        if jacobians is not None:
+            self._check_jacobians_list(jacobians)
+            # Right jacobians for SE(3) are computed
+            Jg = torch.zeros(batch_size, 3, 6, dtype=self.dtype, device=self.device)
+            Jg[:, 0, 0] = -1
+            Jg[:, 1, 1] = -1
+            Jg[:, 2, 2] = -1
+            Jg[:, 0, 4] = -ret[:, 2]
+            Jg[:, 1, 3] = ret[:, 2]
+            Jg[:, 0, 5] = ret[:, 1]
+            Jg[:, 2, 3] = -ret[:, 1]
+            Jg[:, 1, 5] = -ret[:, 0]
+            Jg[:, 2, 4] = ret[:, 0]
+            # Jacobians for point
+            Jpnt = self[:, :, :3].transpose(1, 2).expand(batch_size, 3, 3)
+
+            jacobians.extend([Jg, Jpnt])
+
+        return ret

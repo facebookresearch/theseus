@@ -220,10 +220,12 @@ class SE3(LieGroup):
             (sine_theta + two_cosine_minus_two) / (theta2_nz * two_cosine_minus_two_nz),
         )
 
+        translation = self[:, :, 3].view(-1, 3, 1)
+        tangent_vector_ang = ret[:, 3:].view(-1, 3, 1)
         ret[:, :3] = a.view(-1, 1) * self[:, :, 3]
         ret[:, :3] -= 0.5 * torch.cross(ret[:, 3:], self[:, :, 3])
         ret[:, :3] += b.view(-1, 1) * (
-            ret[:, 3:].view(-1, 3, 1) @ (ret[:, 3:].view(-1, 1, 3) @ self[:, :, 3:])
+            tangent_vector_ang @ (tangent_vector_ang.transpose(1, 2) @ translation)
         ).view(-1, 3)
 
         return ret

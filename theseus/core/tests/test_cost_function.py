@@ -185,3 +185,50 @@ def test_autodiff_cost_function_cost_weight():
         weighted_error = cost_function.weighted_error()
         direct_error_computation = cost_weight_value * torch.ones(batch_size, 1)
         assert torch.allclose(weighted_error, direct_error_computation)
+
+
+def test_autodiff_cost_function_to():
+    batch_size = 10
+    optim_vars = []
+    aux_vars = []
+
+    for i in range(5):
+        optim_vars.append(
+            MockVar(
+                1,
+                data=torch.ones(batch_size, 1) * torch.randn(1),
+                name=f"optim_var_{i}",
+            )
+        )
+        aux_vars.append(
+            MockVar(
+                1,
+                data=torch.ones(batch_size, 1) * torch.randn(1),
+                name=f"aux_var_{i}",
+            )
+        )
+
+    def error_fn(optim_vars, aux_vars):
+        res = 0
+        for var in optim_vars:
+            res += var.data
+        return res
+
+    # test verifying default CostWeight
+    cost_function = th.AutoDiffCostFunction(
+        optim_vars,
+        error_fn,
+        1,
+        aux_vars=aux_vars,
+    )
+
+    for var in optim_vars:
+        var.to(dtype=torch.double)
+
+    # This fails because internal vars of the cost function have not been converted
+    # to double
+    with pytest.raises(ValueError):
+        cost_function.jacobians()
+
+    cost_function.to(dtype=torch.double)
+    cost_function.jacobians()

@@ -230,8 +230,16 @@ class SE3(LieGroup):
 
         return ret
 
-    def _compose_impl(self, so3_2: LieGroup) -> "SE3":
-        raise NotImplementedError
+    def _compose_impl(self, se3_2: LieGroup) -> "SE3":
+        se3_2 = cast(SE3, se3_2)
+        batch_size = max(self.shape[0], se3_2.shape[0])
+        ret = SE3()
+        ret.data = torch.zeros(batch_size, 3, 4, dtype=self.dtype, device=self.device)
+        ret[:, :, :3] = self[:, :, :3] @ se3_2[:, :, :3]
+        ret[:, :, 3] = self[:, :, 3]
+        ret[:, :, 3:] += self[:, :, :3] @ se3_2[:, :, 3:]
+
+        return ret
 
     def _inverse_impl(self, get_jacobian: bool = False) -> "SE3":
         ret = torch.zeros(self.shape[0], 3, 4).to(dtype=self.dtype, device=self.device)

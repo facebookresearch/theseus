@@ -294,7 +294,7 @@ class SE3(LieGroup):
     def _transform_shape_check(self, point: Union[Point3, torch.Tensor]):
         err_msg = (
             f"SE3 can only transform vectors of shape [{self.shape[0]}, 3] or [1, 3], "
-            + f"but the input has shape {point.shape}."
+            f"but the input has shape {point.shape}."
         )
 
         if isinstance(point, torch.Tensor):

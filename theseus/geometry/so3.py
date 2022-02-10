@@ -228,7 +228,7 @@ class SO3(LieGroup):
     def _rotate_shape_check(self, point: Union[Point3, torch.Tensor]):
         err_msg = (
             f"SO3 can only rotate vectors of shape [{self.shape[0]}, 3] or [1, 3], "
-            + f"but the input has shape {point.shape}."
+            f"but the input has shape {point.shape}."
         )
         if isinstance(point, torch.Tensor):
             if not point.ndim == 2 or point.shape[1] != 3:

@@ -109,12 +109,12 @@ class NonlinearOptimizer(Optimizer, abc.ABC):
         return solution_dict
 
     def _init_info(
-        self, track_best_solution: bool, verbose: bool
+        self, track_best_solution: bool, track_err_history: bool, verbose: bool
     ) -> NonlinearOptimizerInfo:
         with torch.no_grad():
             last_err = self.objective.error_squared_norm() / 2
         best_err = last_err.clone() if track_best_solution else None
-        if verbose:
+        if track_err_history:
             err_history = (
                 torch.ones(self.objective.batch_size, self.params.max_iterations + 1)
                 * math.inf
@@ -235,17 +235,16 @@ class NonlinearOptimizer(Optimizer, abc.ABC):
     # `track_best_solution` keeps a **detached** copy (as in no gradient info)
     # of the best variables found, but it is optional to avoid unnecessary copying
     # if this is not needed
-    #
-    # if verbose, info will also keep track of the full error history
     def _optimize_impl(
         self,
         track_best_solution: bool = False,
+        track_err_history: bool = False,
         verbose: bool = False,
         backward_mode: BackwardMode = BackwardMode.FULL,
         **kwargs,
     ) -> OptimizerInfo:
         with torch.no_grad():
-            info = self._init_info(track_best_solution, verbose)
+            info = self._init_info(track_best_solution, track_err_history, verbose)
 
         if verbose:
             print(
@@ -288,7 +287,9 @@ class NonlinearOptimizer(Optimizer, abc.ABC):
                     **kwargs,
                 )
 
-            grad_loop_info = self._init_info(track_best_solution, verbose)
+            grad_loop_info = self._init_info(
+                track_best_solution, track_err_history, verbose
+            )
             self._optimize_loop(
                 start_iter=0,
                 num_iter=backward_num_iterations,

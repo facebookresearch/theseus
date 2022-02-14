@@ -179,7 +179,10 @@ class NonlinearOptimizer(Optimizer, abc.ABC):
             # do optimizer step
             self.linear_solver.linearization.linearize()
             try:
-                delta = self.compute_delta(**kwargs)
+                if truncated_grad_loop:
+                    delta = self.linear_solver.solve()
+                else:
+                    delta = self.compute_delta(**kwargs)
             except RuntimeError as run_err:
                 msg = (
                     f"There was an error while running the linear optimizer. "

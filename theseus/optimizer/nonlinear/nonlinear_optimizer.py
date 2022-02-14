@@ -316,7 +316,16 @@ class NonlinearOptimizer(Optimizer, abc.ABC):
                     raise ValueError(
                         "backward_num_iterations expected but not received"
                     )
-                backward_num_iterations = kwargs["backward_num_iterations"]
+                if kwargs["backward_num_iterations"] > self.params.max_iterations:
+                    warnings.warn(
+                        f"Input backward_num_iterations "
+                        f"(={kwargs['backward_num_iterations']}) > "
+                        f"max_iterations (={self.params.max_iterations}). "
+                        f"Using backward_num_iterations=max_iterations."
+                    )
+                backward_num_iterations = min(
+                    kwargs["backward_num_iterations"], self.params.max_iterations
+                )
 
             num_no_grad_iter = self.params.max_iterations - backward_num_iterations
             with torch.no_grad():

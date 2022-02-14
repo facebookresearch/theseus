@@ -164,6 +164,50 @@ class NonlinearOptimizer(Optimizer, abc.ABC):
             np.array(converged_indices.detach().cpu())
         ] = NonlinearOptimizerStatus.CONVERGED
 
+    # Modifies the (no grad) info in place to add data of grad loop info
+    def _merge_infos(
+        self,
+        grad_loop_info: NonlinearOptimizerInfo,
+        num_no_grad_iter: int,
+        backward_num_iterations: int,
+        info: NonlinearOptimizerInfo,
+    ):
+        # Concatenate error histories
+        if info.err_history is not None:
+            info.err_history[:, num_no_grad_iter:] = grad_loop_info.err_history[
+                :, : backward_num_iterations + 1
+            ]
+        # Merge best solution and best error
+        if info.best_solution is not None:
+            best_solution = {}
+            best_err_no_grad = info.best_err
+            best_err_grad = grad_loop_info.best_err
+            idx_no_grad = best_err_no_grad < best_err_grad
+            best_err = torch.minimum(best_err_no_grad, best_err_grad)
+            for var_name in info.best_solution:
+                sol_no_grad = info.best_solution[var_name]
+                sol_grad = grad_loop_info.best_solution[var_name]
+                best_solution[var_name] = torch.where(
+                    idx_no_grad, sol_no_grad, sol_grad
+                )
+            info.best_solution = best_solution
+            info.best_err = best_err
+
+        # Merge the converged status into the info from the detached loop,
+        M = info.status == NonlinearOptimizerStatus.MAX_ITERATIONS
+        assert np.all(
+            (grad_loop_info.status[M] == NonlinearOptimizerStatus.MAX_ITERATIONS)
+            | (grad_loop_info.status[M] == NonlinearOptimizerStatus.CONVERGED)
+        )
+        info.status[M] = grad_loop_info.status[M]
+        info.converged_iter[M] = (
+            info.converged_iter[M] + grad_loop_info.converged_iter[M]
+        )
+        # If didn't coverge in either loop, remove misleading converged_iter value
+        info.converged_iter[
+            M & (grad_loop_info.status == NonlinearOptimizerStatus.MAX_ITERATIONS)
+        ] = -1
+
     # loop for the iterative optimizer
     def _optimize_loop(
         self,
@@ -173,7 +217,7 @@ class NonlinearOptimizer(Optimizer, abc.ABC):
         verbose: bool,
         truncated_grad_loop: bool,
         **kwargs,
-    ):
+    ) -> NonlinearOptimizerInfo:
         converged_indices = torch.zeros_like(info.last_err).bool()
         for it_ in range(start_iter, start_iter + num_iter):
             # do optimizer step
@@ -299,42 +343,10 @@ class NonlinearOptimizer(Optimizer, abc.ABC):
                 **kwargs,
             )
 
-            # --------------- Merge info data --------------- #
-            # Concatenate error histories
-            if info.err_history is not None:
-                info.err_history[:, num_no_grad_iter:] = grad_loop_info.err_history[
-                    :, : backward_num_iterations + 1
-                ]
-            # Merge best solution and best error
-            if info.best_solution is not None:
-                best_solution = {}
-                best_err_no_grad = info.best_err
-                best_err_grad = grad_loop_info.best_err
-                idx_no_grad = best_err_no_grad < best_err_grad
-                best_err = torch.minimum(best_err_no_grad, best_err_grad)
-                for var_name in info.best_solution:
-                    sol_no_grad = info.best_solution[var_name]
-                    sol_grad = grad_loop_info.best_solution[var_name]
-                    best_solution[var_name] = torch.where(
-                        idx_no_grad, sol_no_grad, sol_grad
-                    )
-                info.best_solution = best_solution
-                info.best_err = best_err
-
-            # Merge the converged status into the info from the detached loop,
-            M = info.status == NonlinearOptimizerStatus.MAX_ITERATIONS
-            assert np.all(
-                (grad_loop_info.status[M] == NonlinearOptimizerStatus.MAX_ITERATIONS)
-                | (grad_loop_info.status[M] == NonlinearOptimizerStatus.CONVERGED)
+            # Adds grad_loop_info results to original info
+            self._merge_infos(
+                grad_loop_info, num_no_grad_iter, backward_num_iterations, info
             )
-            info.status[M] = grad_loop_info.status[M]
-            info.converged_iter[M] = (
-                info.converged_iter[M] + grad_loop_info.converged_iter[M]
-            )
-            # If didn't coverge in either loop, remove misleading converged_iter value
-            info.converged_iter[
-                M & (grad_loop_info.status == NonlinearOptimizerStatus.MAX_ITERATIONS)
-            ] = -1
 
             return info
         else:

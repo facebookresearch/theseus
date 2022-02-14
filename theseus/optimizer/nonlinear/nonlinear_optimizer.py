@@ -295,8 +295,29 @@ class NonlinearOptimizer(Optimizer, abc.ABC):
                 **kwargs,
             )
 
+            # --------------- Merge info data --------------- #
+            # Concatenate error histories
+            if info.err_history is not None:
+                info.err_history[:, num_no_grad_iter:] = grad_loop_info.err_history[
+                    :, : backward_num_iterations + 1
+                ]
+            # Merge best solution and best error
+            if info.best_solution is not None:
+                best_solution = {}
+                best_err_no_grad = info.best_err
+                best_err_grad = grad_loop_info.best_err
+                idx_no_grad = best_err_no_grad < best_err_grad
+                best_err = torch.minimum(best_err_no_grad, best_err_grad)
+                for var_name in info.best_solution:
+                    sol_no_grad = info.best_solution[var_name]
+                    sol_grad = grad_loop_info.best_solution[var_name]
+                    best_solution[var_name] = torch.where(
+                        idx_no_grad, sol_no_grad, sol_grad
+                    )
+                info.best_solution = best_solution
+                info.best_err = best_err
+
             # Merge the converged status into the info from the detached loop,
-            # and for now, don't update the best err tracking or best solution.
             M = info.status == NonlinearOptimizerStatus.MAX_ITERATIONS
             assert np.all(
                 (grad_loop_info.status[M] == NonlinearOptimizerStatus.MAX_ITERATIONS)

@@ -4,6 +4,7 @@
 # LICENSE file in the root directory of this source tree.
 
 import abc
+from typing import Dict
 
 import torch
 import differentiable_robot_model as drm
@@ -46,10 +47,18 @@ class UrdfRobotModel(RobotModel):
         self.robot_model = drm.DifferentiableRobotModel(urdf_path)
     
     def forward_kinematics(self, joint_states: torch.Tensor) -> Dict[str, SE3]:
+        """Computes forward kinematics
+        Args:
+            joint_states: Vector of all joint angles
+        Outputs:
+             Dictionary that maps link name to link pose
+
+        (Note: differentiable robot model uses the xyzw quaternion convention, while theseus uses wxyz, hence the conversion.)
+        """
         link_poses = {}
         for link_name in self.robot_model.get_link_names():
-            pos, quat = self.robot_model.forward_kinematics(joint_states, link_name)
-            link_poses[link_name] = SE3(x_y_z_quaternion=torch.cat(pos, quat))
+            pos, quat = self.robot_model.compute_forward_kinematics(joint_states, link_name)
+            link_poses[link_name] = SE3(x_y_z_quaternion=torch.cat([pos, quat[..., 3:], quat[..., :3]], dim=-1))
 
         return link_poses
     

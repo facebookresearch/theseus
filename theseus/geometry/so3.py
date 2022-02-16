@@ -31,8 +31,6 @@ class SO3(LieGroup):
             self._SO3_matrix_check(data)
         super().__init__(data=data, name=name, dtype=dtype)
         if quaternion is not None:
-            if quaternion.ndim == 1:
-                quaternion = quaternion.unsqueeze(0)
             self.update_from_unit_quaternion(quaternion)
 
     @staticmethod
@@ -40,7 +38,7 @@ class SO3(LieGroup):
         return torch.eye(3, 3).view(1, 3, 3)
 
     def update_from_unit_quaternion(self, quaternion: torch.Tensor):
-        self.update(self.unit_quaternion_to_matrix(quaternion))
+        self.update(self.unit_quaternion_to_SO3(quaternion))
 
     def dof(self) -> int:
         return 3
@@ -228,7 +226,10 @@ class SO3(LieGroup):
         return torch.stack((matrix[:, 2, 1], matrix[:, 0, 2], matrix[:, 1, 0]), dim=1)
 
     def _rotate_shape_check(self, point: Union[Point3, torch.Tensor]):
-        err_msg = "SO3 can only rotate 3-D vectors."
+        err_msg = (
+            f"SO3 can only rotate vectors of shape [{self.shape[0]}, 3] or [1, 3], "
+            f"but the input has shape {point.shape}."
+        )
         if isinstance(point, torch.Tensor):
             if not point.ndim == 2 or point.shape[1] != 3:
                 raise ValueError(err_msg)
@@ -239,13 +240,14 @@ class SO3(LieGroup):
             and point.shape[0] != 1
             and self.shape[0] != 1
         ):
-            raise ValueError(
-                "Input point batch size is not broadcastable with group batch size."
-            )
+            raise ValueError(err_msg)
 
     @staticmethod
-    def unit_quaternion_to_matrix(quaternion: torch.torch.Tensor):
+    def unit_quaternion_to_SO3(quaternion: torch.torch.Tensor) -> "SO3":
+        if quaternion.ndim == 1:
+            quaternion = quaternion.unsqueeze(0)
         SO3._unit_quaternion_check(quaternion)
+
         q0 = quaternion[:, 0]
         q1 = quaternion[:, 1]
         q2 = quaternion[:, 2]
@@ -260,7 +262,9 @@ class SO3(LieGroup):
         q22 = q2 * q2
         q23 = q2 * q3
         q33 = q3 * q3
-        ret = torch.zeros(quaternion.shape[0], 3, 3).to(
+
+        ret = SO3()
+        ret.data = torch.zeros(quaternion.shape[0], 3, 3).to(
             dtype=quaternion.dtype, device=quaternion.device
         )
         ret[:, 0, 0] = 2 * (q00 + q11) - 1
@@ -296,7 +300,7 @@ class SO3(LieGroup):
         ret = Point3(data=(self.data @ p).view(-1, 3))
         if jacobians is not None:
             self._check_jacobians_list(jacobians)
-            # Jacobians for SO3: left-invariant jacobians are computed
+            # Right jacobians for SO(3) are computed
             Jrot = -self.data @ SO3.hat(p)
             # Jacobians for point
             Jpnt = self.to_matrix().expand(batch_size, 3, 3)
@@ -320,7 +324,7 @@ class SO3(LieGroup):
         ret = Point3(data=(self.data.transpose(1, 2) @ p).view(-1, 3))
         if jacobians is not None:
             self._check_jacobians_list(jacobians)
-            # Jacobians for SO3: left-invariant jacobians are computed
+            # Left jacobians for SO3 are computed
             Jrot = torch.zeros(batch_size, 3, 3, dtype=self.dtype, device=self.device)
             Jrot[:, 0, 1] = -ret[:, 2]
             Jrot[:, 1, 0] = ret[:, 2]

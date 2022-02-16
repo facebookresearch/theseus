@@ -14,6 +14,7 @@ from .core import (
 )
 from .geometry import (
     SE2,
+    SE3,
     SO2,
     SO3,
     LieGroup,

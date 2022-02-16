@@ -27,10 +27,10 @@ def check_SO3_log_map(tangent_vector):
     assert torch.allclose(error, torch.zeros_like(error), atol=EPS)
 
 
-def check_SO3_to_quaternion(so3: th.SO3):
+def check_SO3_to_quaternion(so3: th.SO3, atol=1e-10):
     quaternions = so3.to_quaternion()
     assert torch.allclose(
-        th.SO3(quaternion=quaternions).to_matrix(), so3.to_matrix(), atol=1e-8
+        th.SO3(quaternion=quaternions).to_matrix(), so3.to_matrix(), atol=atol
     )
 
 
@@ -39,12 +39,14 @@ def test_exp_map():
         tangent_vector = torch.rand(batch_size, 3).double() - 0.5
         check_exp_map(tangent_vector, th.SO3)
 
+    # SO3.exp_map uses approximations for small theta
     for batch_size in [1, 2, 100]:
         tangent_vector = torch.rand(batch_size, 3).double() - 0.5
         tangent_vector /= torch.linalg.norm(tangent_vector, dim=1, keepdim=True)
         tangent_vector *= 1e-5
         check_exp_map(tangent_vector, th.SO3)
 
+    # SO3.exp_map uses the exact exponential map for small theta
     for batch_size in [1, 2, 100]:
         tangent_vector = torch.rand(batch_size, 3).double() - 0.5
         tangent_vector /= torch.linalg.norm(tangent_vector, dim=1, keepdim=True)
@@ -69,12 +71,14 @@ def test_log_map():
         tangent_vector = torch.rand(batch_size, 3).double() - 0.5
         check_SO3_log_map(tangent_vector)
 
+    # SO3.log_map uses approximations for small theta
     for batch_size in [1, 2, 100]:
         tangent_vector = torch.rand(batch_size, 3).double() - 0.5
         tangent_vector /= torch.linalg.norm(tangent_vector, dim=1, keepdim=True)
         tangent_vector *= 1e-6
         check_SO3_log_map(tangent_vector)
 
+    # SO3.log_map uses the exact logarithm map for small theta
     for batch_size in [1, 2, 100]:
         tangent_vector = torch.rand(batch_size, 3).double() - 0.5
         tangent_vector /= torch.linalg.norm(tangent_vector, dim=1, keepdim=True)
@@ -125,7 +129,7 @@ def test_quaternion():
         tangent_vector /= torch.linalg.norm(tangent_vector, dim=1, keepdim=True)
         tangent_vector *= np.pi - 1e-11
         so3 = th.SO3.exp_map(tangent_vector)
-        check_SO3_to_quaternion(so3)
+        check_SO3_to_quaternion(so3, 1e-7)
 
     for batch_size in [1, 2, 100]:
         tangent_vector = torch.rand(batch_size, 3).double() - 0.5

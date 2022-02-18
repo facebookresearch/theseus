@@ -125,7 +125,7 @@ run_tests: &run_tests
 jobs:
   py37_linux:
     docker:
-      - image: circleci/python:3.7
+      - image: cimg/python:3.7
     steps:
       - checkout
       - <<: *install_suitesparse
@@ -139,7 +139,7 @@ jobs:
 
   py38_linux:
     docker:
-      - image: circleci/python:3.8
+      - image: cimg/python:3.8
     steps:
       - checkout
       - <<: *install_suitesparse

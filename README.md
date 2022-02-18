@@ -16,6 +16,9 @@ The current focus is on nonlinear least squares with support for sparsity, batch
 - Prerequisites
     - We *strongly* recommend you install `theseus` in a venv or conda environment.
     - Theseus requires `torch` installation. To install for your particular CPU/CUDA configuration, follow the instructions in the PyTorch [website](https://pytorch.org/get-started/locally/).
+    - Theseus also requires `suitesparse`, which you can install via:
+        - `sudo apt-get install libsuitesparse-dev` (Ubuntu).
+        - `conda install -c conda-forge suitesparse` (Mac).
     
 - Installing
     ```bash

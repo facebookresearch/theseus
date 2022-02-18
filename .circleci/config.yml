@@ -38,14 +38,14 @@ install_nox: &install_nox
   - run:
       name: "Preparing environment: nox"
       command: |
-        sudo apt-get install -y expect
-        sudo pip install nox==2020.8.22
+        sudo apt-get update && sudo apt-get install -y expect
+        pip install nox==2020.8.22
 
 install_suitesparse: &install_suitesparse
   - run:
       name: "Preparing environment: suitesparse"
       command: |
-        sudo apt-get install -y libsuitesparse-dev
+        sudo apt-get update && sudo apt-get install -y libsuitesparse-dev
 
 setup_cuda10_libs: &setup_cuda10_libs
   - run:

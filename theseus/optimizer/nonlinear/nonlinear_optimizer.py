@@ -216,6 +216,7 @@ class NonlinearOptimizer(Optimizer, abc.ABC):
         info: NonlinearOptimizerInfo,
         verbose: bool,
         truncated_grad_loop: bool,
+        implicit_grad_loop: bool,
         **kwargs,
     ) -> NonlinearOptimizerInfo:
         converged_indices = torch.zeros_like(info.last_err).bool()
@@ -225,6 +226,8 @@ class NonlinearOptimizer(Optimizer, abc.ABC):
             try:
                 if truncated_grad_loop:
                     delta = self.linear_solver.solve()
+                elif implicit_grad_loop:
+                    delta = self.netwon_step()
                 else:
                     delta = self.compute_delta(**kwargs)
             except RuntimeError as run_err:
@@ -243,7 +246,7 @@ class NonlinearOptimizer(Optimizer, abc.ABC):
                     info.status[:] = NonlinearOptimizerStatus.FAIL
                     return info
 
-            if truncated_grad_loop:
+            if truncated_grad_loop or implicit_grad_loop:
                 step_size = 1.0
                 force_update = True
             else:
@@ -303,6 +306,7 @@ class NonlinearOptimizer(Optimizer, abc.ABC):
                 info=info,
                 verbose=verbose,
                 truncated_grad_loop=False,
+                implicit_grad_loop=False,
                 **kwargs,
             )
             # If didn't coverge, remove misleading converged_iter value
@@ -337,6 +341,7 @@ class NonlinearOptimizer(Optimizer, abc.ABC):
                     info=info,
                     verbose=verbose,
                     truncated_grad_loop=False,
+                    implicit_grad_loop=False,
                     **kwargs,
                 )
 
@@ -349,6 +354,7 @@ class NonlinearOptimizer(Optimizer, abc.ABC):
                 info=grad_loop_info,
                 verbose=verbose,
                 truncated_grad_loop=True,
+                implicit_grad_loop=(backward_mode == BackwardMode.IMPLICIT),
                 **kwargs,
             )
 
@@ -360,6 +366,46 @@ class NonlinearOptimizer(Optimizer, abc.ABC):
             return info
         else:
             raise ValueError("Unrecognized backward mode")
+
+    def netwon_step(self):
+        from functools import reduce
+
+        var_order = self.linear_solver.linearization.ordering
+
+        tensors = tuple(v.data for v in var_order)
+        names = [v.name for v in var_order]
+        var_dim = reduce(lambda x, y: x + y, [t.shape[1] for t in tensors])
+
+        def hfun(*ttt):
+            update_dict = {}
+            for i, t in enumerate(ttt):
+                update_dict[names[i]] = t
+            self.objective.update(update_dict)
+            return self.objective.error_squared_norm()
+
+        h_data = torch.autograd.functional.hessian(
+            hfun, tensors, create_graph=True, vectorize=True
+        )
+        aux = torch.arange(tensors[0].shape[0])
+        H = torch.zeros(tensors[0].shape[0], var_dim, var_dim).to(
+            dtype=tensors[0].dtype,
+            device=tensors[0].device,
+        )
+        n_vars = len(tensors)
+        row = 0
+        for i in range(n_vars):
+            col = 0
+            row_size = var_order[i].dof()
+            for j in range(n_vars):
+                col_size = var_order[j].dof()
+                hij = h_data[i][j][aux, :, aux, :]
+                H[:, row : row + row_size, col : col + col_size] = hij
+                col += col_size
+            row += row_size
+
+        self.linear_solver.linearization.linearize()
+        g = self.linear_solver.linearization.Atb
+        return torch.linalg.solve(H, g).squeeze(2)
 
     @abc.abstractmethod
     def compute_delta(self, **kwargs) -> torch.Tensor:

@@ -113,7 +113,9 @@ def _check_nonlinear_least_squares_fit(
     optimizer = nonlinear_optim_cls(objective)
     assert isinstance(optimizer.linear_solver, th.CholeskyDenseSolver)
     optimizer.set_params(max_iterations=max_iterations)
-    info = optimizer.optimize(track_best_solution=True, verbose=True, **optimize_kwargs)
+    info = optimizer.optimize(
+        track_best_solution=True, track_err_history=True, **optimize_kwargs
+    )
     # Solution must now match the true coefficients
     assert variables[0].data.allclose(true_coeffs.repeat(batch_size, 1), atol=1e-6)
     _check_info(info, batch_size, max_iterations, initial_error, objective)
@@ -153,7 +155,9 @@ def _check_nonlinear_least_squares_fit_multivar(
     optimizer = nonlinear_optim_cls(objective)
     assert isinstance(optimizer.linear_solver, th.CholeskyDenseSolver)
     optimizer.set_params(max_iterations=max_iterations)
-    info = optimizer.optimize(track_best_solution=True, verbose=True, **optimize_kwargs)
+    info = optimizer.optimize(
+        track_best_solution=True, track_err_history=True, **optimize_kwargs
+    )
 
     # Solution must now match the true coefficients
     for i in range(nvars):
@@ -213,7 +217,7 @@ def _check_optimizer_returns_fail_status_on_singular(
     with pytest.warns(RuntimeWarning):
         with torch.no_grad():
             info = optimizer.optimize(
-                track_best_solution=True, verbose=True, **optimize_kwargs
+                track_best_solution=True, track_err_history=True, **optimize_kwargs
             )
         assert (info.status == th.NonlinearOptimizerStatus.FAIL).all()
 

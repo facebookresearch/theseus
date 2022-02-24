@@ -9,7 +9,7 @@ from typing import Any
 import torch
 
 
-class LieGroupContext(object):
+class _LieGroupContext(object):
     contexts = threading.local()
 
     @classmethod
@@ -25,33 +25,33 @@ class LieGroupContext(object):
 
 class set_lie_tangent_enabled(object):
     def __init__(self, mode: bool) -> None:
-        self.prev = LieGroupContext.get_context()
-        LieGroupContext.set_context(mode)
+        self.prev = _LieGroupContext.get_context()
+        _LieGroupContext.set_context(mode)
 
     def __enter__(self) -> None:
         pass
 
     def __exit__(self, exc_type: Any, exc_value: Any, traceback: Any) -> None:
-        LieGroupContext.set_context(self.prev)
+        _LieGroupContext.set_context(self.prev)
 
 
 class enable_lie_tangent(object):
     def __enter__(self) -> None:
-        self.prev = LieGroupContext.get_context()
-        LieGroupContext.set_context(True)
+        self.prev = _LieGroupContext.get_context()
+        _LieGroupContext.set_context(True)
 
     def __exit__(self, typ, value, traceback) -> None:
-        LieGroupContext.set_context(self.prev)
+        _LieGroupContext.set_context(self.prev)
 
 
-class no_lie_tangent(LieGroupContext):
+class no_lie_tangent(_LieGroupContext):
     def __enter__(self):
         self.prev = super().get_context()
-        LieGroupContext.set_context(False)
+        _LieGroupContext.set_context(False)
         return self
 
     def __exit__(self, typ, value, traceback):
-        LieGroupContext.set_context(self.prev)
+        _LieGroupContext.set_context(self.prev)
 
 
 class LieGroupTensor(torch.Tensor):
@@ -66,7 +66,7 @@ class LieGroupTensor(torch.Tensor):
         self.group_cls = type(group)
 
     def add_(self, update, alpha=1):
-        if LieGroupContext.get_context():
+        if _LieGroupContext.get_context():
             group = self.group_cls(data=self.data)
             grad = group.project(update)
             self.set_(group.retract(alpha * grad).data)
@@ -78,7 +78,7 @@ class LieGroupTensor(torch.Tensor):
     def addcdiv_(self, tensor1, tensor2, value=1):
         self.add_(
             value * tensor1 / tensor2
-        ) if LieGroupContext.get_context() else super().addcdiv_(
+        ) if _LieGroupContext.get_context() else super().addcdiv_(
             tensor1, tensor2, value=value
         )
         return self
@@ -86,7 +86,7 @@ class LieGroupTensor(torch.Tensor):
     def addcmul_(self, tensor1, tensor2, value=1):
         self.add_(
             value * tensor1 * tensor2
-        ) if LieGroupContext.get_context() else super().addcmul_(
+        ) if _LieGroupContext.get_context() else super().addcmul_(
             tensor1, tensor2, value=value
         )
         return self

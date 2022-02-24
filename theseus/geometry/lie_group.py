@@ -5,6 +5,7 @@
 
 import abc
 from typing import Any, List, Optional, Tuple, cast
+from xmlrpc.client import Boolean
 
 import torch
 
@@ -42,6 +43,16 @@ class LieGroup(Manifold):
 
     @abc.abstractmethod
     def dof(self) -> int:
+        pass
+
+    @staticmethod
+    # @abc.abstractmethod
+    def rand(
+        size: int = 0,
+        dytpe: Optional[torch.dtype] = None,
+        device: Optional[torch.device] = None,
+        requires_grad: Boolean = False,
+    ) -> "LieGroup":
         pass
 
     def __str__(self) -> str:

@@ -48,8 +48,8 @@ class LieGroup(Manifold):
     @staticmethod
     # @abc.abstractmethod
     def rand(
-        size: int = 0,
-        dytpe: Optional[torch.dtype] = None,
+        *size,
+        dtype: Optional[torch.dtype] = None,
         device: Optional[torch.device] = None,
         requires_grad: Boolean = False,
     ) -> "LieGroup":

@@ -4,6 +4,7 @@
 # LICENSE file in the root directory of this source tree.
 
 from typing import List, Optional, Tuple, Union, cast
+from xmlrpc.client import Boolean
 
 import torch
 
@@ -41,6 +42,21 @@ class Vector(LieGroup):
 
     def dof(self) -> int:
         return self.data.shape[1]
+
+    @staticmethod
+    def rand(
+        *size,
+        dtype: Optional[torch.dtype] = None,
+        device: Optional[torch.device] = None,
+        requires_grad: Boolean = False,
+    ) -> "LieGroup":
+        if len(size) != 2:
+            raise ValueError("The size should be 2D.")
+        return Vector(
+            data=torch.rand(
+                size, dtype=dtype, device=device, requires_grad=requires_grad
+            )
+        )
 
     def __repr__(self) -> str:
         return (

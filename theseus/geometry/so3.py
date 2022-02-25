@@ -45,7 +45,9 @@ class SO3(LieGroup):
         if len(size) != 1:
             raise ValueError("The size should be 1D.")
         return SO3.exp_map(
-            torch.rand(
+            2
+            * theseus.constants.PI
+            * torch.rand(
                 size[0],
                 3,
                 generator=generator,
@@ -53,6 +55,7 @@ class SO3(LieGroup):
                 device=device,
                 requires_grad=requires_grad,
             )
+            - theseus.constants.PI
         )
 
     @staticmethod

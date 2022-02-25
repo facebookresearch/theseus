@@ -47,8 +47,9 @@ class SE2(LieGroup):
     ) -> "LieGroup":
         if len(size) != 1:
             raise ValueError("The size should be 1D.")
-        return SE2(
-            x_y_theta=torch.rand(
+        x_y_theta = (
+            2
+            * torch.rand(
                 size[0],
                 3,
                 generator=generator,
@@ -56,7 +57,11 @@ class SE2(LieGroup):
                 device=device,
                 requires_grad=requires_grad,
             )
+            - 1
         )
+        x_y_theta[:, 2] *= theseus.constants.PI
+
+        return SE2(x_y_theta=x_y_theta)
 
     @staticmethod
     def _init_data() -> torch.Tensor:  # type: ignore

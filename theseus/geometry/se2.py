@@ -4,6 +4,7 @@
 # LICENSE file in the root directory of this source tree.
 
 from typing import List, Optional, Union, cast
+from xmlrpc.client import Boolean
 
 import torch
 
@@ -35,6 +36,21 @@ class SE2(LieGroup):
             rotation = SO2(theta=x_y_theta[:, 2:])
             translation = Point2(data=x_y_theta[:, :2])
             self.update_from_rot_and_trans(rotation, translation)
+
+    @staticmethod
+    def rand(
+        *size,
+        dtype: Optional[torch.dtype] = None,
+        device: Optional[torch.device] = None,
+        requires_grad: Boolean = False,
+    ) -> "LieGroup":
+        if len(size) != 1:
+            raise ValueError("The size should be 1D.")
+        return SE2(
+            x_y_theta=torch.rand(
+                size[0], 3, dtype=dtype, device=device, requires_grad=requires_grad
+            )
+        )
 
     @staticmethod
     def _init_data() -> torch.Tensor:  # type: ignore

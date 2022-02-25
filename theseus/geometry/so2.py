@@ -4,6 +4,7 @@
 # LICENSE file in the root directory of this source tree.
 
 from typing import List, Optional, Tuple, Union, cast
+from xmlrpc.client import Boolean
 
 import torch
 
@@ -34,6 +35,21 @@ class SO2(LieGroup):
                     "Argument theta must be have ndim = 1, or ndim=2 and shape[1] = 1."
                 )
             self.update_from_angle(theta)
+
+    @staticmethod
+    def rand(
+        *size,
+        dtype: Optional[torch.dtype] = None,
+        device: Optional[torch.device] = None,
+        requires_grad: Boolean = False,
+    ) -> "LieGroup":
+        if len(size) != 1:
+            raise ValueError("The size should be 1D.")
+        return SO2.exp_map(
+            torch.rand(
+                size[0], 1, dtype=dtype, device=device, requires_grad=requires_grad
+            )
+        )
 
     @staticmethod
     def _init_data() -> torch.Tensor:  # type: ignore

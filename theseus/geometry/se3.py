@@ -36,7 +36,8 @@ class SE3(LieGroup):
 
     @staticmethod
     def rand(
-        *size,
+        *size: int,
+        generator: Optional[torch.Generator] = None,
         dtype: Optional[torch.dtype] = None,
         device: Optional[torch.device] = None,
         requires_grad: Boolean = False,
@@ -45,10 +46,18 @@ class SE3(LieGroup):
             raise ValueError("The size should be 1D.")
         ret = SE3()
         rotation = SO3.rand(
-            size[0], dtype=dtype, device=device, requires_grad=requires_grad
+            size[0],
+            generator=generator,
+            dtype=dtype,
+            device=device,
+            requires_grad=requires_grad,
         )
         translation = Point3.rand(
-            size[0], dtype=dtype, device=device, requires_grad=requires_grad
+            size[0],
+            generator=generator,
+            dtype=dtype,
+            device=device,
+            requires_grad=requires_grad,
         )
         ret.update_from_rot_and_trans(rotation=rotation, translation=translation)
         return ret

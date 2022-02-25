@@ -39,7 +39,8 @@ class Point2(Vector):
 
     @staticmethod
     def rand(
-        *size,
+        *size: int,
+        generator: Optional[torch.Generator] = None,
         dtype: Optional[torch.dtype] = None,
         device: Optional[torch.device] = None,
         requires_grad: Boolean = False,
@@ -48,7 +49,12 @@ class Point2(Vector):
             raise ValueError("The size should be 1D.")
         return Point2(
             data=torch.rand(
-                size[0], 2, dtype=dtype, device=device, requires_grad=requires_grad
+                size[0],
+                2,
+                generator=generator,
+                dtype=dtype,
+                device=device,
+                requires_grad=requires_grad,
             )
         )
 
@@ -79,7 +85,8 @@ class Point3(Vector):
 
     @staticmethod
     def rand(
-        *size,
+        *size: int,
+        generator: Optional[torch.Generator] = None,
         dtype: Optional[torch.dtype] = None,
         device: Optional[torch.device] = None,
         requires_grad: Boolean = False,
@@ -88,7 +95,12 @@ class Point3(Vector):
             raise ValueError("The size should be 1D.")
         return Point3(
             data=torch.rand(
-                size[0], 3, dtype=dtype, device=device, requires_grad=requires_grad
+                size[0],
+                3,
+                generator=generator,
+                dtype=dtype,
+                device=device,
+                requires_grad=requires_grad,
             )
         )
 

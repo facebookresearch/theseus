@@ -45,7 +45,8 @@ class Vector(LieGroup):
 
     @staticmethod
     def rand(
-        *size,
+        *size: int,
+        generator: Optional[torch.Generator] = None,
         dtype: Optional[torch.dtype] = None,
         device: Optional[torch.device] = None,
         requires_grad: Boolean = False,
@@ -54,7 +55,11 @@ class Vector(LieGroup):
             raise ValueError("The size should be 2D.")
         return Vector(
             data=torch.rand(
-                size, dtype=dtype, device=device, requires_grad=requires_grad
+                size,
+                generator=generator,
+                dtype=dtype,
+                device=device,
+                requires_grad=requires_grad,
             )
         )
 

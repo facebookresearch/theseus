@@ -4,6 +4,7 @@
 # LICENSE file in the root directory of this source tree.
 
 from typing import Optional, Tuple, cast
+from xmlrpc.client import Boolean
 
 import torch
 
@@ -37,6 +38,21 @@ class Point2(Vector):
         dof, data = _prepare_dof_and_data(2, data)
         super().__init__(dof=dof, data=data, name=name, dtype=dtype)
 
+    @staticmethod
+    def rand(
+        *size,
+        dtype: Optional[torch.dtype] = None,
+        device: Optional[torch.device] = None,
+        requires_grad: Boolean = False,
+    ) -> "LieGroup":
+        if len(size) != 1:
+            raise ValueError("The size should be 1D.")
+        return Vector(
+            data=torch.rand(
+                size[0], 2, dtype=dtype, device=device, requires_grad=requires_grad
+            )
+        )
+
     def x(self) -> torch.Tensor:
         return self[:, 0]
 
@@ -61,6 +77,21 @@ class Point3(Vector):
     ):
         dof, data = _prepare_dof_and_data(3, data)
         super().__init__(dof=dof, data=data, name=name, dtype=dtype)
+
+    @staticmethod
+    def rand(
+        *size,
+        dtype: Optional[torch.dtype] = None,
+        device: Optional[torch.device] = None,
+        requires_grad: Boolean = False,
+    ) -> "LieGroup":
+        if len(size) != 1:
+            raise ValueError("The size should be 1D.")
+        return Vector(
+            data=torch.rand(
+                size[0], 3, dtype=dtype, device=device, requires_grad=requires_grad
+            )
+        )
 
     def x(self) -> torch.Tensor:
         return self[:, 0]

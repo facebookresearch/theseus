@@ -20,6 +20,13 @@ from .common import (
 )
 
 
+def create_random_se2(batch_size, rng):
+    theta = torch.rand(batch_size, 1, generator=rng) * 2 * np.pi - np.pi
+    u = torch.randn(batch_size, 2)
+    tangent_vector = torch.cat([u, theta], dim=1)
+    return th.SE2.exp_map(tangent_vector.double())
+
+
 def test_exp_map():
     for batch_size in [1, 20, 100]:
         theta = torch.from_numpy(np.linspace(-np.pi, np.pi, batch_size))

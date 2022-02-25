@@ -4,6 +4,7 @@
 # LICENSE file in the root directory of this source tree.
 
 from typing import List, Optional, Union, cast
+from xmlrpc.client import Boolean
 
 import torch
 
@@ -32,6 +33,21 @@ class SO3(LieGroup):
         super().__init__(data=data, name=name, dtype=dtype)
         if quaternion is not None:
             self.update_from_unit_quaternion(quaternion)
+
+    @staticmethod
+    def rand(
+        *size,
+        dtype: Optional[torch.dtype] = None,
+        device: Optional[torch.device] = None,
+        requires_grad: Boolean = False,
+    ) -> "LieGroup":
+        if len(size) != 2:
+            raise ValueError("The size should be 1D.")
+        return SO3.exp_map(
+            torch.rand(
+                size[0], 3, dtype=dtype, device=device, requires_grad=requires_grad
+            )
+        )
 
     @staticmethod
     def _init_data() -> torch.Tensor:  # type: ignore

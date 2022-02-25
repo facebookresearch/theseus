@@ -47,7 +47,7 @@ class Point2(Vector):
     ) -> "LieGroup":
         if len(size) != 1:
             raise ValueError("The size should be 1D.")
-        return Vector(
+        return Point2(
             data=torch.rand(
                 size[0], 2, dtype=dtype, device=device, requires_grad=requires_grad
             )
@@ -87,7 +87,7 @@ class Point3(Vector):
     ) -> "LieGroup":
         if len(size) != 1:
             raise ValueError("The size should be 1D.")
-        return Vector(
+        return Point3(
             data=torch.rand(
                 size[0], 3, dtype=dtype, device=device, requires_grad=requires_grad
             )

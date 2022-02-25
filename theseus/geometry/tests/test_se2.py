@@ -20,13 +20,6 @@ from .common import (
 )
 
 
-def create_random_se2(batch_size, rng):
-    theta = torch.rand(batch_size, 1, generator=rng) * 2 * np.pi - np.pi
-    u = torch.randn(batch_size, 2)
-    tangent_vector = torch.cat([u, theta], dim=1)
-    return th.SE2.exp_map(tangent_vector.double())
-
-
 def test_exp_map():
     for batch_size in [1, 20, 100]:
         theta = torch.from_numpy(np.linspace(-np.pi, np.pi, batch_size))
@@ -47,8 +40,8 @@ def test_compose():
     rng = torch.Generator()
     rng.manual_seed(0)
     for batch_size in [1, 20, 100]:
-        se2_1 = create_random_se2(batch_size, rng)
-        se2_2 = create_random_se2(batch_size, rng)
+        se2_1 = th.SE2.rand(batch_size, generator=rng, dtype=torch.float64)
+        se2_2 = th.SE2.rand(batch_size, generator=rng, dtype=torch.float64)
         check_compose(se2_1, se2_2)
 
 
@@ -56,7 +49,7 @@ def test_inverse():
     rng = torch.Generator()
     rng.manual_seed(0)
     for batch_size in [1, 20, 100]:
-        se2 = create_random_se2(batch_size, rng)
+        se2 = th.SE2.rand(batch_size, generator=rng, dtype=torch.float64)
         check_inverse(se2)
 
 
@@ -64,14 +57,14 @@ def test_adjoint():
     rng = torch.Generator()
     rng.manual_seed(0)
     for batch_size in [1, 20, 100]:
-        se2 = create_random_se2(batch_size, rng)
+        se2 = th.SE2.rand(batch_size, generator=rng, dtype=torch.float64)
         tangent = torch.randn(batch_size, 3).double()
         check_adjoint(se2, tangent)
 
 
 def test_copy():
     rng = torch.Generator()
-    se2 = create_random_se2(1, rng)
+    se2 = th.SE2.rand(1, generator=rng, dtype=torch.float64)
     check_copy_var(se2)
 
 
@@ -100,7 +93,7 @@ def test_xy_jacobian():
     rng = torch.Generator()
     rng.manual_seed(0)
     for batch_size in [1, 20, 100]:
-        se2 = create_random_se2(batch_size, rng)
+        se2 = th.SE2.rand(batch_size, generator=rng, dtype=torch.float64)
         jacobian = []
         se2.xy(jacobians=jacobian)
         expected_jac = numeric_jacobian(
@@ -113,7 +106,7 @@ def test_theta_jacobian():
     rng = torch.Generator()
     rng.manual_seed(0)
     for batch_size in [1, 20, 100]:
-        se2 = create_random_se2(batch_size, rng)
+        se2 = th.SE2.rand(batch_size, generator=rng, dtype=torch.float64)
         jacobian = []
         se2.theta(jacobians=jacobian)
         expected_jac = numeric_jacobian(
@@ -127,7 +120,7 @@ def test_projection():
     rng.manual_seed(0)
     for _ in range(10):  # repeat a few times
         for batch_size in [1, 20, 100]:
-            se2 = create_random_se2(batch_size, rng)
+            se2 = th.SE2.rand(batch_size, generator=rng, dtype=torch.float64)
             point = th.Point2(data=torch.randn(batch_size, 2).double())
 
             # Test SE2.transform_to

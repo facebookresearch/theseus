@@ -4,10 +4,14 @@
 # LICENSE file in the root directory of this source tree.
 
 import abc
+from typing import Dict, Union
 
 import torch
 
 from theseus.geometry import SE2, LieGroup, Point2, Vector
+
+RobotModelInput = Union[torch.Tensor, Vector]
+RobotModelOuput = Union[LieGroup, Dict[str, LieGroup]]
 
 
 class RobotModel(abc.ABC):
@@ -15,7 +19,7 @@ class RobotModel(abc.ABC):
         pass
 
     @abc.abstractmethod
-    def forward_kinematics(self, robot_pose: LieGroup) -> torch.Tensor:
+    def forward_kinematics(self, robot_pose: RobotModelInput) -> RobotModelOuput:
         pass
 
     @abc.abstractmethod
@@ -27,12 +31,12 @@ class IdentityModel(RobotModel):
     def __init__(self):
         super().__init__()
 
-    def forward_kinematics(self, robot_pose: LieGroup) -> torch.Tensor:
+    def forward_kinematics(self, robot_pose: RobotModelInput) -> RobotModelOuput:
         if isinstance(robot_pose, SE2):
-            return robot_pose.translation.data.view(-1, 2, 1)
+            return robot_pose.translation
         if isinstance(robot_pose, Point2) or isinstance(robot_pose, Vector):
             assert robot_pose.dof() == 2
-            return robot_pose.data.view(-1, 2, 1)
+            return robot_pose
         raise NotImplementedError(
             f"IdentityModel not implemented for pose with type {type(robot_pose)}."
         )

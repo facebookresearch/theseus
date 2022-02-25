@@ -3,7 +3,7 @@
 # This source code is licensed under the MIT license found in the
 # LICENSE file in the root directory of this source tree.
 
-from typing import List, Optional, Tuple
+from typing import List, Optional, Tuple, cast
 
 import torch
 
@@ -41,8 +41,8 @@ class Collision2D(CostFunction):
     def _compute_distances_and_jacobians(
         self,
     ) -> Tuple[torch.Tensor, torch.Tensor]:
-        robot_state = self.robot.forward_kinematics(self.pose)
-        return self.sdf.signed_distance(robot_state)
+        robot_state = cast(Point2, self.robot.forward_kinematics(self.pose))
+        return self.sdf.signed_distance(robot_state.data.view(-1, 2, 1))
 
     def _error_from_distances(self, distances: torch.Tensor):
         return (self.cost_eps.data - distances).clamp(min=0)

@@ -42,7 +42,7 @@ class SO2(LieGroup):
         dtype: Optional[torch.dtype] = None,
         device: Optional[torch.device] = None,
         requires_grad: Boolean = False,
-    ) -> "LieGroup":
+    ) -> "SO2":
         if len(size) != 1:
             raise ValueError("The size should be 1D.")
         return SO2.exp_map(
@@ -81,7 +81,7 @@ class SO2(LieGroup):
         return torch.einsum("...k,...k", euclidean_grad, temp).unsqueeze(-1)
 
     @staticmethod
-    def exp_map(tangent_vector: torch.Tensor) -> LieGroup:
+    def exp_map(tangent_vector: torch.Tensor) -> "SO2":
         so2 = SO2(dtype=tangent_vector.dtype)
         so2.update_from_angle(tangent_vector)
         return so2

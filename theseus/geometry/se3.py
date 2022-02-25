@@ -4,6 +4,7 @@
 # LICENSE file in the root directory of this source tree.
 
 from typing import List, Optional, Union, cast
+from xmlrpc.client import Boolean
 
 import torch
 
@@ -32,6 +33,25 @@ class SE3(LieGroup):
         super().__init__(data=data, name=name, dtype=dtype)
         if x_y_z_quaternion is not None:
             self.update_from_x_y_z_quaternion(x_y_z_quaternion=x_y_z_quaternion)
+
+    @staticmethod
+    def rand(
+        *size,
+        dtype: Optional[torch.dtype] = None,
+        device: Optional[torch.device] = None,
+        requires_grad: Boolean = False,
+    ) -> "SE3":
+        if len(size) != 1:
+            raise ValueError("The size should be 1D.")
+        ret = SE3()
+        rotation = SO3.rand(
+            size[0], dtype=dtype, device=device, requires_grad=requires_grad
+        )
+        translation = Point3.rand(
+            size[0], dtype=dtype, device=device, requires_grad=requires_grad
+        )
+        ret.update_from_rot_and_trans(rotation=rotation, translation=translation)
+        return ret
 
     @staticmethod
     def _init_data() -> torch.Tensor:  # type: ignore

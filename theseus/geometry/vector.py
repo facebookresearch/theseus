@@ -49,7 +49,7 @@ class Vector(LieGroup):
         dtype: Optional[torch.dtype] = None,
         device: Optional[torch.device] = None,
         requires_grad: Boolean = False,
-    ) -> "LieGroup":
+    ) -> "Vector":
         if len(size) != 2:
             raise ValueError("The size should be 2D.")
         return Vector(

@@ -46,7 +46,7 @@ class LieGroup(Manifold):
         pass
 
     @staticmethod
-    # @abc.abstractmethod
+    @abc.abstractmethod
     def rand(
         *size,
         dtype: Optional[torch.dtype] = None,

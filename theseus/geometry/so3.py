@@ -40,7 +40,7 @@ class SO3(LieGroup):
         dtype: Optional[torch.dtype] = None,
         device: Optional[torch.device] = None,
         requires_grad: Boolean = False,
-    ) -> "LieGroup":
+    ) -> "SO3":
         if len(size) != 1:
             raise ValueError("The size should be 1D.")
         return SO3.exp_map(
@@ -110,7 +110,7 @@ class SO3(LieGroup):
             raise ValueError("Hat matrices of SO(3) can only be skew-symmetric.")
 
     @staticmethod
-    def exp_map(tangent_vector: torch.Tensor) -> LieGroup:
+    def exp_map(tangent_vector: torch.Tensor) -> "SO3":
         if tangent_vector.ndim != 2 or tangent_vector.shape[1] != 3:
             raise ValueError("Invalid input for SO3.exp_map.")
         ret = SO3(dtype=tangent_vector.dtype)

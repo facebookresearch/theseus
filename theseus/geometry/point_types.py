@@ -44,7 +44,7 @@ class Point2(Vector):
         dtype: Optional[torch.dtype] = None,
         device: Optional[torch.device] = None,
         requires_grad: Boolean = False,
-    ) -> "LieGroup":
+    ) -> "Point2":
         if len(size) != 1:
             raise ValueError("The size should be 1D.")
         return Point2(
@@ -84,7 +84,7 @@ class Point3(Vector):
         dtype: Optional[torch.dtype] = None,
         device: Optional[torch.device] = None,
         requires_grad: Boolean = False,
-    ) -> "LieGroup":
+    ) -> "Point3":
         if len(size) != 1:
             raise ValueError("The size should be 1D.")
         return Point3(

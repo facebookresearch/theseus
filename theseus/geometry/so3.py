@@ -41,7 +41,7 @@ class SO3(LieGroup):
         device: Optional[torch.device] = None,
         requires_grad: Boolean = False,
     ) -> "LieGroup":
-        if len(size) != 2:
+        if len(size) != 1:
             raise ValueError("The size should be 1D.")
         return SO3.exp_map(
             torch.rand(

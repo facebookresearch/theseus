@@ -14,13 +14,6 @@ from theseus.utils import numeric_jacobian
 from .common import check_adjoint, check_compose, check_exp_map
 
 
-def _create_random_so3(batch_size, rng):
-    q = torch.rand(batch_size, 4, generator=rng).double() - 0.5
-    qnorm = torch.linalg.norm(q, dim=1, keepdim=True)
-    q = q / qnorm
-    return th.SO3(quaternion=q)
-
-
 def check_SO3_log_map(tangent_vector):
     error = (tangent_vector - th.SO3.exp_map(tangent_vector).log_map()).norm(dim=1)
     error = torch.minimum(error, (error - 2 * np.pi).abs())
@@ -146,7 +139,7 @@ def test_adjoint():
     rng = torch.Generator()
     rng.manual_seed(0)
     for batch_size in [1, 20, 100]:
-        so3 = _create_random_so3(batch_size, rng)
+        so3 = th.SO3.rand(batch_size, generator=rng, dtype=torch.float64)
         tangent = torch.randn(batch_size, 3).double()
         check_adjoint(so3, tangent)
 
@@ -155,8 +148,8 @@ def test_compose():
     rng = torch.Generator()
     rng.manual_seed(0)
     for batch_size in [1, 20, 100]:
-        so3_1 = _create_random_so3(batch_size, rng)
-        so3_2 = _create_random_so3(batch_size, rng)
+        so3_1 = th.SO3.rand(batch_size, generator=rng, dtype=torch.float64)
+        so3_2 = th.SO3.rand(batch_size, generator=rng, dtype=torch.float64)
         check_compose(so3_1, so3_2)
 
 
@@ -165,7 +158,7 @@ def test_rotate_and_unrotate():
     rng.manual_seed(0)
     for _ in range(10):  # repeat a few times
         for batch_size in [1, 20, 100]:
-            so3 = _create_random_so3(batch_size, rng)
+            so3 = th.SO3.rand(batch_size, generator=rng, dtype=torch.float64)
             point_tensor = torch.randn(batch_size, 3).double()
 
             jacobians_rotate = []
@@ -204,7 +197,7 @@ def test_projection():
     rng.manual_seed(0)
     for _ in range(10):  # repeat a few times
         for batch_size in [1, 20, 100]:
-            so3 = _create_random_so3(batch_size, rng)
+            so3 = th.SO3.rand(batch_size, generator=rng, dtype=torch.float64)
             point = th.Point3(data=torch.randn(batch_size, 3).double())
 
             # Test SO3.rotate

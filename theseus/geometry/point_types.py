@@ -8,7 +8,6 @@ from xmlrpc.client import Boolean
 
 import torch
 
-from .lie_group import LieGroup
 from .vector import Vector
 
 
@@ -60,7 +59,7 @@ class Point2(Vector):
         return self[:, 1]
 
     @staticmethod
-    def exp_map(tangent_vector: torch.Tensor) -> LieGroup:
+    def exp_map(tangent_vector: torch.Tensor) -> "Point2":
         return Point2(data=tangent_vector.clone())
 
     # added to avoid casting downstream
@@ -103,7 +102,7 @@ class Point3(Vector):
         return self[:, 2]
 
     @staticmethod
-    def exp_map(tangent_vector: torch.Tensor) -> LieGroup:
+    def exp_map(tangent_vector: torch.Tensor) -> "Point3":
         return Point3(data=tangent_vector.clone())
 
     # added to avoid casting downstream

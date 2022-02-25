@@ -178,7 +178,7 @@ class Vector(LieGroup):
         return euclidean_grad.clone()
 
     @staticmethod
-    def exp_map(tangent_vector: torch.Tensor) -> LieGroup:
+    def exp_map(tangent_vector: torch.Tensor) -> "Vector":
         return Vector(data=tangent_vector.clone())
 
     def _log_map_impl(self) -> torch.Tensor:

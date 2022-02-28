@@ -78,13 +78,6 @@ class LieGroup(Manifold):
     def adjoint(self) -> torch.Tensor:
         return self._adjoint_impl()
 
-    @abc.abstractmethod
-    def _project_impl(self, euclidean_grad: torch.Tensor) -> torch.Tensor:
-        pass
-
-    def project(self, euclidean_grad: torch.Tensor) -> torch.Tensor:
-        return self._project_impl(euclidean_grad)
-
     def _project_check(self, euclidean_grad: torch.Tensor):
         if euclidean_grad.dtype != self.dtype:
             raise ValueError(

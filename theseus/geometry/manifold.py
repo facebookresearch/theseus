@@ -74,6 +74,13 @@ class Manifold(Variable, abc.ABC):
     def _retract_impl(self, delta: torch.Tensor) -> "Manifold":
         pass
 
+    @abc.abstractmethod
+    def _project_impl(self, euclidean_grad: torch.Tensor) -> torch.Tensor:
+        pass
+
+    def project(self, euclidean_grad: torch.Tensor) -> torch.Tensor:
+        return self._project_impl(euclidean_grad)
+
     def local(
         self,
         variable2: "Manifold",

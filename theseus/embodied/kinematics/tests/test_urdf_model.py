@@ -43,7 +43,7 @@ def test_forward_kinematics_seq(robot_model, dataset):
         ee_se3_computed = robot_model.forward_kinematics(joint_state)[ee_name]
 
         assert torch.allclose(
-            ee_se3_target.between(ee_se3_computed).log_map(), torch.zeros(6)
+            ee_se3_target.local(ee_se3_computed), torch.zeros(6)
         )
 
 
@@ -54,6 +54,6 @@ def test_forward_kinematics_batched(robot_model, dataset):
     ee_se3_computed = robot_model.forward_kinematics(dataset["joint_states"])[ee_name]
 
     assert torch.allclose(
-        ee_se3_target.between(ee_se3_computed).log_map(),
+        ee_se3_target.local(ee_se3_computed),
         torch.zeros(dataset["num_data"], 6),
     )

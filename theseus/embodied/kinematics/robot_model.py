@@ -12,7 +12,7 @@ import torch
 from theseus.geometry import SE2, SE3, LieGroup, Point2, Vector
 
 
-class RobotModel(abc.ABC):
+class KinematicsModel(abc.ABC):
     def __init__(self):
         pass
 
@@ -25,7 +25,7 @@ class RobotModel(abc.ABC):
         pass
 
 
-class IdentityModel(RobotModel):
+class IdentityModel(KinematicsModel):
     def __init__(self):
         super().__init__()
 
@@ -43,9 +43,9 @@ class IdentityModel(RobotModel):
         return 1
 
 
-class UrdfRobotModel(RobotModel):
+class UrdfRobotModel(KinematicsModel):
     def __init__(self, urdf_path: str):
-        self.robot_model = drm.DifferentiableRobotModel(urdf_path)
+        self.drm_model = drm.DifferentiableRobotModel(urdf_path)
 
     def forward_kinematics(self, joint_states: torch.Tensor) -> Dict[str, SE3]:
         """Computes forward kinematics
@@ -58,8 +58,8 @@ class UrdfRobotModel(RobotModel):
         while theseus uses wxyz, hence the conversion.)
         """
         link_poses = {}
-        for link_name in self.robot_model.get_link_names():
-            pos, quat = self.robot_model.compute_forward_kinematics(
+        for link_name in self.drm_model.get_link_names():
+            pos, quat = self.drm_model.compute_forward_kinematics(
                 joint_states, link_name
             )
             link_poses[link_name] = SE3(
@@ -69,4 +69,4 @@ class UrdfRobotModel(RobotModel):
         return link_poses
 
     def dim(self) -> int:
-        return len(self.robot_model.get_joint_limits())
+        return len(self.drm_model.get_joint_limits())

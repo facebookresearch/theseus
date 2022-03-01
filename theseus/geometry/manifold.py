@@ -75,11 +75,15 @@ class Manifold(Variable, abc.ABC):
         pass
 
     @abc.abstractmethod
-    def _project_impl(self, euclidean_grad: torch.Tensor) -> torch.Tensor:
+    def _project_impl(
+        self, euclidean_grad: torch.Tensor, is_sparse: bool = False
+    ) -> torch.Tensor:
         pass
 
-    def project(self, euclidean_grad: torch.Tensor) -> torch.Tensor:
-        return self._project_impl(euclidean_grad)
+    def project(
+        self, euclidean_grad: torch.Tensor, is_sparse: bool = False
+    ) -> torch.Tensor:
+        return self._project_impl(euclidean_grad, is_sparse)
 
     def local(
         self,

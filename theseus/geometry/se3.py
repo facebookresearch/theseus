@@ -84,18 +84,26 @@ class SE3(LieGroup):
 
         return ret
 
-    def _project_impl(self, euclidean_grad: torch.Tensor) -> torch.Tensor:
+    def _project_impl(
+        self, euclidean_grad: torch.Tensor, is_sparse: bool = False
+    ) -> torch.Tensor:
         self._project_check(euclidean_grad)
         ret = torch.zeros(
             euclidean_grad.shape[:-2] + torch.Size([6]),
             dtype=self.dtype,
             device=self.device,
         )
-        temp = torch.einsum("...jk,...ji->...ik", euclidean_grad, self.data[:, :, :3])
-        ret[..., :3] = temp[..., 3]
-        ret[..., 3] = temp[..., 2, 1] - temp[..., 1, 2]
-        ret[..., 4] = temp[..., 0, 2] - temp[..., 2, 0]
-        ret[..., 5] = temp[..., 1, 0] - temp[..., 0, 1]
+
+        if is_sparse:
+            raise NotImplementedError
+        else:
+            temp = torch.einsum(
+                "...jk,...ji->...ik", euclidean_grad, self.data[:, :, :3]
+            )
+            ret[..., :3] = temp[..., 3]
+            ret[..., 3] = temp[..., 2, 1] - temp[..., 1, 2]
+            ret[..., 4] = temp[..., 0, 2] - temp[..., 2, 0]
+            ret[..., 5] = temp[..., 1, 0] - temp[..., 0, 1]
 
         return ret
 

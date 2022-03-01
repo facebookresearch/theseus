@@ -78,7 +78,7 @@ class LieGroup(Manifold):
     def adjoint(self) -> torch.Tensor:
         return self._adjoint_impl()
 
-    def _project_check(self, euclidean_grad: torch.Tensor):
+    def _project_check(self, euclidean_grad: torch.Tensor, is_sparse: bool = False):
         if euclidean_grad.dtype != self.dtype:
             raise ValueError(
                 "Euclidean gradients must be of the same type as the Lie group."
@@ -89,7 +89,7 @@ class LieGroup(Manifold):
                 "Euclidean gradients must be on the same device as the Lie group."
             )
 
-        if euclidean_grad.shape[-self.ndim :] != self.shape:
+        if euclidean_grad.shape[-self.ndim + is_sparse :] != self.shape[is_sparse:]:
             raise ValueError(
                 "Euclidean gradients must have consistent shapes with the Lie group."
             )

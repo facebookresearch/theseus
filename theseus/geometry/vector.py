@@ -180,8 +180,10 @@ class Vector(LieGroup):
             .to(self.device)
         )
 
-    def _project_impl(self, euclidean_grad: torch.Tensor) -> torch.Tensor:
-        self._project_check(euclidean_grad)
+    def _project_impl(
+        self, euclidean_grad: torch.Tensor, is_sparse: bool = False
+    ) -> torch.Tensor:
+        self._project_check(euclidean_grad, is_sparse)
         return euclidean_grad.clone()
 
     @staticmethod

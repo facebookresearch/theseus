@@ -4,7 +4,6 @@
 # LICENSE file in the root directory of this source tree.
 
 from typing import List, Optional, Union, cast
-from xmlrpc.client import Boolean
 
 import torch
 
@@ -43,7 +42,7 @@ class SE2(LieGroup):
         generator: Optional[torch.Generator] = None,
         dtype: Optional[torch.dtype] = None,
         device: Optional[torch.device] = None,
-        requires_grad: Boolean = False,
+        requires_grad: bool = False,
     ) -> "LieGroup":
         if len(size) != 1:
             raise ValueError("The size should be 1D.")

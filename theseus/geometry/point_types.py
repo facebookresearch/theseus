@@ -47,8 +47,7 @@ class Point2(Vector):
         if len(size) != 1:
             raise ValueError("The size should be 1D.")
         return Point2(
-            data=2
-            * torch.rand(
+            data=torch.rand(
                 size[0],
                 2,
                 generator=generator,
@@ -56,7 +55,6 @@ class Point2(Vector):
                 device=device,
                 requires_grad=requires_grad,
             )
-            - 1
         )
 
     def x(self) -> torch.Tensor:
@@ -95,8 +93,7 @@ class Point3(Vector):
         if len(size) != 1:
             raise ValueError("The size should be 1D.")
         return Point3(
-            data=2
-            * torch.rand(
+            data=torch.rand(
                 size[0],
                 3,
                 generator=generator,
@@ -104,7 +101,6 @@ class Point3(Vector):
                 device=device,
                 requires_grad=requires_grad,
             )
-            - 1
         )
 
     def x(self) -> torch.Tensor:

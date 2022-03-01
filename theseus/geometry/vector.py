@@ -53,15 +53,13 @@ class Vector(LieGroup):
         if len(size) != 2:
             raise ValueError("The size should be 2D.")
         return Vector(
-            data=2
-            * torch.rand(
+            data=torch.rand(
                 size,
                 generator=generator,
                 dtype=dtype,
                 device=device,
                 requires_grad=requires_grad,
             )
-            - 1
         )
 
     def __repr__(self) -> str:

@@ -60,6 +60,28 @@ class SO2(LieGroup):
         )
 
     @staticmethod
+    def randn(
+        *size: int,
+        generator: Optional[torch.Generator] = None,
+        dtype: Optional[torch.dtype] = None,
+        device: Optional[torch.device] = None,
+        requires_grad: bool = False,
+    ) -> "SO2":
+        if len(size) != 1:
+            raise ValueError("The size should be 1D.")
+        return SO2.exp_map(
+            theseus.constants.PI
+            * torch.randn(
+                size[0],
+                1,
+                generator=generator,
+                dtype=dtype,
+                device=device,
+                requires_grad=requires_grad,
+            )
+        )
+
+    @staticmethod
     def _init_data() -> torch.Tensor:  # type: ignore
         return torch.tensor([1.0, 0.0]).view(1, 2)
 

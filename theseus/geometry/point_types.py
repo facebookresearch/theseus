@@ -57,6 +57,27 @@ class Point2(Vector):
             )
         )
 
+    @staticmethod
+    def randn(
+        *size: int,
+        generator: Optional[torch.Generator] = None,
+        dtype: Optional[torch.dtype] = None,
+        device: Optional[torch.device] = None,
+        requires_grad: bool = False,
+    ) -> "Point2":
+        if len(size) != 1:
+            raise ValueError("The size should be 1D.")
+        return Point2(
+            data=torch.randn(
+                size[0],
+                2,
+                generator=generator,
+                dtype=dtype,
+                device=device,
+                requires_grad=requires_grad,
+            )
+        )
+
     def x(self) -> torch.Tensor:
         return self[:, 0]
 
@@ -94,6 +115,27 @@ class Point3(Vector):
             raise ValueError("The size should be 1D.")
         return Point3(
             data=torch.rand(
+                size[0],
+                3,
+                generator=generator,
+                dtype=dtype,
+                device=device,
+                requires_grad=requires_grad,
+            )
+        )
+
+    @staticmethod
+    def randn(
+        *size: int,
+        generator: Optional[torch.Generator] = None,
+        dtype: Optional[torch.dtype] = None,
+        device: Optional[torch.device] = None,
+        requires_grad: bool = False,
+    ) -> "Point3":
+        if len(size) != 1:
+            raise ValueError("The size should be 1D.")
+        return Point3(
+            data=torch.randn(
                 size[0],
                 3,
                 generator=generator,

@@ -62,6 +62,26 @@ class Vector(LieGroup):
             )
         )
 
+    @staticmethod
+    def randn(
+        *size: int,
+        generator: Optional[torch.Generator] = None,
+        dtype: Optional[torch.dtype] = None,
+        device: Optional[torch.device] = None,
+        requires_grad: bool = False,
+    ) -> "Vector":
+        if len(size) != 2:
+            raise ValueError("The size should be 2D.")
+        return Vector(
+            data=torch.randn(
+                size,
+                generator=generator,
+                dtype=dtype,
+                device=device,
+                requires_grad=requires_grad,
+            )
+        )
+
     def __repr__(self) -> str:
         return (
             f"{self.__class__.__name__}"

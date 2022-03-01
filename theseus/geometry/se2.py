@@ -43,7 +43,7 @@ class SE2(LieGroup):
         dtype: Optional[torch.dtype] = None,
         device: Optional[torch.device] = None,
         requires_grad: bool = False,
-    ) -> "LieGroup":
+    ) -> "SE2":
         if len(size) != 1:
             raise ValueError("The size should be 1D.")
         x_y_theta = torch.rand(
@@ -55,6 +55,28 @@ class SE2(LieGroup):
             requires_grad=requires_grad,
         )
         x_y_theta[:, 2] = 2 * theseus.constants.PI * (x_y_theta[:, 2] - 0.5)
+
+        return SE2(x_y_theta=x_y_theta)
+
+    @staticmethod
+    def randn(
+        *size: int,
+        generator: Optional[torch.Generator] = None,
+        dtype: Optional[torch.dtype] = None,
+        device: Optional[torch.device] = None,
+        requires_grad: bool = False,
+    ) -> "SE2":
+        if len(size) != 1:
+            raise ValueError("The size should be 1D.")
+        x_y_theta = torch.randn(
+            size[0],
+            3,
+            generator=generator,
+            dtype=dtype,
+            device=device,
+            requires_grad=requires_grad,
+        )
+        x_y_theta[:, 2] *= theseus.constants.PI
 
         return SE2(x_y_theta=x_y_theta)
 

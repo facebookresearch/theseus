@@ -175,7 +175,7 @@ class AutoDiffCostFunction(CostFunction):
         # includes derivatives of batches against each other.
         # this indexing recovers only the derivatives wrt the same batch
         jacobians = list(
-            v.project(jac[aux_idx, :, aux_idx, :])
+            v.project(jac[aux_idx, :, aux_idx, :], is_sparse=True)
             for v, jac in zip(optim_vars, jacobians_full)
         )
         return jacobians, err

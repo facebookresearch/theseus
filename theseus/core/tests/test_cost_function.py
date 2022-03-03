@@ -185,3 +185,64 @@ def test_autodiff_cost_function_cost_weight():
         weighted_error = cost_function.weighted_error()
         direct_error_computation = cost_weight_value * torch.ones(batch_size, 1)
         assert torch.allclose(weighted_error, direct_error_computation)
+
+
+def test_autodiff_cost_function_error_and_jacobians_shape_on_SO3():
+    for i in range(100):
+        num_vars = np.random.randint(0, 5)
+        batch_size = np.random.randint(1, 10)
+        err_dim = 3
+        optim_vars = []
+        aux_vars = []
+        idx = 0
+        for i in range(num_vars):
+            optim_vars.append(th.SO3.rand(batch_size, dtype=torch.float64))
+            idx += 1
+        for i in range(num_vars):
+            aux_vars.append(th.Point3.rand(batch_size, dtype=torch.float64))
+            idx += 1
+        cost_weight = MockCostWeight(torch.ones(1, 1))
+
+        # checks that the right number of optimization variables is passed
+        # checks that the variable values are correct
+        # returns the sum of the first elements of each tensor, which should be the
+        # same as the sum of variables_values
+        def error_fn(optim_vars, aux_vars):
+            assert isinstance(optim_vars, tuple)
+            assert len(optim_vars) == num_vars
+            assert len(aux_vars) == num_vars
+            ret_val = torch.zeros(batch_size, err_dim)
+
+            for optim_var, aux_var in zip(optim_vars, aux_vars):
+                ret_val += th.SO3(data=optim_var.data).rotate(aux_var).data
+
+            return ret_val
+
+        # this checks that 0 optimization variables is not allowed
+        if len(optim_vars) < 1:
+            with pytest.raises(ValueError):
+                th.AutoDiffCostFunction(
+                    optim_vars,
+                    error_fn,
+                    1,
+                    cost_weight=cost_weight,
+                    aux_vars=aux_vars,
+                )
+        else:
+            # check that the error function returns the correct value
+            cost_function = th.AutoDiffCostFunction(
+                optim_vars,
+                error_fn,
+                err_dim,
+                cost_weight=cost_weight,
+                aux_vars=aux_vars,
+            )
+            err = cost_function.error()
+
+            # Now checking the jacobians
+            jacobians, err_jac = cost_function.jacobians()
+            assert err_jac.allclose(err)
+            assert len(jacobians) == num_vars
+            for i in range(num_vars):
+                # variable dim is i + 1 (see MockVar creation line)
+                assert jacobians[i].shape == (batch_size, err_dim, 3)

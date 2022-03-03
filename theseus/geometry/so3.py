@@ -394,3 +394,7 @@ class SO3(LieGroup):
             jacobians.extend([Jrot, Jpnt])
 
         return ret
+
+
+rand_so3 = SO3.rand
+randn_so3 = SO3.randn

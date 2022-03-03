@@ -242,3 +242,7 @@ class SO2(LieGroup):
     # only added to avoid casting downstream
     def copy(self, new_name: Optional[str] = None) -> "SO2":
         return cast(SO2, super().copy(new_name=new_name))
+
+
+rand_so2 = SO2.rand
+randn_so2 = SO2.randn

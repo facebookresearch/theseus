@@ -217,16 +217,26 @@ class SE2(LieGroup):
     def _project_impl(
         self, euclidean_grad: torch.Tensor, is_sparse: bool = False
     ) -> torch.Tensor:
-        self._project_check(euclidean_grad)
+        self._project_check(euclidean_grad, is_sparse)
         ret = torch.zeros(
             euclidean_grad.shape[:-1] + torch.Size([3]),
             dtype=self.dtype,
             device=self.device,
         )
+
+        temp = torch.stack((-self[:, 3], self[:, 2]), dim=1)
+
         if is_sparse:
-            raise NotImplementedError
+            ret[..., 0] = torch.einsum(
+                "i...k,i...k->i...", euclidean_grad[..., :2], self[:, 2:]
+            )
+            ret[..., 1] = torch.einsum(
+                "i...k,i...k->i...", euclidean_grad[..., :2], temp
+            )
+            ret[..., 2] = torch.einsum(
+                "i...k,i...k->i...", euclidean_grad[..., 2:], temp
+            )
         else:
-            temp = torch.stack((-self[:, 3], self[:, 2]), dim=1)
             ret[..., 0] = torch.einsum(
                 "...k,...k", euclidean_grad[..., :2], self[:, 2:]
             )

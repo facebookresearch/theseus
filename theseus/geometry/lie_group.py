@@ -5,7 +5,6 @@
 
 import abc
 from typing import Any, List, Optional, Tuple, cast
-from xmlrpc.client import Boolean
 
 import torch
 
@@ -52,7 +51,18 @@ class LieGroup(Manifold):
         generator: Optional[torch.Generator] = None,
         dtype: Optional[torch.dtype] = None,
         device: Optional[torch.device] = None,
-        requires_grad: Boolean = False,
+        requires_grad: bool = False,
+    ) -> "LieGroup":
+        pass
+
+    @staticmethod
+    @abc.abstractmethod
+    def randn(
+        *size: int,
+        generator: Optional[torch.Generator] = None,
+        dtype: Optional[torch.dtype] = None,
+        device: Optional[torch.device] = None,
+        requires_grad: bool = False,
     ) -> "LieGroup":
         pass
 

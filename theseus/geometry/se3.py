@@ -4,7 +4,6 @@
 # LICENSE file in the root directory of this source tree.
 
 from typing import List, Optional, Union, cast
-from xmlrpc.client import Boolean
 
 import torch
 
@@ -40,7 +39,7 @@ class SE3(LieGroup):
         generator: Optional[torch.Generator] = None,
         dtype: Optional[torch.dtype] = None,
         device: Optional[torch.device] = None,
-        requires_grad: Boolean = False,
+        requires_grad: bool = False,
     ) -> "SE3":
         if len(size) != 1:
             raise ValueError("The size should be 1D.")
@@ -53,6 +52,34 @@ class SE3(LieGroup):
             requires_grad=requires_grad,
         )
         translation = Point3.rand(
+            size[0],
+            generator=generator,
+            dtype=dtype,
+            device=device,
+            requires_grad=requires_grad,
+        )
+        ret.update_from_rot_and_trans(rotation=rotation, translation=translation)
+        return ret
+
+    @staticmethod
+    def randn(
+        *size: int,
+        generator: Optional[torch.Generator] = None,
+        dtype: Optional[torch.dtype] = None,
+        device: Optional[torch.device] = None,
+        requires_grad: bool = False,
+    ) -> "SE3":
+        if len(size) != 1:
+            raise ValueError("The size should be 1D.")
+        ret = SE3()
+        rotation = SO3.randn(
+            size[0],
+            generator=generator,
+            dtype=dtype,
+            device=device,
+            requires_grad=requires_grad,
+        )
+        translation = Point3.randn(
             size[0],
             generator=generator,
             dtype=dtype,

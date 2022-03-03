@@ -4,7 +4,6 @@
 # LICENSE file in the root directory of this source tree.
 
 from typing import List, Optional, Union, cast
-from xmlrpc.client import Boolean
 
 import torch
 
@@ -40,7 +39,7 @@ class SO3(LieGroup):
         generator: Optional[torch.Generator] = None,
         dtype: Optional[torch.dtype] = None,
         device: Optional[torch.device] = None,
-        requires_grad: Boolean = False,
+        requires_grad: bool = False,
     ) -> "SO3":
         if len(size) != 1:
             raise ValueError("The size should be 1D.")
@@ -56,6 +55,28 @@ class SO3(LieGroup):
                 requires_grad=requires_grad,
             )
             - theseus.constants.PI
+        )
+
+    @staticmethod
+    def randn(
+        *size: int,
+        generator: Optional[torch.Generator] = None,
+        dtype: Optional[torch.dtype] = None,
+        device: Optional[torch.device] = None,
+        requires_grad: bool = False,
+    ) -> "SO3":
+        if len(size) != 1:
+            raise ValueError("The size should be 1D.")
+        return SO3.exp_map(
+            theseus.constants.PI
+            * torch.randn(
+                size[0],
+                3,
+                generator=generator,
+                dtype=dtype,
+                device=device,
+                requires_grad=requires_grad,
+            )
         )
 
     @staticmethod

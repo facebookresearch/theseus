@@ -4,7 +4,6 @@
 # LICENSE file in the root directory of this source tree.
 
 from typing import Optional, Tuple, cast
-from xmlrpc.client import Boolean
 
 import torch
 
@@ -43,13 +42,12 @@ class Point2(Vector):
         generator: Optional[torch.Generator] = None,
         dtype: Optional[torch.dtype] = None,
         device: Optional[torch.device] = None,
-        requires_grad: Boolean = False,
+        requires_grad: bool = False,
     ) -> "Point2":
         if len(size) != 1:
             raise ValueError("The size should be 1D.")
         return Point2(
-            data=2
-            * torch.rand(
+            data=torch.rand(
                 size[0],
                 2,
                 generator=generator,
@@ -57,7 +55,27 @@ class Point2(Vector):
                 device=device,
                 requires_grad=requires_grad,
             )
-            - 1
+        )
+
+    @staticmethod
+    def randn(
+        *size: int,
+        generator: Optional[torch.Generator] = None,
+        dtype: Optional[torch.dtype] = None,
+        device: Optional[torch.device] = None,
+        requires_grad: bool = False,
+    ) -> "Point2":
+        if len(size) != 1:
+            raise ValueError("The size should be 1D.")
+        return Point2(
+            data=torch.randn(
+                size[0],
+                2,
+                generator=generator,
+                dtype=dtype,
+                device=device,
+                requires_grad=requires_grad,
+            )
         )
 
     def x(self) -> torch.Tensor:
@@ -91,13 +109,12 @@ class Point3(Vector):
         generator: Optional[torch.Generator] = None,
         dtype: Optional[torch.dtype] = None,
         device: Optional[torch.device] = None,
-        requires_grad: Boolean = False,
+        requires_grad: bool = False,
     ) -> "Point3":
         if len(size) != 1:
             raise ValueError("The size should be 1D.")
         return Point3(
-            data=2
-            * torch.rand(
+            data=torch.rand(
                 size[0],
                 3,
                 generator=generator,
@@ -105,7 +122,27 @@ class Point3(Vector):
                 device=device,
                 requires_grad=requires_grad,
             )
-            - 1
+        )
+
+    @staticmethod
+    def randn(
+        *size: int,
+        generator: Optional[torch.Generator] = None,
+        dtype: Optional[torch.dtype] = None,
+        device: Optional[torch.device] = None,
+        requires_grad: bool = False,
+    ) -> "Point3":
+        if len(size) != 1:
+            raise ValueError("The size should be 1D.")
+        return Point3(
+            data=torch.randn(
+                size[0],
+                3,
+                generator=generator,
+                dtype=dtype,
+                device=device,
+                requires_grad=requires_grad,
+            )
         )
 
     def x(self) -> torch.Tensor:

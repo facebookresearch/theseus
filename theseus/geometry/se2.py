@@ -4,7 +4,6 @@
 # LICENSE file in the root directory of this source tree.
 
 from typing import List, Optional, Union, cast
-from xmlrpc.client import Boolean
 
 import torch
 
@@ -43,21 +42,39 @@ class SE2(LieGroup):
         generator: Optional[torch.Generator] = None,
         dtype: Optional[torch.dtype] = None,
         device: Optional[torch.device] = None,
-        requires_grad: Boolean = False,
-    ) -> "LieGroup":
+        requires_grad: bool = False,
+    ) -> "SE2":
         if len(size) != 1:
             raise ValueError("The size should be 1D.")
-        x_y_theta = (
-            2
-            * torch.rand(
-                size[0],
-                3,
-                generator=generator,
-                dtype=dtype,
-                device=device,
-                requires_grad=requires_grad,
-            )
-            - 1
+        x_y_theta = torch.rand(
+            size[0],
+            3,
+            generator=generator,
+            dtype=dtype,
+            device=device,
+            requires_grad=requires_grad,
+        )
+        x_y_theta[:, 2] = 2 * theseus.constants.PI * (x_y_theta[:, 2] - 0.5)
+
+        return SE2(x_y_theta=x_y_theta)
+
+    @staticmethod
+    def randn(
+        *size: int,
+        generator: Optional[torch.Generator] = None,
+        dtype: Optional[torch.dtype] = None,
+        device: Optional[torch.device] = None,
+        requires_grad: bool = False,
+    ) -> "SE2":
+        if len(size) != 1:
+            raise ValueError("The size should be 1D.")
+        x_y_theta = torch.randn(
+            size[0],
+            3,
+            generator=generator,
+            dtype=dtype,
+            device=device,
+            requires_grad=requires_grad,
         )
         x_y_theta[:, 2] *= theseus.constants.PI
 

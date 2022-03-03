@@ -10,6 +10,8 @@ import torch
 import torch.autograd.functional as autogradF
 from typing_extensions import Protocol
 
+from theseus.geometry import Manifold
+
 from .cost_weight import CostWeight, ScaleCostWeight
 from .theseus_function import TheseusFunction
 from .variable import Variable
@@ -94,7 +96,7 @@ class ErrFnType(Protocol):
 class AutoDiffCostFunction(CostFunction):
     def __init__(
         self,
-        optim_vars: List[Variable],
+        optim_vars: List[Manifold],
         err_fn: ErrFnType,
         dim: int,
         cost_weight: CostWeight = ScaleCostWeight(1.0),
@@ -135,7 +137,7 @@ class AutoDiffCostFunction(CostFunction):
 
     def _compute_error(
         self,
-    ) -> Tuple[torch.Tensor, Tuple[Variable, ...], Tuple[Variable, ...]]:
+    ) -> Tuple[torch.Tensor, Tuple[Manifold, ...], Tuple[Variable, ...]]:
         optim_vars = tuple(v for v in self.optim_vars)
         aux_vars = tuple(v for v in self.aux_vars)
         err = self._err_fn(optim_vars=optim_vars, aux_vars=aux_vars)
@@ -172,7 +174,10 @@ class AutoDiffCostFunction(CostFunction):
         # torch autograd returns shape (batch_size, dim, batch_size, var_dim), which
         # includes derivatives of batches against each other.
         # this indexing recovers only the derivatives wrt the same batch
-        jacobians = list(jac[aux_idx, :, aux_idx, :] for jac in jacobians_full)
+        jacobians = list(
+            v.project(jac[aux_idx, :, aux_idx, :])
+            for v, jac in zip(optim_vars, jacobians_full)
+        )
         return jacobians, err
 
     def dim(self) -> int:

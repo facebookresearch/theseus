@@ -451,3 +451,7 @@ class SE3(LieGroup):
             jacobians.extend([Jg, Jpnt])
 
         return ret
+
+
+rand_se3 = SE3.rand
+randn_se3 = SE3.randn

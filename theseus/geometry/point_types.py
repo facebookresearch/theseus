@@ -161,3 +161,9 @@ class Point3(Vector):
     # added to avoid casting downstream
     def copy(self, new_name: Optional[str] = None) -> "Point3":
         return cast(Point3, super().copy(new_name=new_name))
+
+
+rand_point2 = Point2.rand
+randn_point2 = Point2.randn
+rand_point3 = Point3.rand
+randn_point3 = Point3.randn

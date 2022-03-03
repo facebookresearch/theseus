@@ -312,3 +312,7 @@ class SE2(LieGroup):
     # only added to avoid casting downstream
     def copy(self, new_name: Optional[str] = None) -> "SE2":
         return cast(SE2, super().copy(new_name=new_name))
+
+
+rand_se2 = SE2.rand
+randn_se2 = SE2.randn

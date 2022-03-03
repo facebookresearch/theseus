@@ -219,3 +219,7 @@ class Vector(LieGroup):
     # added to avoid casting downstream
     def copy(self, new_name: Optional[str] = None) -> "Vector":
         return cast(Vector, super().copy(new_name=new_name))
+
+
+rand_vector2 = Vector.rand
+randn_vector2 = Vector.randn

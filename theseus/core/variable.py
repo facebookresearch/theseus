@@ -56,8 +56,8 @@ class Variable:
                 f"{self.name} has dtype {self.dtype}."
             )
         if batch_ignore_mask is not None and batch_ignore_mask.any():
-            good_indices = ~batch_ignore_mask
-            self[good_indices] = data[good_indices]
+            mask_shape = (-1,) + (1,) * (data.ndim - 1)
+            self.data = torch.where(batch_ignore_mask.view(mask_shape), self.data, data)
         else:
             self.data = data
 

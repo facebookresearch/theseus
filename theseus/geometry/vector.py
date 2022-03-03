@@ -219,5 +219,5 @@ class Vector(LieGroup):
         return cast(Vector, super().copy(new_name=new_name))
 
 
-rand_vector2 = Vector.rand
-randn_vector2 = Vector.randn
+rand_vector = Vector.rand
+randn_vector = Vector.randn

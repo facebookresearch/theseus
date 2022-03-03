@@ -113,34 +113,76 @@ def test_projection():
             so2 = th.SO2.rand(batch_size, generator=rng, dtype=torch.float64)
             point = th.Point2(data=torch.randn(batch_size, 2).double())
 
+            aux_id = torch.arange(batch_size)
+
             # Test SO3.rotate
-            def rotate_sum(R, p):
-                return th.SO2(data=R).rotate(p).data.sum(dim=0)
+            def rotate_func(R, p):
+                return th.SO2(data=R).rotate(p).data
 
-            jac = torch.autograd.functional.jacobian(rotate_sum, (so2.data, point.data))
+            jac_raw = torch.autograd.functional.jacobian(
+                rotate_func, (so2.data, point.data)
+            )
+            jac = []
+            _ = so2.rotate(point, jac)
 
+            # Check dense jacobian matrices
             actual = [
-                so2.project(jac[0]).transpose(0, 1),
-                point.project(jac[1]).transpose(0, 1),
+                so2.project(jac_raw[0]),
+                point.project(jac_raw[1]),
             ]
-            expected = []
-            _ = so2.rotate(point, expected)
+
+            expected = [
+                torch.zeros([batch_size, 2, batch_size, 2]).double(),
+                torch.zeros([batch_size, 2, batch_size, 2]).double(),
+            ]
+            expected[0][aux_id, :, aux_id, :] = jac[0]
+            expected[1][aux_id, :, aux_id, :] = jac[1]
+
+            assert torch.allclose(actual[0], expected[0])
+            assert torch.allclose(actual[1], expected[1])
+
+            # Check sparse jacobian matrices
+            actual = [
+                so2.project(jac_raw[0][aux_id, :, aux_id, :], is_sparse=True),
+                point.project(jac_raw[1][aux_id, :, aux_id, :], is_sparse=True),
+            ]
+
+            expected = jac
             assert torch.allclose(actual[0], expected[0])
             assert torch.allclose(actual[1], expected[1])
 
             # Test SO3.unrotate
-            def unrotate_sum(R, p):
-                return th.SO2(data=R).unrotate(p).data.sum(dim=0)
+            def unrotate_func(R, p):
+                return th.SO2(data=R).unrotate(p).data
 
-            jac = torch.autograd.functional.jacobian(
-                unrotate_sum, (so2.data, point.data)
+            jac_raw = torch.autograd.functional.jacobian(
+                unrotate_func, (so2.data, point.data)
             )
+            jac = []
+            _ = so2.unrotate(point, jac)
 
+            # Check dense jacobian matrices
             actual = [
-                so2.project(jac[0]).transpose(0, 1),
-                point.project(jac[1]).transpose(0, 1),
+                so2.project(jac_raw[0]),
+                point.project(jac_raw[1]),
             ]
-            expected = []
-            _ = so2.unrotate(point, expected)
+
+            expected = [
+                torch.zeros([batch_size, 2, batch_size, 2]).double(),
+                torch.zeros([batch_size, 2, batch_size, 2]).double(),
+            ]
+            expected[0][aux_id, :, aux_id, :] = jac[0]
+            expected[1][aux_id, :, aux_id, :] = jac[1]
+
+            assert torch.allclose(actual[0], expected[0])
+            assert torch.allclose(actual[1], expected[1])
+
+            # Check sparse jacobian matrices
+            actual = [
+                so2.project(jac_raw[0][aux_id, :, aux_id, :], is_sparse=True),
+                point.project(jac_raw[1][aux_id, :, aux_id, :], is_sparse=True),
+            ]
+
+            expected = jac
             assert torch.allclose(actual[0], expected[0])
             assert torch.allclose(actual[1], expected[1])

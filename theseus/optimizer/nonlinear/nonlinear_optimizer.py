@@ -180,6 +180,11 @@ class NonlinearOptimizer(Optimizer, abc.ABC):
             self.linear_solver.linearization.linearize()
             try:
                 if truncated_grad_loop:
+                    # The derivation for implicit differentiation states that
+                    # the autograd-enabled loop (which `truncated_grad_loop` signals)
+                    # must be done using Gauss-Newton steps. Well, technically,
+                    # full Newton, but it seems less stable numerically and
+                    # GN is working well so far.
                     delta = self.linear_solver.solve()
                 else:
                     delta = self.compute_delta(**kwargs)

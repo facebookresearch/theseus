@@ -13,12 +13,12 @@ from theseus.optimizer.linear import DenseSolver, LinearSolver, LUCudaSparseSolv
 
 from .nonlinear_least_squares import NonlinearLeastSquares
 
-_LM_ALLOWED_SOLVERS = [DenseSolver, LUCudaSparseSolver]
+_LM_ALLOWED_ELLIPS_DAMP_SOLVERS = [DenseSolver, LUCudaSparseSolver]
 
 
 def _check_ellipsoidal_damping_cls(linear_solver: LinearSolver):
     good = False
-    for lsc in _LM_ALLOWED_SOLVERS:
+    for lsc in _LM_ALLOWED_ELLIPS_DAMP_SOLVERS:
         if isinstance(linear_solver, lsc):
             good = True
     return good
@@ -60,7 +60,7 @@ class LevenbergMarquardt(NonlinearLeastSquares):
         **kwargs,
     ) -> torch.Tensor:
 
-        solvers_str = ",".join(c.__name__ for c in _LM_ALLOWED_SOLVERS)
+        solvers_str = ",".join(c.__name__ for c in _LM_ALLOWED_ELLIPS_DAMP_SOLVERS)
         if ellipsoidal_damping and not self._allows_ellipsoidal:
             raise NotImplementedError(
                 f"Ellipsoidal damping is only supported by solvers with type "

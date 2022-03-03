@@ -36,10 +36,10 @@ class LUCudaSparseSolver(LinearSolver):
         super().__init__(objective, linearization_cls, linearization_kwargs, **kwargs)
         self.linearization: SparseLinearization = self.linearization
 
+        self._num_solver_contexts: int = num_solver_contexts
+
         if self.linearization.structure().num_rows:
             self.reset()
-
-        self._num_solver_contexts: int = num_solver_contexts
 
     def reset(self, batch_size: int = 16):
         if not torch.cuda.is_available():

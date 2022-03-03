@@ -102,17 +102,18 @@ class SO3(LieGroup):
     def _project_impl(
         self, euclidean_grad: torch.Tensor, is_sparse: bool = False
     ) -> torch.Tensor:
-        self._project_check(euclidean_grad)
+        self._project_check(euclidean_grad, is_sparse)
         ret = torch.zeros(
             euclidean_grad.shape[:-1], dtype=self.dtype, device=self.device
         )
         if is_sparse:
-            raise NotImplementedError
+            temp = torch.einsum("i...jk,i...jl->i...lk", euclidean_grad, self.data)
         else:
             temp = torch.einsum("...jk,...ji->...ik", euclidean_grad, self.data)
-            ret[..., 0] = temp[..., 2, 1] - temp[..., 1, 2]
-            ret[..., 1] = temp[..., 0, 2] - temp[..., 2, 0]
-            ret[..., 2] = temp[..., 1, 0] - temp[..., 0, 1]
+
+        ret[..., 0] = temp[..., 2, 1] - temp[..., 1, 2]
+        ret[..., 1] = temp[..., 0, 2] - temp[..., 2, 0]
+        ret[..., 2] = temp[..., 1, 0] - temp[..., 0, 1]
 
         return ret
 

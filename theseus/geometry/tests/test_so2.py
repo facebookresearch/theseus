@@ -111,7 +111,7 @@ def test_projection():
     for _ in range(10):  # repeat a few times
         for batch_size in [1, 20, 100]:
             so2 = th.SO2.rand(batch_size, generator=rng, dtype=torch.float64)
-            point = th.Point2(data=torch.randn(batch_size, 2).double())
+            point = th.Point2.rand(batch_size, generator=rng, dtype=torch.float64)
 
             aux_id = torch.arange(batch_size)
 

@@ -108,12 +108,13 @@ class SO2(LieGroup):
     def _project_impl(
         self, euclidean_grad: torch.Tensor, is_sparse: bool = False
     ) -> torch.Tensor:
-        self._project_check(euclidean_grad)
+        self._project_check(euclidean_grad, is_sparse)
+
+        temp = torch.stack((-self[:, 1], self[:, 0]), dim=1)
 
         if is_sparse:
-            raise NotImplementedError
+            return torch.einsum("i...k,i...k->i...", euclidean_grad, temp).unsqueeze(-1)
         else:
-            temp = torch.stack((-self[:, 1], self[:, 0]), dim=1)
             return torch.einsum("...k,...k", euclidean_grad, temp).unsqueeze(-1)
 
     @staticmethod

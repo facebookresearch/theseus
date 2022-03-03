@@ -130,19 +130,40 @@ def test_projection():
             se2 = th.SE2.rand(batch_size, generator=rng, dtype=torch.float64)
             point = th.Point2(data=torch.randn(batch_size, 2).double())
 
+            aux_id = torch.arange(batch_size)
+
             # Test SE2.transform_to
-            def transform_to_sum(g, p):
-                return th.SE2(data=g).transform_to(p).data.sum(dim=0)
+            def transform_to_func(g, p):
+                return th.SE2(data=g).transform_to(p).data
 
-            jac = torch.autograd.functional.jacobian(
-                transform_to_sum, (se2.data, point.data)
+            jac_raw = torch.autograd.functional.jacobian(
+                transform_to_func, (se2.data, point.data)
             )
+            jac = []
+            _ = se2.transform_to(point, jac)
 
+            # Check dense jacobian matrices
             actual = [
-                se2.project(jac[0]).transpose(0, 1),
-                point.project(jac[1]).transpose(0, 1),
+                se2.project(jac_raw[0]),
+                point.project(jac_raw[1]),
             ]
-            expected = []
-            _ = se2.transform_to(point, expected)
+
+            expected = [
+                torch.zeros([batch_size, 2, batch_size, 3]).double(),
+                torch.zeros([batch_size, 2, batch_size, 2]).double(),
+            ]
+            expected[0][aux_id, :, aux_id, :] = jac[0]
+            expected[1][aux_id, :, aux_id, :] = jac[1]
+
+            assert torch.allclose(actual[0], expected[0])
+            assert torch.allclose(actual[1], expected[1])
+
+            # Check sparse jacobian matrices
+            actual = [
+                se2.project(jac_raw[0][aux_id, :, aux_id, :], is_sparse=True),
+                point.project(jac_raw[1][aux_id, :, aux_id, :], is_sparse=True),
+            ]
+
+            expected = jac
             assert torch.allclose(actual[0], expected[0])
             assert torch.allclose(actual[1], expected[1])

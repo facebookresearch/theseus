@@ -115,7 +115,7 @@ def test_projection():
 
             aux_id = torch.arange(batch_size)
 
-            # Test SO3.rotate
+            # Test SO2.rotate
             def rotate_func(R, p):
                 return th.SO2(data=R).rotate(p).data
 
@@ -151,7 +151,7 @@ def test_projection():
             assert torch.allclose(actual[0], expected[0])
             assert torch.allclose(actual[1], expected[1])
 
-            # Test SO3.unrotate
+            # Test SO2.unrotate
             def unrotate_func(R, p):
                 return th.SO2(data=R).unrotate(p).data
 

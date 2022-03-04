@@ -14,7 +14,9 @@ from .core import (
 )
 from .geometry import (
     SE2,
+    SE3,
     SO2,
+    SO3,
     LieGroup,
     Manifold,
     Point2,
@@ -26,6 +28,24 @@ from .geometry import (
     inverse,
     log_map,
     exp_map,
+    LieGroupTensor,
+    set_lie_tangent_enabled,
+    enable_lie_tangent,
+    no_lie_tangent,
+    rand_vector,
+    rand_point2,
+    rand_point3,
+    rand_so2,
+    rand_so3,
+    rand_se2,
+    rand_se3,
+    randn_vector,
+    randn_point2,
+    randn_point3,
+    randn_so2,
+    randn_so3,
+    randn_se2,
+    randn_se3,
 )
 from .optimizer import DenseLinearization, SparseLinearization, VariableOrdering
 from .optimizer.linear import (
@@ -33,6 +53,7 @@ from .optimizer.linear import (
     CholmodSparseSolver,
     DenseSolver,
     LinearOptimizer,
+    LUCudaSparseSolver,
     LUDenseSolver,
 )
 from .optimizer.nonlinear import (

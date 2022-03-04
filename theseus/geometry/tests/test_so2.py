@@ -21,11 +21,6 @@ from .common import (
 )
 
 
-def _create_random_so2(batch_size, rng):
-    theta = torch.rand(batch_size, 1, generator=rng) * 2 * np.pi - np.pi
-    return th.SO2(theta=theta.double())
-
-
 def test_exp_map():
     for batch_size in [1, 20, 100]:
         theta = torch.from_numpy(np.linspace(-np.pi, np.pi, batch_size)).view(-1, 1)
@@ -42,8 +37,8 @@ def test_compose():
     rng = torch.Generator()
     rng.manual_seed(0)
     for batch_size in [1, 20, 100]:
-        so2_1 = _create_random_so2(batch_size, rng)
-        so2_2 = _create_random_so2(batch_size, rng)
+        so2_1 = th.SO2.rand(batch_size, generator=rng, dtype=torch.float64)
+        so2_2 = th.SO2.rand(batch_size, generator=rng, dtype=torch.float64)
         check_compose(so2_1, so2_2)
 
 
@@ -51,7 +46,7 @@ def test_inverse():
     rng = torch.Generator()
     rng.manual_seed(0)
     for batch_size in [1, 20, 100]:
-        so2 = _create_random_so2(batch_size, rng)
+        so2 = th.SO2.rand(batch_size, generator=rng, dtype=torch.float64)
         check_inverse(so2)
 
 
@@ -68,7 +63,7 @@ def test_rotate_and_unrotate():
                 ):
                     continue
 
-                so2 = _create_random_so2(batch_size_so2, rng)
+                so2 = th.SO2.rand(batch_size_so2, generator=rng, dtype=torch.float64)
                 # Tests that rotate works from tensor. unrotate() would work similarly), but
                 # it's also tested indirectly by test_transform_to() for SE2
                 point_tensor = torch.randn(batch_size_pnt, 2).double()
@@ -112,7 +107,7 @@ def test_adjoint():
     rng = torch.Generator()
     rng.manual_seed(0)
     for batch_size in [1, 20, 100]:
-        so2 = _create_random_so2(batch_size, rng)
+        so2 = th.SO2.rand(batch_size, generator=rng, dtype=torch.float64)
         tangent = torch.randn(batch_size, 1).double()
         check_adjoint(so2, tangent)
 
@@ -120,5 +115,46 @@ def test_adjoint():
 def test_copy():
     rng = torch.Generator()
     rng.manual_seed(0)
-    so2 = _create_random_so2(1, rng)
+    so2 = th.SO2.rand(1, generator=rng, dtype=torch.float64)
     check_copy_var(so2)
+
+
+def test_projection():
+    rng = torch.Generator()
+    rng.manual_seed(0)
+    for _ in range(10):  # repeat a few times
+        for batch_size in [1, 20, 100]:
+            so2 = th.SO2.rand(batch_size, generator=rng, dtype=torch.float64)
+            point = th.Point2(data=torch.randn(batch_size, 2).double())
+
+            # Test SO3.rotate
+            def rotate_sum(R, p):
+                return th.SO2(data=R).rotate(p).data.sum(dim=0)
+
+            jac = torch.autograd.functional.jacobian(rotate_sum, (so2.data, point.data))
+
+            actual = [
+                so2.project(jac[0]).transpose(0, 1),
+                point.project(jac[1]).transpose(0, 1),
+            ]
+            expected = []
+            _ = so2.rotate(point, expected)
+            assert torch.allclose(actual[0], expected[0])
+            assert torch.allclose(actual[1], expected[1])
+
+            # Test SO3.unrotate
+            def unrotate_sum(R, p):
+                return th.SO2(data=R).unrotate(p).data.sum(dim=0)
+
+            jac = torch.autograd.functional.jacobian(
+                unrotate_sum, (so2.data, point.data)
+            )
+
+            actual = [
+                so2.project(jac[0]).transpose(0, 1),
+                point.project(jac[1]).transpose(0, 1),
+            ]
+            expected = []
+            _ = so2.unrotate(point, expected)
+            assert torch.allclose(actual[0], expected[0])
+            assert torch.allclose(actual[1], expected[1])

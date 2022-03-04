@@ -38,14 +38,14 @@ install_nox: &install_nox
   - run:
       name: "Preparing environment: nox"
       command: |
-        sudo apt-get install -y expect
-        sudo pip install nox==2020.8.22
+        sudo apt-get update && sudo apt-get install -y expect
+        pip install nox==2020.8.22
 
 install_suitesparse: &install_suitesparse
   - run:
       name: "Preparing environment: suitesparse"
       command: |
-        sudo apt-get install -y libsuitesparse-dev
+        sudo apt-get update && sudo apt-get install -y libsuitesparse-dev
 
 setup_cuda10_libs: &setup_cuda10_libs
   - run:
@@ -117,8 +117,7 @@ run_tests: &run_tests
       working_directory: ~/project
       command: |
         pytest -s theseus/tests/test_theseus_layer.py
-        pytest -s theseus/extlib/tests/test_mat_mult.py
-        pytest -s theseus/extlib/tests/test_cusolver_lu_solver.py
+        pytest -s theseus -m "cuda"
 
 # -------------------------------------------------------------------------------------
 # Jobs
@@ -126,7 +125,7 @@ run_tests: &run_tests
 jobs:
   py37_linux:
     docker:
-      - image: circleci/python:3.7
+      - image: cimg/python:3.7
     steps:
       - checkout
       - <<: *install_suitesparse
@@ -140,7 +139,7 @@ jobs:
 
   py38_linux:
     docker:
-      - image: circleci/python:3.8
+      - image: cimg/python:3.8
     steps:
       - checkout
       - <<: *install_suitesparse

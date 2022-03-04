@@ -16,6 +16,7 @@ from .common import (
     check_compose,
     check_exp_map,
     check_projection_for_compose,
+    check_projection_for_inverse,
     check_projection_for_rotate_and_transform,
 )
 
@@ -219,3 +220,6 @@ def test_projection():
 
             # Test SO3.compose
             check_projection_for_compose(th.SO3, batch_size, rng)
+
+            # Test SO3.inverse
+            check_projection_for_inverse(th.SO3, batch_size, rng)

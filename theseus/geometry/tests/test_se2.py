@@ -18,6 +18,7 @@ from .common import (
     check_inverse,
     check_log_map,
     check_projection_for_compose,
+    check_projection_for_inverse,
     check_projection_for_rotate_and_transform,
 )
 
@@ -136,3 +137,6 @@ def test_projection():
 
             # Test SE2.compose
             check_projection_for_compose(th.SE2, batch_size, rng)
+
+            # Test SE2.inverse
+            check_projection_for_inverse(th.SE2, batch_size, rng)

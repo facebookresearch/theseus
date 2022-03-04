@@ -325,8 +325,9 @@ class SE3(LieGroup):
 
     def _inverse_impl(self, get_jacobian: bool = False) -> "SE3":
         ret = torch.zeros(self.shape[0], 3, 4).to(dtype=self.dtype, device=self.device)
-        ret[:, :, :3] = self.data[:, :3, :3].transpose(1, 2)
-        ret[:, :, 3] = -(ret[:, :3, :3] @ self.data[:, :3, 3].unsqueeze(2)).view(-1, 3)
+        rotT = self.data[:, :3, :3].transpose(1, 2)
+        ret[:, :, :3] = rotT
+        ret[:, :, 3] = -(rotT @ self.data[:, :3, 3].unsqueeze(2)).view(-1, 3)
         return SE3(data=ret)
 
     def to_matrix(self) -> torch.Tensor:

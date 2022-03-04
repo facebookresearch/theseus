@@ -56,3 +56,39 @@ def check_adjoint(group, tangent_vector):
         group_matrix @ group.hat(tangent_vector) @ group.inverse().to_matrix()
     )
     assert torch.allclose(tangent_left.squeeze(2), tangent_right, atol=EPS)
+
+
+def check_projection(Group, Point, Func, batch_size, generator):
+    group = Group.rand(batch_size, generator=generator, dtype=torch.float64)
+    point = Point.rand(batch_size, generator=generator, dtype=torch.float64)
+    aux_id = torch.arange(batch_size)
+
+    def func(g, p):
+        return Func(Group(data=g), p).data
+
+    jac_raw = torch.autograd.functional.jacobian(func, (group.data, point.data))
+    jac = []
+    _ = Func(group, point, jac)
+
+    # Check dense jacobian matrices
+    actual = [group.project(jac_raw[0]), point.project(jac_raw[1])]
+
+    expected = [
+        torch.zeros(batch_size, point.dof(), batch_size, group.dof()).double(),
+        torch.zeros(batch_size, point.dof(), batch_size, point.dof()).double(),
+    ]
+    expected[0][aux_id, :, aux_id, :] = jac[0]
+    expected[1][aux_id, :, aux_id, :] = jac[1]
+
+    assert torch.allclose(actual[0], expected[0])
+    assert torch.allclose(actual[1], expected[1])
+
+    # Check sparse jacobian matrices
+    actual = [
+        group.project(jac_raw[0][aux_id, :, aux_id, :], is_sparse=True),
+        point.project(jac_raw[1][aux_id, :, aux_id, :], is_sparse=True),
+    ]
+
+    expected = jac
+    assert torch.allclose(actual[0], expected[0])
+    assert torch.allclose(actual[1], expected[1])

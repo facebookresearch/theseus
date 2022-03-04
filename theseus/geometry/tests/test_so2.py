@@ -54,39 +54,53 @@ def test_rotate_and_unrotate():
     rng = torch.Generator()
     rng.manual_seed(0)
     for _ in range(10):  # repeat a few times
-        for batch_size in [1, 20, 100]:
-            so2 = th.SO2.rand(batch_size, generator=rng, dtype=torch.float64)
-            # Tests that rotate works from tensor. unrotate() would work similarly), but
-            # it's also tested indirectly by test_transform_to() for SE2
-            point_tensor = torch.randn(batch_size, 2).double()
-            jacobians_rotate = []
-            rotated_point = so2.rotate(point_tensor, jacobians=jacobians_rotate)
-            expected_rotated_data = so2.to_matrix() @ point_tensor.unsqueeze(2)
-            jacobians_unrotate = []
-            unrotated_point = so2.unrotate(rotated_point, jacobians_unrotate)
+        for batch_size_so2 in [1, 20, 100]:
+            for batch_size_pnt in [1, 20, 100]:
+                if (
+                    batch_size_so2 != 1
+                    and batch_size_pnt != 1
+                    and batch_size_pnt != batch_size_so2
+                ):
+                    continue
 
-            # Check the operation result
-            assert torch.allclose(
-                expected_rotated_data.squeeze(2), rotated_point.data, atol=EPS
-            )
-            assert torch.allclose(point_tensor, unrotated_point.data, atol=EPS)
+                so2 = th.SO2.rand(batch_size_so2, generator=rng, dtype=torch.float64)
+                # Tests that rotate works from tensor. unrotate() would work similarly), but
+                # it's also tested indirectly by test_transform_to() for SE2
+                point_tensor = torch.randn(batch_size_pnt, 2).double()
+                jacobians_rotate = []
+                rotated_point = so2.rotate(point_tensor, jacobians=jacobians_rotate)
+                expected_rotated_data = so2.to_matrix() @ point_tensor.unsqueeze(2)
+                jacobians_unrotate = []
+                unrotated_point = so2.unrotate(rotated_point, jacobians_unrotate)
 
-            # Check the jacobians
-            # function_dim = 2 because rotate(theta, (x, y)) --> (x_new, y_new)
-            expected_jac = numeric_jacobian(
-                lambda groups: groups[0].rotate(groups[1]),
-                [so2, th.Point2(point_tensor)],
-                function_dim=2,
-            )
-            assert torch.allclose(jacobians_rotate[0], expected_jac[0])
-            assert torch.allclose(jacobians_rotate[1], expected_jac[1])
-            expected_jac = numeric_jacobian(
-                lambda groups: groups[0].unrotate(groups[1]),
-                [so2, rotated_point],
-                function_dim=2,
-            )
-            assert torch.allclose(jacobians_unrotate[0], expected_jac[0])
-            assert torch.allclose(jacobians_unrotate[1], expected_jac[1])
+                # Check the operation result
+                assert torch.allclose(
+                    expected_rotated_data.squeeze(2), rotated_point.data, atol=EPS
+                )
+                assert torch.allclose(point_tensor, unrotated_point.data, atol=EPS)
+
+                # Check the jacobians
+                # function_dim = 2 because rotate(theta, (x, y)) --> (x_new, y_new)
+                expected_jac = numeric_jacobian(
+                    lambda groups: groups[0].rotate(groups[1]),
+                    [so2, th.Point2(point_tensor)],
+                    function_dim=2,
+                )
+
+                assert jacobians_rotate[0].shape == expected_jac[0].shape
+                assert jacobians_rotate[1].shape == expected_jac[1].shape
+                assert torch.allclose(jacobians_rotate[0], expected_jac[0])
+                assert torch.allclose(jacobians_rotate[1], expected_jac[1])
+
+                expected_jac = numeric_jacobian(
+                    lambda groups: groups[0].unrotate(groups[1]),
+                    [so2, rotated_point],
+                    function_dim=2,
+                )
+                assert jacobians_unrotate[0].shape == expected_jac[0].shape
+                assert jacobians_unrotate[1].shape == expected_jac[1].shape
+                assert torch.allclose(jacobians_unrotate[0], expected_jac[0])
+                assert torch.allclose(jacobians_unrotate[1], expected_jac[1])
 
 
 def test_adjoint():

@@ -58,10 +58,11 @@ def check_adjoint(group, tangent_vector):
     assert torch.allclose(tangent_left.squeeze(2), tangent_right, atol=EPS)
 
 
+# Func can be SO2.rotate, SE2.transform_to, SO3.unrotate, etc., whose third argument
+# populates the jacobians
 def check_projection(Group, Point, Func, batch_size, generator):
     group = Group.rand(batch_size, generator=generator, dtype=torch.float64)
     point = Point.rand(batch_size, generator=generator, dtype=torch.float64)
-    aux_id = torch.arange(batch_size)
 
     def func(g, p):
         return Func(Group(data=g), p).data
@@ -77,6 +78,9 @@ def check_projection(Group, Point, Func, batch_size, generator):
         torch.zeros(batch_size, point.dof(), batch_size, group.dof()).double(),
         torch.zeros(batch_size, point.dof(), batch_size, point.dof()).double(),
     ]
+
+    aux_id = torch.arange(batch_size)
+
     expected[0][aux_id, :, aux_id, :] = jac[0]
     expected[1][aux_id, :, aux_id, :] = jac[1]
 

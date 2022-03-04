@@ -201,3 +201,44 @@ def test_rotate_and_unrotate():
             )
             assert torch.allclose(jacobians_unrotate[0], expected_jac[0])
             assert torch.allclose(jacobians_unrotate[1], expected_jac[1])
+
+
+def test_projection():
+    rng = torch.Generator()
+    rng.manual_seed(0)
+    for _ in range(10):  # repeat a few times
+        for batch_size in [1, 20, 100]:
+            so3 = _create_random_so3(batch_size, rng)
+            point = th.Point3(data=torch.randn(batch_size, 3).double())
+
+            # Test SO3.rotate
+            def rotate_sum(R, p):
+                return th.SO3(data=R).rotate(p).data.sum(dim=0)
+
+            jac = torch.autograd.functional.jacobian(rotate_sum, (so3.data, point.data))
+
+            actual = [
+                so3.project(jac[0]).transpose(0, 1),
+                point.project(jac[1]).transpose(0, 1),
+            ]
+            expected = []
+            _ = so3.rotate(point, expected)
+            assert torch.allclose(actual[0], expected[0])
+            assert torch.allclose(actual[1], expected[1])
+
+            # Test SO3.unrotate
+            def unrotate_sum(R, p):
+                return th.SO3(data=R).unrotate(p).data.sum(dim=0)
+
+            jac = torch.autograd.functional.jacobian(
+                unrotate_sum, (so3.data, point.data)
+            )
+
+            actual = [
+                so3.project(jac[0]).transpose(0, 1),
+                point.project(jac[1]).transpose(0, 1),
+            ]
+            expected = []
+            _ = so3.unrotate(point, expected)
+            assert torch.allclose(actual[0], expected[0])
+            assert torch.allclose(actual[1], expected[1])

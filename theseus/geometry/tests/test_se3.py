@@ -189,3 +189,46 @@ def test_transform_from_and_to():
             )
             assert torch.allclose(jacobians_from[0], expected_jac[0])
             assert torch.allclose(jacobians_from[1], expected_jac[1])
+
+
+def test_projection():
+    rng = torch.Generator()
+    rng.manual_seed(0)
+    for _ in range(10):  # repeat a few times
+        for batch_size in [1, 20, 100]:
+            se3 = _create_random_se3(batch_size, rng)
+            point = th.Point3(data=torch.randn(batch_size, 3).double())
+
+            # Test SE2.transform_to
+            def transform_to_sum(g, p):
+                return th.SE3(data=g).transform_to(p).data.sum(dim=0)
+
+            jac = torch.autograd.functional.jacobian(
+                transform_to_sum, (se3.data, point.data)
+            )
+
+            actual = [
+                se3.project(jac[0]).transpose(0, 1),
+                point.project(jac[1]).transpose(0, 1),
+            ]
+            expected = []
+            _ = se3.transform_to(point, expected)
+            assert torch.allclose(actual[0], expected[0])
+            assert torch.allclose(actual[1], expected[1])
+
+            # Test SE2.transform_from
+            def transform_from_sum(g, p):
+                return th.SE3(data=g).transform_from(p).data.sum(dim=0)
+
+            jac = torch.autograd.functional.jacobian(
+                transform_from_sum, (se3.data, point.data)
+            )
+
+            actual = [
+                se3.project(jac[0]).transpose(0, 1),
+                point.project(jac[1]).transpose(0, 1),
+            ]
+            expected = []
+            _ = se3.transform_from(point, expected)
+            assert torch.allclose(actual[0], expected[0])
+            assert torch.allclose(actual[1], expected[1])

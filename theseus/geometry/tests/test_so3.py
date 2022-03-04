@@ -15,6 +15,7 @@ from .common import (
     check_adjoint,
     check_compose,
     check_exp_map,
+    check_projection_for_compose,
     check_projection_for_rotate_and_transform,
 )
 
@@ -211,7 +212,10 @@ def test_projection():
                 th.SO3, th.Point3, th.SO3.rotate, batch_size, rng
             )
 
-            # Test SO2.unrotate
+            # Test SO3.unrotate
             check_projection_for_rotate_and_transform(
                 th.SO3, th.Point3, th.SO3.unrotate, batch_size, rng
             )
+
+            # Test SO3.compose
+            check_projection_for_compose(th.SO3, batch_size, rng)

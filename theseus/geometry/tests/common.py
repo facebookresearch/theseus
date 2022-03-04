@@ -60,7 +60,9 @@ def check_adjoint(group, tangent_vector):
 
 # Func can be SO2.rotate, SE2.transform_to, SO3.unrotate, etc., whose third argument
 # populates the jacobians
-def check_projection(Group, Point, Func, batch_size, generator):
+def check_projection_for_rotate_and_transform(
+    Group, Point, Func, batch_size, generator
+):
     group = Group.rand(batch_size, generator=generator, dtype=torch.float64)
     point = Point.rand(batch_size, generator=generator, dtype=torch.float64)
 

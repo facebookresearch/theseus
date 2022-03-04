@@ -18,7 +18,7 @@ from .common import (
     check_exp_map,
     check_inverse,
     check_log_map,
-    check_projection,
+    check_projection_for_rotate_and_transform,
 )
 
 
@@ -112,7 +112,11 @@ def test_projection():
     for _ in range(10):  # repeat a few times
         for batch_size in [1, 20, 100]:
             # Test SO2.rotate
-            check_projection(th.SO2, th.Point2, th.SO2.rotate, batch_size, rng)
+            check_projection_for_rotate_and_transform(
+                th.SO2, th.Point2, th.SO2.rotate, batch_size, rng
+            )
 
             # Test SO2.unrotate
-            check_projection(th.SO2, th.Point2, th.SO2.unrotate, batch_size, rng)
+            check_projection_for_rotate_and_transform(
+                th.SO2, th.Point2, th.SO2.unrotate, batch_size, rng
+            )

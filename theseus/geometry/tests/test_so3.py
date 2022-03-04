@@ -11,7 +11,12 @@ import theseus as th
 from theseus.constants import EPS
 from theseus.utils import numeric_jacobian
 
-from .common import check_adjoint, check_compose, check_exp_map, check_projection
+from .common import (
+    check_adjoint,
+    check_compose,
+    check_exp_map,
+    check_projection_for_rotate_and_transform,
+)
 
 
 def check_SO3_log_map(tangent_vector):
@@ -202,7 +207,11 @@ def test_projection():
     for _ in range(10):  # repeat a few times
         for batch_size in [1, 20, 100]:
             # Test SO3.rotate
-            check_projection(th.SO3, th.Point3, th.SO3.rotate, batch_size, rng)
+            check_projection_for_rotate_and_transform(
+                th.SO3, th.Point3, th.SO3.rotate, batch_size, rng
+            )
 
             # Test SO2.unrotate
-            check_projection(th.SO3, th.Point3, th.SO3.unrotate, batch_size, rng)
+            check_projection_for_rotate_and_transform(
+                th.SO3, th.Point3, th.SO3.unrotate, batch_size, rng
+            )

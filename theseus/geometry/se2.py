@@ -37,6 +37,50 @@ class SE2(LieGroup):
             self.update_from_rot_and_trans(rotation, translation)
 
     @staticmethod
+    def rand(
+        *size: int,
+        generator: Optional[torch.Generator] = None,
+        dtype: Optional[torch.dtype] = None,
+        device: Optional[torch.device] = None,
+        requires_grad: bool = False,
+    ) -> "SE2":
+        if len(size) != 1:
+            raise ValueError("The size should be 1D.")
+        x_y_theta = torch.rand(
+            size[0],
+            3,
+            generator=generator,
+            dtype=dtype,
+            device=device,
+            requires_grad=requires_grad,
+        )
+        x_y_theta[:, 2] = 2 * theseus.constants.PI * (x_y_theta[:, 2] - 0.5)
+
+        return SE2(x_y_theta=x_y_theta)
+
+    @staticmethod
+    def randn(
+        *size: int,
+        generator: Optional[torch.Generator] = None,
+        dtype: Optional[torch.dtype] = None,
+        device: Optional[torch.device] = None,
+        requires_grad: bool = False,
+    ) -> "SE2":
+        if len(size) != 1:
+            raise ValueError("The size should be 1D.")
+        x_y_theta = torch.randn(
+            size[0],
+            3,
+            generator=generator,
+            dtype=dtype,
+            device=device,
+            requires_grad=requires_grad,
+        )
+        x_y_theta[:, 2] *= theseus.constants.PI
+
+        return SE2(x_y_theta=x_y_theta)
+
+    @staticmethod
     def _init_data() -> torch.Tensor:  # type: ignore
         return torch.tensor([0.0, 0.0, 1.0, 0.0]).view(1, 4)
 
@@ -114,7 +158,7 @@ class SE2(LieGroup):
         return torch.stack((ux, uy, theta), dim=1)
 
     @staticmethod
-    def exp_map(tangent_vector: torch.Tensor) -> LieGroup:
+    def exp_map(tangent_vector: torch.Tensor) -> "SE2":
         u = tangent_vector[:, :2]
         theta = tangent_vector[:, 2]
         rotation = SO2(theta=theta)
@@ -251,3 +295,7 @@ class SE2(LieGroup):
     # only added to avoid casting downstream
     def copy(self, new_name: Optional[str] = None) -> "SE2":
         return cast(SE2, super().copy(new_name=new_name))
+
+
+rand_se2 = SE2.rand
+randn_se2 = SE2.randn

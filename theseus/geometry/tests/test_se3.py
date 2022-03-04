@@ -14,15 +14,6 @@ from theseus.utils import numeric_jacobian
 from .common import check_adjoint, check_compose, check_exp_map, check_inverse
 
 
-def _create_random_se3(batch_size, rng):
-    tangent_vector_ang = torch.rand(batch_size, 3).double() - 0.5
-    tangent_vector_ang /= tangent_vector_ang.norm(dim=1, keepdim=True)
-    tangent_vector_ang *= torch.rand(batch_size, 1).double() * 2 * np.pi - np.pi
-    tangent_vector_lin = torch.randn(batch_size, 3).double()
-    tangent_vector = torch.cat([tangent_vector_lin, tangent_vector_ang], dim=1)
-    return th.SE3.exp_map(tangent_vector)
-
-
 def check_SE3_log_map(tangent_vector, atol=EPS):
     g = th.SE3.exp_map(tangent_vector)
     assert torch.allclose(th.SE3.exp_map(g.log_map()).data, g.data, atol=atol)
@@ -130,8 +121,8 @@ def test_compose():
     rng = torch.Generator()
     rng.manual_seed(0)
     for batch_size in [1, 20, 100]:
-        se3_1 = _create_random_se3(batch_size, rng)
-        se3_2 = _create_random_se3(batch_size, rng)
+        se3_1 = th.SE3.rand(batch_size, generator=rng, dtype=torch.float64)
+        se3_2 = th.SE3.rand(batch_size, generator=rng, dtype=torch.float64)
         check_compose(se3_1, se3_2)
 
 
@@ -139,7 +130,7 @@ def test_inverse():
     rng = torch.Generator()
     rng.manual_seed(0)
     for batch_size in [1, 20, 100]:
-        se3 = _create_random_se3(batch_size, rng)
+        se3 = th.SE3.rand(batch_size, generator=rng, dtype=torch.float64)
         check_inverse(se3)
 
 
@@ -147,7 +138,7 @@ def test_adjoint():
     rng = torch.Generator()
     rng.manual_seed(0)
     for batch_size in [1, 20, 100]:
-        se3 = _create_random_se3(batch_size, rng)
+        se3 = th.SE3.rand(batch_size, generator=rng, dtype=torch.float64)
         tangent = torch.randn(batch_size, 6).double()
         check_adjoint(se3, tangent)
 
@@ -157,7 +148,7 @@ def test_transform_from_and_to():
     rng.manual_seed(0)
     for _ in range(10):  # repeat a few times
         for batch_size in [1, 20, 100]:
-            se3 = _create_random_se3(batch_size, rng)
+            se3 = th.SE3.rand(batch_size, generator=rng, dtype=torch.float64)
             point_tensor = torch.randn(batch_size, 3).double()
             point_tensor_ext = torch.cat(
                 (point_tensor, torch.ones(batch_size, 1).double()), dim=1
@@ -196,7 +187,7 @@ def test_projection():
     rng.manual_seed(0)
     for _ in range(10):  # repeat a few times
         for batch_size in [1, 20, 100]:
-            se3 = _create_random_se3(batch_size, rng)
+            se3 = th.SE3.rand(batch_size, generator=rng, dtype=torch.float64)
             point = th.Point3(data=torch.randn(batch_size, 3).double())
 
             # Test SE2.transform_to

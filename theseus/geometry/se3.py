@@ -34,6 +34,62 @@ class SE3(LieGroup):
             self.update_from_x_y_z_quaternion(x_y_z_quaternion=x_y_z_quaternion)
 
     @staticmethod
+    def rand(
+        *size: int,
+        generator: Optional[torch.Generator] = None,
+        dtype: Optional[torch.dtype] = None,
+        device: Optional[torch.device] = None,
+        requires_grad: bool = False,
+    ) -> "SE3":
+        if len(size) != 1:
+            raise ValueError("The size should be 1D.")
+        ret = SE3()
+        rotation = SO3.rand(
+            size[0],
+            generator=generator,
+            dtype=dtype,
+            device=device,
+            requires_grad=requires_grad,
+        )
+        translation = Point3.rand(
+            size[0],
+            generator=generator,
+            dtype=dtype,
+            device=device,
+            requires_grad=requires_grad,
+        )
+        ret.update_from_rot_and_trans(rotation=rotation, translation=translation)
+        return ret
+
+    @staticmethod
+    def randn(
+        *size: int,
+        generator: Optional[torch.Generator] = None,
+        dtype: Optional[torch.dtype] = None,
+        device: Optional[torch.device] = None,
+        requires_grad: bool = False,
+    ) -> "SE3":
+        if len(size) != 1:
+            raise ValueError("The size should be 1D.")
+        ret = SE3()
+        rotation = SO3.randn(
+            size[0],
+            generator=generator,
+            dtype=dtype,
+            device=device,
+            requires_grad=requires_grad,
+        )
+        translation = Point3.randn(
+            size[0],
+            generator=generator,
+            dtype=dtype,
+            device=device,
+            requires_grad=requires_grad,
+        )
+        ret.update_from_rot_and_trans(rotation=rotation, translation=translation)
+        return ret
+
+    @staticmethod
     def _init_data() -> torch.Tensor:  # type: ignore
         return torch.eye(3, 4).view(1, 3, 4)
 
@@ -111,7 +167,7 @@ class SE3(LieGroup):
             )
 
     @staticmethod
-    def exp_map(tangent_vector: torch.Tensor) -> LieGroup:
+    def exp_map(tangent_vector: torch.Tensor) -> "SE3":
         if tangent_vector.ndim != 2 or tangent_vector.shape[1] != 6:
             raise ValueError("Tangent vectors of SE(3) can only be 6-D vectors.")
 
@@ -388,3 +444,7 @@ class SE3(LieGroup):
             jacobians.extend([Jg, Jpnt])
 
         return ret
+
+
+rand_se3 = SE3.rand
+randn_se3 = SE3.randn

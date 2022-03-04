@@ -44,6 +44,28 @@ class LieGroup(Manifold):
     def dof(self) -> int:
         pass
 
+    @staticmethod
+    @abc.abstractmethod
+    def rand(
+        *size: int,
+        generator: Optional[torch.Generator] = None,
+        dtype: Optional[torch.dtype] = None,
+        device: Optional[torch.device] = None,
+        requires_grad: bool = False,
+    ) -> "LieGroup":
+        pass
+
+    @staticmethod
+    @abc.abstractmethod
+    def randn(
+        *size: int,
+        generator: Optional[torch.Generator] = None,
+        dtype: Optional[torch.dtype] = None,
+        device: Optional[torch.device] = None,
+        requires_grad: bool = False,
+    ) -> "LieGroup":
+        pass
+
     def __str__(self) -> str:
         return repr(self)
 

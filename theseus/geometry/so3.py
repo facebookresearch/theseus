@@ -34,6 +34,52 @@ class SO3(LieGroup):
             self.update_from_unit_quaternion(quaternion)
 
     @staticmethod
+    def rand(
+        *size: int,
+        generator: Optional[torch.Generator] = None,
+        dtype: Optional[torch.dtype] = None,
+        device: Optional[torch.device] = None,
+        requires_grad: bool = False,
+    ) -> "SO3":
+        if len(size) != 1:
+            raise ValueError("The size should be 1D.")
+        return SO3.exp_map(
+            2
+            * theseus.constants.PI
+            * torch.rand(
+                size[0],
+                3,
+                generator=generator,
+                dtype=dtype,
+                device=device,
+                requires_grad=requires_grad,
+            )
+            - theseus.constants.PI
+        )
+
+    @staticmethod
+    def randn(
+        *size: int,
+        generator: Optional[torch.Generator] = None,
+        dtype: Optional[torch.dtype] = None,
+        device: Optional[torch.device] = None,
+        requires_grad: bool = False,
+    ) -> "SO3":
+        if len(size) != 1:
+            raise ValueError("The size should be 1D.")
+        return SO3.exp_map(
+            theseus.constants.PI
+            * torch.randn(
+                size[0],
+                3,
+                generator=generator,
+                dtype=dtype,
+                device=device,
+                requires_grad=requires_grad,
+            )
+        )
+
+    @staticmethod
     def _init_data() -> torch.Tensor:  # type: ignore
         return torch.eye(3, 3).view(1, 3, 3)
 
@@ -94,7 +140,7 @@ class SO3(LieGroup):
             raise ValueError("Hat matrices of SO(3) can only be skew-symmetric.")
 
     @staticmethod
-    def exp_map(tangent_vector: torch.Tensor) -> LieGroup:
+    def exp_map(tangent_vector: torch.Tensor) -> "SO3":
         if tangent_vector.ndim != 2 or tangent_vector.shape[1] != 3:
             raise ValueError("Invalid input for SO3.exp_map.")
         ret = SO3(dtype=tangent_vector.dtype)
@@ -349,3 +395,7 @@ class SO3(LieGroup):
             jacobians.extend([Jrot, Jpnt])
 
         return ret
+
+
+rand_so3 = SO3.rand
+randn_so3 = SO3.randn

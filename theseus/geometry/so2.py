@@ -36,6 +36,52 @@ class SO2(LieGroup):
             self.update_from_angle(theta)
 
     @staticmethod
+    def rand(
+        *size: int,
+        generator: Optional[torch.Generator] = None,
+        dtype: Optional[torch.dtype] = None,
+        device: Optional[torch.device] = None,
+        requires_grad: bool = False,
+    ) -> "SO2":
+        if len(size) != 1:
+            raise ValueError("The size should be 1D.")
+        return SO2.exp_map(
+            2
+            * theseus.constants.PI
+            * torch.rand(
+                size[0],
+                1,
+                generator=generator,
+                dtype=dtype,
+                device=device,
+                requires_grad=requires_grad,
+            )
+            - theseus.constants.PI
+        )
+
+    @staticmethod
+    def randn(
+        *size: int,
+        generator: Optional[torch.Generator] = None,
+        dtype: Optional[torch.dtype] = None,
+        device: Optional[torch.device] = None,
+        requires_grad: bool = False,
+    ) -> "SO2":
+        if len(size) != 1:
+            raise ValueError("The size should be 1D.")
+        return SO2.exp_map(
+            theseus.constants.PI
+            * torch.randn(
+                size[0],
+                1,
+                generator=generator,
+                dtype=dtype,
+                device=device,
+                requires_grad=requires_grad,
+            )
+        )
+
+    @staticmethod
     def _init_data() -> torch.Tensor:  # type: ignore
         return torch.tensor([1.0, 0.0]).view(1, 2)
 
@@ -65,7 +111,7 @@ class SO2(LieGroup):
         return torch.einsum("...k,...k", euclidean_grad, temp).unsqueeze(-1)
 
     @staticmethod
-    def exp_map(tangent_vector: torch.Tensor) -> LieGroup:
+    def exp_map(tangent_vector: torch.Tensor) -> "SO2":
         so2 = SO2(dtype=tangent_vector.dtype)
         so2.update_from_angle(tangent_vector)
         return so2
@@ -196,3 +242,7 @@ class SO2(LieGroup):
     # only added to avoid casting downstream
     def copy(self, new_name: Optional[str] = None) -> "SO2":
         return cast(SO2, super().copy(new_name=new_name))
+
+
+rand_so2 = SO2.rand
+randn_so2 = SO2.randn

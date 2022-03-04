@@ -283,7 +283,10 @@ class SO3(LieGroup):
         return torch.stack((matrix[:, 2, 1], matrix[:, 0, 2], matrix[:, 1, 0]), dim=1)
 
     def _rotate_shape_check(self, point: Union[Point3, torch.Tensor]):
-        err_msg = "SO3 can only rotate 3-D vectors."
+        err_msg = (
+            f"SO3 can only rotate vectors of shape [{self.shape[0]}, 3] or [1, 3], "
+            f"but the input has shape {point.shape}."
+        )
         if isinstance(point, torch.Tensor):
             if not point.ndim == 2 or point.shape[1] != 3:
                 raise ValueError(err_msg)
@@ -294,9 +297,7 @@ class SO3(LieGroup):
             and point.shape[0] != 1
             and self.shape[0] != 1
         ):
-            raise ValueError(
-                "Input point batch size is not broadcastable with group batch size."
-            )
+            raise ValueError(err_msg)
 
     @staticmethod
     def unit_quaternion_to_SO3(quaternion: torch.torch.Tensor) -> "SO3":

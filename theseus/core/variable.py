@@ -52,12 +52,12 @@ class Variable:
             )
         if data.dtype != self.dtype:
             raise ValueError(
-                f"Tried to update used tensor of dtype {data.dtype} but Variable has "
-                f"type {self.dtype}."
+                f"Tried to update used tensor of dtype {data.dtype} but Variable "
+                f"{self.name} has dtype {self.dtype}."
             )
         if batch_ignore_mask is not None and batch_ignore_mask.any():
-            good_indices = ~batch_ignore_mask
-            self[good_indices] = data[good_indices]
+            mask_shape = (-1,) + (1,) * (data.ndim - 1)
+            self.data = torch.where(batch_ignore_mask.view(mask_shape), self.data, data)
         else:
             self.data = data
 

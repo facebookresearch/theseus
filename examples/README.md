@@ -15,6 +15,7 @@ These can be run from your root `theseus` directory by doing
     python examples/motion_planning_2d.py
     python examples/tactile_pose_estimation.py
     python examples/backward_modes.py
+    python examples/se2_inverse.py
 
 The motion planning and tactile estimation examples require `hydra` installation which you can obtain
 by running.

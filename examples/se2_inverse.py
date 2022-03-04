@@ -12,11 +12,15 @@ import theseus as th
 from theseus import LieGroupTensor
 from theseus.geometry.lie_group import LieGroup
 
+from theseus.geometry.tests.test_se2 import create_random_se2
 
+# Create two random SE2
 rng = torch.Generator()
 rng.manual_seed(0)
-x1 = th.SE2.rand(1, generator=rng)
-x2 = th.SE2.rand(1, generator=rng)
+x1 = create_random_se2(1, rng)
+x2 = create_random_se2(1, rng)
+
+# use_lie_tangent: update on the Lie group or not
 
 
 def run(x1: LieGroup, x2: LieGroup, num_iters=10, use_lie_tangent=True):
@@ -39,6 +43,7 @@ def run(x1: LieGroup, x2: LieGroup, num_iters=10, use_lie_tangent=True):
             )
         loss.backward()
 
+        # Activiate the Lie group update
         with th.set_lie_tangent_enabled(use_lie_tangent):
             optim.step()
 

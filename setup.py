@@ -29,6 +29,7 @@ with open("README.md", "r") as fh:
 
 if "CUDA_HOME" in os.environ:
     ext_modules = [
+        # reference: https://docs.python.org/3/distutils/apiref.html#distutils.core.Extension
         torch_cpp_ext.CUDAExtension(
             name="theseus.extlib.mat_mult", sources=["theseus/extlib/mat_mult.cu"]
         ),
@@ -39,6 +40,30 @@ if "CUDA_HOME" in os.environ:
                 "theseus/extlib/cusolver_sp_defs.cpp",
             ],
             libraries=["cusolver"],
+        ),
+        torch_cpp_ext.CUDAExtension(
+            name="theseus.extlib.baspacho_solver",
+            sources=[
+                "theseus/extlib/baspacho_cuda_utils.cu",
+                "theseus/extlib/baspacho_solver.cpp",
+            ],
+            extra_compile_args=["-std=c++17"],
+            include_dirs=[
+                str(root_dir / "third_party" / "BaSpaCho"),
+                str(root_dir / "third_party" / "BaSpaCho" / "build" / "_deps" / "eigen-src"),
+            ],
+            library_dirs=[
+                str(root_dir / "third_party" / "BaSpaCho" / "build" / "baspacho" / "testing"),
+                str(root_dir / "third_party" / "BaSpaCho" / "build" / "baspacho" / "baspacho"),
+                str(root_dir / "third_party" / "BaSpaCho" / "build" / "_deps" / "dispenso-build" / "dispenso"),
+            ],
+            libraries=[
+                "BaSpaCho",
+                "testing",
+                "dispenso",
+                "cusolver",
+                "cublas",
+            ],
         ),
     ]
 else:

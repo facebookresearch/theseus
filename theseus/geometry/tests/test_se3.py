@@ -165,41 +165,48 @@ def test_transform_from_and_to():
     rng = torch.Generator()
     rng.manual_seed(0)
     for _ in range(10):  # repeat a few times
-        for batch_size in [1, 20, 100]:
-            se3 = th.SE3.rand(batch_size, generator=rng, dtype=torch.float64)
-            point_tensor = torch.randn(batch_size, 3).double()
-            point_tensor_ext = torch.cat(
-                (point_tensor, torch.ones(batch_size, 1).double()), dim=1
-            )
+        for batch_size_group in [1, 20, 100]:
+            for batch_size_pnt in [1, 20, 100]:
+                if (
+                    batch_size_group != 1
+                    and batch_size_pnt != 1
+                    and batch_size_pnt != batch_size_group
+                ):
+                    continue
+                se3 = th.SE3.rand(batch_size_group, generator=rng, dtype=torch.float64)
+                point_tensor = torch.randn(batch_size_pnt, 3).double()
+                point_tensor_ext = torch.cat(
+                    (point_tensor, torch.ones(batch_size_pnt, 1).double()), dim=1
+                )
 
-            jacobians_to = []
-            point_to = se3.transform_to(point_tensor, jacobians=jacobians_to)
-            expected_to = (se3.inverse().to_matrix() @ point_tensor_ext.unsqueeze(2))[
-                :, :3
-            ]
-            jacobians_from = []
-            point_from = se3.transform_from(point_to, jacobians_from)
+                jacobians_to = []
+                point_to = se3.transform_to(point_tensor, jacobians=jacobians_to)
+                expected_to = (
+                    se3.inverse().to_matrix() @ point_tensor_ext.unsqueeze(2)
+                )[:, :3]
+                jacobians_from = []
+                point_from = se3.transform_from(point_to, jacobians_from)
 
-            # Check the operation result
-            assert torch.allclose(expected_to.squeeze(2), point_to.data, atol=EPS)
-            assert torch.allclose(point_tensor, point_from.data, atol=EPS)
+                # Check the operation result
+                assert torch.allclose(expected_to.squeeze(2), point_to.data, atol=EPS)
+                assert torch.allclose(point_tensor, point_from.data, atol=EPS)
 
-            # Check the jacobians
-            expected_jac = numeric_jacobian(
-                lambda groups: groups[0].transform_to(groups[1]),
-                [se3, th.Point3(point_tensor)],
-                function_dim=3,
-            )
-            assert torch.allclose(jacobians_to[0], expected_jac[0])
-            assert torch.allclose(jacobians_to[1], expected_jac[1])
-            expected_jac = numeric_jacobian(
-                lambda groups: groups[0].transform_from(groups[1]),
-                [se3, point_to],
-                delta_mag=1e-5,
-                function_dim=3,
-            )
-            assert torch.allclose(jacobians_from[0], expected_jac[0])
-            assert torch.allclose(jacobians_from[1], expected_jac[1])
+                # Check the jacobians
+                expected_jac = numeric_jacobian(
+                    lambda groups: groups[0].transform_to(groups[1]),
+                    [se3, th.Point3(point_tensor)],
+                    function_dim=3,
+                )
+                assert torch.allclose(jacobians_to[0], expected_jac[0])
+                assert torch.allclose(jacobians_to[1], expected_jac[1])
+                expected_jac = numeric_jacobian(
+                    lambda groups: groups[0].transform_from(groups[1]),
+                    [se3, point_to],
+                    delta_mag=1e-5,
+                    function_dim=3,
+                )
+                assert torch.allclose(jacobians_from[0], expected_jac[0])
+                assert torch.allclose(jacobians_from[1], expected_jac[1])
 
 
 def test_projection():

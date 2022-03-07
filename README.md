@@ -29,7 +29,8 @@ The current focus is on nonlinear least squares with support for sparsity, batch
     ```bash
     pytest theseus
     ```
-  By default both cuda and non-cuda tests are run, add the option `-m "not cuda"` to skip cuda tests when installing without cuda support.
+  By default, unit tests include tests for our CUDA extensions. You can add the option `-m "not cudaext"` to 
+  skip them when installing without CUDA support.
 - See [tutorials](tutorials/) and [examples](examples/) to learn about the API and usage.
 
 

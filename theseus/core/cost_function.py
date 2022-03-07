@@ -99,12 +99,14 @@ class AutoDiffCostFunction(CostFunction):
         optim_vars: List[Manifold],
         err_fn: ErrFnType,
         dim: int,
-        cost_weight: CostWeight = ScaleCostWeight(1.0),
+        cost_weight: Optional[CostWeight] = None,
         aux_vars: Optional[List[Variable]] = None,
         name: Optional[str] = None,
         autograd_strict: bool = False,
         autograd_vectorize: bool = False,
     ):
+        if cost_weight is None:
+            cost_weight = ScaleCostWeight(1.0)
         super().__init__(cost_weight, name=name)
         # this avoids doing aux_vars=[], which is a bad default since [] is mutable
         aux_vars = aux_vars or []
@@ -192,3 +194,9 @@ class AutoDiffCostFunction(CostFunction):
             cost_weight=self.weight.copy(),
             name=new_name,
         )
+
+    def to(self, *args, **kwargs):
+        # calls to() on the cost weight, variables and any internal tensors
+        super().to(*args, **kwargs)
+        for var in self._tmp_optim_vars:
+            var.to(*args, **kwargs)

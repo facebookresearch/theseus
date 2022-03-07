@@ -17,6 +17,9 @@ from .common import (
     check_exp_map,
     check_inverse,
     check_log_map,
+    check_projection_for_compose,
+    check_projection_for_inverse,
+    check_projection_for_rotate_and_transform,
 )
 
 
@@ -127,43 +130,13 @@ def test_projection():
     rng.manual_seed(0)
     for _ in range(10):  # repeat a few times
         for batch_size in [1, 20, 100]:
-            se2 = th.SE2.rand(batch_size, generator=rng, dtype=torch.float64)
-            point = th.Point2.rand(batch_size, generator=rng, dtype=torch.float64)
-
-            aux_id = torch.arange(batch_size)
-
             # Test SE2.transform_to
-            def transform_to_func(g, p):
-                return th.SE2(data=g).transform_to(p).data
-
-            jac_raw = torch.autograd.functional.jacobian(
-                transform_to_func, (se2.data, point.data)
+            check_projection_for_rotate_and_transform(
+                th.SE2, th.Point2, th.SE2.transform_to, batch_size, rng
             )
-            jac = []
-            _ = se2.transform_to(point, jac)
 
-            # Check dense jacobian matrices
-            actual = [
-                se2.project(jac_raw[0]),
-                point.project(jac_raw[1]),
-            ]
+            # Test SE2.compose
+            check_projection_for_compose(th.SE2, batch_size, rng)
 
-            expected = [
-                torch.zeros([batch_size, 2, batch_size, 3]).double(),
-                torch.zeros([batch_size, 2, batch_size, 2]).double(),
-            ]
-            expected[0][aux_id, :, aux_id, :] = jac[0]
-            expected[1][aux_id, :, aux_id, :] = jac[1]
-
-            assert torch.allclose(actual[0], expected[0])
-            assert torch.allclose(actual[1], expected[1])
-
-            # Check sparse jacobian matrices
-            actual = [
-                se2.project(jac_raw[0][aux_id, :, aux_id, :], is_sparse=True),
-                point.project(jac_raw[1][aux_id, :, aux_id, :], is_sparse=True),
-            ]
-
-            expected = jac
-            assert torch.allclose(actual[0], expected[0])
-            assert torch.allclose(actual[1], expected[1])
+            # Test SE2.inverse
+            check_projection_for_inverse(th.SE2, batch_size, rng)

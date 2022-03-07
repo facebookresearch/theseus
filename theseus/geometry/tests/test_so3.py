@@ -11,7 +11,14 @@ import theseus as th
 from theseus.constants import EPS
 from theseus.utils import numeric_jacobian
 
-from .common import check_adjoint, check_compose, check_exp_map
+from .common import (
+    check_adjoint,
+    check_compose,
+    check_exp_map,
+    check_projection_for_compose,
+    check_projection_for_inverse,
+    check_projection_for_rotate_and_transform,
+)
 
 
 def check_SO3_log_map(tangent_vector):
@@ -28,107 +35,120 @@ def check_SO3_to_quaternion(so3: th.SO3, atol=1e-10):
 
 
 def test_exp_map():
+    rng = torch.Generator()
+    rng.manual_seed(0)
+
     for batch_size in [1, 20, 100]:
-        tangent_vector = torch.rand(batch_size, 3).double() - 0.5
+        tangent_vector = torch.rand(batch_size, 3, generator=rng).double() - 0.5
         check_exp_map(tangent_vector, th.SO3)
 
+    # SO3.exp_map uses approximations for small theta
     for batch_size in [1, 2, 100]:
-        tangent_vector = torch.rand(batch_size, 3).double() - 0.5
+        tangent_vector = torch.rand(batch_size, 3, generator=rng).double() - 0.5
         tangent_vector /= torch.linalg.norm(tangent_vector, dim=1, keepdim=True)
         tangent_vector *= 1e-5
         check_exp_map(tangent_vector, th.SO3)
 
+    # SO3.exp_map uses the exact exponential map for small theta
     for batch_size in [1, 2, 100]:
-        tangent_vector = torch.rand(batch_size, 3).double() - 0.5
+        tangent_vector = torch.rand(batch_size, 3, generator=rng).double() - 0.5
         tangent_vector /= torch.linalg.norm(tangent_vector, dim=1, keepdim=True)
         tangent_vector *= 3e-3
         check_exp_map(tangent_vector, th.SO3)
 
     for batch_size in [1, 2, 100]:
-        tangent_vector = torch.rand(batch_size, 3).double() - 0.5
+        tangent_vector = torch.rand(batch_size, 3, generator=rng).double() - 0.5
         tangent_vector /= torch.linalg.norm(tangent_vector, dim=1, keepdim=True)
         tangent_vector *= np.pi - 1e-11
         check_exp_map(tangent_vector, th.SO3)
 
     for batch_size in [1, 2, 100]:
-        tangent_vector = torch.rand(batch_size, 3).double() - 0.5
+        tangent_vector = torch.rand(batch_size, 3, generator=rng).double() - 0.5
         tangent_vector /= torch.linalg.norm(tangent_vector, dim=1, keepdim=True)
         tangent_vector *= 2 * np.pi - 1e-11
         check_exp_map(tangent_vector, th.SO3)
 
 
 def test_log_map():
-    for batch_size in [1, 2, 100]:
-        tangent_vector = torch.rand(batch_size, 3).double() - 0.5
-        check_SO3_log_map(tangent_vector)
+    rng = torch.Generator()
+    rng.manual_seed(0)
 
     for batch_size in [1, 2, 100]:
-        tangent_vector = torch.rand(batch_size, 3).double() - 0.5
+        tangent_vector = torch.rand(batch_size, 3, generator=rng).double() - 0.5
+        check_SO3_log_map(tangent_vector)
+
+    # SO3.log_map uses approximations for small theta
+    for batch_size in [1, 2, 100]:
+        tangent_vector = torch.rand(batch_size, 3, generator=rng).double() - 0.5
         tangent_vector /= torch.linalg.norm(tangent_vector, dim=1, keepdim=True)
         tangent_vector *= 1e-6
         check_SO3_log_map(tangent_vector)
 
+    # SO3.log_map uses the exact logarithm map for small theta
     for batch_size in [1, 2, 100]:
-        tangent_vector = torch.rand(batch_size, 3).double() - 0.5
+        tangent_vector = torch.rand(batch_size, 3, generator=rng).double() - 0.5
         tangent_vector /= torch.linalg.norm(tangent_vector, dim=1, keepdim=True)
         tangent_vector *= 1e-3
         check_SO3_log_map(tangent_vector)
 
     for batch_size in [1, 2, 100]:
-        tangent_vector = torch.rand(batch_size, 3).double() - 0.5
+        tangent_vector = torch.rand(batch_size, 3, generator=rng).double() - 0.5
         tangent_vector /= torch.linalg.norm(tangent_vector, dim=1, keepdim=True)
         tangent_vector *= np.pi - 1e-11
         check_SO3_log_map(tangent_vector)
 
     for batch_size in [1, 2, 100]:
-        tangent_vector = torch.rand(batch_size, 3).double() - 0.5
+        tangent_vector = torch.rand(batch_size, 3, generator=rng).double() - 0.5
         tangent_vector /= torch.linalg.norm(tangent_vector, dim=1, keepdim=True)
         tangent_vector *= np.pi - 1e-3
         check_SO3_log_map(tangent_vector)
 
     for batch_size in [1, 2, 100]:
-        tangent_vector = torch.rand(batch_size, 3).double() - 0.5
+        tangent_vector = torch.rand(batch_size, 3, generator=rng).double() - 0.5
         tangent_vector /= torch.linalg.norm(tangent_vector, dim=1, keepdim=True)
         tangent_vector *= 2 * np.pi - 1e-11
         check_SO3_log_map(tangent_vector)
 
 
 def test_quaternion():
+    rng = torch.Generator()
+    rng.manual_seed(0)
+
     for batch_size in [1, 2, 100]:
-        tangent_vector = torch.rand(batch_size, 3).double() - 0.5
+        tangent_vector = torch.rand(batch_size, 3, generator=rng).double() - 0.5
         so3 = th.SO3.exp_map(tangent_vector)
         check_SO3_to_quaternion(so3)
 
     for batch_size in [1, 2, 100]:
-        tangent_vector = torch.rand(batch_size, 3).double() - 0.5
+        tangent_vector = torch.rand(batch_size, 3, generator=rng).double() - 0.5
         tangent_vector /= torch.linalg.norm(tangent_vector, dim=1, keepdim=True)
         tangent_vector *= 1e-6
         so3 = th.SO3.exp_map(tangent_vector)
         check_SO3_to_quaternion(so3)
 
     for batch_size in [1, 2, 100]:
-        tangent_vector = torch.rand(batch_size, 3).double() - 0.5
+        tangent_vector = torch.rand(batch_size, 3, generator=rng).double() - 0.5
         tangent_vector /= torch.linalg.norm(tangent_vector, dim=1, keepdim=True)
         tangent_vector *= 1e-3
         so3 = th.SO3.exp_map(tangent_vector)
         check_SO3_to_quaternion(so3)
 
     for batch_size in [1, 2, 100]:
-        tangent_vector = torch.rand(batch_size, 3).double() - 0.5
+        tangent_vector = torch.rand(batch_size, 3, generator=rng).double() - 0.5
         tangent_vector /= torch.linalg.norm(tangent_vector, dim=1, keepdim=True)
         tangent_vector *= np.pi - 1e-11
         so3 = th.SO3.exp_map(tangent_vector)
         check_SO3_to_quaternion(so3, 1e-7)
 
     for batch_size in [1, 2, 100]:
-        tangent_vector = torch.rand(batch_size, 3).double() - 0.5
+        tangent_vector = torch.rand(batch_size, 3, generator=rng).double() - 0.5
         tangent_vector /= torch.linalg.norm(tangent_vector, dim=1, keepdim=True)
         tangent_vector *= np.pi - 1e-3
         so3 = th.SO3.exp_map(tangent_vector)
         check_SO3_to_quaternion(so3)
 
     for batch_size in [1, 2, 100]:
-        tangent_vector = torch.rand(batch_size, 3).double() - 0.5
+        tangent_vector = torch.rand(batch_size, 3, generator=rng).double() - 0.5
         tangent_vector /= torch.linalg.norm(tangent_vector, dim=1, keepdim=True)
         tangent_vector *= 2 * np.pi - 1e-11
         so3 = th.SO3.exp_map(tangent_vector)
@@ -157,39 +177,47 @@ def test_rotate_and_unrotate():
     rng = torch.Generator()
     rng.manual_seed(0)
     for _ in range(10):  # repeat a few times
-        for batch_size in [1, 20, 100]:
-            so3 = th.SO3.rand(batch_size, generator=rng, dtype=torch.float64)
-            point_tensor = torch.randn(batch_size, 3).double()
+        for batch_size_group in [1, 20, 100]:
+            for batch_size_pnt in [1, 20, 100]:
+                if (
+                    batch_size_group != 1
+                    and batch_size_pnt != 1
+                    and batch_size_pnt != batch_size_group
+                ):
+                    continue
 
-            jacobians_rotate = []
-            rotated_point = so3.rotate(point_tensor, jacobians=jacobians_rotate)
-            expected_rotated_data = so3.to_matrix() @ point_tensor.unsqueeze(2)
-            jacobians_unrotate = []
-            unrotated_point = so3.unrotate(rotated_point, jacobians_unrotate)
+                so3 = th.SO3.rand(batch_size_group, generator=rng, dtype=torch.float64)
+                point_tensor = torch.randn(batch_size_pnt, 3).double()
 
-            # Check the operation result
-            assert torch.allclose(
-                expected_rotated_data.squeeze(2), rotated_point.data, atol=EPS
-            )
-            assert torch.allclose(point_tensor, unrotated_point.data, atol=EPS)
+                jacobians_rotate = []
+                rotated_point = so3.rotate(point_tensor, jacobians=jacobians_rotate)
+                expected_rotated_data = so3.to_matrix() @ point_tensor.unsqueeze(2)
+                jacobians_unrotate = []
+                unrotated_point = so3.unrotate(rotated_point, jacobians_unrotate)
 
-            # Check the jacobians
-            # function_dim = 3 because rotate(so3, (x, y, z)) --> (x_new, y_new, z_new)
-            expected_jac = numeric_jacobian(
-                lambda groups: groups[0].rotate(groups[1]),
-                [so3, th.Point3(point_tensor)],
-                function_dim=3,
-            )
-            assert torch.allclose(jacobians_rotate[0], expected_jac[0])
-            assert torch.allclose(jacobians_rotate[1], expected_jac[1])
-            expected_jac = numeric_jacobian(
-                lambda groups: groups[0].unrotate(groups[1]),
-                [so3, rotated_point],
-                delta_mag=1e-5,
-                function_dim=3,
-            )
-            assert torch.allclose(jacobians_unrotate[0], expected_jac[0])
-            assert torch.allclose(jacobians_unrotate[1], expected_jac[1])
+                # Check the operation result
+                assert torch.allclose(
+                    expected_rotated_data.squeeze(2), rotated_point.data, atol=EPS
+                )
+                assert torch.allclose(point_tensor, unrotated_point.data, atol=EPS)
+
+                # Check the jacobians
+                # function_dim = 3 because rotate(so3, (x, y, z)) --> (x_new, y_new, z_new)
+                expected_jac = numeric_jacobian(
+                    lambda groups: groups[0].rotate(groups[1]),
+                    [so3, th.Point3(point_tensor)],
+                    function_dim=3,
+                )
+                assert torch.allclose(jacobians_rotate[0], expected_jac[0])
+                assert torch.allclose(jacobians_rotate[1], expected_jac[1])
+                expected_jac = numeric_jacobian(
+                    lambda groups: groups[0].unrotate(groups[1]),
+                    [so3, rotated_point],
+                    delta_mag=1e-5,
+                    function_dim=3,
+                )
+                assert torch.allclose(jacobians_unrotate[0], expected_jac[0])
+                assert torch.allclose(jacobians_unrotate[1], expected_jac[1])
 
 
 def test_projection():
@@ -197,79 +225,18 @@ def test_projection():
     rng.manual_seed(0)
     for _ in range(10):  # repeat a few times
         for batch_size in [1, 20, 100]:
-            so3 = th.SO3.rand(batch_size, generator=rng, dtype=torch.float64)
-            point = th.Point3.rand(batch_size, generator=rng, dtype=torch.float64)
-
-            aux_id = torch.arange(batch_size)
-
             # Test SO3.rotate
-            def rotate_func(R, p):
-                return th.SO3(data=R).rotate(p).data
-
-            jac_raw = torch.autograd.functional.jacobian(
-                rotate_func, (so3.data, point.data)
+            check_projection_for_rotate_and_transform(
+                th.SO3, th.Point3, th.SO3.rotate, batch_size, rng
             )
-            jac = []
-            _ = so3.rotate(point, jac)
 
-            # Check dense jacobian matrices
-            actual = [
-                so3.project(jac_raw[0]),
-                point.project(jac_raw[1]),
-            ]
-
-            expected = [
-                torch.zeros([batch_size, 3, batch_size, 3]).double(),
-                torch.zeros([batch_size, 3, batch_size, 3]).double(),
-            ]
-            expected[0][aux_id, :, aux_id, :] = jac[0]
-            expected[1][aux_id, :, aux_id, :] = jac[1]
-
-            assert torch.allclose(actual[0], expected[0])
-            assert torch.allclose(actual[1], expected[1])
-
-            # Check sparse jacobian matrices
-            actual = [
-                so3.project(jac_raw[0][aux_id, :, aux_id, :], is_sparse=True),
-                point.project(jac_raw[1][aux_id, :, aux_id, :], is_sparse=True),
-            ]
-
-            expected = jac
-            assert torch.allclose(actual[0], expected[0])
-            assert torch.allclose(actual[1], expected[1])
-
-            # Test SO2.unrotate
-            def unrotate_func(R, p):
-                return th.SO3(data=R).unrotate(p).data
-
-            jac_raw = torch.autograd.functional.jacobian(
-                unrotate_func, (so3.data, point.data)
+            # Test SO3.unrotate
+            check_projection_for_rotate_and_transform(
+                th.SO3, th.Point3, th.SO3.unrotate, batch_size, rng
             )
-            jac = []
-            _ = so3.unrotate(point, jac)
 
-            # Check dense jacobian matrices
-            actual = [
-                so3.project(jac_raw[0]),
-                point.project(jac_raw[1]),
-            ]
+            # Test SO3.compose
+            check_projection_for_compose(th.SO3, batch_size, rng)
 
-            expected = [
-                torch.zeros([batch_size, 3, batch_size, 3]).double(),
-                torch.zeros([batch_size, 3, batch_size, 3]).double(),
-            ]
-            expected[0][aux_id, :, aux_id, :] = jac[0]
-            expected[1][aux_id, :, aux_id, :] = jac[1]
-
-            assert torch.allclose(actual[0], expected[0])
-            assert torch.allclose(actual[1], expected[1])
-
-            # Check sparse jacobian matrices
-            actual = [
-                so3.project(jac_raw[0][aux_id, :, aux_id, :], is_sparse=True),
-                point.project(jac_raw[1][aux_id, :, aux_id, :], is_sparse=True),
-            ]
-
-            expected = jac
-            assert torch.allclose(actual[0], expected[0])
-            assert torch.allclose(actual[1], expected[1])
+            # Test SO3.inverse
+            check_projection_for_inverse(th.SO3, batch_size, rng)

@@ -71,7 +71,10 @@ def check_projection_for_rotate_and_transform(
 
     jac_raw = torch.autograd.functional.jacobian(func, (group.data, point.data))
     jac = []
-    _ = Func(group, point, jac)
+
+    # Check returns
+    rets = Func(group, point, jac)
+    assert torch.allclose(rets.data, func(group.data, point.data))
 
     # Check dense jacobian matrices
     actual = [group.project(jac_raw[0]), point.project(jac_raw[1])]
@@ -105,39 +108,42 @@ def check_projection_for_compose(Group, batch_size, generator=None):
     group2 = Group.rand(batch_size, generator=generator, dtype=torch.float64)
 
     jac = []
-    group3 = group1.compose(group2, jacobians=jac)
+    rets = group1.compose(group2, jacobians=jac)
 
     def func(g1, g2):
         return Group(data=g1).compose(Group(data=g2)).to_matrix()
 
     jac_raw = torch.autograd.functional.jacobian(func, (group1.data, group2.data))
 
+    # Check returns
+    assert torch.allclose(rets.to_matrix(), func(group1.data, group2.data))
+
     # Check for dense jacobian matrices
     temp = [group1.project(jac_raw[0]), group2.project(jac_raw[1])]
     actual = [
         torch.zeros(
-            batch_size, group3.dof(), batch_size, group3.dof(), dtype=torch.float64
+            batch_size, rets.dof(), batch_size, rets.dof(), dtype=torch.float64
         ),
         torch.zeros(
-            batch_size, group3.dof(), batch_size, group3.dof(), dtype=torch.float64
+            batch_size, rets.dof(), batch_size, rets.dof(), dtype=torch.float64
         ),
     ]
 
     for n in torch.arange(batch_size):
-        for i in torch.arange(group3.dof()):
-            actual[0][:, :, n, i] = group3.vee(
-                group3.inverse().to_matrix() @ temp[0][:, :, :, n, i]
+        for i in torch.arange(rets.dof()):
+            actual[0][:, :, n, i] = rets.vee(
+                rets.inverse().to_matrix() @ temp[0][:, :, :, n, i]
             )
-            actual[1][:, :, n, i] = group3.vee(
-                group3.inverse().to_matrix() @ temp[1][:, :, :, n, i]
+            actual[1][:, :, n, i] = rets.vee(
+                rets.inverse().to_matrix() @ temp[1][:, :, :, n, i]
             )
 
     expected = [
         torch.zeros(
-            batch_size, group3.dof(), batch_size, group3.dof(), dtype=torch.float64
+            batch_size, rets.dof(), batch_size, rets.dof(), dtype=torch.float64
         ),
         torch.zeros(
-            batch_size, group3.dof(), batch_size, group3.dof(), dtype=torch.float64
+            batch_size, rets.dof(), batch_size, rets.dof(), dtype=torch.float64
         ),
     ]
 
@@ -155,17 +161,13 @@ def check_projection_for_compose(Group, batch_size, generator=None):
         group2.project(jac_raw[1][aux_id, :, :, aux_id], is_sparse=True),
     ]
     actual = [
-        torch.zeros(batch_size, group3.dof(), group3.dof(), dtype=torch.float64),
-        torch.zeros(batch_size, group3.dof(), group3.dof(), dtype=torch.float64),
+        torch.zeros(batch_size, rets.dof(), rets.dof(), dtype=torch.float64),
+        torch.zeros(batch_size, rets.dof(), rets.dof(), dtype=torch.float64),
     ]
 
-    for i in torch.arange(group3.dof()):
-        actual[0][:, :, i] = group3.vee(
-            group3.inverse().to_matrix() @ temp[0][:, :, :, i]
-        )
-        actual[1][:, :, i] = group3.vee(
-            group3.inverse().to_matrix() @ temp[1][:, :, :, i]
-        )
+    for i in torch.arange(rets.dof()):
+        actual[0][:, :, i] = rets.vee(rets.inverse().to_matrix() @ temp[0][:, :, :, i])
+        actual[1][:, :, i] = rets.vee(rets.inverse().to_matrix() @ temp[1][:, :, :, i])
 
     expected = jac
 
@@ -177,12 +179,15 @@ def check_projection_for_inverse(Group, batch_size, generator=None):
     group = Group.rand(batch_size, generator=generator, dtype=torch.float64)
 
     jac = []
-    _ = group.inverse(jacobian=jac)
+    rets = group.inverse(jacobian=jac)
 
     def func(g):
         return Group(data=g).inverse().to_matrix()
 
     jac_raw = torch.autograd.functional.jacobian(func, (group.data))
+
+    # Check returns
+    assert torch.allclose(rets.to_matrix(), func(group.data))
 
     # Check for dense jacobian matrices
     temp = group.project(jac_raw)

@@ -174,7 +174,9 @@ def test_transform_from_and_to():
 
             jacobians_to = []
             point_to = se3.transform_to(point_tensor, jacobians=jacobians_to)
-            expected_to = (se3.to_matrix() @ point_tensor_ext.unsqueeze(2))[:, :3]
+            expected_to = (se3.inverse().to_matrix() @ point_tensor_ext.unsqueeze(2))[
+                :, :3
+            ]
             jacobians_from = []
             point_from = se3.transform_from(point_to, jacobians_from)
 

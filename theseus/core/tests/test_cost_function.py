@@ -311,7 +311,7 @@ def test_autodiff_cost_function_error_and_jacobians_value_on_SO3():
             assert isinstance(optim_vars, tuple)
             assert len(optim_vars) == num_vars
             assert len(aux_vars) == num_vars
-            ret_val = torch.zeros(batch_size, err_dim)
+            ret_val = torch.zeros(batch_size, err_dim, dtype=torch.float64)
 
             for optim_var, aux_var in zip(optim_vars, aux_vars):
                 ret_val += th.SO3(data=optim_var.data).rotate(aux_var).data
@@ -345,4 +345,4 @@ def test_autodiff_cost_function_error_and_jacobians_value_on_SO3():
                 err_expected += optim_vars[n].rotate(aux_vars[n], jacobians=jac).data
                 assert torch.allclose(jac_actual[n], jac[0])
 
-            assert torch.allclose(err_actual.double(), err_expected)
+            assert torch.allclose(err_actual, err_expected)

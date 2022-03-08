@@ -49,7 +49,7 @@ def test_ellipsoidal_damping_compatibility(mock_objective):
             optimizer.optimize(damping_eps=0.1)
 
 
-@pytest.mark.cuda
+@pytest.mark.cudaext
 def test_ellipsoidal_damping_compatibility_cuda(mock_objective):
     mock_objective.to(device="cuda", dtype=torch.double)
     batch_size = 2

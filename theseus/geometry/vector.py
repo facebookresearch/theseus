@@ -213,7 +213,11 @@ class Vector(LieGroup):
         if jacobians is not None:
             shape = tangent_vector.shape
             Vector._check_jacobians_list(jacobians)
-            jacobians.append(torch.eye(shape[1]).repeat(shape[0], 1, 1))
+            jacobians.append(
+                torch.eye(
+                    shape[1], dtype=tangent_vector.dtype, device=tangent_vector.device
+                ).repeat(shape[0], 1, 1)
+            )
 
         return Vector(data=tangent_vector.clone())
 

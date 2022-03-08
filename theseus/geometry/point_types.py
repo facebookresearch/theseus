@@ -94,7 +94,11 @@ class Point2(Vector):
         if jacobians is not None:
             shape = tangent_vector.shape
             Point2._check_jacobians_list(jacobians)
-            jacobians.append(torch.eye(2).repeat(shape[0], 1, 1))
+            jacobians.append(
+                torch.eye(
+                    2, dtype=tangent_vector.dtype, device=tangent_vector.device
+                ).repeat(shape[0], 1, 1)
+            )
 
         return Point2(data=tangent_vector.clone())
 
@@ -174,7 +178,11 @@ class Point3(Vector):
         if jacobians is not None:
             shape = tangent_vector.shape
             Point2._check_jacobians_list(jacobians)
-            jacobians.append(torch.eye(3).repeat(shape[0], 1, 1))
+            jacobians.append(
+                torch.eye(
+                    3, dtype=tangent_vector.dtype, device=tangent_vector.device
+                ).repeat(shape[0], 1, 1)
+            )
 
         return Point3(data=tangent_vector.clone())
 

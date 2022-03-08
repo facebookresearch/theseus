@@ -394,7 +394,7 @@ class SE3(LieGroup):
         ):
             raise ValueError(err_msg)
 
-    def transform_to(
+    def transform_from(
         self,
         point: Union[Point3, torch.Tensor],
         jacobians: Optional[List[torch.Tensor]] = None,
@@ -422,7 +422,7 @@ class SE3(LieGroup):
 
         return ret
 
-    def transform_from(
+    def transform_to(
         self,
         point: Union[Point3, torch.Tensor],
         jacobians: Optional[List[torch.Tensor]] = None,

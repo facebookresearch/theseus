@@ -250,6 +250,42 @@ class SE3(LieGroup):
             @ (tangent_vector_ang.transpose(1, 2) @ tangent_vector_lin)
         )
 
+        if jacobians is not None:
+            SE3._check_jacobians_list(jacobians)
+            theta3_nz = theta_nz * theta2_nz
+            theta_minus_sine_by_theta3 = torch.where(
+                near_zero, 1.0 / 6 - theta2 / 120, (theta - sine) / theta3_nz
+            )
+            jac = torch.zeros(
+                tangent_vector.shape[0],
+                6,
+                6,
+                dtype=tangent_vector.dtype,
+                device=tangent_vector.device,
+            )
+            jac[:, :3, :3] = (
+                theta_minus_sine_by_theta3
+                * tangent_vector_ang.view(-1, 3, 1)
+                @ tangent_vector_ang.view(-1, 1, 3)
+            )
+            diag_jac = jac.diagonal(dim1=1, dim2=2)
+            diag_jac += sine_by_theta.view(-1, 1)
+
+            jac_temp = one_minus_cosie_by_theta2.view(-1, 1) * tangent_vector_ang.view(
+                -1, 3
+            )
+
+            jac[:, 0, 1] += jac_temp[:, 2]
+            jac[:, 1, 0] -= jac_temp[:, 2]
+            jac[:, 0, 2] -= jac_temp[:, 1]
+            jac[:, 2, 0] += jac_temp[:, 1]
+            jac[:, 1, 2] += jac_temp[:, 0]
+            jac[:, 2, 1] -= jac_temp[:, 0]
+
+            jac[:, 3:, 3:] = jac[:, :3, :3]
+
+            jacobians.append(jac)
+
         return ret
 
     def _log_map_impl(self) -> torch.Tensor:

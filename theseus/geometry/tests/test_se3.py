@@ -27,7 +27,7 @@ def check_SE3_log_map(tangent_vector, atol=EPS):
     assert torch.allclose(th.SE3.exp_map(g.log_map()).data, g.data, atol=atol)
 
 
-def test_exp_map():
+def test_se3_exp_map():
     rng = torch.Generator()
     rng.manual_seed(0)
 
@@ -81,7 +81,7 @@ def test_exp_map():
         check_exp_map(tangent_vector, th.SE3)
 
 
-def test_log_map():
+def test_se3_log_map():
     rng = torch.Generator()
     rng.manual_seed(0)
 
@@ -135,7 +135,7 @@ def test_log_map():
         check_SE3_log_map(tangent_vector)
 
 
-def test_compose():
+def test_se3_compose():
     rng = torch.Generator()
     rng.manual_seed(0)
     for batch_size in [1, 20, 100]:
@@ -144,7 +144,7 @@ def test_compose():
         check_compose(se3_1, se3_2)
 
 
-def test_inverse():
+def test_se3_inverse():
     rng = torch.Generator()
     rng.manual_seed(0)
     for batch_size in [1, 20, 100]:
@@ -152,7 +152,7 @@ def test_inverse():
         check_inverse(se3)
 
 
-def test_adjoint():
+def test_se3_adjoint():
     rng = torch.Generator()
     rng.manual_seed(0)
     for batch_size in [1, 20, 100]:
@@ -161,7 +161,7 @@ def test_adjoint():
         check_adjoint(se3, tangent)
 
 
-def test_transform_from_and_to():
+def test_se3_transform_from_and_to():
     rng = torch.Generator()
     rng.manual_seed(0)
     for _ in range(10):  # repeat a few times
@@ -209,7 +209,7 @@ def test_transform_from_and_to():
                 assert torch.allclose(jacobians_from[1], expected_jac[1])
 
 
-def test_projection():
+def test_se3_projection():
     rng = torch.Generator()
     rng.manual_seed(0)
     for _ in range(10):  # repeat a few times

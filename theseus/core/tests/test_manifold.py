@@ -61,6 +61,11 @@ class MockVarNoArgs(th.Manifold):
     def _copy_impl(self):
         return MockVarNoArgs()
 
+    def _project_impl(
+        self, euclidean_grad: torch.Tensor, is_sparse: bool = False
+    ) -> torch.Tensor:
+        return euclidean_grad.clone()
+
 
 def test_variable_no_args_init():
     var = MockVarNoArgs(name="mock")

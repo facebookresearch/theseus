@@ -111,14 +111,25 @@ class SE3(LieGroup):
 
         return ret
 
-    def _project_impl(self, euclidean_grad: torch.Tensor) -> torch.Tensor:
-        self._project_check(euclidean_grad)
+    def _project_impl(
+        self, euclidean_grad: torch.Tensor, is_sparse: bool = False
+    ) -> torch.Tensor:
+        self._project_check(euclidean_grad, is_sparse)
         ret = torch.zeros(
             euclidean_grad.shape[:-2] + torch.Size([6]),
             dtype=self.dtype,
             device=self.device,
         )
-        temp = torch.einsum("...jk,...ji->...ik", euclidean_grad, self.data[:, :, :3])
+
+        if is_sparse:
+            temp = torch.einsum(
+                "i...jk,i...jl->i...lk", euclidean_grad, self.data[:, :, :3]
+            )
+        else:
+            temp = torch.einsum(
+                "...jk,...ji->...ik", euclidean_grad, self.data[:, :, :3]
+            )
+
         ret[..., :3] = temp[..., 3]
         ret[..., 3] = temp[..., 2, 1] - temp[..., 1, 2]
         ret[..., 4] = temp[..., 0, 2] - temp[..., 2, 0]
@@ -314,8 +325,9 @@ class SE3(LieGroup):
 
     def _inverse_impl(self, get_jacobian: bool = False) -> "SE3":
         ret = torch.zeros(self.shape[0], 3, 4).to(dtype=self.dtype, device=self.device)
-        ret[:, :, :3] = self.data[:, :3, :3].transpose(1, 2)
-        ret[:, :, 3] = -(ret[:, :3, :3] @ self.data[:, :3, 3].unsqueeze(2)).view(-1, 3)
+        rotT = self.data[:, :3, :3].transpose(1, 2)
+        ret[:, :, :3] = rotT
+        ret[:, :, 3] = -(rotT @ self.data[:, :3, 3].unsqueeze(2)).view(-1, 3)
         return SE3(data=ret)
 
     def to_matrix(self) -> torch.Tensor:

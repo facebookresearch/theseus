@@ -11,7 +11,15 @@ import theseus as th
 from theseus.constants import EPS
 from theseus.utils import numeric_jacobian
 
-from .common import check_adjoint, check_compose, check_exp_map, check_inverse
+from .common import (
+    check_adjoint,
+    check_compose,
+    check_exp_map,
+    check_inverse,
+    check_projection_for_compose,
+    check_projection_for_inverse,
+    check_projection_for_rotate_and_transform,
+)
 
 
 def check_SE3_log_map(tangent_vector, atol=EPS):
@@ -20,98 +28,108 @@ def check_SE3_log_map(tangent_vector, atol=EPS):
 
 
 def test_exp_map():
+    rng = torch.Generator()
+    rng.manual_seed(0)
+
     for batch_size in [1, 20, 100]:
-        tangent_vector_ang = torch.rand(batch_size, 3).double() - 0.5
+        tangent_vector_ang = torch.rand(batch_size, 3, generator=rng).double() - 0.5
         tangent_vector_ang /= tangent_vector_ang.norm(dim=1, keepdim=True)
-        tangent_vector_ang *= torch.rand(batch_size, 1).double() * 2 * np.pi - np.pi
-        tangent_vector_lin = torch.randn(batch_size, 3).double()
+        tangent_vector_ang *= (
+            torch.rand(batch_size, 1, generator=rng).double() * 2 * np.pi - np.pi
+        )
+        tangent_vector_lin = torch.randn(batch_size, 3, generator=rng).double()
         tangent_vector = torch.cat([tangent_vector_lin, tangent_vector_ang], dim=1)
 
         check_exp_map(tangent_vector, th.SE3)
 
     # SE3.exp_map uses approximations for small theta
     for batch_size in [1, 20, 100]:
-        tangent_vector_ang = torch.rand(batch_size, 3).double() - 0.5
+        tangent_vector_ang = torch.rand(batch_size, 3, generator=rng).double() - 0.5
         tangent_vector_ang /= tangent_vector_ang.norm(dim=1, keepdim=True)
         tangent_vector_ang *= 1e-5
-        tangent_vector_lin = torch.randn(batch_size, 3).double()
+        tangent_vector_lin = torch.randn(batch_size, 3, generator=rng).double()
         tangent_vector = torch.cat([tangent_vector_lin, tangent_vector_ang], dim=1)
 
         check_exp_map(tangent_vector, th.SE3)
 
     # SE3.exp_map uses the exact exponential map for small theta
     for batch_size in [1, 20, 100]:
-        tangent_vector_ang = torch.rand(batch_size, 3).double() - 0.5
+        tangent_vector_ang = torch.rand(batch_size, 3, generator=rng).double() - 0.5
         tangent_vector_ang /= tangent_vector_ang.norm(dim=1, keepdim=True)
         tangent_vector_ang *= 3e-3
-        tangent_vector_lin = torch.randn(batch_size, 3).double()
+        tangent_vector_lin = torch.randn(batch_size, 3, generator=rng).double()
         tangent_vector = torch.cat([tangent_vector_lin, tangent_vector_ang], dim=1)
 
         check_exp_map(tangent_vector, th.SE3)
 
     for batch_size in [1, 20, 100]:
-        tangent_vector_ang = torch.rand(batch_size, 3).double() - 0.5
+        tangent_vector_ang = torch.rand(batch_size, 3, generator=rng).double() - 0.5
         tangent_vector_ang /= tangent_vector_ang.norm(dim=1, keepdim=True)
         tangent_vector_ang *= 2 * np.pi - 1e-11
-        tangent_vector_lin = torch.randn(batch_size, 3).double()
+        tangent_vector_lin = torch.randn(batch_size, 3, generator=rng).double()
         tangent_vector = torch.cat([tangent_vector_lin, tangent_vector_ang], dim=1)
 
         check_exp_map(tangent_vector, th.SE3)
 
     for batch_size in [1, 20, 100]:
-        tangent_vector_ang = torch.rand(batch_size, 3).double() - 0.5
+        tangent_vector_ang = torch.rand(batch_size, 3, generator=rng).double() - 0.5
         tangent_vector_ang /= tangent_vector_ang.norm(dim=1, keepdim=True)
         tangent_vector_ang *= np.pi - 1e-11
-        tangent_vector_lin = torch.randn(batch_size, 3).double()
+        tangent_vector_lin = torch.randn(batch_size, 3, generator=rng).double()
         tangent_vector = torch.cat([tangent_vector_lin, tangent_vector_ang], dim=1)
 
         check_exp_map(tangent_vector, th.SE3)
 
 
 def test_log_map():
+    rng = torch.Generator()
+    rng.manual_seed(0)
+
     for batch_size in [1, 20, 100]:
-        tangent_vector_ang = torch.rand(batch_size, 3) - 0.5
+        tangent_vector_ang = torch.rand(batch_size, 3, generator=rng) - 0.5
         tangent_vector_ang /= tangent_vector_ang.norm(dim=1, keepdim=True)
-        tangent_vector_ang *= torch.rand(batch_size, 1).double() * 2 * np.pi - np.pi
-        tangent_vector_lin = torch.randn(batch_size, 3).double()
+        tangent_vector_ang *= (
+            torch.rand(batch_size, 1, generator=rng).double() * 2 * np.pi - np.pi
+        )
+        tangent_vector_lin = torch.randn(batch_size, 3, generator=rng).double()
         tangent_vector = torch.cat([tangent_vector_lin, tangent_vector_ang], dim=1)
 
         check_SE3_log_map(tangent_vector)
 
     # SE3.log_map uses approximations for small theta
     for batch_size in [1, 20, 100]:
-        tangent_vector_ang = torch.rand(batch_size, 3).double() - 0.5
+        tangent_vector_ang = torch.rand(batch_size, 3, generator=rng).double() - 0.5
         tangent_vector_ang /= tangent_vector_ang.norm(dim=1, keepdim=True)
         tangent_vector_ang *= 1e-5
-        tangent_vector_lin = torch.randn(batch_size, 3).double()
+        tangent_vector_lin = torch.randn(batch_size, 3, generator=rng).double()
         tangent_vector = torch.cat([tangent_vector_lin, tangent_vector_ang], dim=1)
 
         check_SE3_log_map(tangent_vector)
 
     # SE3.log_map uses the exact logarithm map for small theta
     for batch_size in [1, 20, 100]:
-        tangent_vector_ang = torch.rand(batch_size, 3).double() - 0.5
+        tangent_vector_ang = torch.rand(batch_size, 3, generator=rng).double() - 0.5
         tangent_vector_ang /= tangent_vector_ang.norm(dim=1, keepdim=True)
         tangent_vector_ang *= 3e-3
-        tangent_vector_lin = torch.randn(batch_size, 3).double()
+        tangent_vector_lin = torch.randn(batch_size, 3, generator=rng).double()
         tangent_vector = torch.cat([tangent_vector_lin, tangent_vector_ang], dim=1)
 
         check_SE3_log_map(tangent_vector)
 
     for batch_size in [1, 20, 100]:
-        tangent_vector_ang = torch.rand(batch_size, 3).double() - 0.5
+        tangent_vector_ang = torch.rand(batch_size, 3, generator=rng).double() - 0.5
         tangent_vector_ang /= tangent_vector_ang.norm(dim=1, keepdim=True)
         tangent_vector_ang *= 2 * np.pi - 1e-11
-        tangent_vector_lin = torch.randn(batch_size, 3).double()
+        tangent_vector_lin = torch.randn(batch_size, 3, generator=rng).double()
         tangent_vector = torch.cat([tangent_vector_lin, tangent_vector_ang], dim=1)
 
         check_SE3_log_map(tangent_vector)
 
     for batch_size in [1, 20, 100]:
-        tangent_vector_ang = torch.rand(batch_size, 3).double() - 0.5
+        tangent_vector_ang = torch.rand(batch_size, 3, generator=rng).double() - 0.5
         tangent_vector_ang /= tangent_vector_ang.norm(dim=1, keepdim=True)
         tangent_vector_ang *= np.pi - 1e-11
-        tangent_vector_lin = torch.randn(batch_size, 3).double()
+        tangent_vector_lin = torch.randn(batch_size, 3, generator=rng).double()
         tangent_vector = torch.cat([tangent_vector_lin, tangent_vector_ang], dim=1)
 
         check_SE3_log_map(tangent_vector)
@@ -187,39 +205,18 @@ def test_projection():
     rng.manual_seed(0)
     for _ in range(10):  # repeat a few times
         for batch_size in [1, 20, 100]:
-            se3 = th.SE3.rand(batch_size, generator=rng, dtype=torch.float64)
-            point = th.Point3(data=torch.randn(batch_size, 3).double())
-
-            # Test SE2.transform_to
-            def transform_to_sum(g, p):
-                return th.SE3(data=g).transform_to(p).data.sum(dim=0)
-
-            jac = torch.autograd.functional.jacobian(
-                transform_to_sum, (se3.data, point.data)
+            # Test SE3.transform_to
+            check_projection_for_rotate_and_transform(
+                th.SE3, th.Point3, th.SE3.transform_to, batch_size, rng
             )
 
-            actual = [
-                se3.project(jac[0]).transpose(0, 1),
-                point.project(jac[1]).transpose(0, 1),
-            ]
-            expected = []
-            _ = se3.transform_to(point, expected)
-            assert torch.allclose(actual[0], expected[0])
-            assert torch.allclose(actual[1], expected[1])
-
-            # Test SE2.transform_from
-            def transform_from_sum(g, p):
-                return th.SE3(data=g).transform_from(p).data.sum(dim=0)
-
-            jac = torch.autograd.functional.jacobian(
-                transform_from_sum, (se3.data, point.data)
+            # Test SE3.transform_from
+            check_projection_for_rotate_and_transform(
+                th.SE3, th.Point3, th.SE3.transform_from, batch_size, rng
             )
 
-            actual = [
-                se3.project(jac[0]).transpose(0, 1),
-                point.project(jac[1]).transpose(0, 1),
-            ]
-            expected = []
-            _ = se3.transform_from(point, expected)
-            assert torch.allclose(actual[0], expected[0])
-            assert torch.allclose(actual[1], expected[1])
+            # Test SE3.compose
+            check_projection_for_compose(th.SE3, batch_size, rng)
+
+            # Test SE3.inverse
+            check_projection_for_inverse(th.SE3, batch_size, rng)

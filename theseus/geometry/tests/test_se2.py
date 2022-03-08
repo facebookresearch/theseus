@@ -17,6 +17,9 @@ from .common import (
     check_exp_map,
     check_inverse,
     check_log_map,
+    check_projection_for_compose,
+    check_projection_for_inverse,
+    check_projection_for_rotate_and_transform,
 )
 
 
@@ -127,22 +130,13 @@ def test_projection():
     rng.manual_seed(0)
     for _ in range(10):  # repeat a few times
         for batch_size in [1, 20, 100]:
-            se2 = th.SE2.rand(batch_size, generator=rng, dtype=torch.float64)
-            point = th.Point2(data=torch.randn(batch_size, 2).double())
-
             # Test SE2.transform_to
-            def transform_to_sum(g, p):
-                return th.SE2(data=g).transform_to(p).data.sum(dim=0)
-
-            jac = torch.autograd.functional.jacobian(
-                transform_to_sum, (se2.data, point.data)
+            check_projection_for_rotate_and_transform(
+                th.SE2, th.Point2, th.SE2.transform_to, batch_size, rng
             )
 
-            actual = [
-                se2.project(jac[0]).transpose(0, 1),
-                point.project(jac[1]).transpose(0, 1),
-            ]
-            expected = []
-            _ = se2.transform_to(point, expected)
-            assert torch.allclose(actual[0], expected[0])
-            assert torch.allclose(actual[1], expected[1])
+            # Test SE2.compose
+            check_projection_for_compose(th.SE2, batch_size, rng)
+
+            # Test SE2.inverse
+            check_projection_for_inverse(th.SE2, batch_size, rng)

@@ -105,10 +105,17 @@ class SO2(LieGroup):
     def _adjoint_impl(self) -> torch.Tensor:
         return torch.ones(self.shape[0], 1, 1, device=self.device, dtype=self.dtype)
 
-    def _project_impl(self, euclidean_grad: torch.Tensor) -> torch.Tensor:
-        self._project_check(euclidean_grad)
+    def _project_impl(
+        self, euclidean_grad: torch.Tensor, is_sparse: bool = False
+    ) -> torch.Tensor:
+        self._project_check(euclidean_grad, is_sparse)
+
         temp = torch.stack((-self[:, 1], self[:, 0]), dim=1)
-        return torch.einsum("...k,...k", euclidean_grad, temp).unsqueeze(-1)
+
+        if is_sparse:
+            return torch.einsum("i...k,i...k->i...", euclidean_grad, temp).unsqueeze(-1)
+        else:
+            return torch.einsum("...k,...k", euclidean_grad, temp).unsqueeze(-1)
 
     @staticmethod
     def exp_map(tangent_vector: torch.Tensor) -> "SO2":

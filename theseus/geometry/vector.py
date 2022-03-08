@@ -204,7 +204,17 @@ class Vector(LieGroup):
         return euclidean_grad.clone()
 
     @staticmethod
-    def exp_map(tangent_vector: torch.Tensor) -> "Vector":
+    def exp_map(
+        tangent_vector: torch.Tensor, jacobians: Optional[List[torch.Tensor]] = None
+    ) -> "Vector":
+        if tangent_vector.ndim != 2:
+            raise ValueError("The dimension of tangent vectors should be 2.")
+
+        if jacobians is not None:
+            shape = tangent_vector.shape
+            Vector._check_jacobians_list(jacobians)
+            jacobians.append(torch.eye(shape[1]).repeat(shape[0], 1, 1))
+
         return Vector(data=tangent_vector.clone())
 
     def _log_map_impl(self) -> torch.Tensor:

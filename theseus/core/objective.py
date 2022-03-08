@@ -337,7 +337,14 @@ class Objective:
     def size_aux_vars(self) -> int:
         return len(self.aux_vars)
 
-    def error(self) -> torch.Tensor:
+    def error(self, input_data: Optional[Dict[str, torch.Tensor]]=None, also_update: bool=False) -> torch.Tensor:
+        old_data = {}
+        if input_data is not None:
+            if also_update == False:
+                for var in self.optim_vars:
+                    old_data[var] = self.optim_vars[var].data
+                self.update(input_data=input_data)
+            self.update(input_data=input_data)
         error_vector = torch.zeros(self.batch_size, self.dim()).to(
             device=self.device, dtype=self.dtype
         )
@@ -347,10 +354,12 @@ class Objective:
                 :, pos : pos + cost_function.dim()
             ] = cost_function.weighted_error()
             pos += cost_function.dim()
+        if old_data:
+            self.update(old_data)
         return error_vector
 
-    def error_squared_norm(self) -> torch.Tensor:
-        return (self.error() ** 2).sum(dim=1)
+    def error_squared_norm(self, input_data: Optional[Dict[str, torch.Tensor]]=None, also_update: bool=False) -> torch.Tensor:
+        return (self.error(input_data=input_data, also_update = also_update) ** 2).sum(dim=1)
 
     def copy(self) -> "Objective":
         new_objective = Objective()

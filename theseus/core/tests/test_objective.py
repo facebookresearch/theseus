@@ -280,6 +280,26 @@ def test_objective_error():
         assert error.shape == (batch_size, 2 * dof)
         _check_error_for_data(v1_data, v2_data, error, error_norm_2)
 
+        # For input_data and also_update
+
+        v1_data = torch.ones(batch_size, dof) * f1 * 0.1
+        v2_data = torch.ones(batch_size, dof) * f2 * 0.1
+
+        input_data = {"v1": v1_data, "v2": v2_data}
+        error = objective.error(input_data=input_data, also_update=True)
+        error_norm_2 = objective.error_squared_norm(input_data=input_data, also_update=True)
+
+        _check_error_for_data(v1_data, v2_data, error, error_norm_2)
+
+        v1_data = torch.ones(batch_size, dof) * f1 * 0.4
+        v2_data = torch.ones(batch_size, dof) * f2 * 0.4
+
+        input_data = {"v1": v1_data, "v2": v2_data}
+        error = objective.error(input_data=input_data, also_update=True)
+        error_norm_2 = objective.error_squared_norm(input_data=input_data, also_update=True)
+
+        _check_error_for_data(v1_data, v2_data, error, error_norm_2)
+
 
 def test_get_cost_functions_connected_to_vars():
     (

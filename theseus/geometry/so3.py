@@ -151,7 +151,7 @@ class SO3(LieGroup):
         tangent_vector: torch.Tensor, jacobians: Optional[List[torch.Tensor]] = None
     ) -> "SO3":
         if tangent_vector.ndim != 2 or tangent_vector.shape[1] != 3:
-            raise ValueError("Invalid input for SO3.exp_map.")
+            raise ValueError("Tangent vectors of SO3 should be 3-D vectors.")
         ret = SO3(dtype=tangent_vector.dtype)
         theta = torch.linalg.norm(tangent_vector, dim=1, keepdim=True).unsqueeze(1)
         theta2 = theta**2
@@ -163,9 +163,8 @@ class SO3(LieGroup):
         theta_nz = torch.where(small_theta, non_zero, theta)
         theta2_nz = torch.where(small_theta, non_zero, theta2)
         cosine = torch.where(small_theta, 8 / (4 + theta2) - 1, theta.cos())
-        sine_by_theta = torch.where(
-            small_theta, 0.5 * cosine + 0.5, theta.sin() / theta_nz
-        )
+        sine = theta.sin()
+        sine_by_theta = torch.where(small_theta, 0.5 * cosine + 0.5, sine / theta_nz)
         one_minus_cosie_by_theta2 = torch.where(
             small_theta, 0.5 * sine_by_theta, (1 - cosine) / theta2_nz
         )
@@ -177,13 +176,39 @@ class SO3(LieGroup):
         ret[:, 0, 0] += cosine.view(-1)
         ret[:, 1, 1] += cosine.view(-1)
         ret[:, 2, 2] += cosine.view(-1)
-        temp = sine_by_theta.view(-1, 1) * tangent_vector
-        ret[:, 0, 1] -= temp[:, 2]
-        ret[:, 1, 0] += temp[:, 2]
-        ret[:, 0, 2] += temp[:, 1]
-        ret[:, 2, 0] -= temp[:, 1]
-        ret[:, 1, 2] -= temp[:, 0]
-        ret[:, 2, 1] += temp[:, 0]
+        ret_temp = sine_by_theta.view(-1, 1) * tangent_vector
+        ret[:, 0, 1] -= ret_temp[:, 2]
+        ret[:, 1, 0] += ret_temp[:, 2]
+        ret[:, 0, 2] += ret_temp[:, 1]
+        ret[:, 2, 0] -= ret_temp[:, 1]
+        ret[:, 1, 2] -= ret_temp[:, 0]
+        ret[:, 2, 1] += ret_temp[:, 0]
+
+        if jacobians is not None:
+            SO3._check_jacobians_list(jacobians)
+            theta3_nz = theta_nz * theta2_nz
+            theta_minus_sine_by_theta3 = torch.where(
+                small_theta, 1.0 / 6 - theta2 / 120, (theta - sine) / theta3_nz
+            )
+            jac = (
+                theta_minus_sine_by_theta3
+                * tangent_vector.view(-1, 3, 1)
+                @ tangent_vector.view(-1, 1, 3)
+            )
+            diag_jac = jac.diagonal(dim1=1, dim2=2)
+            diag_jac += sine_by_theta.view(-1, 1)
+
+            jac_temp = one_minus_cosie_by_theta2.view(-1, 1) * tangent_vector
+
+            jac[:, 0, 1] += jac_temp[:, 2]
+            jac[:, 1, 0] -= jac_temp[:, 2]
+            jac[:, 0, 2] -= jac_temp[:, 1]
+            jac[:, 2, 0] += jac_temp[:, 1]
+            jac[:, 1, 2] += jac_temp[:, 0]
+            jac[:, 2, 1] -= jac_temp[:, 0]
+
+            jacobians.append(jac)
+
         return ret
 
     def _log_map_impl(self) -> torch.Tensor:

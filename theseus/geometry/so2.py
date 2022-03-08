@@ -123,6 +123,18 @@ class SO2(LieGroup):
     ) -> "SO2":
         so2 = SO2(dtype=tangent_vector.dtype)
         so2.update_from_angle(tangent_vector)
+
+        if jacobians is not None:
+            SO2._check_jacobians_list(jacobians)
+            jacobians.append(
+                torch.ones(
+                    tangent_vector.shape[0],
+                    1,
+                    dtype=tangent_vector.dtype,
+                    device=tangent_vector.device,
+                )
+            )
+
         return so2
 
     def _log_map_impl(self) -> torch.Tensor:

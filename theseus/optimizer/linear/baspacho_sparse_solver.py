@@ -46,7 +46,7 @@ class LUCudaSparseSolver(LinearSolver):
             raise RuntimeError("Cuda not available, LUCudaSparseSolver cannot be used")
 
         try:
-            from theseus.extlib.baspacho_solver import CusolverLUSolver
+            from theseus.extlib.baspacho_solver import SymbolicDecomposition
         except Exception as e:
             raise RuntimeError( # FIXME
                 "Theseus C++/Cuda extension cannot be loaded\n"
@@ -80,7 +80,7 @@ class LUCudaSparseSolver(LinearSolver):
         param_size = torch.tensor(self.linearization.var_dims, dtype=torch.int64)
         block_struct_ptrs = torch.tensor(block_AtA_mock.indptr, dtype=torch.int64)
         block_struct_inds = torch.tensor(block_AtA_mock.indices, dtype=torch.int64)
-        self.symbolic_decomposition = BaspachoSymbolicDecomposition(
+        self.symbolic_decomposition = SymbolicDecomposition(
             param_size,
             block_struct_ptrs,
             block_struct_inds

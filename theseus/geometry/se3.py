@@ -16,6 +16,9 @@ from .so3 import SO3
 
 
 class SE3(LieGroup):
+    NEAR_PI_EPS = 1e-7
+    NEAR_ZERO_EPS = 5e-3
+
     def __init__(
         self,
         x_y_z_quaternion: Optional[torch.Tensor] = None,
@@ -174,7 +177,8 @@ class SE3(LieGroup):
             matrix[:, :3, :3].transpose(1, 2) + matrix[:, :3, :3]
         ).abs().max().item() > theseus.constants.EPS:
             raise ValueError(
-                "The 3x3 top-left corner of hat matrices of SE(3) can only be skew-symmetric."
+                "The 3x3 top-left corner of hat matrices of SE(3) can only "
+                "be skew-symmetric."
             )
 
     @staticmethod
@@ -250,67 +254,80 @@ class SE3(LieGroup):
 
         return ret
 
-    def _log_map_impl(self) -> torch.Tensor:
-        NEAR_PI_EPS = 1e-7
-        NEAR_ZERO_EPS = 5e-3
+    def _compute_log_map_rotation(
+        self,
+        rotation_base: torch.Tensor,
+        sine: torch.Tensor,
+        cosine: torch.Tensor,
+        theta: torch.Tensor,
+    ) -> torch.Tensor:
 
-        ret = torch.zeros(self.shape[0], 6, dtype=self.dtype, device=self.device)
+        not_near_pi = 1 + cosine > SE3.NEAR_PI_EPS
+        near_zero = theta < SE3.NEAR_ZERO_EPS
 
-        ret[:, 3] = 0.5 * (self[:, 2, 1] - self[:, 1, 2])
-        ret[:, 4] = 0.5 * (self[:, 0, 2] - self[:, 2, 0])
-        ret[:, 5] = 0.5 * (self[:, 1, 0] - self[:, 0, 1])
-        cosine = 0.5 * (self[:, 0, 0] + self[:, 1, 1] + self[:, 2, 2] - 1)
-        sine = ret[:, 3:].norm(dim=1)
-        theta = torch.atan2(sine, cosine)
-        theta2 = theta**2
-        non_zero = torch.ones(1, dtype=self.dtype, device=self.device)
-
-        # Compute the rotation
-        # theta is not near pi
-        not_near_pi = 1 + cosine > NEAR_PI_EPS
-        # Compute the approximation of theta / sin(theta) when theta is near to 0
-        near_zero = theta[not_near_pi] < NEAR_ZERO_EPS
-        sine_nz = torch.where(near_zero, non_zero, sine[not_near_pi])
+        # theta is !~ pi
         scale = torch.where(
-            near_zero, 1 + sine[not_near_pi] ** 2 / 6, theta[not_near_pi] / sine_nz
-        )
-        ret[not_near_pi, 3:] *= scale.view(-1, 1)
-        # theta is near pi
-        near_pi = ~not_near_pi
-        ddiag = torch.diagonal(self[near_pi], dim1=1, dim2=2)
+            not_near_pi.logical_and(near_zero), 1 + sine**2 / 6, theta / sine
+        ).view(-1, 1)
+        rot_not_near_pi = rotation_base * scale
+
+        # theta is ~pi
+        aux = torch.arange(self.shape[0], device=self.device)
+        ddiag = torch.diagonal(self.data, dim1=1, dim2=2)
         # Find the index of major coloumns and diagonals
         major = torch.logical_and(
             ddiag[:, 1] > ddiag[:, 0], ddiag[:, 1] > ddiag[:, 2]
         ) + 2 * torch.logical_and(ddiag[:, 2] > ddiag[:, 0], ddiag[:, 2] > ddiag[:, 1])
-        ret[near_pi, 3:] = self[near_pi, major, :3]
-        ret[near_pi, major + 3] -= cosine[near_pi]
-        ret[near_pi, 3:] *= (theta[near_pi] ** 2 / (1 - cosine[near_pi])).view(-1, 1)
-        ret[near_pi, 3:] /= ret[near_pi, major + 3].sqrt().view(-1, 1)
+        rot_near_pi = self[aux, major, :3]
+        rot_near_pi[aux, major] -= cosine
+        rot_near_pi *= (theta**2 / (1 - cosine)).view(-1, 1)
+        rot_near_pi /= rot_near_pi[aux, major].sqrt().view(-1, 1)
 
-        # Compute the translation
-        near_zero = theta < NEAR_ZERO_EPS
+        return torch.where(not_near_pi.view(-1, 1), rot_not_near_pi, rot_near_pi)
+
+    def _compute_log_map_translation(
+        self,
+        sine: torch.Tensor,
+        cosine: torch.Tensor,
+        theta: torch.Tensor,
+        rotation: torch.Tensor,
+    ) -> torch.Tensor:
+        theta2 = theta**2
+
+        near_zero = theta < SE3.NEAR_ZERO_EPS
         sine_theta = sine * theta
         two_cosine_minus_two = 2 * cosine - 2
-        two_cosine_minus_two_nz = torch.where(near_zero, non_zero, two_cosine_minus_two)
-        theta2_nz = torch.where(near_zero, non_zero, theta2)
-        a = torch.where(
-            near_zero, 1 - theta2 / 12, -sine_theta / two_cosine_minus_two_nz
-        )
+        a = torch.where(near_zero, 1 - theta2 / 12, -sine_theta / two_cosine_minus_two)
         b = torch.where(
             near_zero,
             1.0 / 12 + theta2 / 720,
-            (sine_theta + two_cosine_minus_two) / (theta2_nz * two_cosine_minus_two_nz),
+            (sine_theta + two_cosine_minus_two) / (theta2 * two_cosine_minus_two),
         )
 
-        translation = self[:, :, 3].view(-1, 3, 1)
-        tangent_vector_ang = ret[:, 3:].view(-1, 3, 1)
-        ret[:, :3] = a.view(-1, 1) * self[:, :, 3]
-        ret[:, :3] -= 0.5 * torch.cross(ret[:, 3:], self[:, :, 3])
-        ret[:, :3] += b.view(-1, 1) * (
-            tangent_vector_ang @ (tangent_vector_ang.transpose(1, 2) @ translation)
+        tangent_vector_ang = rotation.view(-1, 3, 1)
+        translation = a.view(-1, 1) * self[:, :, 3]
+        translation -= 0.5 * torch.cross(rotation, self[:, :, 3])
+        translation += b.view(-1, 1) * (
+            tangent_vector_ang
+            @ (tangent_vector_ang.transpose(1, 2) @ self[:, :, 3].view(-1, 3, 1))
         ).view(-1, 3)
+        return translation
 
-        return ret
+    def _log_map_impl(self) -> torch.Tensor:
+        rotation_base = 0.5 * torch.stack(
+            [
+                self[:, 2, 1] - self[:, 1, 2],
+                self[:, 0, 2] - self[:, 2, 0],
+                self[:, 1, 0] - self[:, 0, 1],
+            ],
+            dim=1,
+        )
+        sine = rotation_base.norm(dim=1)
+        cosine = 0.5 * (self[:, 0, 0] + self[:, 1, 1] + self[:, 2, 2] - 1)
+        theta = torch.atan2(sine, cosine)
+        rotation = self._compute_log_map_rotation(rotation_base, sine, cosine, theta)
+        translation = self._compute_log_map_translation(sine, cosine, theta, rotation)
+        return torch.cat([translation, rotation], dim=1)
 
     def _compose_impl(self, se3_2: LieGroup) -> "SE3":
         se3_2 = cast(SE3, se3_2)

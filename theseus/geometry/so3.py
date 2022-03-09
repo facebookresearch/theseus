@@ -185,6 +185,8 @@ class SO3(LieGroup):
         return ret
 
     def _log_map_impl(self) -> torch.Tensor:
+        ret = torch.zeros(self.shape[0], 3, dtype=self.dtype, device=self.device)
+
         sine_axis = torch.zeros(self.shape[0], 3, dtype=self.dtype, device=self.device)
         sine_axis[:, 0] = 0.5 * (self[:, 2, 1] - self[:, 1, 2])
         sine_axis[:, 1] = 0.5 * (self[:, 0, 2] - self[:, 2, 0])
@@ -201,7 +203,6 @@ class SO3(LieGroup):
         scale = torch.where(
             small_theta, 1 + sine[not_near_pi] ** 2 / 6, theta[not_near_pi] / sine_nz
         )
-        ret = torch.zeros_like(sine_axis)
         ret[not_near_pi] = sine_axis[not_near_pi] * scale.view(-1, 1)
         # # theta ~ pi
         near_pi = ~not_near_pi

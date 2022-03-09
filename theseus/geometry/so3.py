@@ -247,6 +247,37 @@ class SO3(LieGroup):
         )
         major_norm = ret[near_pi, major].sqrt().view(-1, 1)
         ret[near_pi] /= major_norm
+
+        if jacobians is not None:
+            SO3._check_jacobians_list(jacobians)
+            jac = torch.zeros_like(self.data)
+
+            theta2 = theta**2
+            one_minus_cosine = 1 - cosine
+
+            theta2_nz = torch.where(small_theta, non_zero, theta2)
+            one_minus_cosine_nz = torch.where(small_theta, non_zero, one_minus_cosine)
+
+            theta_sine_two_cosine_two = theta * sine - 2 * one_minus_cosine
+            coeff = 0.5 * theta_sine_two_cosine_two / one_minus_cosine_nz
+
+            coeff = coeff.view(-1, 1)
+            theta2_nz = theta2_nz.view(-1, 1)
+            jac = (-(coeff / theta2_nz) * ret).view(-1, 3, 1) * ret.view(-1, 1, 3)
+            half_axis = 0.5 * ret
+
+            jac[:, 0, 1] -= half_axis[:, 2]
+            jac[:, 1, 0] += half_axis[:, 2]
+            jac[:, 0, 2] += half_axis[:, 1]
+            jac[:, 2, 0] -= half_axis[:, 1]
+            jac[:, 1, 2] -= half_axis[:, 0]
+            jac[:, 2, 1] += half_axis[:, 0]
+
+            diag_jac = torch.diagonal(jac, dim1=1, dim2=2)
+            diag_jac += 1 + coeff
+
+            jacobians.append(jac)
+
         return ret
 
     def _compose_impl(self, so3_2: LieGroup) -> "SO3":

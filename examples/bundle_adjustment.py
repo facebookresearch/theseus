@@ -5,7 +5,7 @@ import theseus as th
 
 import theseus.utils.examples as theg
 
-torch.manual_seed(0)
+torch.manual_seed(1)
 
 
 # Smaller values result in error
@@ -42,75 +42,41 @@ def randomSmallQuaternion(max_degrees, min_degrees=0):
     return torch.tensor([c, s * x, s * y, s * z])
 
 
-# unit test for Cost term
-camera_rotation = th.SO3(
-    torch.cat([randomSmallQuaternion(max_degrees=20).unsqueeze(0) for _ in range(4)]),
-    name="camera_rotation",
-)
-camera_translation = th.Point3(
-    data=torch.zeros((4, 3), dtype=torch.float64), name="camera_translation"
-)
-camera_translation.data[:, 2] += 5.0
-focal_length = th.Vector(
-    data=torch.tensor([1000], dtype=torch.float64).repeat(4).unsqueeze(1),
-    name="focal_length",
-)
-loss_radius = th.Vector(
-    data=torch.tensor([0], dtype=torch.float64).repeat(4).unsqueeze(1),
-    name="loss_radius",
-)
-world_point = th.Point3(
-    data=torch.rand((4, 3), dtype=torch.float64), name="world_point"
-)
-point__cam = camera_rotation.rotate(world_point) + camera_translation
-image_feature_point = th.Point2(
-    data=point__cam[:, :2] / point__cam[:, 2:] + torch.rand((4, 2)) * 50,
-    name="image_feature_point",
-)
-r = theg.ReprojectionError(
-    camera_rotation,
-    camera_translation,
-    focal_length,
-    loss_radius,
-    world_point,
-    image_feature_point,
-)
-
-
 def add_noise_and_outliers(
-    projPoints,
-    noiseSize=1,
-    noiseLinear=True,
-    proportionOutliers=0.05,
-    outlierDistance=500,
+    proj_points,
+    noise_size=1,
+    linear_noise=True,
+    outliers_proportion=0.05,
+    outlier_distance=500,
 ):
 
-    if noiseLinear:
-        featImagePoints = projPoints + noiseSize * (
-            torch.rand(projPoints.shape, dtype=torch.float64) * 2 - 1
+    if linear_noise:
+        feat_image_points = proj_points + noise_size * (
+            torch.rand(proj_points.shape, dtype=torch.float64) * 2 - 1
         )
     else:  # normal, stdDev = noiseSize
-        featImagePoints = projPoints + torch.normal(
-            mean=torch.zeros(projPoints.shape), std=noiseSize, dtype=torch.float64
+        feat_image_points = proj_points + torch.normal(
+            mean=torch.zeros(proj_points.shape), std=noise_size, dtype=torch.float64
         )
 
     # add real bad outliers
-    outliersMask = torch.rand(featImagePoints.shape[0]) < proportionOutliers
-    numOutliers = featImagePoints[outliersMask].shape[0]
-    featImagePoints[outliersMask] += outlierDistance * (
-        torch.rand((numOutliers, projPoints.shape[1]), dtype=projPoints.dtype) * 2 - 1
+    outliers_mask = torch.rand(feat_image_points.shape[0]) < outliers_proportion
+    num_outliers = feat_image_points[outliers_mask].shape[0]
+    feat_image_points[outliers_mask] += outlier_distance * (
+        torch.rand((num_outliers, proj_points.shape[1]), dtype=proj_points.dtype) * 2
+        - 1
     )
-    return featImagePoints
+    return feat_image_points
 
 
 class LocalizationSample:
-    def __init__(self, num_points=60, focalLength=1000):
-        self.focalLength = th.Variable(
-            data=torch.tensor([focalLength], dtype=torch.float64), name="focal_length"
+    def __init__(self, num_points=60, focal_length=1000):
+        self.focal_length = th.Variable(
+            data=torch.tensor([focal_length], dtype=torch.float64), name="focal_length"
         )
 
         # pts = [+/-10, +/-10, +/-1]
-        self.worldPoints = torch.cat(
+        self.world_points = torch.cat(
             [
                 torch.rand(2, num_points, dtype=torch.float64) * 20 - 10,
                 torch.rand(1, num_points, dtype=torch.float64) * 2 - 1,
@@ -130,27 +96,39 @@ class LocalizationSample:
             ),
             name="gtCamPos",
         )
-        self.gtCamRot = th.SO3(randomSmallQuaternion(max_degrees=20), name="gtCamRot")
-        self.gtCamTr = (-self.gtCamRot.rotate(gtCamPos)).copy(new_name="gtCamTr")
-
-        camPoints = self.gtCamRot.rotate(self.worldPoints) + self.gtCamTr
-        projPoints = camPoints[:, :2] / camPoints[:, 2:3] * self.focalLength.data
-        self.image_feature_points = add_noise_and_outliers(projPoints)
-
-        smallRot = th.SO3(randomSmallQuaternion(max_degrees=0.3))
-        smallTr = torch.rand(3, dtype=torch.float64) * 0.1
-        self.obsCamRot = smallRot.compose(self.gtCamRot).copy(new_name="obsCamRot")
-        self.obsCamTr = (smallRot.rotate(self.gtCamTr) + smallTr).copy(
-            new_name="obsCamTr"
+        self.gt_cam_rotation = th.SO3(
+            randomSmallQuaternion(max_degrees=20), name="gt_cam_rotation"
         )
+        self.gt_cam_translation = (-self.gt_cam_rotation.rotate(gtCamPos)).copy(
+            new_name="gt_cam_translation"
+        )
+
+        camera_points = (
+            self.gt_cam_rotation.rotate(self.world_points) + self.gt_cam_translation
+        )
+        proj_points = (
+            camera_points[:, :2] / camera_points[:, 2:3] * self.focal_length.data
+        )
+        self.image_feature_points = add_noise_and_outliers(proj_points)
+
+        small_rotation = th.SO3(randomSmallQuaternion(max_degrees=0.3))
+        small_translation = torch.rand(3, dtype=torch.float64) * 0.1
+        self.obs_cam_rotation = small_rotation.compose(self.gt_cam_rotation).copy(
+            new_name="obs_cam_rotation"
+        )
+        self.obs_cam_translation = (
+            small_rotation.rotate(self.gt_cam_translation) + small_translation
+        ).copy(new_name="obs_cam_translation")
 
 
 localization_sample = LocalizationSample()
 
 
 # create optimization problem
-camera_rotation = localization_sample.obsCamRot.copy(new_name="camera_rotation")
-camera_translation = localization_sample.obsCamTr.copy(new_name="camera_translation")
+camera_rotation = localization_sample.obs_cam_rotation.copy(new_name="camera_rotation")
+camera_translation = localization_sample.obs_cam_translation.copy(
+    new_name="camera_translation"
+)
 loss_radius = th.Vector(1, name="loss_radius", dtype=torch.float64)
 focal_length = th.Vector(1, name="focal_length", dtype=torch.float64)
 
@@ -162,9 +140,9 @@ weight = th.ScaleCostWeight(
 # Set up objective
 objective = th.Objective(dtype=torch.float64)
 
-for i in range(len(localization_sample.worldPoints)):
+for i in range(len(localization_sample.world_points)):
     world_point = th.Point3(
-        data=localization_sample.worldPoints[i], name=f"world_point_{i}"
+        data=localization_sample.world_points[i], name=f"world_point_{i}"
     )
     image_feature_point = th.Point2(
         data=localization_sample.image_feature_points[i],
@@ -203,21 +181,21 @@ def get_batch(b):
     batch_ls = loc_samples[b * batch_size : (b + 1) * batch_size]
     batch_data = {
         "camera_rotation": th.SO3(
-            data=torch.cat([ls.obsCamRot.data for ls in batch_ls])
+            data=torch.cat([ls.obs_cam_rotation.data for ls in batch_ls])
         ),
         "camera_translation": th.Point3(
-            data=torch.cat([ls.obsCamTr.data for ls in batch_ls])
+            data=torch.cat([ls.obs_cam_translation.data for ls in batch_ls])
         ),
         "focal_length": th.Vector(
-            data=torch.cat([ls.focalLength.data.unsqueeze(1) for ls in batch_ls]),
+            data=torch.cat([ls.focal_length.data.unsqueeze(1) for ls in batch_ls]),
             name="focal_length",
         ),
     }
 
     # batch of 3d points and 2d feature points
-    for i in range(len(batch_ls[0].worldPoints)):
+    for i in range(len(batch_ls[0].world_points)):
         batch_data[f"world_point_{i}"] = th.Point3(
-            data=torch.cat([ls.worldPoints[i : i + 1].data for ls in batch_ls]),
+            data=torch.cat([ls.world_points[i : i + 1].data for ls in batch_ls]),
             name=f"world_point_{i}",
         )
         batch_data[f"image_feature_point_{i}"] = th.Point2(
@@ -227,17 +205,21 @@ def get_batch(b):
             name=f"image_feature_point_{i}",
         )
 
-    gtCamRot = th.SO3(data=torch.cat([ls.gtCamRot.data for ls in batch_ls]))
-    gtCamTr = th.Point3(data=torch.cat([ls.gtCamTr.data for ls in batch_ls]))
-    return batch_data, gtCamRot, gtCamTr
+    gt_cam_rotation = th.SO3(
+        data=torch.cat([ls.gt_cam_rotation.data for ls in batch_ls])
+    )
+    gt_cam_translation = th.Point3(
+        data=torch.cat([ls.gt_cam_translation.data for ls in batch_ls])
+    )
+    return batch_data, gt_cam_rotation, gt_cam_translation
 
 
 # Outer optimization loop
 loss_radius_tensor = torch.nn.Parameter(torch.tensor([-3], dtype=torch.float64))
-model_optimizer = torch.optim.Adam([loss_radius_tensor], lr=1.0)
+model_optimizer = torch.optim.Adam([loss_radius_tensor], lr=0.1)
 
 
-num_epochs = 10
+num_epochs = 20
 camera_rotation_var = theseus_optim.objective.optim_vars["camera_rotation"]
 camera_translation_var = theseus_optim.objective.optim_vars["camera_translation"]
 for epoch in range(num_epochs):

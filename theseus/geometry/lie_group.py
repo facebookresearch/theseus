@@ -77,11 +77,13 @@ class LieGroup(Manifold):
         pass
 
     @abc.abstractmethod
-    def _log_map_impl(self) -> torch.Tensor:
+    def _log_map_impl(
+        self, jacobians: Optional[List[torch.Tensor]] = None
+    ) -> torch.Tensor:
         pass
 
-    def log_map(self) -> torch.Tensor:
-        return self._log_map_impl()
+    def log_map(self, jacobians: Optional[List[torch.Tensor]] = None) -> torch.Tensor:
+        return self._log_map_impl(jacobians)
 
     @abc.abstractmethod
     def _adjoint_impl(self) -> torch.Tensor:

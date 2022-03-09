@@ -321,7 +321,9 @@ class SE3(LieGroup):
 
         return ret
 
-    def _log_map_impl(self) -> torch.Tensor:
+    def _log_map_impl(
+        self, jacobians: Optional[List[torch.Tensor]] = None
+    ) -> torch.Tensor:
         NEAR_PI_EPS = 1e-7
         NEAR_ZERO_EPS = 5e-3
 

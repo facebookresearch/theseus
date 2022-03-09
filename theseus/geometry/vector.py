@@ -221,7 +221,9 @@ class Vector(LieGroup):
 
         return Vector(data=tangent_vector.clone())
 
-    def _log_map_impl(self) -> torch.Tensor:
+    def _log_map_impl(
+        self, jacobians: Optional[List[torch.Tensor]] = None
+    ) -> torch.Tensor:
         return self.data.clone()
 
     def __hash__(self):

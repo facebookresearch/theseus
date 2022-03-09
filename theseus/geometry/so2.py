@@ -137,7 +137,9 @@ class SO2(LieGroup):
 
         return so2
 
-    def _log_map_impl(self) -> torch.Tensor:
+    def _log_map_impl(
+        self, jacobians: Optional[List[torch.Tensor]] = None
+    ) -> torch.Tensor:
         cosine, sine = self.to_cos_sin()
         return torch.atan2(sine, cosine).unsqueeze(1)
 

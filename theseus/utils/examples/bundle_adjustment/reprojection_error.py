@@ -15,7 +15,7 @@ class ReprojectionError(th.CostFunction):
         focal_length: th.Vector,
         loss_radius: th.Vector,
         world_point: th.Point3,
-        image_feature_point: th.Point3,
+        image_feature_point: th.Point2,
         weight: Optional[th.CostWeight] = None,
         name: Optional[str] = None,
     ):

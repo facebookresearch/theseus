@@ -1,5 +1,4 @@
 import math
-from typing import cast
 
 import torch
 import theseus as th
@@ -44,58 +43,37 @@ def randomSmallQuaternion(max_degrees, min_degrees=0):
 
 
 # unit test for Cost term
-camRot = th.SO3(
+camera_rotation = th.SO3(
     torch.cat([randomSmallQuaternion(max_degrees=20).unsqueeze(0) for _ in range(4)]),
-    name="camRot",
+    name="camera_rotation",
 )
-camTr = th.Point3(data=torch.zeros((4, 3), dtype=torch.float64), name="camTr")
-camTr.data[:, 2] += 5.0
-focalLenght = th.Vector(
+camera_translation = th.Point3(
+    data=torch.zeros((4, 3), dtype=torch.float64), name="camera_translation"
+)
+camera_translation.data[:, 2] += 5.0
+focal_length = th.Vector(
     data=torch.tensor([1000], dtype=torch.float64).repeat(4).unsqueeze(1),
-    name="focalLength",
+    name="focal_length",
 )
-lossRadius = th.Vector(
+loss_radius = th.Vector(
     data=torch.tensor([0], dtype=torch.float64).repeat(4).unsqueeze(1),
     name="loss_radius",
 )
-worldPoint = th.Point3(data=torch.rand((4, 3), dtype=torch.float64), name="worldPoint")
-camPoint = camRot.rotate(worldPoint) + camTr
-imageFeaturePoint = th.Point3(
-    data=camPoint[:, :2] / camPoint[:, 2:] + torch.rand((4, 2)) * 50,
-    name="imageFeaturePoint",
+world_point = th.Point3(
+    data=torch.rand((4, 3), dtype=torch.float64), name="world_point"
+)
+point__cam = camera_rotation.rotate(world_point) + camera_translation
+image_feature_point = th.Point2(
+    data=point__cam[:, :2] / point__cam[:, 2:] + torch.rand((4, 2)) * 50,
+    name="image_feature_point",
 )
 r = theg.ReprojectionError(
-    camRot, camTr, focalLenght, lossRadius, worldPoint, imageFeaturePoint
-)
-
-baseVal = r.error()
-baseCamRot = r.camera_rotation.copy()
-baseCamTr = r.camera_translation.copy()
-nErr = baseVal.shape[1]
-nJac = torch.zeros((r.camera_rotation.data.shape[0], nErr, 6), dtype=torch.float64)
-epsilon = 1e-8
-for i in range(6):
-    if i >= 3:
-        r.camera_translation = baseCamTr.copy()
-        r.camera_translation.data[:, i - 3] += epsilon
-        r.camera_rotation = baseCamRot.copy()
-    else:
-        r.camera_translation = baseCamTr.copy()
-        v = torch.zeros((r.camera_rotation.data.shape[0], 3), dtype=torch.float64)
-        v[:, i] += epsilon
-        r.camera_rotation = cast(th.SO3, baseCamRot.retract(v))
-    pertVal = r.error()
-    nJac[:, :, i] = (pertVal - baseVal) / epsilon
-
-rotNumJac = nJac[:, :, :3]
-trNumJac = nJac[:, :, 3:]
-
-(rotJac, trJac), _ = r.jacobians()
-
-print(
-    "|numJac-analiticJac|: ",
-    float(torch.norm(rotNumJac - rotJac)),
-    float(torch.norm(trNumJac - trJac)),
+    camera_rotation,
+    camera_translation,
+    focal_length,
+    loss_radius,
+    world_point,
+    image_feature_point,
 )
 
 
@@ -128,7 +106,7 @@ def add_noise_and_outliers(
 class LocalizationSample:
     def __init__(self, num_points=60, focalLength=1000):
         self.focalLength = th.Variable(
-            data=torch.tensor([focalLength], dtype=torch.float64), name="focalLength"
+            data=torch.tensor([focalLength], dtype=torch.float64), name="focal_length"
         )
 
         # pts = [+/-10, +/-10, +/-1]
@@ -157,7 +135,7 @@ class LocalizationSample:
 
         camPoints = self.gtCamRot.rotate(self.worldPoints) + self.gtCamTr
         projPoints = camPoints[:, :2] / camPoints[:, 2:3] * self.focalLength.data
-        self.imageFeaturePoints = add_noise_and_outliers(projPoints)
+        self.image_feature_points = add_noise_and_outliers(projPoints)
 
         smallRot = th.SO3(randomSmallQuaternion(max_degrees=0.3))
         smallTr = torch.rand(3, dtype=torch.float64) * 0.1
@@ -171,10 +149,10 @@ localization_sample = LocalizationSample()
 
 
 # create optimization problem
-camRot = localization_sample.obsCamRot.copy(new_name="camRot")
-camTr = localization_sample.obsCamTr.copy(new_name="camTr")
-lossRadius = th.Vector(1, name="loss_radius", dtype=torch.float64)
-focalLength = th.Vector(1, name="focal_length", dtype=torch.float64)
+camera_rotation = localization_sample.obsCamRot.copy(new_name="camera_rotation")
+camera_translation = localization_sample.obsCamTr.copy(new_name="camera_translation")
+loss_radius = th.Vector(1, name="loss_radius", dtype=torch.float64)
+focal_length = th.Vector(1, name="focal_length", dtype=torch.float64)
 
 # NOTE: if not set explicitly will crash using a weight of wrong type `float32`
 weight = th.ScaleCostWeight(
@@ -185,22 +163,20 @@ weight = th.ScaleCostWeight(
 objective = th.Objective(dtype=torch.float64)
 
 for i in range(len(localization_sample.worldPoints)):
-    worldPoint = th.Point3(
-        data=localization_sample.worldPoints[i], name=f"worldPoint_{i}"
+    world_point = th.Point3(
+        data=localization_sample.worldPoints[i], name=f"world_point_{i}"
     )
-    imageFeaturePoint = th.Point3(
-        data=localization_sample.imageFeaturePoints[i], name=f"imageFeaturePoint_{i}"
+    image_feature_point = th.Point2(
+        data=localization_sample.image_feature_points[i],
+        name=f"image_feature_point_{i}",
     )
-
-    # optim_vars = [camRot, camTr]
-    # aux_vars = [lossRadius, focalLength, worldPoint, imageFeaturePoint]
     cost_function = theg.ReprojectionError(
-        camRot,
-        camTr,
-        focalLength,
-        lossRadius,
-        worldPoint,
-        imageFeaturePoint,
+        camera_rotation,
+        camera_translation,
+        focal_length,
+        loss_radius,
+        world_point,
+        image_feature_point,
     )
     objective.add(cost_function)
 
@@ -217,7 +193,6 @@ theseus_optim = th.TheseusLayer(optimizer)
 
 
 # Create dataset
-# NOTE: composition of SO3 rotations is often not a valid rotation (.copy fails)
 loc_samples = [LocalizationSample() for _ in range(16)]
 batch_size = 4
 num_batches = (len(loc_samples) + batch_size - 1) // batch_size
@@ -227,23 +202,29 @@ def get_batch(b):
     assert b * batch_size < len(loc_samples)
     batch_ls = loc_samples[b * batch_size : (b + 1) * batch_size]
     batch_data = {
-        "camRot": th.SO3(data=torch.cat([ls.obsCamRot.data for ls in batch_ls])),
-        "camTr": th.Point3(data=torch.cat([ls.obsCamTr.data for ls in batch_ls])),
+        "camera_rotation": th.SO3(
+            data=torch.cat([ls.obsCamRot.data for ls in batch_ls])
+        ),
+        "camera_translation": th.Point3(
+            data=torch.cat([ls.obsCamTr.data for ls in batch_ls])
+        ),
         "focal_length": th.Vector(
             data=torch.cat([ls.focalLength.data.unsqueeze(1) for ls in batch_ls]),
-            name="focalLength",
+            name="focal_length",
         ),
     }
 
     # batch of 3d points and 2d feature points
     for i in range(len(batch_ls[0].worldPoints)):
-        batch_data[f"worldPoint_{i}"] = th.Point3(
+        batch_data[f"world_point_{i}"] = th.Point3(
             data=torch.cat([ls.worldPoints[i : i + 1].data for ls in batch_ls]),
-            name=f"worldPoint_{i}",
+            name=f"world_point_{i}",
         )
-        batch_data[f"imageFeaturePoint_{i}"] = th.Point3(
-            data=torch.cat([ls.imageFeaturePoints[i : i + 1].data for ls in batch_ls]),
-            name=f"imageFeaturePoint_{i}",
+        batch_data[f"image_feature_point_{i}"] = th.Point2(
+            data=torch.cat(
+                [ls.image_feature_points[i : i + 1].data for ls in batch_ls]
+            ),
+            name=f"image_feature_point_{i}",
         )
 
     gtCamRot = th.SO3(data=torch.cat([ls.gtCamRot.data for ls in batch_ls]))
@@ -252,30 +233,32 @@ def get_batch(b):
 
 
 # Outer optimization loop
-lossRadius_tensor = torch.nn.Parameter(torch.tensor([-3], dtype=torch.float64))
-model_optimizer = torch.optim.Adam([lossRadius_tensor], lr=1.0)
+loss_radius_tensor = torch.nn.Parameter(torch.tensor([-3], dtype=torch.float64))
+model_optimizer = torch.optim.Adam([loss_radius_tensor], lr=1.0)
 
 
 num_epochs = 10
-camRotVar = theseus_optim.objective.optim_vars["camRot"]
-camTrVar = theseus_optim.objective.optim_vars["camTr"]
+camera_rotation_var = theseus_optim.objective.optim_vars["camera_rotation"]
+camera_translation_var = theseus_optim.objective.optim_vars["camera_translation"]
 for epoch in range(num_epochs):
     print(" ******************* EPOCH {epoch} ******************* ")
     epoch_loss = 0.0
     for i in range(num_batches):
         print(f"BATCH {i}/{num_batches}")
         model_optimizer.zero_grad()
-        theseus_inputs, gtCamRot, gtCamTr = get_batch(i)
-        theseus_inputs["loss_radius"] = lossRadius_tensor.repeat(
-            gtCamTr.data.shape[0]
+        theseus_inputs, gt_camera_rotation, gt_camera_translation = get_batch(i)
+        theseus_inputs["loss_radius"] = loss_radius_tensor.repeat(
+            gt_camera_translation.data.shape[0]
         ).unsqueeze(1)
 
         theseus_outputs, info = theseus_optim.forward(
             theseus_inputs, optimizer_kwargs={"verbose": False}
         )
 
-        cam_rot_loss = th.local(camRotVar, gtCamRot).norm(dim=1)
-        cam_tr_loss = th.local(camTrVar, gtCamTr).norm(dim=1, p=1)
+        cam_rot_loss = th.local(camera_rotation_var, gt_camera_rotation).norm(dim=1)
+        cam_tr_loss = th.local(camera_translation_var, gt_camera_translation).norm(
+            dim=1, p=1
+        )
         loss = 100 * cam_rot_loss + cam_tr_loss
         loss = torch.where(loss < 10e5, loss, 0.0).sum()
         loss.backward()
@@ -286,6 +269,6 @@ for epoch in range(num_epochs):
 
     print(
         f"Epoch: {epoch} Loss: {epoch_loss} "
-        f"Kernel Radius: exp({lossRadius_tensor.data.item()})="
-        f"{torch.exp(lossRadius_tensor.data).item()}"
+        f"Kernel Radius: exp({loss_radius_tensor.data.item()})="
+        f"{torch.exp(loss_radius_tensor.data).item()}"
     )

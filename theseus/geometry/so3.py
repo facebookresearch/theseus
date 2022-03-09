@@ -185,8 +185,6 @@ class SO3(LieGroup):
         return ret
 
     def _log_map_impl(self) -> torch.Tensor:
-        ret = torch.zeros(self.shape[0], 3, dtype=self.dtype, device=self.device)
-
         sine_axis = torch.zeros(self.shape[0], 3, dtype=self.dtype, device=self.device)
         sine_axis[:, 0] = 0.5 * (self[:, 2, 1] - self[:, 1, 2])
         sine_axis[:, 1] = 0.5 * (self[:, 0, 2] - self[:, 2, 0])
@@ -203,6 +201,7 @@ class SO3(LieGroup):
         scale = torch.where(
             small_theta, 1 + sine[not_near_pi] ** 2 / 6, theta[not_near_pi] / sine_nz
         )
+        ret = torch.zeros_like(sine_axis)
         ret[not_near_pi] = sine_axis[not_near_pi] * scale.view(-1, 1)
         # # theta ~ pi
         near_pi = ~not_near_pi
@@ -211,11 +210,12 @@ class SO3(LieGroup):
         major = torch.logical_and(
             ddiag[:, 1] > ddiag[:, 0], ddiag[:, 1] > ddiag[:, 2]
         ) + 2 * torch.logical_and(ddiag[:, 2] > ddiag[:, 0], ddiag[:, 2] > ddiag[:, 1])
-        sine_axis[near_pi] = self[near_pi, major]
-        sine_axis[near_pi, major] -= cosine[near_pi]
-        ret[near_pi] = sine_axis[near_pi] * (
-            theta[near_pi] ** 2 / (1 - cosine[near_pi])
-        ).view(-1, 1)
+        sel_rows = self[near_pi, major]
+        aux = torch.ones(sel_rows.shape[0], dtype=torch.bool)
+        sel_rows[aux, major] -= cosine[near_pi]
+        ret[near_pi] = sel_rows * (theta[near_pi] ** 2 / (1 - cosine[near_pi])).view(
+            -1, 1
+        )
         major_norm = ret[near_pi, major].sqrt().view(-1, 1)
         ret[near_pi] /= major_norm
         return ret

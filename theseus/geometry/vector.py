@@ -224,6 +224,15 @@ class Vector(LieGroup):
     def _log_map_impl(
         self, jacobians: Optional[List[torch.Tensor]] = None
     ) -> torch.Tensor:
+        if jacobians is not None:
+            shape = self.shape
+            Vector._check_jacobians_list(jacobians)
+            jacobians.append(
+                torch.eye(shape[1], dtype=self.dtype, device=self.device).repeat(
+                    shape[0], 1, 1
+                )
+            )
+
         return self.data.clone()
 
     def __hash__(self):

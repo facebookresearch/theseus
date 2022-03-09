@@ -22,6 +22,8 @@ from .geometry import (
     Point2,
     Point3,
     Vector,
+    adjoint,
+    between,
     local,
     retract,
     compose,

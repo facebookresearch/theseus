@@ -188,7 +188,7 @@ class SO3(LieGroup):
             SO3._check_jacobians_list(jacobians)
             theta3_nz = theta_nz * theta2_nz
             theta_minus_sine_by_theta3 = torch.where(
-                small_theta, 1.0 / 6 - theta2 / 120, (theta - sine) / theta3_nz
+                small_theta, torch.zeros_like(theta), (theta - sine) / theta3_nz
             )
             jac = (
                 theta_minus_sine_by_theta3

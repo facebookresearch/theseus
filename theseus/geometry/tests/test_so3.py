@@ -16,6 +16,7 @@ from .common import (
     check_compose,
     check_exp_map,
     check_projection_for_compose,
+    check_projection_for_exp_map,
     check_projection_for_inverse,
     check_projection_for_rotate_and_transform,
 )
@@ -41,6 +42,7 @@ def test_exp_map():
     for batch_size in [1, 20, 100]:
         tangent_vector = torch.rand(batch_size, 3, generator=rng).double() - 0.5
         check_exp_map(tangent_vector, th.SO3)
+        check_projection_for_exp_map(tangent_vector, th.SO3)
 
     # SO3.exp_map uses approximations for small theta
     for batch_size in [1, 2, 100]:
@@ -48,6 +50,7 @@ def test_exp_map():
         tangent_vector /= torch.linalg.norm(tangent_vector, dim=1, keepdim=True)
         tangent_vector *= 1e-5
         check_exp_map(tangent_vector, th.SO3)
+        check_projection_for_exp_map(tangent_vector, th.SO3)
 
     # SO3.exp_map uses the exact exponential map for small theta
     for batch_size in [1, 2, 100]:
@@ -55,18 +58,21 @@ def test_exp_map():
         tangent_vector /= torch.linalg.norm(tangent_vector, dim=1, keepdim=True)
         tangent_vector *= 3e-3
         check_exp_map(tangent_vector, th.SO3)
+        check_projection_for_exp_map(tangent_vector, th.SO3)
 
     for batch_size in [1, 2, 100]:
         tangent_vector = torch.rand(batch_size, 3, generator=rng).double() - 0.5
         tangent_vector /= torch.linalg.norm(tangent_vector, dim=1, keepdim=True)
         tangent_vector *= np.pi - 1e-11
         check_exp_map(tangent_vector, th.SO3)
+        check_projection_for_exp_map(tangent_vector, th.SO3)
 
     for batch_size in [1, 2, 100]:
         tangent_vector = torch.rand(batch_size, 3, generator=rng).double() - 0.5
         tangent_vector /= torch.linalg.norm(tangent_vector, dim=1, keepdim=True)
         tangent_vector *= 2 * np.pi - 1e-11
         check_exp_map(tangent_vector, th.SO3)
+        check_projection_for_exp_map(tangent_vector, th.SO3)
 
 
 def test_log_map():

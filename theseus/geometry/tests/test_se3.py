@@ -17,6 +17,7 @@ from .common import (
     check_exp_map,
     check_inverse,
     check_projection_for_compose,
+    check_projection_for_exp_map,
     check_projection_for_inverse,
     check_projection_for_rotate_and_transform,
 )
@@ -51,6 +52,7 @@ def test_exp_map():
         tangent_vector = torch.cat([tangent_vector_lin, tangent_vector_ang], dim=1)
 
         check_exp_map(tangent_vector, th.SE3)
+        check_projection_for_exp_map(tangent_vector, th.SE3)
 
     # SE3.exp_map uses the exact exponential map for small theta
     for batch_size in [1, 20, 100]:
@@ -61,6 +63,7 @@ def test_exp_map():
         tangent_vector = torch.cat([tangent_vector_lin, tangent_vector_ang], dim=1)
 
         check_exp_map(tangent_vector, th.SE3)
+        check_projection_for_exp_map(tangent_vector, th.SE3, 1e-6)
 
     for batch_size in [1, 20, 100]:
         tangent_vector_ang = torch.rand(batch_size, 3, generator=rng).double() - 0.5
@@ -70,6 +73,7 @@ def test_exp_map():
         tangent_vector = torch.cat([tangent_vector_lin, tangent_vector_ang], dim=1)
 
         check_exp_map(tangent_vector, th.SE3)
+        check_projection_for_exp_map(tangent_vector, th.SE3)
 
     for batch_size in [1, 20, 100]:
         tangent_vector_ang = torch.rand(batch_size, 3, generator=rng).double() - 0.5
@@ -79,6 +83,7 @@ def test_exp_map():
         tangent_vector = torch.cat([tangent_vector_lin, tangent_vector_ang], dim=1)
 
         check_exp_map(tangent_vector, th.SE3)
+        check_projection_for_exp_map(tangent_vector, th.SE3)
 
 
 def test_log_map():
@@ -165,8 +170,8 @@ def test_transform_from_and_to():
     rng = torch.Generator()
     rng.manual_seed(0)
     for _ in range(10):  # repeat a few times
-        for batch_size_group in [1, 20, 100]:
-            for batch_size_pnt in [1, 20, 100]:
+        for batch_size_group in [1, 20]:
+            for batch_size_pnt in [1, 20]:
                 if (
                     batch_size_group != 1
                     and batch_size_pnt != 1
@@ -213,7 +218,7 @@ def test_projection():
     rng = torch.Generator()
     rng.manual_seed(0)
     for _ in range(10):  # repeat a few times
-        for batch_size in [1, 20, 100]:
+        for batch_size in [1, 20]:
             # Test SE3.transform_to
             check_projection_for_rotate_and_transform(
                 th.SE3, th.Point3, th.SE3.transform_to, batch_size, rng

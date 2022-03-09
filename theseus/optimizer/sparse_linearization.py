@@ -92,10 +92,12 @@ class SparseLinearization(Linearization):
         self.A_val = torch.empty(
             size=(self.objective.batch_size, len(self.A_col_ind)),
             device=self.objective.device,
+            dtype=self.objective.dtype,
         )
         self.b = torch.empty(
             size=(self.objective.batch_size, self.num_rows),
             device=self.objective.device,
+            dtype=self.objective.dtype,
         )
 
         err_row_idx = 0

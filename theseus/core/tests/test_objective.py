@@ -286,8 +286,10 @@ def test_objective_error():
         v2_data = torch.ones(batch_size, dof) * f2 * 0.1
 
         input_data = {"v1": v1_data, "v2": v2_data}
-        error = objective.error(input_data=input_data, also_update=True)
-        error_norm_2 = objective.error_squared_norm(input_data=input_data, also_update=True)
+        error = objective.error(input_data=input_data, also_update=False)
+        error_norm_2 = objective.error_squared_norm(
+            input_data=input_data, also_update=False
+        )
 
         _check_error_for_data(v1_data, v2_data, error, error_norm_2)
 
@@ -296,7 +298,19 @@ def test_objective_error():
 
         input_data = {"v1": v1_data, "v2": v2_data}
         error = objective.error(input_data=input_data, also_update=True)
-        error_norm_2 = objective.error_squared_norm(input_data=input_data, also_update=True)
+        error_norm_2 = objective.error_squared_norm(
+            input_data=input_data, also_update=True
+        )
+
+        # To check if variables are updated
+        assert (
+            objective.optim_vars["v1"].data.numpy().all()
+            == input_data["v1"].numpy().all()
+        )
+        assert (
+            objective.optim_vars["v2"].data.numpy().all()
+            == input_data["v2"].numpy().all()
+        )
 
         _check_error_for_data(v1_data, v2_data, error, error_norm_2)
 

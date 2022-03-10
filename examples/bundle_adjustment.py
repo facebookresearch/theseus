@@ -14,7 +14,7 @@ th.SO3.SO3_EPS = 1e-6
 
 
 # returns a uniformly random point of the 2-sphere
-def random_S2(dtype: torch.dtype = torch.float64) -> torch.Tensor:
+def random_s2(dtype: torch.dtype = torch.float64) -> torch.Tensor:
     theta = torch.rand(()) * math.tau
     z = torch.rand(()) * 2 - 1
     r = torch.sqrt(1 - z**2)
@@ -22,7 +22,7 @@ def random_S2(dtype: torch.dtype = torch.float64) -> torch.Tensor:
 
 
 # returns a uniformly random point of the 3-sphere
-def random_S3(dtype: torch.dtype = torch.float64) -> torch.Tensor:
+def random_s3(dtype: torch.dtype = torch.float64) -> torch.Tensor:
     u, v, w = torch.rand(3)
     return torch.tensor(
         [
@@ -34,10 +34,10 @@ def random_S3(dtype: torch.dtype = torch.float64) -> torch.Tensor:
     ).to(dtype=dtype)
 
 
-def randomSmallQuaternion(
+def random_small_quaternion(
     max_degrees: float, min_degrees: int = 0, dtype: torch.dtype = torch.float64
 ) -> torch.Tensor:
-    x, y, z = random_S2(dtype=dtype)
+    x, y, z = random_s2(dtype=dtype)
     theta = (
         (min_degrees + (max_degrees - min_degrees) * torch.rand((), dtype=dtype))
         * math.tau
@@ -102,7 +102,7 @@ class LocalizationSample:
             name="gtCamPos",
         )
         self.gt_cam_rotation = th.SO3(
-            randomSmallQuaternion(max_degrees=20), name="gt_cam_rotation"
+            random_small_quaternion(max_degrees=20), name="gt_cam_rotation"
         )
         self.gt_cam_translation = cast(
             th.Point3,
@@ -119,7 +119,7 @@ class LocalizationSample:
         )
         self.image_feature_points = add_noise_and_outliers(proj_points)
 
-        small_rotation = th.SO3(randomSmallQuaternion(max_degrees=0.3))
+        small_rotation = th.SO3(random_small_quaternion(max_degrees=0.3))
         small_translation = torch.rand(3, dtype=torch.float64) * 0.1
         self.obs_cam_rotation = cast(
             th.SO3,

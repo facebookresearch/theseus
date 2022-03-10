@@ -154,6 +154,11 @@ class NumericDecomposition {
         int64_t batchSize = data.size(0);
         int64_t factorSize = data.size(1);
         double* pFactor = data.data_ptr<double>();
+
+        /*vector<double> d1(pFactor, pFactor + factorSize);
+        std::cout << "FACTOR:\n" <<
+        dec->solver->factorSkel.densify(d1) << std::endl;*/
+
         for(int i = 0; i < batchSize; i++) {
             dec->solver->factor(pFactor + factorSize * i);
         }

@@ -132,7 +132,6 @@ camera_translation = localization_sample.obs_cam_translation.copy(
 loss_radius = th.Vector(1, name="loss_radius", dtype=torch.float64)
 focal_length = th.Vector(1, name="focal_length", dtype=torch.float64)
 
-# NOTE: if not set explicitly will crash using a weight of wrong type `float32`
 weight = th.ScaleCostWeight(
     th.Vector(data=torch.tensor([1.0], dtype=torch.float64), name="weight")
 )
@@ -180,29 +179,22 @@ def get_batch(b):
     assert b * batch_size < len(loc_samples)
     batch_ls = loc_samples[b * batch_size : (b + 1) * batch_size]
     batch_data = {
-        "camera_rotation": th.SO3(
-            data=torch.cat([ls.obs_cam_rotation.data for ls in batch_ls])
+        "camera_rotation": torch.cat([ls.obs_cam_rotation.data for ls in batch_ls]),
+        "camera_translation": torch.cat(
+            [ls.obs_cam_translation.data for ls in batch_ls]
         ),
-        "camera_translation": th.Point3(
-            data=torch.cat([ls.obs_cam_translation.data for ls in batch_ls])
-        ),
-        "focal_length": th.Vector(
-            data=torch.cat([ls.focal_length.data.unsqueeze(1) for ls in batch_ls]),
-            name="focal_length",
+        "focal_length": torch.cat(
+            [ls.focal_length.data.unsqueeze(1) for ls in batch_ls]
         ),
     }
 
     # batch of 3d points and 2d feature points
     for i in range(len(batch_ls[0].world_points)):
-        batch_data[f"world_point_{i}"] = th.Point3(
-            data=torch.cat([ls.world_points[i : i + 1].data for ls in batch_ls]),
-            name=f"world_point_{i}",
+        batch_data[f"world_point_{i}"] = torch.cat(
+            [ls.world_points[i : i + 1].data for ls in batch_ls]
         )
-        batch_data[f"image_feature_point_{i}"] = th.Point2(
-            data=torch.cat(
-                [ls.image_feature_points[i : i + 1].data for ls in batch_ls]
-            ),
-            name=f"image_feature_point_{i}",
+        batch_data[f"image_feature_point_{i}"] = torch.cat(
+            [ls.image_feature_points[i : i + 1].data for ls in batch_ls]
         )
 
     gt_cam_rotation = th.SO3(

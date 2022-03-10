@@ -6,13 +6,14 @@ import theseus.utils.examples as theg
 
 torch.manual_seed(1)
 
-
 # Smaller values result in error
 th.SO3.SO3_EPS = 1e-6
 
-
+# Experiment config
+num_samples = 16
 num_points = 60
-
+batch_size = 4
+num_epochs = 20
 
 # create optimization problem
 camera_rotation = th.SO3(name="camera_rotation", dtype=torch.float64)
@@ -49,59 +50,21 @@ optimizer = th.LevenbergMarquardt(  # GaussNewton(
 # Set up Theseus layer
 theseus_optim = th.TheseusLayer(optimizer)
 
-
 # Create dataset
-loc_samples = [theg.LocalizationSample(num_points=num_points) for _ in range(16)]
-batch_size = 4
-num_batches = (len(loc_samples) + batch_size - 1) // batch_size
-
-
-def get_batch(b):
-    assert b * batch_size < len(loc_samples)
-    batch_ls = loc_samples[b * batch_size : (b + 1) * batch_size]
-    batch_data = {
-        "camera_rotation": torch.cat([ls.obs_cam_rotation.data for ls in batch_ls]),
-        "camera_translation": torch.cat(
-            [ls.obs_cam_translation.data for ls in batch_ls]
-        ),
-        "focal_length": torch.cat(
-            [ls.focal_length.data.unsqueeze(1) for ls in batch_ls]
-        ),
-    }
-
-    # batch of 3d points and 2d feature points
-    for i in range(len(batch_ls[0].world_points)):
-        batch_data[f"world_point_{i}"] = torch.cat(
-            [ls.world_points[i : i + 1].data for ls in batch_ls]
-        )
-        batch_data[f"image_feature_point_{i}"] = torch.cat(
-            [ls.image_feature_points[i : i + 1].data for ls in batch_ls]
-        )
-
-    gt_cam_rotation = th.SO3(
-        data=torch.cat([ls.gt_cam_rotation.data for ls in batch_ls])
-    )
-    gt_cam_translation = th.Point3(
-        data=torch.cat([ls.gt_cam_translation.data for ls in batch_ls])
-    )
-    return batch_data, gt_cam_rotation, gt_cam_translation
-
+localization_dataset = theg.LocalizationDataset(num_samples, num_points, batch_size)
 
 # Outer optimization loop
 loss_radius_tensor = torch.nn.Parameter(torch.tensor([-3], dtype=torch.float64))
 model_optimizer = torch.optim.Adam([loss_radius_tensor], lr=0.1)
-
-
-num_epochs = 20
 camera_rotation_var = theseus_optim.objective.optim_vars["camera_rotation"]
 camera_translation_var = theseus_optim.objective.optim_vars["camera_translation"]
 for epoch in range(num_epochs):
     print(" ******************* EPOCH {epoch} ******************* ")
     epoch_loss = 0.0
-    for i in range(num_batches):
-        print(f"BATCH {i}/{num_batches}")
+    for i, batch in enumerate(localization_dataset):
+        print(f"BATCH {i}/{len(localization_dataset)}")
         model_optimizer.zero_grad()
-        theseus_inputs, gt_camera_rotation, gt_camera_translation = get_batch(i)
+        theseus_inputs, gt_camera_rotation, gt_camera_translation = batch
         theseus_inputs["loss_radius"] = loss_radius_tensor.repeat(
             gt_camera_translation.data.shape[0]
         ).unsqueeze(1)

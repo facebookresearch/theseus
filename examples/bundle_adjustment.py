@@ -1,4 +1,5 @@
 import math
+from typing import cast
 
 import torch
 import theseus as th
@@ -13,15 +14,15 @@ th.SO3.SO3_EPS = 1e-6
 
 
 # returns a uniformly random point of the 2-sphere
-def random_S2():
+def random_S2(dtype: torch.dtype = torch.float64) -> torch.Tensor:
     theta = torch.rand(()) * math.tau
     z = torch.rand(()) * 2 - 1
     r = torch.sqrt(1 - z**2)
-    return torch.tensor([r * torch.cos(theta), r * torch.sin(theta), z]).double()
+    return torch.tensor([r * torch.cos(theta), r * torch.sin(theta), z]).to(dtype=dtype)
 
 
 # returns a uniformly random point of the 3-sphere
-def random_S3():
+def random_S3(dtype: torch.dtype = torch.float64) -> torch.Tensor:
     u, v, w = torch.rand(3)
     return torch.tensor(
         [
@@ -30,25 +31,29 @@ def random_S3():
             torch.sqrt(u) * torch.sin(math.tau * w),
             torch.sqrt(u) * torch.cos(math.tau * w),
         ]
-    ).double()
+    ).to(dtype=dtype)
 
 
-def randomSmallQuaternion(max_degrees, min_degrees=0):
-    x, y, z = random_S2()
+def randomSmallQuaternion(
+    max_degrees: float, min_degrees: int = 0, dtype: torch.dtype = torch.float64
+) -> torch.Tensor:
+    x, y, z = random_S2(dtype=dtype)
     theta = (
-        (min_degrees + (max_degrees - min_degrees) * torch.rand(())) * math.tau / 360.0
+        (min_degrees + (max_degrees - min_degrees) * torch.rand((), dtype=dtype))
+        * math.tau
+        / 360.0
     )
     c, s = torch.cos(theta), torch.sin(theta)
     return torch.tensor([c, s * x, s * y, s * z])
 
 
 def add_noise_and_outliers(
-    proj_points,
-    noise_size=1,
-    linear_noise=True,
-    outliers_proportion=0.05,
-    outlier_distance=500,
-):
+    proj_points: torch.Tensor,
+    noise_size: int = 1,
+    linear_noise: bool = True,
+    outliers_proportion: float = 0.05,
+    outlier_distance: float = 500.0,
+) -> torch.Tensor:
 
     if linear_noise:
         feat_image_points = proj_points + noise_size * (
@@ -56,8 +61,8 @@ def add_noise_and_outliers(
         )
     else:  # normal, stdDev = noiseSize
         feat_image_points = proj_points + torch.normal(
-            mean=torch.zeros(proj_points.shape), std=noise_size, dtype=torch.float64
-        )
+            mean=torch.zeros(proj_points.shape), std=noise_size
+        ).to(dtype=proj_points.dtype)
 
     # add real bad outliers
     outliers_mask = torch.rand(feat_image_points.shape[0]) < outliers_proportion
@@ -70,7 +75,7 @@ def add_noise_and_outliers(
 
 
 class LocalizationSample:
-    def __init__(self, num_points=60, focal_length=1000):
+    def __init__(self, num_points: int = 60, focal_length: float = 1000.0):
         self.focal_length = th.Variable(
             data=torch.tensor([focal_length], dtype=torch.float64), name="focal_length"
         )
@@ -99,8 +104,11 @@ class LocalizationSample:
         self.gt_cam_rotation = th.SO3(
             randomSmallQuaternion(max_degrees=20), name="gt_cam_rotation"
         )
-        self.gt_cam_translation = (-self.gt_cam_rotation.rotate(gtCamPos)).copy(
-            new_name="gt_cam_translation"
+        self.gt_cam_translation = cast(
+            th.Point3,
+            (-self.gt_cam_rotation.rotate(gtCamPos)).copy(
+                new_name="gt_cam_translation"
+            ),
         )
 
         camera_points = (
@@ -113,11 +121,17 @@ class LocalizationSample:
 
         small_rotation = th.SO3(randomSmallQuaternion(max_degrees=0.3))
         small_translation = torch.rand(3, dtype=torch.float64) * 0.1
-        self.obs_cam_rotation = small_rotation.compose(self.gt_cam_rotation).copy(
-            new_name="obs_cam_rotation"
+        self.obs_cam_rotation = cast(
+            th.SO3,
+            small_rotation.compose(self.gt_cam_rotation).copy(
+                new_name="obs_cam_rotation"
+            ),
         )
         self.obs_cam_translation = (
-            small_rotation.rotate(self.gt_cam_translation) + small_translation
+            cast(
+                th.Point3,
+                small_rotation.rotate(self.gt_cam_translation) + small_translation,
+            )
         ).copy(new_name="obs_cam_translation")
 
 

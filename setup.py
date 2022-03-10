@@ -67,7 +67,29 @@ if "CUDA_HOME" in os.environ:
         ),
     ]
 else:
-    ext_modules = []
+    ext_modules = [
+        torch_cpp_ext.CppExtension(
+            name="theseus.extlib.baspacho_solver",
+            sources=[
+                "theseus/extlib/baspacho_solver.cpp",
+            ],
+            extra_compile_args=["-std=c++17"],
+            include_dirs=[
+                str(root_dir / "third_party" / "BaSpaCho"),
+                str(root_dir / "third_party" / "BaSpaCho" / "build" / "_deps" / "eigen-src"),
+            ],
+            library_dirs=[
+                str(root_dir / "third_party" / "BaSpaCho" / "build" / "baspacho" / "testing"),
+                str(root_dir / "third_party" / "BaSpaCho" / "build" / "baspacho" / "baspacho"),
+                str(root_dir / "third_party" / "BaSpaCho" / "build" / "_deps" / "dispenso-build" / "dispenso"),
+            ],
+            libraries=[
+                "BaSpaCho",
+                "testing",
+                "dispenso",
+            ],
+        ),
+    ]
 
 setuptools.setup(
     name="theseus",

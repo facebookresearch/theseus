@@ -36,9 +36,7 @@ def add_noise_and_outliers(
 
 class LocalizationSample:
     def __init__(self, num_points: int = 60, focal_length: float = 1000.0):
-        self.focal_length = th.Variable(
-            data=torch.tensor([focal_length], dtype=torch.float64), name="focal_length"
-        )
+        self.focal_length = torch.tensor([focal_length], dtype=torch.float64)
 
         # pts = [+/-10, +/-10, +/-1]
         self.world_points = torch.cat(
@@ -48,8 +46,8 @@ class LocalizationSample:
             ]
         ).T
 
-        # gtCamPos = [+/-3, +/-3, 5 +/-1]
-        gtCamPos = th.Point3(
+        # gt_cam_pos = [+/-3, +/-3, 5 +/-1]
+        gt_cam_pos = th.Point3(
             torch.tensor(
                 [
                     [
@@ -58,17 +56,11 @@ class LocalizationSample:
                         5 + torch.rand((), dtype=torch.float64),
                     ]
                 ]
-            ),
-            name="gtCamPos",
+            )
         )
-        self.gt_cam_rotation = th.SO3(
-            random_small_quaternion(max_degrees=20), name="gt_cam_rotation"
-        )
+        self.gt_cam_rotation = th.SO3(random_small_quaternion(max_degrees=20))
         self.gt_cam_translation = cast(
-            th.Point3,
-            (-self.gt_cam_rotation.rotate(gtCamPos)).copy(
-                new_name="gt_cam_translation"
-            ),
+            th.Point3, -self.gt_cam_rotation.rotate(gt_cam_pos)
         )
 
         camera_points = (
@@ -82,14 +74,9 @@ class LocalizationSample:
         small_rotation = th.SO3(random_small_quaternion(max_degrees=0.3))
         small_translation = torch.rand(3, dtype=torch.float64) * 0.1
         self.obs_cam_rotation = cast(
-            th.SO3,
-            small_rotation.compose(self.gt_cam_rotation).copy(
-                new_name="obs_cam_rotation"
-            ),
+            th.SO3, small_rotation.compose(self.gt_cam_rotation)
         )
-        self.obs_cam_translation = (
-            cast(
-                th.Point3,
-                small_rotation.rotate(self.gt_cam_translation) + small_translation,
-            )
-        ).copy(new_name="obs_cam_translation")
+        self.obs_cam_translation = cast(
+            th.Point3,
+            small_rotation.rotate(self.gt_cam_translation) + small_translation,
+        )

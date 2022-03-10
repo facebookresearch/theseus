@@ -11,7 +11,7 @@ torch.manual_seed(1)
 th.SO3.SO3_EPS = 1e-6
 
 
-localization_sample = theg.LocalizationSample()
+num_points = 60
 
 
 # create optimization problem
@@ -20,20 +20,13 @@ camera_translation = th.Point3(name="camera_translation", dtype=torch.float64)
 loss_radius = th.Vector(1, name="loss_radius", dtype=torch.float64)
 focal_length = th.Vector(1, name="focal_length", dtype=torch.float64)
 
-weight = th.ScaleCostWeight(
-    th.Vector(data=torch.tensor([1.0], dtype=torch.float64), name="weight")
-)
-
 # Set up objective
 objective = th.Objective(dtype=torch.float64)
 
-for i in range(len(localization_sample.world_points)):
-    world_point = th.Point3(
-        data=localization_sample.world_points[i], name=f"world_point_{i}"
-    )
+for i in range(num_points):
+    world_point = th.Point3(name=f"world_point_{i}", dtype=torch.float64)
     image_feature_point = th.Point2(
-        data=localization_sample.image_feature_points[i],
-        name=f"image_feature_point_{i}",
+        name=f"image_feature_point_{i}", dtype=torch.float64
     )
     cost_function = theg.ReprojectionError(
         camera_rotation,
@@ -58,7 +51,7 @@ theseus_optim = th.TheseusLayer(optimizer)
 
 
 # Create dataset
-loc_samples = [theg.LocalizationSample() for _ in range(16)]
+loc_samples = [theg.LocalizationSample(num_points=num_points) for _ in range(16)]
 batch_size = 4
 num_batches = (len(loc_samples) + batch_size - 1) // batch_size
 

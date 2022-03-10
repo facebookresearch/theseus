@@ -291,6 +291,10 @@ def test_objective_error():
             input_data=input_data, also_update=False
         )
 
+        # To check if variables are not updated
+        assert not torch.equal(objective.optim_vars["v1"].data, input_data["v1"])
+        assert not torch.equal(objective.optim_vars["v2"].data, input_data["v2"])
+
         _check_error_for_data(v1_data, v2_data, error, error_norm_2)
 
         v1_data = torch.ones(batch_size, dof) * f1 * 0.4
@@ -303,14 +307,8 @@ def test_objective_error():
         )
 
         # To check if variables are updated
-        assert (
-            objective.optim_vars["v1"].data.numpy().all()
-            == input_data["v1"].numpy().all()
-        )
-        assert (
-            objective.optim_vars["v2"].data.numpy().all()
-            == input_data["v2"].numpy().all()
-        )
+        assert torch.equal(objective.optim_vars["v1"].data, input_data["v1"])
+        assert torch.equal(objective.optim_vars["v2"].data, input_data["v2"])
 
         _check_error_for_data(v1_data, v2_data, error, error_norm_2)
 

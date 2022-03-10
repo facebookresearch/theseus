@@ -346,8 +346,8 @@ class SE3(LieGroup):
         scale = torch.where(
             near_zero, 1 + sine[not_near_pi] ** 2 / 6, theta[not_near_pi] / sine_nz
         )
-        tangent_vector_ang = torch.zeros_like(sine_axis)
-        tangent_vector_ang[not_near_pi] = sine_axis[not_near_pi] * scale.view(-1, 1)
+        ret_ang = torch.zeros_like(sine_axis)
+        ret_ang[not_near_pi] = sine_axis[not_near_pi] * scale.view(-1, 1)
         # theta is near pi
         near_pi = ~not_near_pi
         ddiag = torch.diagonal(self[near_pi], dim1=1, dim2=2)
@@ -358,11 +358,11 @@ class SE3(LieGroup):
         sel_rows = self[near_pi, major, :3]
         aux = torch.ones(sel_rows.shape[0], dtype=torch.bool)
         sel_rows[aux, major] -= cosine[near_pi]
-        tangent_vector_ang[near_pi] = sel_rows * (
+        ret_ang[near_pi] = sel_rows * (
             theta[near_pi] ** 2 / (1 - cosine[near_pi])
         ).view(-1, 1)
-        major_norm = tangent_vector_ang[near_pi, major].sqrt().view(-1, 1)
-        tangent_vector_ang[near_pi] /= major_norm
+        major_norm = ret_ang[near_pi, major].sqrt().view(-1, 1)
+        ret_ang[near_pi] /= major_norm
 
         # Compute the translation
         near_zero = theta < NEAR_ZERO_EPS
@@ -380,14 +380,67 @@ class SE3(LieGroup):
         )
 
         translation = self[:, :, 3].view(-1, 3, 1)
-        tangent_vector_lin = a.view(-1, 1) * self[:, :, 3]
-        tangent_vector_lin -= 0.5 * torch.cross(tangent_vector_ang, self[:, :, 3])
-        tangent_vector_ang_t = tangent_vector_ang.view(-1, 3, 1)
-        tangent_vector_lin += b.view(-1, 1) * (
-            tangent_vector_ang_t @ (tangent_vector_ang_t.transpose(1, 2) @ translation)
+        ret_lin = a.view(-1, 1) * self[:, :, 3]
+        ret_lin -= 0.5 * torch.cross(ret_ang, self[:, :, 3])
+        ret_ang_ext = ret_ang.view(-1, 3, 1)
+        ret_lin += b.view(-1, 1) * (
+            ret_ang_ext @ (ret_ang_ext.transpose(1, 2) @ translation)
         ).view(-1, 3)
 
-        return torch.cat([tangent_vector_lin, tangent_vector_ang], dim=1)
+        if jacobians is not None:
+            SE3._check_jacobians_list(jacobians)
+            jac = torch.zeros(self.shape[0], 6, 6, dtype=self.dtype, device=self.device)
+
+            b_ret_ang = b.view(-1, 1) * ret_ang
+            jac[:, :3, :3] = b_ret_ang.view(-1, 3, 1) * ret_ang.view(-1, 1, 3)
+
+            half_ret_ang = 0.5 * ret_ang
+            jac[:, 0, 1] -= half_ret_ang[:, 2]
+            jac[:, 1, 0] += half_ret_ang[:, 2]
+            jac[:, 0, 2] += half_ret_ang[:, 1]
+            jac[:, 2, 0] -= half_ret_ang[:, 1]
+            jac[:, 1, 2] -= half_ret_ang[:, 0]
+            jac[:, 2, 1] += half_ret_ang[:, 0]
+
+            diag_jac_rot = torch.diagonal(jac[:, :3, :3], dim1=1, dim2=2)
+            diag_jac_rot += a.view(-1, 1)
+
+            jac[:, 3:, 3:] = jac[:, :3, :3]
+
+            theta_nz = torch.where(near_zero, non_zero, theta)
+            theta4_nz = theta2_nz**2
+            c = torch.where(
+                near_zero,
+                -1 / 360.0 - theta2 / 7560.0,
+                -(2 * two_cosine_minus_two + theta * sine + theta2)
+                / (theta4_nz * two_cosine_minus_two_nz),
+            )
+            d = torch.where(
+                near_zero,
+                -1 / 6.0 - theta2 / 180.0,
+                (theta - sine) / (theta_nz * two_cosine_minus_two_nz),
+            )
+            e = (ret_ang.view(-1, 1, 3) @ ret_lin.view(-1, 3, 1)).view(-1)
+
+            ce_ret_ang = (c * e).view(-1, 1) * ret_ang
+            jac[:, :3, 3:] = ce_ret_ang.view(-1, 3, 1) * ret_ang.view(-1, 1, 3)
+            jac[:, :3, 3:] += b_ret_ang.view(-1, 3, 1) * ret_lin.view(
+                -1, 1, 3
+            ) + ret_lin.view(-1, 3, 1) * b_ret_ang.view(-1, 1, 3)
+            diag_jac_t = torch.diagonal(jac[:, :3, 3:], dim1=1, dim2=2)
+            diag_jac_t += (e * d).view(-1, 1)
+
+            half_ret_lin = 0.5 * ret_lin
+            jac[:, 0, 4] -= half_ret_lin[:, 2]
+            jac[:, 1, 3] += half_ret_lin[:, 2]
+            jac[:, 0, 5] += half_ret_lin[:, 1]
+            jac[:, 2, 3] -= half_ret_lin[:, 1]
+            jac[:, 1, 5] -= half_ret_lin[:, 0]
+            jac[:, 2, 4] += half_ret_lin[:, 0]
+
+            jacobians.append(jac)
+
+        return torch.cat([ret_lin, ret_ang], dim=1)
 
     def _compose_impl(self, se3_2: LieGroup) -> "SE3":
         se3_2 = cast(SE3, se3_2)

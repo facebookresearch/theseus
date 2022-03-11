@@ -248,43 +248,37 @@ def test_add_and_erase_step_by_step():
 
 
 def test_objective_error():
-    vars = []
-    # Create var_i with data = i, for i in {0, 1, 2}
-    for i in range(3):
-        data = i * torch.ones(1, 1)
-        var = MockVar(1, data=data, name=f"var{i}")
-        var.update(data)
-        vars.append(var)
+    def _check_error_for_data(v1_data_, v2_data_, error_, error_norm_2_):
+        expected_error = torch.cat([v1_data_, v2_data_], dim=1) * w
+        assert error_.allclose(expected_error)
+        assert error_norm_2_.allclose(expected_error.norm(dim=1) ** 2)
 
-    # Adds all three possible cost functions with var_i and var_j to the objective
-    cov = NullCostWeight()
-    objective = th.Objective()
-    expected_objective_error = []
-    for i, v1 in enumerate(vars):
-        for j, v2 in enumerate(vars):
-            if i == j:
-                continue
-            cost_function = MockCostFunction([v1, v2], [], cov)
-            objective.add(cost_function)
-            cost_function_error = cost_function.error().numpy()
-            expected_objective_error.append(cost_function_error)
-            # Mock cost function computes error as (i + j)[1, 1] for var_i, var_j
-            np.testing.assert_almost_equal(cost_function_error, (i + j) * np.ones(2))
-    # Given these cost functionss,
-    # error is just the concatenation of the cost function errors above
-    expected_objective_error = np.concatenate(expected_objective_error)
+    for _ in range(10):
+        f1, f2 = np.random.random(), np.random.random()
+        dof = np.random.randint(2, 10)
+        batch_size = np.random.randint(2, 10)
+        v1 = th.Vector(dof=dof, name="v1")
+        v2 = th.Vector(dof=dof, name="v2")
+        z = th.Vector(data=torch.zeros(batch_size, dof), name="z")
 
-    # batch_size is set by update, but for this test we just want to check
-    # that the error method works properly (no pass through update)
-    objective._batch_size = 1
-    error = objective.error().squeeze().numpy()
-    np.testing.assert_almost_equal(error, expected_objective_error)
+        w = np.random.random()
+        # This cost functions will just compute the norm of each vector, scaled by w
+        weight = th.ScaleCostWeight(w)
+        d1 = th.eb.VariableDifference(v1, weight, z, name="d1")
+        d2 = th.eb.VariableDifference(v2, weight, z, name="d2")
 
-    # Test the squared error function
-    squared_error = np.sum(expected_objective_error**2)
-    np.testing.assert_almost_equal(
-        objective.error_squared_norm().numpy(), squared_error
-    )
+        objective = th.Objective()
+        objective.add(d1)
+        objective.add(d2)
+
+        v1_data = torch.ones(batch_size, dof) * f1
+        v2_data = torch.ones(batch_size, dof) * f2
+        objective.update({"v1": v1_data, "v2": v2_data})
+        error = objective.error()
+        error_norm_2 = objective.error_squared_norm()
+
+        assert error.shape == (batch_size, 2 * dof)
+        _check_error_for_data(v1_data, v2_data, error, error_norm_2)
 
 
 def test_get_cost_functions_connected_to_vars():

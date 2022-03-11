@@ -9,9 +9,19 @@ import torch
 
 from theseus.core import Objective
 from theseus.optimizer import Linearization
-from theseus.optimizer.linear import DenseSolver, LinearSolver
+from theseus.optimizer.linear import DenseSolver, LinearSolver, LUCudaSparseSolver
 
 from .nonlinear_least_squares import NonlinearLeastSquares
+
+_LM_ALLOWED_ELLIPS_DAMP_SOLVERS = [DenseSolver, LUCudaSparseSolver]
+
+
+def _check_ellipsoidal_damping_cls(linear_solver: LinearSolver):
+    good = False
+    for lsc in _LM_ALLOWED_ELLIPS_DAMP_SOLVERS:
+        if isinstance(linear_solver, lsc):
+            good = True
+    return good
 
 
 # See Nocedal and Wright, Numerical Optimization, pp. 258 - 261
@@ -40,6 +50,7 @@ class LevenbergMarquardt(NonlinearLeastSquares):
             max_iterations=max_iterations,
             step_size=step_size,
         )
+        self._allows_ellipsoidal = _check_ellipsoidal_damping_cls(self.linear_solver)
 
     def compute_delta(
         self,
@@ -48,15 +59,17 @@ class LevenbergMarquardt(NonlinearLeastSquares):
         damping_eps: Optional[float] = None,
         **kwargs,
     ) -> torch.Tensor:
-        if ellipsoidal_damping:
-            raise NotImplementedError("Ellipsoidal damping is not currently supported.")
-        if ellipsoidal_damping and not isinstance(self.linear_solver, DenseSolver):
+
+        solvers_str = ",".join(c.__name__ for c in _LM_ALLOWED_ELLIPS_DAMP_SOLVERS)
+        if ellipsoidal_damping and not self._allows_ellipsoidal:
             raise NotImplementedError(
-                "Ellipsoidal damping is only supported when using DenseSolver."
+                f"Ellipsoidal damping is only supported by solvers with type "
+                f"[{solvers_str}]."
             )
-        if damping_eps and not isinstance(self.linear_solver, DenseSolver):
+        if damping_eps and not self._allows_ellipsoidal:
             raise NotImplementedError(
-                "damping eps is only supported when using DenseSolver."
+                f"damping eps is only supported by solvers with type "
+                f"[{solvers_str}]."
             )
         damping_eps = damping_eps or 1e-8
 

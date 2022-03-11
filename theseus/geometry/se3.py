@@ -111,14 +111,25 @@ class SE3(LieGroup):
 
         return ret
 
-    def _project_impl(self, euclidean_grad: torch.Tensor) -> torch.Tensor:
-        self._project_check(euclidean_grad)
+    def _project_impl(
+        self, euclidean_grad: torch.Tensor, is_sparse: bool = False
+    ) -> torch.Tensor:
+        self._project_check(euclidean_grad, is_sparse)
         ret = torch.zeros(
             euclidean_grad.shape[:-2] + torch.Size([6]),
             dtype=self.dtype,
             device=self.device,
         )
-        temp = torch.einsum("...jk,...ji->...ik", euclidean_grad, self.data[:, :, :3])
+
+        if is_sparse:
+            temp = torch.einsum(
+                "i...jk,i...jl->i...lk", euclidean_grad, self.data[:, :, :3]
+            )
+        else:
+            temp = torch.einsum(
+                "...jk,...ji->...ik", euclidean_grad, self.data[:, :, :3]
+            )
+
         ret[..., :3] = temp[..., 3]
         ret[..., 3] = temp[..., 2, 1] - temp[..., 1, 2]
         ret[..., 4] = temp[..., 0, 2] - temp[..., 2, 0]
@@ -243,13 +254,12 @@ class SE3(LieGroup):
         NEAR_PI_EPS = 1e-7
         NEAR_ZERO_EPS = 5e-3
 
-        ret = torch.zeros(self.shape[0], 6, dtype=self.dtype, device=self.device)
-
-        ret[:, 3] = 0.5 * (self[:, 2, 1] - self[:, 1, 2])
-        ret[:, 4] = 0.5 * (self[:, 0, 2] - self[:, 2, 0])
-        ret[:, 5] = 0.5 * (self[:, 1, 0] - self[:, 0, 1])
+        sine_axis = torch.zeros(self.shape[0], 3, dtype=self.dtype, device=self.device)
+        sine_axis[:, 0] = 0.5 * (self[:, 2, 1] - self[:, 1, 2])
+        sine_axis[:, 1] = 0.5 * (self[:, 0, 2] - self[:, 2, 0])
+        sine_axis[:, 2] = 0.5 * (self[:, 1, 0] - self[:, 0, 1])
         cosine = 0.5 * (self[:, 0, 0] + self[:, 1, 1] + self[:, 2, 2] - 1)
-        sine = ret[:, 3:].norm(dim=1)
+        sine = sine_axis.norm(dim=1)
         theta = torch.atan2(sine, cosine)
         theta2 = theta**2
         non_zero = torch.ones(1, dtype=self.dtype, device=self.device)
@@ -263,7 +273,8 @@ class SE3(LieGroup):
         scale = torch.where(
             near_zero, 1 + sine[not_near_pi] ** 2 / 6, theta[not_near_pi] / sine_nz
         )
-        ret[not_near_pi, 3:] *= scale.view(-1, 1)
+        tangent_vector_ang = torch.zeros_like(sine_axis)
+        tangent_vector_ang[not_near_pi] = sine_axis[not_near_pi] * scale.view(-1, 1)
         # theta is near pi
         near_pi = ~not_near_pi
         ddiag = torch.diagonal(self[near_pi], dim1=1, dim2=2)
@@ -271,10 +282,14 @@ class SE3(LieGroup):
         major = torch.logical_and(
             ddiag[:, 1] > ddiag[:, 0], ddiag[:, 1] > ddiag[:, 2]
         ) + 2 * torch.logical_and(ddiag[:, 2] > ddiag[:, 0], ddiag[:, 2] > ddiag[:, 1])
-        ret[near_pi, 3:] = self[near_pi, major, :3]
-        ret[near_pi, major + 3] -= cosine[near_pi]
-        ret[near_pi, 3:] *= (theta[near_pi] ** 2 / (1 - cosine[near_pi])).view(-1, 1)
-        ret[near_pi, 3:] /= ret[near_pi, major + 3].sqrt().view(-1, 1)
+        sel_rows = self[near_pi, major, :3]
+        aux = torch.ones(sel_rows.shape[0], dtype=torch.bool)
+        sel_rows[aux, major] -= cosine[near_pi]
+        tangent_vector_ang[near_pi] = sel_rows * (
+            theta[near_pi] ** 2 / (1 - cosine[near_pi])
+        ).view(-1, 1)
+        major_norm = tangent_vector_ang[near_pi, major].sqrt().view(-1, 1)
+        tangent_vector_ang[near_pi] /= major_norm
 
         # Compute the translation
         near_zero = theta < NEAR_ZERO_EPS
@@ -292,14 +307,14 @@ class SE3(LieGroup):
         )
 
         translation = self[:, :, 3].view(-1, 3, 1)
-        tangent_vector_ang = ret[:, 3:].view(-1, 3, 1)
-        ret[:, :3] = a.view(-1, 1) * self[:, :, 3]
-        ret[:, :3] -= 0.5 * torch.cross(ret[:, 3:], self[:, :, 3])
-        ret[:, :3] += b.view(-1, 1) * (
-            tangent_vector_ang @ (tangent_vector_ang.transpose(1, 2) @ translation)
+        tangent_vector_lin = a.view(-1, 1) * self[:, :, 3]
+        tangent_vector_lin -= 0.5 * torch.cross(tangent_vector_ang, self[:, :, 3])
+        tangent_vector_ang_t = tangent_vector_ang.view(-1, 3, 1)
+        tangent_vector_lin += b.view(-1, 1) * (
+            tangent_vector_ang_t @ (tangent_vector_ang_t.transpose(1, 2) @ translation)
         ).view(-1, 3)
 
-        return ret
+        return torch.cat([tangent_vector_lin, tangent_vector_ang], dim=1)
 
     def _compose_impl(self, se3_2: LieGroup) -> "SE3":
         se3_2 = cast(SE3, se3_2)
@@ -314,8 +329,9 @@ class SE3(LieGroup):
 
     def _inverse_impl(self, get_jacobian: bool = False) -> "SE3":
         ret = torch.zeros(self.shape[0], 3, 4).to(dtype=self.dtype, device=self.device)
-        ret[:, :, :3] = self.data[:, :3, :3].transpose(1, 2)
-        ret[:, :, 3] = -(ret[:, :3, :3] @ self.data[:, :3, 3].unsqueeze(2)).view(-1, 3)
+        rotT = self.data[:, :3, :3].transpose(1, 2)
+        ret[:, :, :3] = rotT
+        ret[:, :, 3] = -(rotT @ self.data[:, :3, 3].unsqueeze(2)).view(-1, 3)
         return SE3(data=ret)
 
     def to_matrix(self) -> torch.Tensor:
@@ -382,7 +398,7 @@ class SE3(LieGroup):
         ):
             raise ValueError(err_msg)
 
-    def transform_to(
+    def transform_from(
         self,
         point: Union[Point3, torch.Tensor],
         jacobians: Optional[List[torch.Tensor]] = None,
@@ -410,7 +426,7 @@ class SE3(LieGroup):
 
         return ret
 
-    def transform_from(
+    def transform_to(
         self,
         point: Union[Point3, torch.Tensor],
         jacobians: Optional[List[torch.Tensor]] = None,

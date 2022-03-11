@@ -11,7 +11,14 @@ import theseus as th
 from theseus.constants import EPS
 from theseus.utils import numeric_jacobian
 
-from .common import check_adjoint, check_compose, check_exp_map
+from .common import (
+    check_adjoint,
+    check_compose,
+    check_exp_map,
+    check_projection_for_compose,
+    check_projection_for_inverse,
+    check_projection_for_rotate_and_transform,
+)
 
 
 def check_SO3_log_map(tangent_vector):
@@ -28,111 +35,120 @@ def check_SO3_to_quaternion(so3: th.SO3, atol=1e-10):
 
 
 def test_exp_map():
+    rng = torch.Generator()
+    rng.manual_seed(0)
+
     for batch_size in [1, 20, 100]:
-        tangent_vector = torch.rand(batch_size, 3).double() - 0.5
+        tangent_vector = torch.rand(batch_size, 3, generator=rng).double() - 0.5
         check_exp_map(tangent_vector, th.SO3)
 
     # SO3.exp_map uses approximations for small theta
     for batch_size in [1, 2, 100]:
-        tangent_vector = torch.rand(batch_size, 3).double() - 0.5
+        tangent_vector = torch.rand(batch_size, 3, generator=rng).double() - 0.5
         tangent_vector /= torch.linalg.norm(tangent_vector, dim=1, keepdim=True)
         tangent_vector *= 1e-5
         check_exp_map(tangent_vector, th.SO3)
 
     # SO3.exp_map uses the exact exponential map for small theta
     for batch_size in [1, 2, 100]:
-        tangent_vector = torch.rand(batch_size, 3).double() - 0.5
+        tangent_vector = torch.rand(batch_size, 3, generator=rng).double() - 0.5
         tangent_vector /= torch.linalg.norm(tangent_vector, dim=1, keepdim=True)
         tangent_vector *= 3e-3
         check_exp_map(tangent_vector, th.SO3)
 
     for batch_size in [1, 2, 100]:
-        tangent_vector = torch.rand(batch_size, 3).double() - 0.5
+        tangent_vector = torch.rand(batch_size, 3, generator=rng).double() - 0.5
         tangent_vector /= torch.linalg.norm(tangent_vector, dim=1, keepdim=True)
         tangent_vector *= np.pi - 1e-11
         check_exp_map(tangent_vector, th.SO3)
 
     for batch_size in [1, 2, 100]:
-        tangent_vector = torch.rand(batch_size, 3).double() - 0.5
+        tangent_vector = torch.rand(batch_size, 3, generator=rng).double() - 0.5
         tangent_vector /= torch.linalg.norm(tangent_vector, dim=1, keepdim=True)
         tangent_vector *= 2 * np.pi - 1e-11
         check_exp_map(tangent_vector, th.SO3)
 
 
 def test_log_map():
+    rng = torch.Generator()
+    rng.manual_seed(0)
+
     for batch_size in [1, 2, 100]:
-        tangent_vector = torch.rand(batch_size, 3).double() - 0.5
+        tangent_vector = torch.rand(batch_size, 3, generator=rng).double() - 0.5
         check_SO3_log_map(tangent_vector)
 
     # SO3.log_map uses approximations for small theta
     for batch_size in [1, 2, 100]:
-        tangent_vector = torch.rand(batch_size, 3).double() - 0.5
+        tangent_vector = torch.rand(batch_size, 3, generator=rng).double() - 0.5
         tangent_vector /= torch.linalg.norm(tangent_vector, dim=1, keepdim=True)
         tangent_vector *= 1e-6
         check_SO3_log_map(tangent_vector)
 
     # SO3.log_map uses the exact logarithm map for small theta
     for batch_size in [1, 2, 100]:
-        tangent_vector = torch.rand(batch_size, 3).double() - 0.5
+        tangent_vector = torch.rand(batch_size, 3, generator=rng).double() - 0.5
         tangent_vector /= torch.linalg.norm(tangent_vector, dim=1, keepdim=True)
         tangent_vector *= 1e-3
         check_SO3_log_map(tangent_vector)
 
     for batch_size in [1, 2, 100]:
-        tangent_vector = torch.rand(batch_size, 3).double() - 0.5
+        tangent_vector = torch.rand(batch_size, 3, generator=rng).double() - 0.5
         tangent_vector /= torch.linalg.norm(tangent_vector, dim=1, keepdim=True)
         tangent_vector *= np.pi - 1e-11
         check_SO3_log_map(tangent_vector)
 
     for batch_size in [1, 2, 100]:
-        tangent_vector = torch.rand(batch_size, 3).double() - 0.5
+        tangent_vector = torch.rand(batch_size, 3, generator=rng).double() - 0.5
         tangent_vector /= torch.linalg.norm(tangent_vector, dim=1, keepdim=True)
         tangent_vector *= np.pi - 1e-3
         check_SO3_log_map(tangent_vector)
 
     for batch_size in [1, 2, 100]:
-        tangent_vector = torch.rand(batch_size, 3).double() - 0.5
+        tangent_vector = torch.rand(batch_size, 3, generator=rng).double() - 0.5
         tangent_vector /= torch.linalg.norm(tangent_vector, dim=1, keepdim=True)
         tangent_vector *= 2 * np.pi - 1e-11
         check_SO3_log_map(tangent_vector)
 
 
 def test_quaternion():
+    rng = torch.Generator()
+    rng.manual_seed(0)
+
     for batch_size in [1, 2, 100]:
-        tangent_vector = torch.rand(batch_size, 3).double() - 0.5
+        tangent_vector = torch.rand(batch_size, 3, generator=rng).double() - 0.5
         so3 = th.SO3.exp_map(tangent_vector)
         check_SO3_to_quaternion(so3)
 
     for batch_size in [1, 2, 100]:
-        tangent_vector = torch.rand(batch_size, 3).double() - 0.5
+        tangent_vector = torch.rand(batch_size, 3, generator=rng).double() - 0.5
         tangent_vector /= torch.linalg.norm(tangent_vector, dim=1, keepdim=True)
         tangent_vector *= 1e-6
         so3 = th.SO3.exp_map(tangent_vector)
         check_SO3_to_quaternion(so3)
 
     for batch_size in [1, 2, 100]:
-        tangent_vector = torch.rand(batch_size, 3).double() - 0.5
+        tangent_vector = torch.rand(batch_size, 3, generator=rng).double() - 0.5
         tangent_vector /= torch.linalg.norm(tangent_vector, dim=1, keepdim=True)
         tangent_vector *= 1e-3
         so3 = th.SO3.exp_map(tangent_vector)
         check_SO3_to_quaternion(so3)
 
     for batch_size in [1, 2, 100]:
-        tangent_vector = torch.rand(batch_size, 3).double() - 0.5
+        tangent_vector = torch.rand(batch_size, 3, generator=rng).double() - 0.5
         tangent_vector /= torch.linalg.norm(tangent_vector, dim=1, keepdim=True)
         tangent_vector *= np.pi - 1e-11
         so3 = th.SO3.exp_map(tangent_vector)
         check_SO3_to_quaternion(so3, 1e-7)
 
     for batch_size in [1, 2, 100]:
-        tangent_vector = torch.rand(batch_size, 3).double() - 0.5
+        tangent_vector = torch.rand(batch_size, 3, generator=rng).double() - 0.5
         tangent_vector /= torch.linalg.norm(tangent_vector, dim=1, keepdim=True)
         tangent_vector *= np.pi - 1e-3
         so3 = th.SO3.exp_map(tangent_vector)
         check_SO3_to_quaternion(so3)
 
     for batch_size in [1, 2, 100]:
-        tangent_vector = torch.rand(batch_size, 3).double() - 0.5
+        tangent_vector = torch.rand(batch_size, 3, generator=rng).double() - 0.5
         tangent_vector /= torch.linalg.norm(tangent_vector, dim=1, keepdim=True)
         tangent_vector *= 2 * np.pi - 1e-11
         so3 = th.SO3.exp_map(tangent_vector)
@@ -209,37 +225,18 @@ def test_projection():
     rng.manual_seed(0)
     for _ in range(10):  # repeat a few times
         for batch_size in [1, 20, 100]:
-            so3 = th.SO3.rand(batch_size, generator=rng, dtype=torch.float64)
-            point = th.Point3(data=torch.randn(batch_size, 3).double())
-
             # Test SO3.rotate
-            def rotate_sum(R, p):
-                return th.SO3(data=R).rotate(p).data.sum(dim=0)
-
-            jac = torch.autograd.functional.jacobian(rotate_sum, (so3.data, point.data))
-
-            actual = [
-                so3.project(jac[0]).transpose(0, 1),
-                point.project(jac[1]).transpose(0, 1),
-            ]
-            expected = []
-            _ = so3.rotate(point, expected)
-            assert torch.allclose(actual[0], expected[0])
-            assert torch.allclose(actual[1], expected[1])
-
-            # Test SO3.unrotate
-            def unrotate_sum(R, p):
-                return th.SO3(data=R).unrotate(p).data.sum(dim=0)
-
-            jac = torch.autograd.functional.jacobian(
-                unrotate_sum, (so3.data, point.data)
+            check_projection_for_rotate_and_transform(
+                th.SO3, th.Point3, th.SO3.rotate, batch_size, rng
             )
 
-            actual = [
-                so3.project(jac[0]).transpose(0, 1),
-                point.project(jac[1]).transpose(0, 1),
-            ]
-            expected = []
-            _ = so3.unrotate(point, expected)
-            assert torch.allclose(actual[0], expected[0])
-            assert torch.allclose(actual[1], expected[1])
+            # Test SO3.unrotate
+            check_projection_for_rotate_and_transform(
+                th.SO3, th.Point3, th.SO3.unrotate, batch_size, rng
+            )
+
+            # Test SO3.compose
+            check_projection_for_compose(th.SO3, batch_size, rng)
+
+            # Test SO3.inverse
+            check_projection_for_inverse(th.SO3, batch_size, rng)

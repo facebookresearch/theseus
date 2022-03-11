@@ -21,6 +21,7 @@ class LUCudaSparseSolver(LinearSolver):
         linearization_cls: Optional[Type[Linearization]] = None,
         linearization_kwargs: Optional[Dict[str, Any]] = None,
         num_solver_contexts=1,
+        batch_size: Optional[int] = None,
         **kwargs,
     ):
         if not torch.cuda.is_available():
@@ -39,7 +40,10 @@ class LUCudaSparseSolver(LinearSolver):
         self._num_solver_contexts: int = num_solver_contexts
 
         if self.linearization.structure().num_rows:
-            self.reset()
+            if batch_size is not None:
+                self.reset(batch_size=batch_size)
+            else:
+                self.reset()
 
     def reset(self, batch_size: int = 16):
         if not torch.cuda.is_available():

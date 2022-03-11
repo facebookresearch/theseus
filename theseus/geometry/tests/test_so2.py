@@ -18,6 +18,9 @@ from .common import (
     check_exp_map,
     check_inverse,
     check_log_map,
+    check_projection_for_compose,
+    check_projection_for_inverse,
+    check_projection_for_rotate_and_transform,
 )
 
 
@@ -124,37 +127,18 @@ def test_projection():
     rng.manual_seed(0)
     for _ in range(10):  # repeat a few times
         for batch_size in [1, 20, 100]:
-            so2 = th.SO2.rand(batch_size, generator=rng, dtype=torch.float64)
-            point = th.Point2(data=torch.randn(batch_size, 2).double())
-
-            # Test SO3.rotate
-            def rotate_sum(R, p):
-                return th.SO2(data=R).rotate(p).data.sum(dim=0)
-
-            jac = torch.autograd.functional.jacobian(rotate_sum, (so2.data, point.data))
-
-            actual = [
-                so2.project(jac[0]).transpose(0, 1),
-                point.project(jac[1]).transpose(0, 1),
-            ]
-            expected = []
-            _ = so2.rotate(point, expected)
-            assert torch.allclose(actual[0], expected[0])
-            assert torch.allclose(actual[1], expected[1])
-
-            # Test SO3.unrotate
-            def unrotate_sum(R, p):
-                return th.SO2(data=R).unrotate(p).data.sum(dim=0)
-
-            jac = torch.autograd.functional.jacobian(
-                unrotate_sum, (so2.data, point.data)
+            # Test SO2.rotate
+            check_projection_for_rotate_and_transform(
+                th.SO2, th.Point2, th.SO2.rotate, batch_size, rng
             )
 
-            actual = [
-                so2.project(jac[0]).transpose(0, 1),
-                point.project(jac[1]).transpose(0, 1),
-            ]
-            expected = []
-            _ = so2.unrotate(point, expected)
-            assert torch.allclose(actual[0], expected[0])
-            assert torch.allclose(actual[1], expected[1])
+            # Test SO2.unrotate
+            check_projection_for_rotate_and_transform(
+                th.SO2, th.Point2, th.SO2.unrotate, batch_size, rng
+            )
+
+            # Test SO2.compose
+            check_projection_for_compose(th.SO2, batch_size, rng)
+
+            # Test SO2.inverse
+            check_projection_for_inverse(th.SO2, batch_size, rng)

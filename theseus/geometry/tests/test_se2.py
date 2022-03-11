@@ -8,6 +8,7 @@ import pytest  # noqa: F401
 import torch
 
 import theseus as th
+from theseus.constants import EPS
 from theseus.core.tests.common import check_copy_var
 from theseus.utils import numeric_jacobian
 
@@ -17,6 +18,9 @@ from .common import (
     check_exp_map,
     check_inverse,
     check_log_map,
+    check_projection_for_compose,
+    check_projection_for_inverse,
+    check_projection_for_rotate_and_transform,
 )
 
 
@@ -75,25 +79,58 @@ def test_copy():
     check_copy_var(se2)
 
 
-def test_transform_to():
-    pose = th.SE2(x_y_theta=torch.DoubleTensor([1, 2, np.pi / 2.0]).view(1, -1))
-    point = th.Point2(data=torch.DoubleTensor([-1, 4]).view(1, -1))
-    expected = th.Point2(data=torch.DoubleTensor([2, 2]).view(1, -1))
-    jacobians = []
-    actual = pose.transform_to(point, jacobians=jacobians)
-    jacobians_from_tensor = []
-    actual_from_tensor = pose.transform_to(point.data, jacobians=jacobians_from_tensor)
+def test_transform_from_and_to():
+    rng = torch.Generator()
+    rng.manual_seed(0)
+    for _ in range(10):  # repeat a few times
+        for batch_size_se2 in [1, 20, 100]:
+            for batch_size_pnt in [1, 20, 100]:
+                if (
+                    batch_size_se2 != 1
+                    and batch_size_pnt != 1
+                    and batch_size_pnt != batch_size_se2
+                ):
+                    continue
 
-    expected_jac = numeric_jacobian(
-        lambda groups: groups[0].transform_to(groups[1]),
-        [pose, point],
-        function_dim=2,
-    )
-    assert expected.data.allclose(actual.data)
-    assert expected.data.allclose(actual_from_tensor.data)
-    for i in range(2):
-        assert torch.allclose(jacobians[i], expected_jac[i])
-        assert torch.allclose(jacobians_from_tensor[i], expected_jac[i])
+                se2 = th.SE2.rand(batch_size_se2, generator=rng, dtype=torch.float64)
+                point_tensor = torch.randn(batch_size_pnt, 2).double()
+                point_tensor_ext = torch.cat(
+                    (point_tensor, torch.ones(batch_size_pnt, 1).double()), dim=1
+                )
+
+                jacobians_to = []
+                point_to = se2.transform_to(point_tensor, jacobians=jacobians_to)
+                expected_to = (
+                    se2.inverse().to_matrix() @ point_tensor_ext.unsqueeze(2)
+                )[:, :2]
+                jacobians_from = []
+                point_from = se2.transform_from(point_to, jacobians_from)
+
+                # Check the operation result
+                assert torch.allclose(expected_to.squeeze(2), point_to.data, atol=EPS)
+                assert torch.allclose(point_tensor, point_from.data, atol=EPS)
+
+                # Check the jacobians
+                expected_jac = numeric_jacobian(
+                    lambda groups: groups[0].transform_to(groups[1]),
+                    [se2, th.Point2(point_tensor)],
+                    function_dim=2,
+                )
+
+                assert jacobians_to[0].shape == expected_jac[0].shape
+                assert jacobians_to[1].shape == expected_jac[1].shape
+                assert torch.allclose(jacobians_to[0], expected_jac[0])
+                assert torch.allclose(jacobians_to[1], expected_jac[1])
+
+                expected_jac = numeric_jacobian(
+                    lambda groups: groups[0].transform_from(groups[1]),
+                    [se2, point_to],
+                    function_dim=2,
+                )
+                assert jacobians_from[0].shape == expected_jac[0].shape
+                assert jacobians_from[1].shape == expected_jac[1].shape
+                assert torch.allclose(jacobians_from[0], expected_jac[0])
+                assert torch.allclose(jacobians_from[1], expected_jac[1])
 
 
 def test_xy_jacobian():
@@ -127,22 +164,18 @@ def test_projection():
     rng.manual_seed(0)
     for _ in range(10):  # repeat a few times
         for batch_size in [1, 20, 100]:
-            se2 = th.SE2.rand(batch_size, generator=rng, dtype=torch.float64)
-            point = th.Point2(data=torch.randn(batch_size, 2).double())
-
             # Test SE2.transform_to
-            def transform_to_sum(g, p):
-                return th.SE2(data=g).transform_to(p).data.sum(dim=0)
-
-            jac = torch.autograd.functional.jacobian(
-                transform_to_sum, (se2.data, point.data)
+            check_projection_for_rotate_and_transform(
+                th.SE2, th.Point2, th.SE2.transform_to, batch_size, rng
             )
 
-            actual = [
-                se2.project(jac[0]).transpose(0, 1),
-                point.project(jac[1]).transpose(0, 1),
-            ]
-            expected = []
-            _ = se2.transform_to(point, expected)
-            assert torch.allclose(actual[0], expected[0])
-            assert torch.allclose(actual[1], expected[1])
+            # Test SE2.transform_from
+            check_projection_for_rotate_and_transform(
+                th.SE2, th.Point2, th.SE2.transform_from, batch_size, rng
+            )
+
+            # Test SE2.compose
+            check_projection_for_compose(th.SE2, batch_size, rng)
+
+            # Test SE2.inverse
+            check_projection_for_inverse(th.SE2, batch_size, rng)

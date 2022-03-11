@@ -33,6 +33,11 @@ class MockVar(th.Manifold):
     def _copy_impl(self, new_name=None):
         return MockVar(self.data.shape[1], data=self.data.clone(), name=new_name)
 
+    def _project_impl(
+        self, euclidean_grad: torch.Tensor, is_sparse: bool = False
+    ) -> torch.Tensor:
+        return euclidean_grad.clone()
+
 
 class MockCostWeight(th.CostWeight):
     def __init__(

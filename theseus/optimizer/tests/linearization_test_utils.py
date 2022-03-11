@@ -30,6 +30,11 @@ class MockVector(th.Manifold):
     def _copy_impl(self):
         raise NotImplementedError
 
+    def _project_impl(
+        self, euclidean_grad: torch.Tensor, is_sparse: bool = False
+    ) -> torch.Tensor:
+        return euclidean_grad.clone()
+
 
 class MockCostFunction(th.CostFunction):
     def __init__(self, optim_vars, cost_weight, dim, name=None):

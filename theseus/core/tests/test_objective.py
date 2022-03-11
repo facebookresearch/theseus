@@ -282,10 +282,10 @@ def test_objective_error():
 
         # For input_data and also_update
 
-        v1_data = torch.ones(batch_size, dof) * f1 * 0.1
-        v2_data = torch.ones(batch_size, dof) * f2 * 0.1
+        v1_data_new = torch.ones(batch_size, dof) * f1 * 0.1
+        v2_data_new = torch.ones(batch_size, dof) * f2 * 0.1
 
-        input_data = {"v1": v1_data, "v2": v2_data}
+        input_data = {"v1": v1_data_new, "v2": v2_data_new}
         error = objective.error(input_data=input_data, also_update=False)
         error_norm_2 = objective.error_squared_norm(
             input_data=input_data, also_update=False
@@ -295,7 +295,10 @@ def test_objective_error():
         assert objective.optim_vars["v1"].data is not input_data["v1"]
         assert objective.optim_vars["v2"].data is not input_data["v2"]
 
-        _check_error_for_data(v1_data, v2_data, error, error_norm_2)
+        assert objective.optim_vars["v1"].data is v1_data
+        assert objective.optim_vars["v2"].data is v2_data
+
+        _check_error_for_data(v1_data_new, v2_data_new, error, error_norm_2)
 
         v1_data = torch.ones(batch_size, dof) * f1 * 0.4
         v2_data = torch.ones(batch_size, dof) * f2 * 0.4

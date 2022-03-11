@@ -12,7 +12,7 @@ def test_simple(verbose=False):
    s = SymbolicDecomposition(param_sizes, ss_ptrs, ss_inds)
 
    batch_size = 2
-   f = s.newNumericDecomposition(batch_size)
+   f = s.create_numeric_decomposition(batch_size)
 
    mRowPtr = [
       0, 1, 3, 5, 8, 11, 13, 15, 17, 20, 23, 25, 27
@@ -100,5 +100,3 @@ def test_simple(verbose=False):
       print("residuals:", residuals)
 
    assert all(np.linalg.norm(res) < 1e-10 for res in residuals)
-
-test_simple()

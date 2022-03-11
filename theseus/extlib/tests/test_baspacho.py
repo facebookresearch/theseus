@@ -65,7 +65,7 @@ def check_baspacho(
     s = SymbolicDecomposition(torch.tensor(paramSizes, dtype=torch.int64),
                               torch.tensor(AtA_blk.indptr, dtype=torch.int64),
                               torch.tensor(AtA_blk.indices, dtype=torch.int64))
-    f = s.newNumericDecomposition(batch_size)
+    f = s.create_numeric_decomposition(batch_size)
 
     f.add_MtM(A_val, A_rowPtr, A_colInd)
     f.factor()

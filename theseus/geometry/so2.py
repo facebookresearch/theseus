@@ -105,10 +105,17 @@ class SO2(LieGroup):
     def _adjoint_impl(self) -> torch.Tensor:
         return torch.ones(self.shape[0], 1, 1, device=self.device, dtype=self.dtype)
 
-    def _project_impl(self, euclidean_grad: torch.Tensor) -> torch.Tensor:
-        self._project_check(euclidean_grad)
+    def _project_impl(
+        self, euclidean_grad: torch.Tensor, is_sparse: bool = False
+    ) -> torch.Tensor:
+        self._project_check(euclidean_grad, is_sparse)
+
         temp = torch.stack((-self[:, 1], self[:, 0]), dim=1)
-        return torch.einsum("...k,...k", euclidean_grad, temp).unsqueeze(-1)
+
+        if is_sparse:
+            return torch.einsum("i...k,i...k->i...", euclidean_grad, temp).unsqueeze(-1)
+        else:
+            return torch.einsum("...k,...k", euclidean_grad, temp).unsqueeze(-1)
 
     @staticmethod
     def exp_map(tangent_vector: torch.Tensor) -> "SO2":
@@ -133,7 +140,11 @@ class SO2(LieGroup):
         return SO2(data=torch.stack([cosine, -sine], dim=1))
 
     def _rotate_shape_check(self, point: Union[Point2, torch.Tensor]):
-        err_msg = "SO2 can only rotate 2-D vectors."
+        err_msg = (
+            f"SO2 can only transform vectors of shape [{self.shape[0]}, 2] or [1, 2], "
+            f"but the input has shape {point.shape}."
+        )
+
         if isinstance(point, torch.Tensor):
             if not point.ndim == 2 or point.shape[1] != 2:
                 raise ValueError(err_msg)
@@ -179,13 +190,13 @@ class SO2(LieGroup):
     ) -> Point2:
         self._rotate_shape_check(point)
         cosine, sine = self.to_cos_sin()
-        rotation = SO2._rotate_from_cos_sin(point, cosine, sine)
+        ret = SO2._rotate_from_cos_sin(point, cosine, sine)
         if jacobians is not None:
             self._check_jacobians_list(jacobians)
-            J1 = torch.stack([-rotation.y(), rotation.x()], dim=1).view(-1, 2, 1)
-            J2 = self.to_matrix().expand(rotation.shape[0], -1, -1)
-            jacobians.extend([J1, J2])
-        return rotation
+            Jrot = torch.stack([-ret.y(), ret.x()], dim=1).view(-1, 2, 1)
+            Jpnt = self.to_matrix().expand(ret.shape[0], -1, -1)
+            jacobians.extend([Jrot, Jpnt])
+        return ret
 
     def unrotate(
         self,
@@ -194,13 +205,13 @@ class SO2(LieGroup):
     ) -> Point2:
         self._rotate_shape_check(point)
         cosine, sine = self.to_cos_sin()
-        rotation = SO2._rotate_from_cos_sin(point, cosine, -sine)
+        ret = SO2._rotate_from_cos_sin(point, cosine, -sine)
         if jacobians is not None:
             self._check_jacobians_list(jacobians)
-            J1 = torch.stack([rotation.y(), -rotation.x()], dim=1).view(-1, 2, 1)
-            J2 = self.to_matrix().transpose(2, 1).expand(rotation.shape[0], -1, -1)
-            jacobians.extend([J1, J2])
-        return rotation
+            Jrot = torch.stack([ret.y(), -ret.x()], dim=1).view(-1, 2, 1)
+            Jpnt = self.to_matrix().transpose(2, 1).expand(ret.shape[0], -1, -1)
+            jacobians.extend([Jrot, Jpnt])
+        return ret
 
     def to_cos_sin(self) -> Tuple[torch.Tensor, torch.Tensor]:
         return self[:, 0], self[:, 1]

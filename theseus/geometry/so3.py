@@ -99,15 +99,22 @@ class SO3(LieGroup):
     def _adjoint_impl(self) -> torch.Tensor:
         return self.data.clone()
 
-    def _project_impl(self, euclidean_grad: torch.Tensor) -> torch.Tensor:
-        self._project_check(euclidean_grad)
+    def _project_impl(
+        self, euclidean_grad: torch.Tensor, is_sparse: bool = False
+    ) -> torch.Tensor:
+        self._project_check(euclidean_grad, is_sparse)
         ret = torch.zeros(
             euclidean_grad.shape[:-1], dtype=self.dtype, device=self.device
         )
-        temp = torch.einsum("...jk,...ji->...ik", euclidean_grad, self.data)
+        if is_sparse:
+            temp = torch.einsum("i...jk,i...jl->i...lk", euclidean_grad, self.data)
+        else:
+            temp = torch.einsum("...jk,...ji->...ik", euclidean_grad, self.data)
+
         ret[..., 0] = temp[..., 2, 1] - temp[..., 1, 2]
         ret[..., 1] = temp[..., 0, 2] - temp[..., 2, 0]
         ret[..., 2] = temp[..., 1, 0] - temp[..., 0, 1]
+
         return ret
 
     @staticmethod
@@ -178,12 +185,12 @@ class SO3(LieGroup):
         return ret
 
     def _log_map_impl(self) -> torch.Tensor:
-        ret = torch.zeros(self.shape[0], 3, dtype=self.dtype, device=self.device)
-        ret[:, 0] = 0.5 * (self[:, 2, 1] - self[:, 1, 2])
-        ret[:, 1] = 0.5 * (self[:, 0, 2] - self[:, 2, 0])
-        ret[:, 2] = 0.5 * (self[:, 1, 0] - self[:, 0, 1])
+        sine_axis = torch.zeros(self.shape[0], 3, dtype=self.dtype, device=self.device)
+        sine_axis[:, 0] = 0.5 * (self[:, 2, 1] - self[:, 1, 2])
+        sine_axis[:, 1] = 0.5 * (self[:, 0, 2] - self[:, 2, 0])
+        sine_axis[:, 2] = 0.5 * (self[:, 1, 0] - self[:, 0, 1])
         cosine = 0.5 * (self[:, 0, 0] + self[:, 1, 1] + self[:, 2, 2] - 1)
-        sine = ret.norm(dim=1)
+        sine = sine_axis.norm(dim=1)
         theta = torch.atan2(sine, cosine)
         # theta != pi
         not_near_pi = 1 + cosine > 1e-7
@@ -194,18 +201,23 @@ class SO3(LieGroup):
         scale = torch.where(
             small_theta, 1 + sine[not_near_pi] ** 2 / 6, theta[not_near_pi] / sine_nz
         )
-        ret[not_near_pi] *= scale.view(-1, 1)
-        # theta ~ pi
+        ret = torch.zeros_like(sine_axis)
+        ret[not_near_pi] = sine_axis[not_near_pi] * scale.view(-1, 1)
+        # # theta ~ pi
         near_pi = ~not_near_pi
         ddiag = torch.diagonal(self[near_pi], dim1=1, dim2=2)
         # Find the index of major coloumns and diagonals
         major = torch.logical_and(
             ddiag[:, 1] > ddiag[:, 0], ddiag[:, 1] > ddiag[:, 2]
         ) + 2 * torch.logical_and(ddiag[:, 2] > ddiag[:, 0], ddiag[:, 2] > ddiag[:, 1])
-        ret[near_pi] = self[near_pi, major]
-        ret[near_pi, major] -= cosine[near_pi]
-        ret[near_pi] *= (theta[near_pi] ** 2 / (1 - cosine[near_pi])).view(-1, 1)
-        ret[near_pi] /= ret[near_pi, major].sqrt().view(-1, 1)
+        sel_rows = self[near_pi, major]
+        aux = torch.ones(sel_rows.shape[0], dtype=torch.bool)
+        sel_rows[aux, major] -= cosine[near_pi]
+        ret[near_pi] = sel_rows * (theta[near_pi] ** 2 / (1 - cosine[near_pi])).view(
+            -1, 1
+        )
+        major_norm = ret[near_pi, major].sqrt().view(-1, 1)
+        ret[near_pi] /= major_norm
         return ret
 
     def _compose_impl(self, so3_2: LieGroup) -> "SO3":

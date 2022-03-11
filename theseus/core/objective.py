@@ -480,5 +480,5 @@ class Objective:
         for cost_function in self.cost_functions.values():
             cost_function.to(*args, **kwargs)
         device, dtype, *_ = torch._C._nn._parse_to(*args, **kwargs)
-        self.device = device
-        self.dtype = dtype
+        self.device = device or self.device
+        self.dtype = dtype or self.dtype

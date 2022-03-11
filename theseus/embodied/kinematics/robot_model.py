@@ -8,7 +8,7 @@ from typing import Dict, Union
 
 import torch
 
-from theseus.geometry import SE2, LieGroup, Point2, Vector
+from theseus.geometry import LieGroup, Point2, Vector
 
 RobotModelInput = Union[torch.Tensor, Vector]
 RobotModelOuput = Union[LieGroup, Dict[str, LieGroup]]
@@ -32,8 +32,6 @@ class IdentityModel(RobotModel):
         super().__init__()
 
     def forward_kinematics(self, robot_pose: RobotModelInput) -> RobotModelOuput:
-        if isinstance(robot_pose, SE2):
-            return robot_pose.translation
         if isinstance(robot_pose, Point2) or isinstance(robot_pose, Vector):
             assert robot_pose.dof() == 2
             return robot_pose

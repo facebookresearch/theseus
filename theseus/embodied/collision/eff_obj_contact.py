@@ -57,7 +57,7 @@ class EffectorObjectContactPlanar(CostFunction):
         )
         J_transf_obj = J_transf[0]
         J_transf_eff = J_transf[1].matmul(J_xy[0])
-        robot_state = cast(Point2, self.robot.forward_kinematics(eff__obj))
+        robot_state = cast(Point2, self.robot.forward_kinematics(eff__obj)["state"])
         dist, J_dist = self.sdf.signed_distance(robot_state.data.view(-1, 2, 1))
         J_out = (J_dist.matmul(J_transf_obj), J_dist.matmul(J_transf_eff))
         return dist, J_out

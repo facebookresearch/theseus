@@ -41,7 +41,7 @@ class Collision2D(CostFunction):
     def _compute_distances_and_jacobians(
         self,
     ) -> Tuple[torch.Tensor, torch.Tensor]:
-        robot_state = cast(Point2, self.robot.forward_kinematics(self.pose))
+        robot_state = cast(Point2, self.robot.forward_kinematics(self.pose)["state"])
         return self.sdf.signed_distance(robot_state.data.view(-1, 2, 1))
 
     def _error_from_distances(self, distances: torch.Tensor):

@@ -11,7 +11,6 @@ import torch
 from theseus.geometry import LieGroup, Point2, Vector
 
 RobotModelInput = Union[torch.Tensor, Vector]
-RobotModelOuput = Union[LieGroup, Dict[str, LieGroup]]
 
 
 class RobotModel(abc.ABC):
@@ -19,7 +18,7 @@ class RobotModel(abc.ABC):
         pass
 
     @abc.abstractmethod
-    def forward_kinematics(self, robot_pose: RobotModelInput) -> RobotModelOuput:
+    def forward_kinematics(self, robot_pose: RobotModelInput) -> Dict[str, LieGroup]:
         pass
 
     @abc.abstractmethod
@@ -31,10 +30,10 @@ class IdentityModel(RobotModel):
     def __init__(self):
         super().__init__()
 
-    def forward_kinematics(self, robot_pose: RobotModelInput) -> RobotModelOuput:
+    def forward_kinematics(self, robot_pose: RobotModelInput) -> Dict[str, LieGroup]:
         if isinstance(robot_pose, Point2) or isinstance(robot_pose, Vector):
             assert robot_pose.dof() == 2
-            return robot_pose
+            return {"state": robot_pose}
         raise NotImplementedError(
             f"IdentityModel not implemented for pose with type {type(robot_pose)}."
         )

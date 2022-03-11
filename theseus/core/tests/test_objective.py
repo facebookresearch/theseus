@@ -253,6 +253,18 @@ def test_objective_error():
         assert error_.allclose(expected_error)
         assert error_norm_2_.allclose(expected_error.norm(dim=1) ** 2)
 
+    def _check_variables(objective, input_data, v1_data, v2_data, also_update):
+
+        if also_update:
+            assert objective.optim_vars["v1"].data is input_data["v1"]
+            assert objective.optim_vars["v2"].data is input_data["v2"]
+        else:
+            assert objective.optim_vars["v1"].data is not input_data["v1"]
+            assert objective.optim_vars["v2"].data is not input_data["v2"]
+
+            assert objective.optim_vars["v1"].data is v1_data
+            assert objective.optim_vars["v2"].data is v2_data
+
     for _ in range(10):
         f1, f2 = np.random.random(), np.random.random()
         dof = np.random.randint(2, 10)
@@ -280,8 +292,6 @@ def test_objective_error():
         assert error.shape == (batch_size, 2 * dof)
         _check_error_for_data(v1_data, v2_data, error, error_norm_2)
 
-        # For input_data and also_update
-
         v1_data_new = torch.ones(batch_size, dof) * f1 * 0.1
         v2_data_new = torch.ones(batch_size, dof) * f2 * 0.1
 
@@ -292,11 +302,7 @@ def test_objective_error():
         )
 
         # To check if variables are not updated
-        assert objective.optim_vars["v1"].data is not input_data["v1"]
-        assert objective.optim_vars["v2"].data is not input_data["v2"]
-
-        assert objective.optim_vars["v1"].data is v1_data
-        assert objective.optim_vars["v2"].data is v2_data
+        _check_variables(objective, input_data, v1_data, v2_data, also_update=False)
 
         _check_error_for_data(v1_data_new, v2_data_new, error, error_norm_2)
 
@@ -310,8 +316,7 @@ def test_objective_error():
         )
 
         # To check if variables are updated
-        assert objective.optim_vars["v1"].data is input_data["v1"]
-        assert objective.optim_vars["v2"].data is input_data["v2"]
+        _check_variables(objective, input_data, v1_data, v2_data, also_update=True)
 
         _check_error_for_data(v1_data, v2_data, error, error_norm_2)
 

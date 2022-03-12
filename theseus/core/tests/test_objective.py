@@ -248,10 +248,18 @@ def test_add_and_erase_step_by_step():
 
 
 def test_objective_error():
-    def _check_error_for_data(v1_data_, v2_data_, error_, error_norm_2_):
+    def _check_error_for_data(v1_data_, v2_data_, error_, error_type):
         expected_error = torch.cat([v1_data_, v2_data_], dim=1) * w
-        assert error_.allclose(expected_error)
-        assert error_norm_2_.allclose(expected_error.norm(dim=1) ** 2)
+
+        if error_type == "error":
+            assert error_.allclose(expected_error)
+        else:
+            assert error_.allclose(expected_error.norm(dim=1) ** 2)
+
+    # def _check_error_for_data(v1_data_, v2_data_, error_, error_norm_2_):
+    #     expected_error = torch.cat([v1_data_, v2_data_], dim=1) * w
+    #     assert error_.allclose(expected_error)
+    #     assert error_norm_2_.allclose(expected_error.norm(dim=1) ** 2)
 
     def _check_variables(objective, input_data, v1_data, v2_data, also_update):
 
@@ -264,6 +272,14 @@ def test_objective_error():
 
             assert objective.optim_vars["v1"].data is v1_data
             assert objective.optim_vars["v2"].data is v2_data
+
+    def _check_error(
+        v1_data_, v2_data_, error_, error_type, objective, input_data, also_update
+    ):
+
+        _check_error_for_data(v1_data_, v2_data_, error_, error_type)
+
+        _check_variables(objective, input_data, v1_data, v2_data, also_update)
 
     for _ in range(10):
         f1, f2 = np.random.random(), np.random.random()
@@ -287,38 +303,65 @@ def test_objective_error():
         v2_data = torch.ones(batch_size, dof) * f2
         objective.update({"v1": v1_data, "v2": v2_data})
         error = objective.error()
+        _check_error_for_data(v1_data, v2_data, error, "error")
         error_norm_2 = objective.error_squared_norm()
 
         assert error.shape == (batch_size, 2 * dof)
-        _check_error_for_data(v1_data, v2_data, error, error_norm_2)
+        _check_error_for_data(v1_data, v2_data, error_norm_2, "error_norm_2")
 
         v1_data_new = torch.ones(batch_size, dof) * f1 * 0.1
         v2_data_new = torch.ones(batch_size, dof) * f2 * 0.1
 
         input_data = {"v1": v1_data_new, "v2": v2_data_new}
         error = objective.error(input_data=input_data, also_update=False)
+
+        _check_error(
+            v1_data_new,
+            v2_data_new,
+            error,
+            "error",
+            objective,
+            input_data,
+            also_update=False,
+        )
+
         error_norm_2 = objective.error_squared_norm(
             input_data=input_data, also_update=False
         )
 
-        # To check if variables are not updated
-        _check_variables(objective, input_data, v1_data, v2_data, also_update=False)
-
-        _check_error_for_data(v1_data_new, v2_data_new, error, error_norm_2)
+        _check_error(
+            v1_data_new,
+            v2_data_new,
+            error_norm_2,
+            "error_norm_2",
+            objective,
+            input_data,
+            also_update=False,
+        )
 
         v1_data = torch.ones(batch_size, dof) * f1 * 0.4
         v2_data = torch.ones(batch_size, dof) * f2 * 0.4
 
         input_data = {"v1": v1_data, "v2": v2_data}
         error = objective.error(input_data=input_data, also_update=True)
+
+        _check_error(
+            v1_data, v2_data, error, "error", objective, input_data, also_update=True
+        )
+
         error_norm_2 = objective.error_squared_norm(
             input_data=input_data, also_update=True
         )
 
-        # To check if variables are updated
-        _check_variables(objective, input_data, v1_data, v2_data, also_update=True)
-
-        _check_error_for_data(v1_data, v2_data, error, error_norm_2)
+        _check_error(
+            v1_data,
+            v2_data,
+            error_norm_2,
+            "error_norm_2",
+            objective,
+            input_data,
+            also_update=True,
+        )
 
 
 def test_get_cost_functions_connected_to_vars():

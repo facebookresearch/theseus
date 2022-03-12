@@ -237,7 +237,6 @@ class SO3(LieGroup):
         )
         ret = torch.zeros_like(sine_axis)
         ret[not_near_pi] = sine_axis[not_near_pi] * scale.view(-1, 1)
-
         # # theta ~ pi
         near_pi = ~not_near_pi
         ddiag = torch.diagonal(self[near_pi], dim1=1, dim2=2)

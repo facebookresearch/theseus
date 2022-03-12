@@ -55,7 +55,7 @@ class no_lie_tangent(_LieGroupContext):
 
 
 class LieGroupTensor(torch.Tensor):
-    from torch._C import _disabled_torch_function_impl
+    from torch._C import _disabled_torch_function_impl  # type: ignore
 
     __torch_function__ = _disabled_torch_function_impl
 

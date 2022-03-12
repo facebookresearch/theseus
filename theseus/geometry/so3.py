@@ -221,19 +221,22 @@ class SO3(LieGroup):
         cosine = 0.5 * (self[:, 0, 0] + self[:, 1, 1] + self[:, 2, 2] - 1)
         sine = sine_axis.norm(dim=1)
         theta = torch.atan2(sine, cosine)
+
         # theta != pi
         not_near_pi = 1 + cosine > 1e-7
+        near_zero = theta < 5e-3
         # Compute the approximation of theta / sin(theta) when theta is near to 0
-        small_theta = theta < 5e-3
+        near_zero_not_near_pi = near_zero[not_near_pi]
         non_zero = torch.ones(1, dtype=self.dtype, device=self.device)
-        sine_nz = torch.where(small_theta[not_near_pi], non_zero, sine[not_near_pi])
+        sine_nz = torch.where(near_zero_not_near_pi, non_zero, sine[not_near_pi])
         scale = torch.where(
-            small_theta[not_near_pi],
+            near_zero_not_near_pi,
             1 + sine[not_near_pi] ** 2 / 6,
             theta[not_near_pi] / sine_nz,
         )
         ret = torch.zeros_like(sine_axis)
         ret[not_near_pi] = sine_axis[not_near_pi] * scale.view(-1, 1)
+
         # # theta ~ pi
         near_pi = ~not_near_pi
         ddiag = torch.diagonal(self[near_pi], dim1=1, dim2=2)
@@ -259,15 +262,15 @@ class SO3(LieGroup):
             sine_theta = sine * theta
             two_cosine_minus_two = 2 * cosine - 2
             two_cosine_minus_two_nz = torch.where(
-                small_theta, non_zero, two_cosine_minus_two
+                near_zero, non_zero, two_cosine_minus_two
             )
-            theta2_nz = torch.where(small_theta, non_zero, theta2)
+            theta2_nz = torch.where(near_zero, non_zero, theta2)
 
             a = torch.where(
-                small_theta, 1 - theta2 / 12, -sine_theta / two_cosine_minus_two_nz
+                near_zero, 1 - theta2 / 12, -sine_theta / two_cosine_minus_two_nz
             )
             b = torch.where(
-                small_theta,
+                near_zero,
                 1.0 / 12 + theta2 / 720,
                 (sine_theta + two_cosine_minus_two)
                 / (theta2_nz * two_cosine_minus_two_nz),

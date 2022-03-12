@@ -337,17 +337,22 @@ class SE3(LieGroup):
         theta2 = theta**2
         non_zero = torch.ones(1, dtype=self.dtype, device=self.device)
 
+        near_zero = theta < NEAR_ZERO_EPS
+
         # Compute the rotation
-        # theta is not near pi
         not_near_pi = 1 + cosine > NEAR_PI_EPS
+        # theta is not near pi
+        near_zero_not_near_pi = near_zero[not_near_pi]
         # Compute the approximation of theta / sin(theta) when theta is near to 0
-        near_zero = theta[not_near_pi] < NEAR_ZERO_EPS
-        sine_nz = torch.where(near_zero, non_zero, sine[not_near_pi])
+        sine_nz = torch.where(near_zero_not_near_pi, non_zero, sine[not_near_pi])
         scale = torch.where(
-            near_zero, 1 + sine[not_near_pi] ** 2 / 6, theta[not_near_pi] / sine_nz
+            near_zero_not_near_pi,
+            1 + sine[not_near_pi] ** 2 / 6,
+            theta[not_near_pi] / sine_nz,
         )
         ret_ang = torch.zeros_like(sine_axis)
         ret_ang[not_near_pi] = sine_axis[not_near_pi] * scale.view(-1, 1)
+
         # theta is near pi
         near_pi = ~not_near_pi
         ddiag = torch.diagonal(self[near_pi], dim1=1, dim2=2)
@@ -358,14 +363,14 @@ class SE3(LieGroup):
         sel_rows = self[near_pi, major, :3]
         aux = torch.ones(sel_rows.shape[0], dtype=torch.bool)
         sel_rows[aux, major] -= cosine[near_pi]
-        ret_ang[near_pi] = sel_rows * (
-            theta[near_pi] ** 2 / (1 - cosine[near_pi])
+        axis_squared = ddiag - cosine[near_pi].view(-1, 1)
+        axis_abs = (axis_squared / axis_squared.sum(1, keepdim=True)).sqrt()
+        axis = axis_abs * sel_rows.sign()
+        ret_ang[near_pi] = axis * (
+            theta[near_pi] * sine_axis[near_pi, major].sign()
         ).view(-1, 1)
-        major_norm = ret_ang[near_pi, major].sqrt().view(-1, 1)
-        ret_ang[near_pi] /= major_norm
 
         # Compute the translation
-        near_zero = theta < NEAR_ZERO_EPS
         sine_theta = sine * theta
         two_cosine_minus_two = 2 * cosine - 2
         two_cosine_minus_two_nz = torch.where(near_zero, non_zero, two_cosine_minus_two)

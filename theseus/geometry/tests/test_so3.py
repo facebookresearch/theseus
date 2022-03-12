@@ -149,7 +149,7 @@ def test_quaternion():
         tangent_vector /= torch.linalg.norm(tangent_vector, dim=1, keepdim=True)
         tangent_vector *= np.pi - 1e-11
         so3 = th.SO3.exp_map(tangent_vector)
-        check_SO3_to_quaternion(so3, 1e-7)
+        check_SO3_to_quaternion(so3)
 
     for batch_size in [1, 2, 100]:
         tangent_vector = torch.rand(batch_size, 3, generator=rng).double() - 0.5

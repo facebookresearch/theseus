@@ -224,11 +224,13 @@ class SO3(LieGroup):
         # theta != pi
         not_near_pi = 1 + cosine > 1e-7
         # Compute the approximation of theta / sin(theta) when theta is near to 0
-        small_theta = theta[not_near_pi] < 5e-3
+        small_theta = theta < 5e-3
         non_zero = torch.ones(1, dtype=self.dtype, device=self.device)
-        sine_nz = torch.where(small_theta, non_zero, sine[not_near_pi])
+        sine_nz = torch.where(small_theta[not_near_pi], non_zero, sine[not_near_pi])
         scale = torch.where(
-            small_theta, 1 + sine[not_near_pi] ** 2 / 6, theta[not_near_pi] / sine_nz
+            small_theta[not_near_pi],
+            1 + sine[not_near_pi] ** 2 / 6,
+            theta[not_near_pi] / sine_nz,
         )
         ret = torch.zeros_like(sine_axis)
         ret[not_near_pi] = sine_axis[not_near_pi] * scale.view(-1, 1)
@@ -242,11 +244,12 @@ class SO3(LieGroup):
         sel_rows = self[near_pi, major]
         aux = torch.ones(sel_rows.shape[0], dtype=torch.bool)
         sel_rows[aux, major] -= cosine[near_pi]
-        ret[near_pi] = sel_rows * (theta[near_pi] ** 2 / (1 - cosine[near_pi])).view(
+        axis_squared = ddiag - cosine[near_pi].view(-1, 1)
+        axis_abs = (axis_squared / axis_squared.sum(1, keepdim=True)).sqrt()
+        axis = axis_abs * sel_rows.sign()
+        ret[near_pi] = axis * (theta[near_pi] * sine_axis[near_pi, major].sign()).view(
             -1, 1
         )
-        major_norm = ret[near_pi, major].sqrt().view(-1, 1)
-        ret[near_pi] /= major_norm
 
         if jacobians is not None:
             SO3._check_jacobians_list(jacobians)

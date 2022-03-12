@@ -176,13 +176,13 @@ class SO3(LieGroup):
         ret[:, 0, 0] += cosine.view(-1)
         ret[:, 1, 1] += cosine.view(-1)
         ret[:, 2, 2] += cosine.view(-1)
-        ret_temp = sine_by_theta.view(-1, 1) * tangent_vector
-        ret[:, 0, 1] -= ret_temp[:, 2]
-        ret[:, 1, 0] += ret_temp[:, 2]
-        ret[:, 0, 2] += ret_temp[:, 1]
-        ret[:, 2, 0] -= ret_temp[:, 1]
-        ret[:, 1, 2] -= ret_temp[:, 0]
-        ret[:, 2, 1] += ret_temp[:, 0]
+        sine_axis = sine_by_theta.view(-1, 1) * tangent_vector
+        ret[:, 0, 1] -= sine_axis[:, 2]
+        ret[:, 1, 0] += sine_axis[:, 2]
+        ret[:, 0, 2] += sine_axis[:, 1]
+        ret[:, 2, 0] -= sine_axis[:, 1]
+        ret[:, 1, 2] -= sine_axis[:, 0]
+        ret[:, 2, 1] += sine_axis[:, 0]
 
         if jacobians is not None:
             SO3._check_jacobians_list(jacobians)

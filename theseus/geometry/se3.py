@@ -374,7 +374,9 @@ class SE3(LieGroup):
         sine_theta = sine * theta
         two_cosine_minus_two = 2 * cosine - 2
         two_cosine_minus_two_nz = torch.where(near_zero, non_zero, two_cosine_minus_two)
+
         theta2_nz = torch.where(near_zero, non_zero, theta2)
+
         a = torch.where(
             near_zero, 1 - theta2 / 12, -sine_theta / two_cosine_minus_two_nz
         )

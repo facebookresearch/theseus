@@ -19,6 +19,7 @@ from .common import (
     check_projection_for_compose,
     check_projection_for_exp_map,
     check_projection_for_inverse,
+    check_projection_for_log_map,
     check_projection_for_rotate_and_transform,
 )
 
@@ -100,6 +101,7 @@ def test_log_map():
         tangent_vector = torch.cat([tangent_vector_lin, tangent_vector_ang], dim=1)
 
         check_SE3_log_map(tangent_vector)
+        check_projection_for_log_map(tangent_vector, th.SE3)
 
     # SE3.log_map uses approximations for small theta
     for batch_size in [1, 20, 100]:
@@ -110,6 +112,7 @@ def test_log_map():
         tangent_vector = torch.cat([tangent_vector_lin, tangent_vector_ang], dim=1)
 
         check_SE3_log_map(tangent_vector)
+        check_projection_for_log_map(tangent_vector, th.SE3)
 
     # SE3.log_map uses the exact logarithm map for small theta
     for batch_size in [1, 20, 100]:
@@ -120,6 +123,7 @@ def test_log_map():
         tangent_vector = torch.cat([tangent_vector_lin, tangent_vector_ang], dim=1)
 
         check_SE3_log_map(tangent_vector)
+        check_projection_for_log_map(tangent_vector, th.SE3)
 
     for batch_size in [1, 20, 100]:
         tangent_vector_ang = torch.rand(batch_size, 3, generator=rng).double() - 0.5
@@ -129,6 +133,7 @@ def test_log_map():
         tangent_vector = torch.cat([tangent_vector_lin, tangent_vector_ang], dim=1)
 
         check_SE3_log_map(tangent_vector)
+        check_projection_for_log_map(tangent_vector, th.SE3)
 
     for batch_size in [1, 20, 100]:
         tangent_vector_ang = torch.rand(batch_size, 3, generator=rng).double() - 0.5
@@ -138,6 +143,7 @@ def test_log_map():
         tangent_vector = torch.cat([tangent_vector_lin, tangent_vector_ang], dim=1)
 
         check_SE3_log_map(tangent_vector)
+        check_projection_for_log_map(tangent_vector, th.SE3)
 
 
 def test_compose():

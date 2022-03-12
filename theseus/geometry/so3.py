@@ -307,27 +307,19 @@ class SO3(LieGroup):
 
     def to_quaternion(self) -> torch.Tensor:
         ret = torch.zeros(self.shape[0], 4, dtype=self.dtype, device=self.device)
-        # ret[:, 4] computes the cos(0.5 * theta)
-        ret[:, 0] = (
-            0.5 * (1 + self[:, 0, 0] + self[:, 1, 1] + self[:, 2, 2]).clamp(0, 4).sqrt()
-        )
+
+        sine_axis = torch.zeros(self.shape[0], 3, dtype=self.dtype, device=self.device)
+        sine_axis[:, 0] = 0.5 * (self[:, 2, 1] - self[:, 1, 2])
+        sine_axis[:, 1] = 0.5 * (self[:, 0, 2] - self[:, 2, 0])
+        sine_axis[:, 2] = 0.5 * (self[:, 1, 0] - self[:, 0, 1])
+        w = 0.5 * (1 + self[:, 0, 0] + self[:, 1, 1] + self[:, 2, 2]).clamp(0, 4).sqrt()
+
+        ret[:, 0] = w
+
         # theta != pi
         not_near_pi = ret[:, 0] > 1e-5
-        ret[not_near_pi, 1] = (
-            0.25
-            * (self[not_near_pi, 2, 1] - self[not_near_pi, 1, 2])
-            / ret[not_near_pi, 0]
-        )
-        ret[not_near_pi, 2] = (
-            0.25
-            * (self[not_near_pi, 0, 2] - self[not_near_pi, 2, 0])
-            / ret[not_near_pi, 0]
-        )
-        ret[not_near_pi, 3] = (
-            0.25
-            * (self[not_near_pi, 1, 0] - self[not_near_pi, 0, 1])
-            / ret[not_near_pi, 0]
-        )
+        ret[:, 1:] = 0.5 * sine_axis / w.view(-1, 1)
+
         # theta ~ pi
         near_pi = ~not_near_pi
         ddiag = torch.diagonal(self[near_pi], dim1=1, dim2=2)
@@ -335,14 +327,18 @@ class SO3(LieGroup):
         major = torch.logical_and(
             ddiag[:, 1] > ddiag[:, 0], ddiag[:, 1] > ddiag[:, 2]
         ) + 2 * torch.logical_and(ddiag[:, 2] > ddiag[:, 0], ddiag[:, 2] > ddiag[:, 1])
-        ret[near_pi, 1:] = self[near_pi, major]
+        sel_rows = self[near_pi, major]
+        aux = torch.ones(sel_rows.shape[0], dtype=torch.bool)
         cosine_near_pi = 0.5 * (
             self[near_pi, 0, 0] + self[near_pi, 1, 1] + self[near_pi, 2, 2] - 1
         )
-        ret[near_pi, major + 1] -= cosine_near_pi
-        ret[near_pi, 1:] /= ret[near_pi, 1:].norm(dim=1, keepdim=True)
-        ret[near_pi, 1:] *= (0.5 * (1 - cosine_near_pi)).clamp(0, 1).sqrt().view(-1, 1)
-        ret /= ret.norm(dim=1, keepdim=True)
+        sel_rows[aux, major] -= cosine_near_pi
+        axis_squared = ddiag - cosine_near_pi.view(-1, 1)
+        axis_abs = (axis_squared / axis_squared.sum(1, keepdim=True)).sqrt()
+        axis = axis_abs * sel_rows.sign() * sine_axis[near_pi, major].sign().view(-1, 1)
+        sine_half_theta = (0.5 * (1 - cosine_near_pi)).clamp(0, 1).sqrt().view(-1, 1)
+        ret[near_pi, 1:] = axis * sine_half_theta
+
         return ret
 
     @staticmethod

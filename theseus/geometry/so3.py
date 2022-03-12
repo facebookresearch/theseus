@@ -156,17 +156,17 @@ class SO3(LieGroup):
         theta = torch.linalg.norm(tangent_vector, dim=1, keepdim=True).unsqueeze(1)
         theta2 = theta**2
         # Compute the approximations when theta ~ 0
-        small_theta = theta < 0.005
+        near_zero = theta < 0.005
         non_zero = torch.ones(
             1, dtype=tangent_vector.dtype, device=tangent_vector.device
         )
-        theta_nz = torch.where(small_theta, non_zero, theta)
-        theta2_nz = torch.where(small_theta, non_zero, theta2)
-        cosine = torch.where(small_theta, 8 / (4 + theta2) - 1, theta.cos())
+        theta_nz = torch.where(near_zero, non_zero, theta)
+        theta2_nz = torch.where(near_zero, non_zero, theta2)
+        cosine = torch.where(near_zero, 8 / (4 + theta2) - 1, theta.cos())
         sine = theta.sin()
-        sine_by_theta = torch.where(small_theta, 0.5 * cosine + 0.5, sine / theta_nz)
+        sine_by_theta = torch.where(near_zero, 0.5 * cosine + 0.5, sine / theta_nz)
         one_minus_cosie_by_theta2 = torch.where(
-            small_theta, 0.5 * sine_by_theta, (1 - cosine) / theta2_nz
+            near_zero, 0.5 * sine_by_theta, (1 - cosine) / theta2_nz
         )
         ret.data = (
             one_minus_cosie_by_theta2
@@ -188,7 +188,7 @@ class SO3(LieGroup):
             SO3._check_jacobians_list(jacobians)
             theta3_nz = theta_nz * theta2_nz
             theta_minus_sine_by_theta3 = torch.where(
-                small_theta, torch.zeros_like(theta), (theta - sine) / theta3_nz
+                near_zero, torch.zeros_like(theta), (theta - sine) / theta3_nz
             )
             jac = (
                 theta_minus_sine_by_theta3
@@ -222,11 +222,12 @@ class SO3(LieGroup):
         sine = sine_axis.norm(dim=1)
         theta = torch.atan2(sine, cosine)
 
-        # theta != pi
-        not_near_pi = 1 + cosine > 1e-7
         near_zero = theta < 5e-3
-        # Compute the approximation of theta / sin(theta) when theta is near to 0
+
+        not_near_pi = 1 + cosine > 1e-7
+        # theta != pi
         near_zero_not_near_pi = near_zero[not_near_pi]
+        # Compute the approximation of theta / sin(theta) when theta is near to 0
         non_zero = torch.ones(1, dtype=self.dtype, device=self.device)
         sine_nz = torch.where(near_zero_not_near_pi, non_zero, sine[not_near_pi])
         scale = torch.where(

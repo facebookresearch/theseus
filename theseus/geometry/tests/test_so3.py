@@ -101,12 +101,12 @@ def test_log_map():
         check_SO3_log_map(tangent_vector)
         check_projection_for_log_map(tangent_vector, th.SO3)
 
-    for batch_size in [1, 2, 20]:
+    for batch_size in [1, 2, 100]:
         tangent_vector = torch.rand(batch_size, 3, generator=rng).double() - 0.5
         tangent_vector /= torch.linalg.norm(tangent_vector, dim=1, keepdim=True)
         tangent_vector *= np.pi - 1e-11
         check_SO3_log_map(tangent_vector)
-        check_projection_for_log_map(tangent_vector, th.SO3, 1e-4)
+        check_projection_for_log_map(tangent_vector, th.SO3, 1e-7)
 
     for batch_size in [1, 2, 100]:
         tangent_vector = torch.rand(batch_size, 3, generator=rng).double() - 0.5

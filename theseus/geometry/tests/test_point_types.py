@@ -9,7 +9,10 @@ import torch
 import theseus as th
 from theseus.constants import EPS
 
-from .common import check_projection_for_vector_exp_map
+from .common import (
+    check_projection_for_vector_exp_map,
+    check_projection_for_vector_log_map,
+)
 
 
 def test_xy_point2():
@@ -69,3 +72,22 @@ def test_exp_map():
 
         assert torch.allclose(ret.data, tangent_vector, atol=EPS)
         check_projection_for_vector_exp_map(tangent_vector, Group=th.Point3)
+
+
+def test_log_map():
+    rng = torch.Generator()
+    rng.manual_seed(0)
+
+    for batch_size in [1, 20, 100]:
+        group = th.Point2.rand(batch_size)
+        ret = group.log_map()
+
+        assert torch.allclose(ret, group.data, atol=EPS)
+        check_projection_for_vector_log_map(tangent_vector=ret, Group=th.Point2)
+
+    for batch_size in [1, 20, 100]:
+        group = th.Point3.rand(batch_size)
+        ret = group.log_map()
+
+        assert torch.allclose(ret, group.data, atol=EPS)
+        check_projection_for_vector_log_map(tangent_vector=ret, Group=th.Point3)

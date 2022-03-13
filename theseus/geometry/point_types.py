@@ -91,7 +91,7 @@ class Point2(Vector):
         if tangent_vector.ndim != 2 or tangent_vector.shape[1] != 2:
             raise ValueError("Tangent vectors of Point2 should be 2-D vectors.")
 
-        Vector._exp_map_jacobian(tangent_vector, jacobians)
+        Vector._exp_map_jacobian_impl(tangent_vector, jacobians)
 
         return Point2(data=tangent_vector.clone())
 
@@ -168,7 +168,7 @@ class Point3(Vector):
         if tangent_vector.ndim != 2 or tangent_vector.shape[1] != 3:
             raise ValueError("Tangent vectors of Point3 should be 3-D vectors.")
 
-        Vector._exp_map_jacobian(tangent_vector, jacobians)
+        Vector._exp_map_jacobian_impl(tangent_vector, jacobians)
 
         return Point3(data=tangent_vector.clone())
 

@@ -11,7 +11,10 @@ import theseus as th
 from theseus.constants import EPS
 from theseus.core.tests.common import check_copy_var
 
-from .common import check_projection_for_vector_exp_map
+from .common import (
+    check_projection_for_vector_exp_map,
+    check_projection_for_vector_log_map,
+)
 
 torch.manual_seed(0)
 
@@ -192,3 +195,16 @@ def test_exp_map():
 
         assert torch.allclose(ret.data, tangent_vector, atol=EPS)
         check_projection_for_vector_exp_map(tangent_vector, Group=th.Vector)
+
+
+def test_log_map():
+    rng = torch.Generator()
+    rng.manual_seed(0)
+
+    for batch_size in [1, 20, 100]:
+        dim = torch.randint(1, 10, size=[1], generator=rng)[0]
+        group = th.Vector.rand(batch_size, dim, generator=rng)
+        ret = group.log_map()
+
+        assert torch.allclose(ret, group.data, atol=EPS)
+        check_projection_for_vector_log_map(tangent_vector=ret, Group=th.Vector)

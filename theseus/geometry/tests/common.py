@@ -275,3 +275,19 @@ def check_projection_for_vector_exp_map(tangent_vector, Group, atol=1e-8):
     ]
 
     assert torch.allclose(actual[0], expected, atol=atol)
+
+
+def check_projection_for_vector_log_map(tangent_vector, Group, atol=1e-8):
+    batch_size = tangent_vector.shape[0]
+    aux_id = torch.arange(batch_size)
+    group = Group.exp_map(tangent_vector)
+
+    def log_func(group):
+        return Group(data=group).log_map()
+
+    jac_raw = torch.autograd.functional.jacobian(log_func, (group.data))
+    expected = jac_raw[aux_id, :, aux_id]
+    actual = []
+    _ = group.log_map(jacobians=actual)
+
+    assert torch.allclose(actual[0], expected, atol=atol)

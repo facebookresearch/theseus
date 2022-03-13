@@ -9,12 +9,14 @@ import torch
 
 from theseus.core import Objective
 from theseus.optimizer import Linearization, SparseLinearization
-from theseus.optimizer.autograd import LUCudaSolveFunction
+from theseus.optimizer.autograd import BaspachoSolveFunction
 
 from .linear_solver import LinearSolver
+from scipy.sparse import csr_matrix
+import numpy as np
 
 
-class LUCudaSparseSolver(LinearSolver):
+class BaspachoSparseSolver(LinearSolver):
     def __init__(
         self,
         objective: Objective,
@@ -23,13 +25,10 @@ class LUCudaSparseSolver(LinearSolver):
         num_solver_contexts=1,
         **kwargs,
     ):
-        if not torch.cuda.is_available():
-            raise RuntimeError("Cuda not available, LUCudaSparseSolver cannot be used")
-
         linearization_cls = linearization_cls or SparseLinearization
         if not linearization_cls == SparseLinearization:
             raise RuntimeError(
-                "LUCudaSparseSolver only works with theseus.optimizer.SparseLinearization,"
+                "BaspachoSparseSolver only works with theseus.optimizer.SparseLinearization,"
                 + f" got {type(self.linearization)}"
             )
 
@@ -41,28 +40,27 @@ class LUCudaSparseSolver(LinearSolver):
         if self.linearization.structure().num_rows:
             self.reset()
 
-    def reset(self, batch_size: int = 16):
-        if not torch.cuda.is_available():
-            raise RuntimeError("Cuda not available, LUCudaSparseSolver cannot be used")
+    def reset(self, dev="cpu"):
+        if dev == "cuda" and not torch.cuda.is_available():
+            raise RuntimeError("Cuda not available, BaspachoSparseSolver cannot be used")
 
         try:
             from theseus.extlib.baspacho_solver import SymbolicDecomposition
         except Exception as e:
-            raise RuntimeError( # FIXME
-                "Theseus C++/Cuda extension cannot be loaded\n"
-                "even if Cuda appears to be available. Make sure Theseus\n"
-                "is installed with Cuda support (export CUDA_HOME=...)\n"
+            raise RuntimeError(
+                "Theseus C++ extension cannot be loaded.\n"
+                "This is an installation issue (also check CUDA\n"
+                "if CUDA support was compiled in)"
                 f"{type(e).__name__}: {e}"
             )
 
         # convert to tensors for accelerated Mt x M operation
-        # TODO: ".cuda" only if necessary
         self.A_rowPtr = torch.tensor(
             self.linearization.structure().row_ptr, dtype=torch.int64
-        ) #.cuda()
+        ).to(dev)
         self.A_colInd = torch.tensor(
             self.linearization.structure().col_ind, dtype=torch.int64
-        ) #.cuda()
+        ).to(dev)
 
         # compute block-structure of AtA. To do so we multiply the Jacobian's
         # transpose At by a matrix that collapses the rows to block-rows, ie
@@ -70,10 +68,16 @@ class LUCudaSparseSolver(LinearSolver):
         # a non-zero in i-th row.
         At_mock = self.linearization.structure().mock_csc_transpose()
         num_vars = len(self.linearization.var_start_cols)
-        to_blocks = csr_matrix((np.ones(num_vars), 
-                                self.linearization.var_start_cols,
-                                np.arange(num_vars+1)),
-                                (num_vars, self.linearization.num_cols))
+        num_cols = self.linearization.num_cols
+        to_blocks = csr_matrix(
+                (np.ones(num_cols), np.arange(num_cols),
+                self.linearization.var_start_cols + [num_cols]),
+                (num_vars, num_cols)
+            )
+        #to_blocks = csr_matrix((np.ones(num_vars), 
+        #                        self.linearization.var_start_cols,
+        #                        np.arange(num_vars+1)),
+        #                        (num_vars, self.linearization.num_cols))
         block_At_mock = to_blocks @ At_mock
         block_AtA_mock = (block_At_mock @ block_At_mock.T).tocsr()
 

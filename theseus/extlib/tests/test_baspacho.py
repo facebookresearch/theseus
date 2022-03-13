@@ -39,11 +39,11 @@ def check_baspacho(
         paramSizes.append(newParam)
     nParams = len(paramSizes)
     paramStarts = np.cumsum([0, *paramSizes])
-    toBlocks = csr_matrix(
+    to_blocks = csr_matrix(
             (np.ones(num_cols), np.arange(num_cols), paramStarts),
             (nParams, num_cols)
         )
-    A_blk = A_skel @ toBlocks.T
+    A_blk = A_skel @ to_blocks.T
     AtA = tril(A_skel.T @ A_skel)
     AtA_blk = tril(A_blk.T @ A_blk).tocsr()
 

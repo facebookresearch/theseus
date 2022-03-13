@@ -23,10 +23,12 @@ class NumericDecomposition {
                          int64_t batchSize);
 
     void add_M(const torch::Tensor& val, const torch::Tensor& ptrs,
-                      const torch::Tensor& inds);
+               const torch::Tensor& inds);
 
     void add_MtM(const torch::Tensor& val, const torch::Tensor& ptrs,
                  const torch::Tensor& inds);
+
+    void damp(double alpha, double beta);
 
     void factor();
 
@@ -36,12 +38,12 @@ class NumericDecomposition {
     torch::Tensor data;
 };
 
-NumericDecomposition::NumericDecomposition(std::shared_ptr<SymbolicDecompositionData> dec,
-                                           int64_t batchSize)
+NumericDecomposition::NumericDecomposition(
+    std::shared_ptr<SymbolicDecompositionData> dec, int64_t batchSize)
     : dec(dec) {
     auto xOptions = torch::TensorOptions().dtype(torch::kFloat64);
-    data = torch::zeros({(long)batchSize, 
-                        (long)(dec->solver->dataSize())}, xOptions);
+    data = torch::zeros({(long)batchSize, (long)(dec->solver->dataSize())},
+                        xOptions);
 }
 
 void NumericDecomposition::add_M(const torch::Tensor& val,
@@ -81,8 +83,8 @@ void NumericDecomposition::add_M(const torch::Tensor& val,
         int64_t rStart = pParamStart[rParam];
         int64_t rowInBlock = r - rStart;
         for (int64_t i = pPtrs[r], iEnd = pPtrs[r + 1]; i < iEnd; i++) {
-            uint64_t c = pInds[i];
-            if(c > r) {
+            int64_t c = pInds[i];
+            if (c > r) {
                 continue;
             }
             int64_t cParam = pToParamIndex[c];
@@ -92,12 +94,12 @@ void NumericDecomposition::add_M(const torch::Tensor& val,
             // note if rParam == cParam then flip = false and
             // we write the lower half
             auto [off, stride, flip] = accessor.blockOffset(rParam, cParam);
-            int64_t offsetInFactor = off + (flip
-                                    ? stride * colInBlock + rowInBlock
-                                    : stride * rowInBlock + colInBlock);
+            int64_t offsetInFactor =
+                off + (flip ? stride * colInBlock + rowInBlock
+                            : stride * rowInBlock + colInBlock);
             int64_t offsetInMVal = i;
 
-            for(int b = 0; b < batchSize; b++) {
+            for (int b = 0; b < batchSize; b++) {
                 pData[offsetInFactor] += pVal[offsetInMVal];
                 offsetInFactor += factorBatchStride;
                 offsetInMVal += valBatchStride;
@@ -140,7 +142,7 @@ void NumericDecomposition::add_MtM(const torch::Tensor& val,
     // for each row in M...
     for (int64_t q = 0; q < nPtrs - 1; q++) {
         // iterate on i <= j (corresponding to c <= r via inds)
-        for (int64_t j = pPtrs[q], jEnd = pPtrs[q + 1]; j < jEnd; j++) {  
+        for (int64_t j = pPtrs[q], jEnd = pPtrs[q + 1]; j < jEnd; j++) {
             uint64_t r = pInds[j];
             int64_t rParam = pToParamIndex[r];
             int64_t rStart = pParamStart[rParam];
@@ -151,19 +153,40 @@ void NumericDecomposition::add_MtM(const torch::Tensor& val,
                 int64_t cStart = pParamStart[cParam];
                 int64_t colInBlock = c - cStart;
 
-                // if cParam == rParam then flip == false and we write lower half
+                // if cParam == rParam then flip == false and we write lower
+                // half
                 auto [off, stride, flip] = accessor.blockOffset(rParam, cParam);
-                int64_t offsetInFactor = off + (flip ? stride * colInBlock + rowInBlock : stride * rowInBlock + colInBlock);
+                int64_t offsetInFactor =
+                    off + (flip ? stride * colInBlock + rowInBlock
+                                : stride * rowInBlock + colInBlock);
                 int64_t offsetInMValR = j;
                 int64_t offsetInMValC = i;
 
-                for(int b = 0; b < batchSize; b++) {
-                    pData[offsetInFactor] += pVal[offsetInMValR] * pVal[offsetInMValC];
+                for (int b = 0; b < batchSize; b++) {
+                    pData[offsetInFactor] +=
+                        pVal[offsetInMValR] * pVal[offsetInMValC];
                     offsetInFactor += factorBatchStride;
                     offsetInMValR += valBatchStride;
                     offsetInMValC += valBatchStride;
                 }
             }
+        }
+    }
+}
+
+void NumericDecomposition::damp(double alpha, double beta) {
+    int64_t batchSize = data.size(0);
+    int64_t factorSize = data.size(1);
+    double* pFactor = data.data_ptr<double>();
+
+    int64_t nParams = dec->paramSize.size(0);
+    auto accessor = dec->solver->accessor();
+    for (int i = 0; i < batchSize; i++) {
+        double* pFactorItem = pFactor + factorSize * i;
+        for (int64_t p = 0; p < nParams; p++) {
+            auto block = accessor.diagBlock(pFactorItem, p);
+            block.diagonal() *= (1.0 + alpha);
+            block.diagonal().array() += beta;
         }
     }
 }
@@ -174,7 +197,7 @@ void NumericDecomposition::factor() {
     double* pFactor = data.data_ptr<double>();
 
     // no proper support for batched factor on CPU, iterate
-    for(int i = 0; i < batchSize; i++) {
+    for (int i = 0; i < batchSize; i++) {
         dec->solver->factor(pFactor + factorSize * i);
     }
 }
@@ -193,8 +216,8 @@ void NumericDecomposition::solve(torch::Tensor& x) {
     // scramble according to parameter permutation
     auto accessor = dec->solver->accessor();
     auto xOptions = torch::TensorOptions().dtype(torch::kFloat64);
-    torch::Tensor permX = torch::empty({(long)(batchSize), 
-                                (long)(order)}, xOptions);
+    torch::Tensor permX =
+        torch::empty({(long)(batchSize), (long)(order)}, xOptions);
     const int64_t* pParamSize = dec->paramSize.data_ptr<int64_t>();
     const int64_t* pParamStart = dec->paramStart.data_ptr<int64_t>();
     int64_t nParams = dec->paramSize.size(0);
@@ -204,15 +227,16 @@ void NumericDecomposition::solve(torch::Tensor& x) {
         int64_t size = pParamSize[i];
         int64_t origStart = pParamStart[i];
         int64_t destStart = accessor.paramStart(i);
-        OuterStridedM(pPermX + destStart, size, batchSize, OuterStride(order))
-            = OuterStridedM(pX + origStart, size, batchSize, OuterStride(order));
+        OuterStridedM(pPermX + destStart, size, batchSize, OuterStride(order)) =
+            OuterStridedM(pX + origStart, size, batchSize, OuterStride(order));
     }
 
     // no proper support for batched solve on CPU, iterate
     double* pFactor = data.data_ptr<double>();
     int64_t factorSize = data.size(1);
-    for(int i = 0; i < batchSize; i++) {
-        dec->solver->solve(pFactor + factorSize * i, pPermX + order * i, order, 1);
+    for (int i = 0; i < batchSize; i++) {
+        dec->solver->solve(pFactor + factorSize * i, pPermX + order * i, order,
+                           1);
     }
 
     // un-scramble
@@ -220,11 +244,11 @@ void NumericDecomposition::solve(torch::Tensor& x) {
         int64_t size = pParamSize[i];
         int64_t origStart = pParamStart[i];
         int64_t destStart = accessor.paramStart(i);
-        OuterStridedM(pX + origStart, size, batchSize, OuterStride(order)) = 
-            OuterStridedM(pPermX + destStart, size, batchSize, OuterStride(order));
+        OuterStridedM(pX + origStart, size, batchSize, OuterStride(order)) =
+            OuterStridedM(pPermX + destStart, size, batchSize,
+                          OuterStride(order));
     }
 }
-
 
 class SymbolicDecomposition {
    public:
@@ -239,9 +263,9 @@ class SymbolicDecomposition {
     std::shared_ptr<SymbolicDecompositionData> dec;
 };
 
-SymbolicDecomposition::SymbolicDecomposition(const torch::Tensor& paramSize,
-                                             const torch::Tensor& sparseStructPtrs,
-                                             const torch::Tensor& sparseStructInds) {
+SymbolicDecomposition::SymbolicDecomposition(
+    const torch::Tensor& paramSize, const torch::Tensor& sparseStructPtrs,
+    const torch::Tensor& sparseStructInds) {
     TORCH_CHECK(paramSize.device().is_cpu());
     TORCH_CHECK(sparseStructPtrs.device().is_cpu());
     TORCH_CHECK(sparseStructInds.device().is_cpu());
@@ -308,11 +332,14 @@ PYBIND11_MODULE(baspacho_solver, m) {
     py::class_<NumericDecomposition>(m, "NumericDecomposition",
                                      "Numeric decomposition")
         .def("add_M", &NumericDecomposition::add_M,
-             "Adds a csr Matrix to the factor data", py::arg("val"), py::arg("ptrs"),
-             py::arg("inds"))
+             "Adds a csr Matrix to the factor data", py::arg("val"),
+             py::arg("ptrs"), py::arg("inds"))
         .def("add_MtM", &NumericDecomposition::add_MtM,
              "Adds Mt * M to the factor data", py::arg("val"), py::arg("ptrs"),
              py::arg("inds"))
+        .def("damp", &NumericDecomposition::damp,
+             "Adds damping to a matrix (diag += alpha*diag + beta)",
+             py::arg("alpha"), py::arg("beta"))
         .def("factor", &NumericDecomposition::factor,
              "Computed the Cholesky decomposition (factor data are replaced)")
         .def("solve", &NumericDecomposition::solve, "Solves (in-place)",

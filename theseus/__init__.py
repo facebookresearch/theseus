@@ -53,6 +53,7 @@ from .optimizer import DenseLinearization, SparseLinearization, VariableOrdering
 from .optimizer.linear import (
     CholeskyDenseSolver,
     CholmodSparseSolver,
+    BaspachoSparseSolver,
     DenseSolver,
     LinearOptimizer,
     LUCudaSparseSolver,

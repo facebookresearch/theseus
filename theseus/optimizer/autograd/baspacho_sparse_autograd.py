@@ -7,23 +7,43 @@ import torch
 
 from ..linear_system import SparseStructure
 
+from scipy.sparse import csr_matrix, csc_matrix
+import numpy as np
+
+def mat_vec_cpu(batch_size, num_cols, A_rowPtr, A_colInd, A_val, v):
+    assert batch_size == A_val.shape[0]
+    num_rows = len(A_rowPtr) - 1
+    retv_data = np.array([
+        csr_matrix( (A_val[i].numpy(), A_colInd, A_rowPtr), (num_rows, num_cols) ) * v[i]
+        for i in range(batch_size)
+    ], dtype=np.float64)
+    return torch.tensor(retv_data, dtype=torch.float64)
+
+def tmat_vec_cpu(batch_size, num_cols, A_rowPtr, A_colInd, A_val, v):
+    assert batch_size == A_val.shape[0]
+    num_rows = len(A_rowPtr) - 1
+    retv_data = np.array([
+        csc_matrix( (A_val[i].numpy(), A_colInd, A_rowPtr), (num_cols, num_rows) ) * v[i]
+        for i in range(batch_size)
+    ], dtype=np.float64)
+    return torch.tensor(retv_data, dtype=torch.float64)
 
 class BaspachoSolveFunction(torch.autograd.Function):
     @staticmethod
     def forward(ctx, *args, **kwargs):
-        if not torch.cuda.is_available(): # remove, add checks...
-            raise RuntimeError("Cuda not available, BaspachoSolveFunction cannot be used")
+        # if not torch.cuda.is_available(): # remove, add checks...
+        #    raise RuntimeError("Cuda not available, BaspachoSolveFunction cannot be used")
 
-        try:
-            from theseus.extlib.cusolver_lu_solver import CusolverLUSolver
-            from theseus.extlib.mat_mult import apply_damping, mult_MtM, tmat_vec
-        except Exception as e:
-            raise RuntimeError(
-                "Theseus C++/Cuda extension cannot be loaded\n"
-                "even if Cuda appears to be available. Make sure Theseus\n"
-                "is installed with Cuda support (export CUDA_HOME=...)\n"
-                f"{type(e).__name__}: {e}"
-            )
+        if False:
+            try:
+                from theseus.extlib.mat_mult import tmat_vec
+            except Exception as e:
+                raise RuntimeError(
+                    "Theseus C++/Cuda extension cannot be loaded\n"
+                    "even if Cuda appears to be available. Make sure Theseus\n"
+                    "is installed with Cuda support (export CUDA_HOME=...)\n"
+                    f"{type(e).__name__}: {e}"
+                )
 
         A_val: torch.Tensor = args[0]
         b: torch.Tensor = args[1]
@@ -32,26 +52,17 @@ class BaspachoSolveFunction(torch.autograd.Function):
         A_colInd: torch.Tensor = args[4]
         symbolic_decomposition: "BaspachoSymbolicDecomposition" = args[5]
         damping_alpha_beta: float = args[6]
-        # check_factor_id: bool = args[7]
-
-        # AtA_rowPtr = solver_context.A_rowPtr
-        # AtA_colInd = solver_context.A_colInd
 
         batch_size = A_val.shape[0]
 
-        # AtA = mult_MtM(batch_size, A_rowPtr, A_colInd, A_val, AtA_rowPtr, AtA_colInd)
-        #if damping_alpha_beta is not None:
-        #    AtA_args = sparse_structure.num_cols, AtA_rowPtr, AtA_colInd, AtA
-        #    apply_damping(batch_size, *AtA_args, *damping_alpha_beta)
-        # solver_context.factor(AtA)
-
-        numeric_decomposition = symbolic_decomposition.mult_MtM(batch_size, A_rowPtr, A_colInd, A_val)
+        numeric_decomposition = symbolic_decomposition.create_numeric_decomposition(batch_size)
+        numeric_decomposition.add_MtM(A_val, A_rowPtr, A_colInd)
         if damping_alpha_beta is not None:
             numeric_decomposition.damp(*damping_alpha_beta)
         numeric_decomposition.factor()
 
         A_args = sparse_structure.num_cols, A_rowPtr, A_colInd, A_val
-        Atb = tmat_vec(batch_size, *A_args, b)
+        Atb = tmat_vec_cpu(batch_size, *A_args, b)
         x = Atb.clone()
         numeric_decomposition.solve(x)  # solve in place
 
@@ -118,18 +129,19 @@ class BaspachoSolveFunction(torch.autograd.Function):
     @staticmethod
     def backward(ctx, grad_output):
 
-        if not torch.cuda.is_available():
-            raise RuntimeError("Cuda not available, LUCudaSolveFunction cannot be used")
+        if False:
+            if not torch.cuda.is_available():
+                raise RuntimeError("Cuda not available, LUCudaSolveFunction cannot be used")
 
-        try:
-            from theseus.extlib.mat_mult import mat_vec
-        except Exception as e:
-            raise RuntimeError(
-                "Theseus C++/Cuda extension cannot be loaded\n"
-                "even if Cuda appears to be available. Make sure Theseus\n"
-                "is installed with Cuda support (export CUDA_HOME=...)\n"
-                f"{type(e).__name__}: {e}"
-            )
+            try:
+                from theseus.extlib.mat_mult import mat_vec
+            except Exception as e:
+                raise RuntimeError(
+                    "Theseus C++/Cuda extension cannot be loaded\n"
+                    "even if Cuda appears to be available. Make sure Theseus\n"
+                    "is installed with Cuda support (export CUDA_HOME=...)\n"
+                    f"{type(e).__name__}: {e}"
+                )
 
         batch_size = grad_output.shape[0]
         targs = {"dtype": grad_output.dtype, "device": grad_output.device}
@@ -138,8 +150,8 @@ class BaspachoSolveFunction(torch.autograd.Function):
         ctx.numeric_decomposition.solve(H)  # solve in place
 
         A_args = ctx.sparse_structure.num_cols, ctx.A_rowPtr, ctx.A_colInd, ctx.A_val
-        AH = mat_vec(batch_size, *A_args, H)
-        b_Ax = ctx.b - mat_vec(batch_size, *A_args, ctx.x)
+        AH = mat_vec_cpu(batch_size, *A_args, H)
+        b_Ax = ctx.b - mat_vec_cpu(batch_size, *A_args, ctx.x)
 
         # now we fill values of a matrix with structure identical to A with
         # selected entries from the difference of tensor products:

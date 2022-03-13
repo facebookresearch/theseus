@@ -165,15 +165,15 @@ class Camera:
         cam_pose = th.SE3(cam_pose_data, name=name+"_pose")
 
         focal_length = th.Vector(
-            data=(torch.rand((batch_size,1)) * 2 - 1.0) * fl_random + fl_base,
+            data=(torch.rand((batch_size,1), dtype=torch.float64) * 2 - 1.0) * fl_random + fl_base,
             name=name+"_focal_length",
         )
         calib_k1 = th.Vector(
-            data=(torch.rand((batch_size,1)) * 2 - 1.0) * k1_random + k1_base,
+            data=(torch.rand((batch_size,1), dtype=torch.float64) * 2 - 1.0) * k1_random + k1_base,
             name=name+"_calib_k1",
         )
         calib_k2 = th.Vector(
-            data=(torch.rand((batch_size,1)) * 2 - 1.0) * k2_random + k2_base,
+            data=(torch.rand((batch_size,1), dtype=torch.float64) * 2 - 1.0) * k2_random + k2_base,
             name=name+"_calib_k2",
         )
         return Camera(cam_pose, focal_length, calib_k1, calib_k2)
@@ -303,7 +303,7 @@ class BundleAdjustmentDataset:
 
         # add points
         gt_points = [
-            th.Point3(data=(torch.rand((1,3),dtype=torch.float64)*2 - 1)*20 + 
+            th.Point3(data=(torch.rand((1,3), dtype=torch.float64)*2 - 1)*20 + 
                             torch.tensor([i * 100.0 / (num_points),0,0],dtype=torch.float64),
                       name=f"Pt{i}")
             for i in range(num_points)

@@ -11,6 +11,7 @@ from .motion_planning import (
     TrajectoryDataset,
     generate_trajectory_figs,
 )
+from .pose_graph import RelativePoseError
 from .tactile_pose_estimation import (
     TactileMeasModel,
     TactilePoseEstimator,

@@ -14,3 +14,4 @@ examples/*.ipynb_checkpoints
 outputs/
 examples/outputs/
 theseus/extlib/*.so
+datasets/

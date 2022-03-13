@@ -50,7 +50,7 @@ class ReprojectionError(th.CostFunction):
 
     def error(self) -> torch.Tensor:
         point_cam = self.camera_pose.transform_from(self.world_point)
-        proj = point_cam[:, :2] / point_cam[:, 2:3]
+        proj = -point_cam[:, :2] / point_cam[:, 2:3]
         proj_sqn = (proj * proj).sum(dim=1).unsqueeze(1)
         proj_factor = self.focal_length.data * (
             1.0 + proj_sqn * (self.calib_k1.data + proj_sqn * self.calib_k2.data)
@@ -70,7 +70,7 @@ class ReprojectionError(th.CostFunction):
         point_cam = self.camera_pose.transform_from(self.world_point, cpose_wpt_jacs)
         J = torch.cat(cpose_wpt_jacs, dim=2)
 
-        proj = point_cam[:, :2] / point_cam[:, 2:3]
+        proj = -point_cam[:, :2] / point_cam[:, 2:3]
         proj_sqn = (proj * proj).sum(dim=1).unsqueeze(1)
         proj_factor = self.focal_length.data * (
             1.0 + proj_sqn * (self.calib_k1.data + proj_sqn * self.calib_k2.data)
@@ -86,7 +86,7 @@ class ReprojectionError(th.CostFunction):
             point_cam[:, :2].unsqueeze(2),
             (J[:, 2, :] / point_cam[:, 2:3]).unsqueeze(1),
         )
-        proj_jac = (d_num - num_dden_den) / point_cam[:, 2:].unsqueeze(2)
+        proj_jac = (num_dden_den - d_num) / point_cam[:, 2:].unsqueeze(2)
         proj_sqn_jac = 2.0 * proj.unsqueeze(2) * torch.bmm(proj.unsqueeze(1), proj_jac)
         point_projection_jac = (proj_jac * proj_factor.unsqueeze(2)
                             + proj_sqn_jac * d_proj_factor.unsqueeze(2))

@@ -15,7 +15,7 @@ def test_residual():
         ]
     )
     cam_tr = torch.rand((batch_size, 3), dtype=torch.float64) * 2 + torch.tensor(
-        [-1, -1, +5.0], dtype=torch.float64
+        [-1, -1, -5.0], dtype=torch.float64
     )
     cam_pose_data = torch.cat([cam_tr, cam_rot], dim=1)
     cam_pose = th.SE3(cam_pose_data, name="cam_pose")
@@ -40,7 +40,7 @@ def test_residual():
         data=torch.rand((batch_size, 3), dtype=torch.float64), name="worldPoint"
     )
     point_cam = cam_pose.transform_from(world_point).data
-    proj = point_cam[:, :2] / point_cam[:, 2:3]
+    proj = -point_cam[:, :2] / point_cam[:, 2:3]
     proj_sqn = (proj * proj).sum(dim=1).unsqueeze(1)
     proj_factor = focal_length.data * (
         1.0 + proj_sqn * (calib_k1.data + proj_sqn * calib_k2.data)
@@ -55,7 +55,7 @@ def test_residual():
         focal_length=focal_length,
         calib_k1=calib_k1,
         calib_k2=calib_k2,
-        loss_radius=log_loss_radius,
+        log_loss_radius=log_loss_radius,
         world_point=world_point,
         image_feature_point=image_feature_point,
     )

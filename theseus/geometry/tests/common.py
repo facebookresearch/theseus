@@ -231,7 +231,7 @@ def check_projection_for_exp_map(tangent_vector, Group, atol=1e-8):
 
     actual = []
     group = Group.exp_map(tangent_vector, jacobians=actual).to_matrix()
-    jac_raw = torch.autograd.functional.jacobian(exp_func, (tangent_vector.data))[
+    jac_raw = torch.autograd.functional.jacobian(exp_func, (tangent_vector))[
         aux_id, :, :, aux_id
     ]
     expected = torch.cat(
@@ -255,6 +255,38 @@ def check_projection_for_log_map(tangent_vector, Group, atol=1e-8):
 
     jac_raw = torch.autograd.functional.jacobian(log_func, (group.data))
     expected = group.project(jac_raw[aux_id, :, aux_id], is_sparse=True)
+    actual = []
+    _ = group.log_map(jacobians=actual)
+
+    assert torch.allclose(actual[0], expected, atol=atol)
+
+
+def check_projection_for_vector_exp_map(tangent_vector, Group, atol=1e-8):
+    batch_size = tangent_vector.shape[0]
+    aux_id = torch.arange(batch_size)
+
+    def exp_func(xi):
+        return Group.exp_map(xi).data
+
+    actual = []
+    _ = Group.exp_map(tangent_vector, actual)
+    expected = torch.autograd.functional.jacobian(exp_func, (tangent_vector))[
+        aux_id, :, aux_id
+    ]
+
+    assert torch.allclose(actual[0], expected, atol=atol)
+
+
+def check_projection_for_vector_log_map(tangent_vector, Group, atol=1e-8):
+    batch_size = tangent_vector.shape[0]
+    aux_id = torch.arange(batch_size)
+    group = Group.exp_map(tangent_vector)
+
+    def log_func(group):
+        return Group(data=group).log_map()
+
+    jac_raw = torch.autograd.functional.jacobian(log_func, (group.data))
+    expected = jac_raw[aux_id, :, aux_id]
     actual = []
     _ = group.log_map(jacobians=actual)
 

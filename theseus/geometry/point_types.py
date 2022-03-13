@@ -21,7 +21,7 @@ def _prepare_dof_and_data(
             data = data.view(1, -1)
         if data.shape[1] != expected_dof:
             raise ValueError(
-                f"Provied data tensor must have shape (batch_size, {expected_dof})."
+                f"Provided data tensor must have shape (batch_size, {expected_dof})."
             )
     return dof, data
 
@@ -91,14 +91,7 @@ class Point2(Vector):
         if tangent_vector.ndim != 2 or tangent_vector.shape[1] != 2:
             raise ValueError("Tangent vectors of Point2 should be 2-D vectors.")
 
-        if jacobians is not None:
-            shape = tangent_vector.shape
-            Point2._check_jacobians_list(jacobians)
-            jacobians.append(
-                torch.eye(
-                    2, dtype=tangent_vector.dtype, device=tangent_vector.device
-                ).repeat(shape[0], 1, 1)
-            )
+        Vector._exp_map_jacobian_impl(tangent_vector, jacobians)
 
         return Point2(data=tangent_vector.clone())
 
@@ -175,14 +168,7 @@ class Point3(Vector):
         if tangent_vector.ndim != 2 or tangent_vector.shape[1] != 3:
             raise ValueError("Tangent vectors of Point3 should be 3-D vectors.")
 
-        if jacobians is not None:
-            shape = tangent_vector.shape
-            Point2._check_jacobians_list(jacobians)
-            jacobians.append(
-                torch.eye(
-                    3, dtype=tangent_vector.dtype, device=tangent_vector.device
-                ).repeat(shape[0], 1, 1)
-            )
+        Vector._exp_map_jacobian_impl(tangent_vector, jacobians)
 
         return Point3(data=tangent_vector.clone())
 

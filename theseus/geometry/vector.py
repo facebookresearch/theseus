@@ -210,20 +210,30 @@ class Vector(LieGroup):
         if tangent_vector.ndim != 2:
             raise ValueError("The dimension of tangent vectors should be 2.")
 
+        Vector._exp_map_jacobian_impl(tangent_vector, jacobians)
+
+        return Vector(data=tangent_vector.clone())
+
+    @staticmethod
+    def _exp_map_jacobian_impl(
+        tangent_vector: torch.Tensor, jacobians: Optional[List[torch.Tensor]]
+    ):
         if jacobians is not None:
             shape = tangent_vector.shape
-            Vector._check_jacobians_list(jacobians)
+            LieGroup._check_jacobians_list(jacobians)
             jacobians.append(
                 torch.eye(
                     shape[1], dtype=tangent_vector.dtype, device=tangent_vector.device
                 ).repeat(shape[0], 1, 1)
             )
 
-        return Vector(data=tangent_vector.clone())
-
     def _log_map_impl(
         self, jacobians: Optional[List[torch.Tensor]] = None
     ) -> torch.Tensor:
+        self._log_map_jacobian_impl(jacobians)
+        return self.data.clone()
+
+    def _log_map_jacobian_impl(self, jacobians: Optional[List[torch.Tensor]] = None):
         if jacobians is not None:
             shape = self.shape
             Vector._check_jacobians_list(jacobians)
@@ -232,8 +242,6 @@ class Vector(LieGroup):
                     shape[0], 1, 1
                 )
             )
-
-        return self.data.clone()
 
     def __hash__(self):
         return id(self)

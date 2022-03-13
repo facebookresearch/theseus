@@ -11,7 +11,7 @@ class ReprojectionError(th.CostFunction):
     def __init__(
         self,
         camera_pose: th.SE3,
-        loss_radius: th.Vector,
+        log_loss_radius: th.Vector,
         world_point: th.Point3,
         image_feature_point: th.Point2,
         focal_length: th.Vector,
@@ -27,7 +27,7 @@ class ReprojectionError(th.CostFunction):
             name=name,
         )
         self.camera_pose = camera_pose
-        self.loss_radius = loss_radius
+        self.log_loss_radius = log_loss_radius
         self.focal_length = focal_length
         self.calib_k1 = calib_k1
         self.calib_k2 = calib_k2
@@ -46,7 +46,7 @@ class ReprojectionError(th.CostFunction):
         self.image_feature_point = image_feature_point
 
         self.register_optim_vars(["camera_pose", "world_point"])
-        self.register_aux_vars(["loss_radius", "focal_length", "image_feature_point"])
+        self.register_aux_vars(["log_loss_radius", "focal_length", "image_feature_point"])
 
     def error(self) -> torch.Tensor:
         point_cam = self.camera_pose.transform_from(self.world_point)
@@ -60,9 +60,9 @@ class ReprojectionError(th.CostFunction):
         err = point_projection - self.image_feature_point.data
 
         err_norm = torch.norm(err, dim=1).unsqueeze(1)
-        exp_loss = torch.exp(self.loss_radius.data)
+        loss_radius = torch.exp(self.log_loss_radius.data)
 
-        val, _ = soft_loss_huber_like(err_norm, exp_loss)
+        val, _ = soft_loss_huber_like(err_norm, loss_radius)
         return val
 
     def jacobians(self) -> Tuple[List[torch.Tensor], torch.Tensor]:
@@ -88,17 +88,16 @@ class ReprojectionError(th.CostFunction):
         )
         proj_jac = (d_num - num_dden_den) / point_cam[:, 2:].unsqueeze(2)
         proj_sqn_jac = 2.0 * proj.unsqueeze(2) * torch.bmm(proj.unsqueeze(1), proj_jac)
-        point_projection_jac = proj_jac * proj_factor.unsqueeze(
-            2
-        ) + proj_sqn_jac * d_proj_factor.unsqueeze(2)
+        point_projection_jac = (proj_jac * proj_factor.unsqueeze(2)
+                            + proj_sqn_jac * d_proj_factor.unsqueeze(2))
 
         err = point_projection - self.image_feature_point.data
         err_norm = torch.norm(err, dim=1).unsqueeze(1)
         err_dir = err / err_norm
         norm_jac = torch.bmm(err_dir.unsqueeze(1), point_projection_jac)
-        exp_loss = torch.exp(self.loss_radius.data)
+        loss_radius = torch.exp(self.log_loss_radius.data)
 
-        val, der = soft_loss_huber_like(err_norm, exp_loss)
+        val, der = soft_loss_huber_like(err_norm, loss_radius)
         soft_jac = norm_jac * der.unsqueeze(1)
 
         return [soft_jac[:, :, :6], soft_jac[:, :, 6:]], val
@@ -112,7 +111,7 @@ class ReprojectionError(th.CostFunction):
     def _copy_impl(self):
         return ReprojectionError(
             self.camera_pose,
-            self.loss_radius,
+            self.log_loss_radius,
             self.focal_length,
             self.world_point,
             self.image_feature_point,

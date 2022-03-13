@@ -18,11 +18,11 @@ def test_residual():
         [-1, -1, +5.0], dtype=torch.float64
     )
     cam_pose_data = torch.cat([cam_tr, cam_rot], dim=1)
-    cam_pose = th.SE3(cam_pose_data, name="camPose")
+    cam_pose = th.SE3(cam_pose_data, name="cam_pose")
 
     focal_length = th.Vector(
         data=torch.tensor([1000], dtype=torch.float64).repeat(batch_size).unsqueeze(1),
-        name="focalLength",
+        name="focal_length",
     )
     calib_k1 = th.Vector(
         data=torch.tensor([-0.1], dtype=torch.float64).repeat(batch_size).unsqueeze(1),
@@ -34,7 +34,7 @@ def test_residual():
     )
     log_loss_radius = th.Vector(
         data=torch.tensor([0], dtype=torch.float64).repeat(batch_size).unsqueeze(1),
-        name="lossRadius",
+        name="log_loss_radius",
     )
     world_point = th.Vector(
         data=torch.rand((batch_size, 3), dtype=torch.float64), name="worldPoint"
@@ -48,7 +48,7 @@ def test_residual():
     point_projection = proj * proj_factor
     image_feature_point = th.Vector(
         data=point_projection.data + (torch.rand((batch_size, 2)) - 0.5) * 50,
-        name="imageFeaturePoint",
+        name="image_feature_point",
     )
     r = theg.ReprojectionError(
         camera_pose=cam_pose,

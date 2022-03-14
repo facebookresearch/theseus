@@ -178,7 +178,9 @@ class SE3(LieGroup):
             )
 
     @staticmethod
-    def exp_map(tangent_vector: torch.Tensor) -> "SE3":
+    def exp_map(
+        tangent_vector: torch.Tensor, jacobians: Optional[List[torch.Tensor]] = None
+    ) -> "SE3":
         if tangent_vector.ndim != 2 or tangent_vector.shape[1] != 6:
             raise ValueError("Tangent vectors of SE(3) can only be 6-D vectors.")
 
@@ -207,14 +209,14 @@ class SE3(LieGroup):
         sine_by_theta = torch.where(
             near_zero, 0.5 * cosine + 0.5, theta.sin() / theta_nz
         )
-        one_minus_cosie_by_theta2 = torch.where(
+        one_minus_cosine_by_theta2 = torch.where(
             near_zero, 0.5 * sine_by_theta, (1 - cosine) / theta2_nz
         )
         ret.data = torch.zeros(tangent_vector.shape[0], 3, 4).to(
             dtype=tangent_vector.dtype, device=tangent_vector.device
         )
         ret.data[:, :3, :3] = (
-            one_minus_cosie_by_theta2
+            one_minus_cosine_by_theta2
             * tangent_vector_ang
             @ tangent_vector_ang.transpose(1, 2)
         )
@@ -232,21 +234,90 @@ class SE3(LieGroup):
 
         # Compute the translation
         sine_by_theta = torch.where(near_zero, 1 - theta2 / 6, sine_by_theta)
-        one_minus_cosie_by_theta2 = torch.where(
-            near_zero, 0.5 - theta2 / 24, one_minus_cosie_by_theta2
+        one_minus_cosine_by_theta2 = torch.where(
+            near_zero, 0.5 - theta2 / 24, one_minus_cosine_by_theta2
         )
-        theta_minus_sine_by_theta3 = torch.where(
+        theta_minus_sine_by_theta3_t = torch.where(
             near_zero, 1.0 / 6 - theta2 / 120, (theta - sine) / theta3_nz
         )
 
         ret[:, :, 3:] = sine_by_theta * tangent_vector_lin
-        ret[:, :, 3:] += one_minus_cosie_by_theta2 * torch.cross(
+        ret[:, :, 3:] += one_minus_cosine_by_theta2 * torch.cross(
             tangent_vector_ang, tangent_vector_lin
         )
-        ret[:, :, 3:] += theta_minus_sine_by_theta3 * (
+        ret[:, :, 3:] += theta_minus_sine_by_theta3_t * (
             tangent_vector_ang
             @ (tangent_vector_ang.transpose(1, 2) @ tangent_vector_lin)
         )
+
+        if jacobians is not None:
+            SE3._check_jacobians_list(jacobians)
+            theta3_nz = theta_nz * theta2_nz
+            theta_minus_sine_by_theta3_rot = torch.where(
+                near_zero, torch.zeros_like(theta), theta_minus_sine_by_theta3_t
+            )
+            jac = torch.zeros(
+                tangent_vector.shape[0],
+                6,
+                6,
+                dtype=tangent_vector.dtype,
+                device=tangent_vector.device,
+            )
+            jac[:, :3, :3] = (
+                theta_minus_sine_by_theta3_rot
+                * tangent_vector_ang.view(-1, 3, 1)
+                @ tangent_vector_ang.view(-1, 1, 3)
+            )
+            diag_jac = jac.diagonal(dim1=1, dim2=2)
+            diag_jac += sine_by_theta.view(-1, 1)
+
+            jac_temp_rot = one_minus_cosine_by_theta2.view(
+                -1, 1
+            ) * tangent_vector_ang.view(-1, 3)
+
+            jac[:, 0, 1] += jac_temp_rot[:, 2]
+            jac[:, 1, 0] -= jac_temp_rot[:, 2]
+            jac[:, 0, 2] -= jac_temp_rot[:, 1]
+            jac[:, 2, 0] += jac_temp_rot[:, 1]
+            jac[:, 1, 2] += jac_temp_rot[:, 0]
+            jac[:, 2, 1] -= jac_temp_rot[:, 0]
+
+            jac[:, 3:, 3:] = jac[:, :3, :3]
+
+            d_one_minus_cosine_by_theta2 = torch.where(
+                near_zero,
+                -1 / 12.0,
+                (sine_by_theta - 2 * one_minus_cosine_by_theta2) / theta2_nz,
+            )
+            d_theta_minus_sine_by_theta3 = torch.where(
+                near_zero,
+                -1 / 60.0,
+                (one_minus_cosine_by_theta2 - 3 * theta_minus_sine_by_theta3_t)
+                / theta2_nz,
+            )
+
+            w = tangent_vector[:, 3:]
+            v = tangent_vector[:, :3]
+            wv = w.cross(v)
+            wwv = w.cross(wv)
+            sw = theta_minus_sine_by_theta3_t.view(-1, 1) * w
+
+            jac_temp_t = (
+                d_one_minus_cosine_by_theta2.view(-1, 1) * wv
+                + d_theta_minus_sine_by_theta3.view(-1, 1) * wwv
+            ).view(-1, 3, 1) @ w.view(-1, 1, 3)
+            jac_temp_t -= v.view(-1, 3, 1) @ sw.view(-1, 1, 3)
+            jac_temp_v = (
+                -one_minus_cosine_by_theta2.view(-1, 1) * v
+                - theta_minus_sine_by_theta3_t.view(-1, 1) * wv
+            )
+            jac_temp_t += SO3.hat(jac_temp_v)
+            diag_jac_t = torch.diagonal(jac_temp_t, dim1=1, dim2=2)
+            diag_jac_t += (sw.view(-1, 1, 3) @ v.view(-1, 3, 1)).view(-1, 1)
+
+            jac[:, :3, 3:] = ret[:, :, :3].transpose(1, 2) @ jac_temp_t
+
+            jacobians.append(jac)
 
         return ret
 

@@ -71,7 +71,9 @@ class LieGroup(Manifold):
 
     @staticmethod
     @abc.abstractmethod
-    def exp_map(tangent_vector: torch.Tensor) -> "LieGroup":
+    def exp_map(
+        tangent_vector: torch.Tensor, jacobians: Optional[List[torch.Tensor]] = None
+    ) -> "LieGroup":
         pass
 
     @abc.abstractmethod

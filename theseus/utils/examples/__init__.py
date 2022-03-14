@@ -4,7 +4,8 @@
 # LICENSE file in the root directory of this source tree.
 
 from .bundle_adjustment import (
-    LocalizationDataset,
+    BundleAdjustmentDataset,
+    Camera,
     LocalizationSample,
     ReprojectionError,
 )

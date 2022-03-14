@@ -219,3 +219,43 @@ def check_projection_for_inverse(Group, batch_size, generator=None):
     expected = jac[0]
 
     assert torch.allclose(actual, expected)
+
+
+def check_projection_for_exp_map(tangent_vector, Group, atol=1e-8):
+    batch_size = tangent_vector.shape[0]
+    dof = tangent_vector.shape[1]
+    aux_id = torch.arange(batch_size)
+
+    def exp_func(xi):
+        return Group.exp_map(xi).to_matrix()
+
+    actual = []
+    group = Group.exp_map(tangent_vector, jacobians=actual).to_matrix()
+    jac_raw = torch.autograd.functional.jacobian(exp_func, (tangent_vector))[
+        aux_id, :, :, aux_id
+    ]
+    expected = torch.cat(
+        [
+            Group.vee(group.inverse() @ jac_raw[:, :, :, i]).view(-1, dof, 1)
+            for i in torch.arange(dof)
+        ],
+        dim=2,
+    )
+
+    assert torch.allclose(actual[0], expected, atol=atol)
+
+
+def check_projection_for_vector_exp_map(tangent_vector, Group, atol=1e-8):
+    batch_size = tangent_vector.shape[0]
+    aux_id = torch.arange(batch_size)
+
+    def exp_func(xi):
+        return Group.exp_map(xi).data
+
+    actual = []
+    _ = Group.exp_map(tangent_vector, actual)
+    expected = torch.autograd.functional.jacobian(exp_func, (tangent_vector))[
+        aux_id, :, aux_id
+    ]
+
+    assert torch.allclose(actual[0], expected, atol=atol)

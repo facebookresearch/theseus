@@ -244,12 +244,10 @@ class SO3(LieGroup):
         major = torch.logical_and(
             ddiag[:, 1] > ddiag[:, 0], ddiag[:, 1] > ddiag[:, 2]
         ) + 2 * torch.logical_and(ddiag[:, 2] > ddiag[:, 0], ddiag[:, 2] > ddiag[:, 1])
-        sel_rows = self[near_pi, major]
+        sel_rows = 0.5 * (self[near_pi, major] + self[near_pi, :, major])
         aux = torch.ones(sel_rows.shape[0], dtype=torch.bool)
         sel_rows[aux, major] -= cosine[near_pi]
-        axis_squared = ddiag - cosine[near_pi].view(-1, 1)
-        axis_abs = (axis_squared / axis_squared.sum(1, keepdim=True)).sqrt()
-        axis = axis_abs * sel_rows.sign()
+        axis = sel_rows / sel_rows.norm(dim=1, keepdim=True)
         ret[near_pi] = axis * (theta[near_pi] * sine_axis[near_pi, major].sign()).view(
             -1, 1
         )

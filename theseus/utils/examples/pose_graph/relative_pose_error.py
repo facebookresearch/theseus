@@ -37,7 +37,7 @@ class RelativePoseError(th.CostFunction):
         pose_ref = th.SE3.compose(self.pose1, self.relative_pose)
         pose_err = self.pose2.between(pose_ref)
         err = pose_err.log_map()
-        return (err**2).sum(dim=1, keepdim=True)
+        return err
 
     def jacobians(self) -> Tuple[List[torch.Tensor], torch.Tensor]:
         pose_ref = th.SE3.compose(self.pose1, self.relative_pose)
@@ -49,7 +49,7 @@ class RelativePoseError(th.CostFunction):
         return [
             dlog @ self.relative_pose.inverse().adjoint(),
             -dlog @ pose_err.inverse().adjoint(),
-        ], (err**2).sum(dim=1, keepdim=True)
+        ], err
 
     def dim(self) -> int:
         return 6

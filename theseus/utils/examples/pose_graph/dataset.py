@@ -25,7 +25,7 @@ class PoseGraph2DEdge:
         self.measurement = relative_pose
 
 
-def read_3D_g2o_file(path: str) -> Tuple[int, th.SE3, List[PoseGraph3DEdge]]:
+def read_3D_g2o_file(path: str) -> Tuple[int, List[th.SE3], List[PoseGraph3DEdge]]:
     with open(path, "r") as file:
         lines = file.readlines()
 
@@ -62,18 +62,17 @@ def read_3D_g2o_file(path: str) -> Tuple[int, th.SE3, List[PoseGraph3DEdge]]:
         num_vertices += 1
 
         if len(verts) > 0:
-            vertices = th.SE3(
-                x_y_z_quaternion=torch.cat(
-                    [x_y_z_quat for _, x_y_z_quat in sorted(verts.items())]
-                )
-            )
+            vertices = [
+                th.SE3(x_y_z_quaternion=x_y_z_quat, name="VERTEX_SE3_{}".format(i))
+                for i, x_y_z_quat in sorted(verts.items())
+            ]
         else:
-            vertices = th.SE3(data=torch.zeros(0, 3, 4, dtype=torch.float64))
+            vertices = []
 
         return (num_vertices, vertices, edges)
 
 
-def read_2D_g2o_file(path: str) -> Tuple[int, th.SE2, List[PoseGraph2DEdge]]:
+def read_2D_g2o_file(path: str) -> Tuple[int, List[th.SE2], List[PoseGraph2DEdge]]:
     with open(path, "r") as file:
         lines = file.readlines()
 
@@ -106,12 +105,11 @@ def read_2D_g2o_file(path: str) -> Tuple[int, th.SE2, List[PoseGraph2DEdge]]:
         num_vertices += 1
 
         if len(verts) > 0:
-            vertices = th.SE2(
-                x_y_theta=torch.cat(
-                    [x_y_theta for _, x_y_theta in sorted(verts.items())]
-                )
-            )
+            vertices = [
+                th.SE2(x_y_theta=x_y_theta, name="VERTEX_SE2_{}".format(i))
+                for i, x_y_theta in sorted(verts.items())
+            ]
         else:
-            vertices = th.SE2(data=torch.zeros([0, 4], dtype=torch.float64))
+            vertices = []
 
         return (num_vertices, vertices, edges)

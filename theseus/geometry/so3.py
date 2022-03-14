@@ -156,17 +156,17 @@ class SO3(LieGroup):
         theta = torch.linalg.norm(tangent_vector, dim=1, keepdim=True).unsqueeze(1)
         theta2 = theta**2
         # Compute the approximations when theta ~ 0
-        small_theta = theta < 0.005
+        near_zero = theta < 0.005
         non_zero = torch.ones(
             1, dtype=tangent_vector.dtype, device=tangent_vector.device
         )
-        theta_nz = torch.where(small_theta, non_zero, theta)
-        theta2_nz = torch.where(small_theta, non_zero, theta2)
-        cosine = torch.where(small_theta, 8 / (4 + theta2) - 1, theta.cos())
+        theta_nz = torch.where(near_zero, non_zero, theta)
+        theta2_nz = torch.where(near_zero, non_zero, theta2)
+        cosine = torch.where(near_zero, 8 / (4 + theta2) - 1, theta.cos())
         sine = theta.sin()
-        sine_by_theta = torch.where(small_theta, 0.5 * cosine + 0.5, sine / theta_nz)
+        sine_by_theta = torch.where(near_zero, 0.5 * cosine + 0.5, sine / theta_nz)
         one_minus_cosie_by_theta2 = torch.where(
-            small_theta, 0.5 * sine_by_theta, (1 - cosine) / theta2_nz
+            near_zero, 0.5 * sine_by_theta, (1 - cosine) / theta2_nz
         )
         ret.data = (
             one_minus_cosie_by_theta2
@@ -176,19 +176,19 @@ class SO3(LieGroup):
         ret[:, 0, 0] += cosine.view(-1)
         ret[:, 1, 1] += cosine.view(-1)
         ret[:, 2, 2] += cosine.view(-1)
-        ret_temp = sine_by_theta.view(-1, 1) * tangent_vector
-        ret[:, 0, 1] -= ret_temp[:, 2]
-        ret[:, 1, 0] += ret_temp[:, 2]
-        ret[:, 0, 2] += ret_temp[:, 1]
-        ret[:, 2, 0] -= ret_temp[:, 1]
-        ret[:, 1, 2] -= ret_temp[:, 0]
-        ret[:, 2, 1] += ret_temp[:, 0]
+        sine_axis = sine_by_theta.view(-1, 1) * tangent_vector
+        ret[:, 0, 1] -= sine_axis[:, 2]
+        ret[:, 1, 0] += sine_axis[:, 2]
+        ret[:, 0, 2] += sine_axis[:, 1]
+        ret[:, 2, 0] -= sine_axis[:, 1]
+        ret[:, 1, 2] -= sine_axis[:, 0]
+        ret[:, 2, 1] += sine_axis[:, 0]
 
         if jacobians is not None:
             SO3._check_jacobians_list(jacobians)
             theta3_nz = theta_nz * theta2_nz
             theta_minus_sine_by_theta3 = torch.where(
-                small_theta, torch.zeros_like(theta), (theta - sine) / theta3_nz
+                near_zero, torch.zeros_like(theta), (theta - sine) / theta3_nz
             )
             jac = (
                 theta_minus_sine_by_theta3
@@ -211,7 +211,9 @@ class SO3(LieGroup):
 
         return ret
 
-    def _log_map_impl(self) -> torch.Tensor:
+    def _log_map_impl(
+        self, jacobians: Optional[List[torch.Tensor]] = None
+    ) -> torch.Tensor:
         sine_axis = torch.zeros(self.shape[0], 3, dtype=self.dtype, device=self.device)
         sine_axis[:, 0] = 0.5 * (self[:, 2, 1] - self[:, 1, 2])
         sine_axis[:, 1] = 0.5 * (self[:, 0, 2] - self[:, 2, 0])
@@ -219,14 +221,19 @@ class SO3(LieGroup):
         cosine = 0.5 * (self[:, 0, 0] + self[:, 1, 1] + self[:, 2, 2] - 1)
         sine = sine_axis.norm(dim=1)
         theta = torch.atan2(sine, cosine)
-        # theta != pi
+
+        near_zero = theta < 5e-3
+
         not_near_pi = 1 + cosine > 1e-7
+        # theta != pi
+        near_zero_not_near_pi = near_zero[not_near_pi]
         # Compute the approximation of theta / sin(theta) when theta is near to 0
-        small_theta = theta[not_near_pi] < 5e-3
         non_zero = torch.ones(1, dtype=self.dtype, device=self.device)
-        sine_nz = torch.where(small_theta, non_zero, sine[not_near_pi])
+        sine_nz = torch.where(near_zero_not_near_pi, non_zero, sine[not_near_pi])
         scale = torch.where(
-            small_theta, 1 + sine[not_near_pi] ** 2 / 6, theta[not_near_pi] / sine_nz
+            near_zero_not_near_pi,
+            1 + sine[not_near_pi] ** 2 / 6,
+            theta[not_near_pi] / sine_nz,
         )
         ret = torch.zeros_like(sine_axis)
         ret[not_near_pi] = sine_axis[not_near_pi] * scale.view(-1, 1)
@@ -237,14 +244,51 @@ class SO3(LieGroup):
         major = torch.logical_and(
             ddiag[:, 1] > ddiag[:, 0], ddiag[:, 1] > ddiag[:, 2]
         ) + 2 * torch.logical_and(ddiag[:, 2] > ddiag[:, 0], ddiag[:, 2] > ddiag[:, 1])
-        sel_rows = self[near_pi, major]
+        sel_rows = 0.5 * (self[near_pi, major] + self[near_pi, :, major])
         aux = torch.ones(sel_rows.shape[0], dtype=torch.bool)
         sel_rows[aux, major] -= cosine[near_pi]
-        ret[near_pi] = sel_rows * (theta[near_pi] ** 2 / (1 - cosine[near_pi])).view(
+        axis = sel_rows / sel_rows.norm(dim=1, keepdim=True)
+        ret[near_pi] = axis * (theta[near_pi] * sine_axis[near_pi, major].sign()).view(
             -1, 1
         )
-        major_norm = ret[near_pi, major].sqrt().view(-1, 1)
-        ret[near_pi] /= major_norm
+
+        if jacobians is not None:
+            SO3._check_jacobians_list(jacobians)
+            jac = torch.zeros_like(self.data)
+
+            theta2 = theta**2
+            sine_theta = sine * theta
+            two_cosine_minus_two = 2 * cosine - 2
+            two_cosine_minus_two_nz = torch.where(
+                near_zero, non_zero, two_cosine_minus_two
+            )
+            theta2_nz = torch.where(near_zero, non_zero, theta2)
+
+            a = torch.where(
+                near_zero, 1 - theta2 / 12, -sine_theta / two_cosine_minus_two_nz
+            )
+            b = torch.where(
+                near_zero,
+                1.0 / 12 + theta2 / 720,
+                (sine_theta + two_cosine_minus_two)
+                / (theta2_nz * two_cosine_minus_two_nz),
+            )
+
+            jac = (b.view(-1, 1) * ret).view(-1, 3, 1) * ret.view(-1, 1, 3)
+
+            half_ret = 0.5 * ret
+            jac[:, 0, 1] -= half_ret[:, 2]
+            jac[:, 1, 0] += half_ret[:, 2]
+            jac[:, 0, 2] += half_ret[:, 1]
+            jac[:, 2, 0] -= half_ret[:, 1]
+            jac[:, 1, 2] -= half_ret[:, 0]
+            jac[:, 2, 1] += half_ret[:, 0]
+
+            diag_jac = torch.diagonal(jac, dim1=1, dim2=2)
+            diag_jac += a.view(-1, 1)
+
+            jacobians.append(jac)
+
         return ret
 
     def _compose_impl(self, so3_2: LieGroup) -> "SO3":

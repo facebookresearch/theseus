@@ -155,7 +155,9 @@ class SE2(LieGroup):
         self[:, 2] = cosine
         self[:, 3] = sine
 
-    def _log_map_impl(self) -> torch.Tensor:
+    def _log_map_impl(
+        self, jacobians: Optional[List[torch.Tensor]] = None
+    ) -> torch.Tensor:
         rotation = self.rotation
         theta = rotation.log_map().view(-1)
         cosine, sine = rotation.to_cos_sin()
@@ -174,6 +176,42 @@ class SE2(LieGroup):
         # Compute the translation
         ux = half_theta_by_tan_half_theta * self[:, 0] + half_theta * self[:, 1]
         uy = half_theta_by_tan_half_theta * self[:, 1] - half_theta * self[:, 0]
+
+        if jacobians is not None:
+            SE2._check_jacobians_list(jacobians)
+            jac = torch.zeros(
+                self.shape[0],
+                3,
+                3,
+                dtype=self.dtype,
+                device=self.device,
+            )
+
+            theta2 = theta**2
+            theta3 = theta * theta2
+
+            theta_nz = torch.where(small_theta, non_zero, theta)
+            one_minus_cosine_nz = torch.where(small_theta, non_zero, 1 - cosine)
+
+            half_theta_sine_by_one_minus_cosine = torch.where(
+                small_theta, 1 - theta2 / 12.0, half_theta * sine / one_minus_cosine_nz
+            )
+            jac[:, [0, 1], [0, 1]] = half_theta_sine_by_one_minus_cosine.view(-1, 1)
+            jac[:, 0, 1] = -half_theta
+            jac[:, 1, 0] = half_theta
+
+            coeff = torch.where(
+                small_theta,
+                theta / 12.0 + theta3 / 720.0,
+                1.0 / theta_nz - 0.5 * sine / one_minus_cosine_nz,
+            )
+
+            jac[:, 0, 2] = coeff * ux + 0.5 * uy
+            jac[:, 1, 2] = coeff * uy - 0.5 * ux
+
+            jac[:, 2, 2] = 1
+
+            jacobians.append(jac)
 
         return torch.stack((ux, uy, theta), dim=1)
 

@@ -163,6 +163,9 @@ class Vector(LieGroup):
             result = torch.cat([self.data] + [vec.data for vec in vecs], 1)
         return Vector(data=result)
 
+    def to_matrix(self) -> torch.Tensor:
+        return self.data.clone()
+
     def _local_impl(self, vec2: Manifold) -> torch.Tensor:
         if not isinstance(vec2, Vector):
             raise ValueError("Non-vector inputs for Vector.local()")

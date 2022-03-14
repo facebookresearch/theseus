@@ -82,6 +82,10 @@ class LieGroup(Manifold):
     ) -> torch.Tensor:
         pass
 
+    @abc.abstractmethod
+    def to_matrix(self) -> torch.Tensor:
+        pass
+
     def log_map(self, jacobians: Optional[List[torch.Tensor]] = None) -> torch.Tensor:
         return self._log_map_impl(jacobians)
 

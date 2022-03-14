@@ -20,7 +20,7 @@ class PoseGraph2DEdge:
         self.measurement = relative_pose
 
 
-def read_3D_g2o_file(path: str) -> Tuple[int, List[th.SE3], List[PoseGraph3DEdge]]:
+def read_3D_g2o_file(path: str) -> Tuple[int, th.SE3, List[PoseGraph3DEdge]]:
     with open(path, "r") as file:
         lines = file.readlines()
 
@@ -38,6 +38,7 @@ def read_3D_g2o_file(path: str) -> Tuple[int, List[th.SE3], List[PoseGraph3DEdge
                 x_y_z_quat = torch.from_numpy(
                     np.array([tokens[3:10]], dtype=np.float64)
                 )
+                x_y_z_quat[3:] /= torch.norm(x_y_z_quat[3:])
                 relative_pose = th.SE3(x_y_z_quaternion=x_y_z_quat)
                 edges.append(PoseGraph3DEdge(i, j, relative_pose))
 
@@ -48,12 +49,16 @@ def read_3D_g2o_file(path: str) -> Tuple[int, List[th.SE3], List[PoseGraph3DEdge
                 i = int(tokens[1])
 
                 x_y_z_quat = torch.from_numpy(np.array([tokens[2:]], dtype=np.float64))
-                pose = th.SE3(x_y_z_quaternion=x_y_z_quat)
-                verts[i] = pose
+                x_y_z_quat[3:] /= torch.norm(x_y_z_quat[3:])
+                verts[i] = x_y_z_quat
 
                 num_vertices = max(num_vertices, i)
 
         num_vertices += 1
-        vertices = [pose for _, pose in sorted(verts.items())]
+        vertices = th.SE3(
+            x_y_z_quaternion=torch.cat(
+                [x_y_z_quat for _, x_y_z_quat in sorted(verts.items())]
+            )
+        )
 
         return (num_vertices, vertices, edges)

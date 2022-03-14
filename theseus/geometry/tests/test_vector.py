@@ -11,10 +11,7 @@ import theseus as th
 from theseus.constants import EPS
 from theseus.core.tests.common import check_copy_var
 
-from .common import (
-    check_projection_for_vector_exp_map,
-    check_projection_for_vector_log_map,
-)
+from .common import check_projection_for_exp_map, check_projection_for_log_map
 
 torch.manual_seed(0)
 
@@ -194,7 +191,9 @@ def test_exp_map():
         ret = th.Vector.exp_map(tangent_vector)
 
         assert torch.allclose(ret.data, tangent_vector, atol=EPS)
-        check_projection_for_vector_exp_map(tangent_vector, Group=th.Vector)
+        check_projection_for_exp_map(
+            tangent_vector, Group=th.Vector, is_projected=False
+        )
 
 
 def test_log_map():
@@ -207,4 +206,6 @@ def test_log_map():
         ret = group.log_map()
 
         assert torch.allclose(ret, group.data, atol=EPS)
-        check_projection_for_vector_log_map(tangent_vector=ret, Group=th.Vector)
+        check_projection_for_log_map(
+            tangent_vector=ret, Group=th.Vector, is_projected=False
+        )

@@ -39,7 +39,7 @@ for edge in edges:
     objective.add(cost_func)
 
 objective.add(
-    theg.PosePirorError(
+    theg.PosePriorError(
         pose=verts[0], pose_prior=verts[0].copy(new_name=verts[0].name + "PRIOR")
     )
 )

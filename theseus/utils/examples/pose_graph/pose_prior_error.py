@@ -10,7 +10,7 @@ import torch
 import theseus as th
 
 
-class PosePirorError(th.CostFunction):
+class PosePriorError(th.CostFunction):
     def __init__(
         self,
         pose: th.SE3,
@@ -52,7 +52,7 @@ class PosePirorError(th.CostFunction):
         super().to(*args, **kwargs)
 
     def _copy_impl(self):
-        return PosePirorError(
+        return PosePriorError(
             pose=self.pose,
             pose_prior=self.pose_prior,
             weight=self.weight,

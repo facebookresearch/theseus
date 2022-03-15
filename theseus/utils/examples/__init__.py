@@ -19,7 +19,7 @@ except ModuleNotFoundError:
     )
 
 try:
-    from .pose_graph import PosePirorError, RelativePoseError
+    from .pose_graph import PosePriorError, RelativePoseError
 except ModuleNotFoundError:
     print(
         "Unable to import Motion Planning utilities. "

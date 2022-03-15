@@ -1,14 +1,13 @@
 import torch
 
 import theseus as th
-from theseus.utils.examples.bundle_adjustment.reprojection_error import (
-    ReprojectionError,
-)
+import theseus.utils.examples as theg
 from theseus.utils.examples.bundle_adjustment.util import random_small_quaternion
 
 
 def test_residual():
     # unit test for Cost term
+    torch.manual_seed(0)
     batch_size = 4
     cam_rot = torch.cat(
         [
@@ -52,7 +51,7 @@ def test_residual():
         data=point_projection.data + (torch.rand((batch_size, 2)) - 0.5) * 50,
         name="image_feature_point",
     )
-    r = ReprojectionError(
+    r = theg.ReprojectionError(
         camera_pose=cam_pose,
         focal_length=focal_length,
         calib_k1=calib_k1,
@@ -87,5 +86,5 @@ def test_residual():
 
     (pose_jac, wpt_jac), _ = r.jacobians()
 
-    assert torch.norm(pose_num_jac - pose_jac) < 1e-5
-    assert torch.norm(wpt_num_jac - wpt_jac) < 1e-5
+    assert torch.norm(pose_num_jac - pose_jac) < 5e-5
+    assert torch.norm(wpt_num_jac - wpt_jac) < 5e-5

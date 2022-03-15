@@ -4,13 +4,15 @@
 # LICENSE file in the root directory of this source tree.
 
 import abc
+from typing import Dict
 
+import differentiable_robot_model as drm
 import torch
 
-from theseus.geometry import SE2, LieGroup, Point2, Vector
+from theseus.geometry import SE2, SE3, LieGroup, Point2, Vector
 
 
-class RobotModel(abc.ABC):
+class KinematicsModel(abc.ABC):
     def __init__(self):
         pass
 
@@ -23,7 +25,7 @@ class RobotModel(abc.ABC):
         pass
 
 
-class IdentityModel(RobotModel):
+class IdentityModel(KinematicsModel):
     def __init__(self):
         super().__init__()
 
@@ -39,3 +41,32 @@ class IdentityModel(RobotModel):
 
     def dim(self) -> int:
         return 1
+
+
+class UrdfRobotModel(KinematicsModel):
+    def __init__(self, urdf_path: str):
+        self.drm_model = drm.DifferentiableRobotModel(urdf_path)
+
+    def forward_kinematics(self, joint_states: torch.Tensor) -> Dict[str, SE3]:
+        """Computes forward kinematics
+        Args:
+            joint_states: Vector of all joint angles
+        Outputs:
+             Dictionary that maps link name to link pose
+
+        (Note: differentiable robot model uses the xyzw quaternion convention,
+        while theseus uses wxyz, hence the conversion.)
+        """
+        link_poses = {}
+        for link_name in self.drm_model.get_link_names():
+            pos, quat = self.drm_model.compute_forward_kinematics(
+                joint_states, link_name
+            )
+            link_poses[link_name] = SE3(
+                x_y_z_quaternion=torch.cat([pos, quat[..., 3:], quat[..., :3]], dim=-1)
+            )
+
+        return link_poses
+
+    def dim(self) -> int:
+        return len(self.drm_model.get_joint_limits())

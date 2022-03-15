@@ -40,11 +40,15 @@ def read_3D_g2o_file(path: str) -> Tuple[int, List[th.SE3], List[PoseGraphEdge]]
                 i = int(tokens[1])
                 j = int(tokens[2])
 
+                n = len(edges)
+
                 x_y_z_quat = torch.from_numpy(
                     np.array([tokens[3:10]], dtype=np.float64)
                 )
                 x_y_z_quat[3:] /= torch.norm(x_y_z_quat[3:])
-                relative_pose = th.SE3(x_y_z_quaternion=x_y_z_quat)
+                relative_pose = th.SE3(
+                    x_y_z_quaternion=x_y_z_quat, name="EDGE_SE3__{}".format(n)
+                )
 
                 sel = [0, 6, 11, 15, 18, 20]
                 weight = th.Variable(
@@ -58,9 +62,7 @@ def read_3D_g2o_file(path: str) -> Tuple[int, List[th.SE3], List[PoseGraphEdge]]
                         i,
                         j,
                         relative_pose,
-                        th.DiagonalCostWeight(
-                            weight, name="weight_{}".format(len(edges))
-                        ),
+                        th.DiagonalCostWeight(weight, name="EDGE_WEIGHT__{}".format(n)),
                     )
                 )
 
@@ -79,7 +81,7 @@ def read_3D_g2o_file(path: str) -> Tuple[int, List[th.SE3], List[PoseGraphEdge]]
 
         if len(verts) > 0:
             vertices = [
-                th.SE3(x_y_z_quaternion=x_y_z_quat, name="VERTEX_SE3_{}".format(i))
+                th.SE3(x_y_z_quaternion=x_y_z_quat, name="VERTEX_SE3__{}".format(i))
                 for i, x_y_z_quat in sorted(verts.items())
             ]
         else:
@@ -103,8 +105,12 @@ def read_2D_g2o_file(path: str) -> Tuple[int, List[th.SE2], List[PoseGraphEdge]]
                 i = int(tokens[1])
                 j = int(tokens[2])
 
+                n = len(edges)
+
                 x_y_theta = torch.from_numpy(np.array([tokens[3:6]], dtype=np.float64))
-                relative_pose = th.SE2(x_y_theta=x_y_theta)
+                relative_pose = th.SE2(
+                    x_y_theta=x_y_theta, name="EDGE_SE2__{}".format(n)
+                )
 
                 sel = [0, 3, 5]
                 weight = th.Variable(
@@ -118,9 +124,7 @@ def read_2D_g2o_file(path: str) -> Tuple[int, List[th.SE2], List[PoseGraphEdge]]
                         i,
                         j,
                         relative_pose,
-                        th.DiagonalCostWeight(
-                            weight, name="weight_{}".format(len(edges))
-                        ),
+                        th.DiagonalCostWeight(weight, name="EDGE_WEIGHT__{}".format(n)),
                     )
                 )
 
@@ -138,7 +142,7 @@ def read_2D_g2o_file(path: str) -> Tuple[int, List[th.SE2], List[PoseGraphEdge]]
 
         if len(verts) > 0:
             vertices = [
-                th.SE2(x_y_theta=x_y_theta, name="VERTEX_SE2_{}".format(i))
+                th.SE2(x_y_theta=x_y_theta, name="VERTEX_SE2__{}".format(i))
                 for i, x_y_theta in sorted(verts.items())
             ]
         else:

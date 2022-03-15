@@ -21,6 +21,7 @@ from .common import (
     check_projection_for_compose,
     check_projection_for_exp_map,
     check_projection_for_inverse,
+    check_projection_for_log_map,
     check_projection_for_rotate_and_transform,
 )
 
@@ -36,6 +37,7 @@ def test_log_map():
     for batch_size in [1, 2, 100]:
         theta = torch.from_numpy(np.linspace(-np.pi, np.pi, batch_size)).view(-1, 1)
         check_log_map(theta, th.SO2)
+        check_projection_for_log_map(theta, th.SO2)
 
 
 def test_compose():

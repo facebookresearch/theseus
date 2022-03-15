@@ -2,6 +2,7 @@
 #
 # This source code is licensed under the MIT license found in the
 # LICENSE file in the root directory of this source tree.
+import warnings
 
 from .bundle_adjustment import (
     BundleAdjustmentDataset,
@@ -20,7 +21,10 @@ try:
         generate_trajectory_figs,
     )
 except ModuleNotFoundError:
-    print("Motion Planning example requires matplotlib installation.")
+    warnings.warn(
+        "Unable to import Motion Planning utilities. "
+        "Please make sure you have matplotlib installed."
+    )
 
 try:
     from .tactile_pose_estimation import (
@@ -39,4 +43,7 @@ try:
         visualize_tactile_push2d,
     )
 except ModuleNotFoundError:
-    print("Tactile Pose Estimation example requires omegaconf installation.")
+    warnings.warn(
+        "Unable to import Tactile Pose Estimation utilities. "
+        "Please make sure you have matplotlib and omegaconf installed."
+    )

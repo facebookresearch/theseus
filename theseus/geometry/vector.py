@@ -163,6 +163,9 @@ class Vector(LieGroup):
             result = torch.cat([self.data] + [vec.data for vec in vecs], 1)
         return Vector(data=result)
 
+    def to_matrix(self) -> torch.Tensor:
+        return self.data.clone()
+
     def _local_impl(self, vec2: Manifold) -> torch.Tensor:
         if not isinstance(vec2, Vector):
             raise ValueError("Non-vector inputs for Vector.local()")
@@ -210,12 +213,12 @@ class Vector(LieGroup):
         if tangent_vector.ndim != 2:
             raise ValueError("The dimension of tangent vectors should be 2.")
 
-        Vector._exp_map_jacobian(tangent_vector, jacobians)
+        Vector._exp_map_jacobian_impl(tangent_vector, jacobians)
 
         return Vector(data=tangent_vector.clone())
 
     @staticmethod
-    def _exp_map_jacobian(
+    def _exp_map_jacobian_impl(
         tangent_vector: torch.Tensor, jacobians: Optional[List[torch.Tensor]]
     ):
         if jacobians is not None:
@@ -227,8 +230,21 @@ class Vector(LieGroup):
                 ).repeat(shape[0], 1, 1)
             )
 
-    def _log_map_impl(self) -> torch.Tensor:
+    def _log_map_impl(
+        self, jacobians: Optional[List[torch.Tensor]] = None
+    ) -> torch.Tensor:
+        self._log_map_jacobian_impl(jacobians)
         return self.data.clone()
+
+    def _log_map_jacobian_impl(self, jacobians: Optional[List[torch.Tensor]] = None):
+        if jacobians is not None:
+            shape = self.shape
+            Vector._check_jacobians_list(jacobians)
+            jacobians.append(
+                torch.eye(shape[1], dtype=self.dtype, device=self.device).repeat(
+                    shape[0], 1, 1
+                )
+            )
 
     def __hash__(self):
         return id(self)

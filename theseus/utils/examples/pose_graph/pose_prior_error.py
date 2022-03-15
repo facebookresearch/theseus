@@ -21,12 +21,12 @@ class PosePirorError(th.CostFunction):
         if weight is None:
             weight = th.ScaleCostWeight(torch.tensor(1e-5).to(dtype=pose.dtype))
         super().__init__(
-            cost_weight=weight.copy(),
+            cost_weight=weight,
             name=name,
         )
 
-        self.pose = pose.copy()
-        self.pose_prior = pose_prior.copy()
+        self.pose = pose
+        self.pose_prior = pose_prior
 
         self.register_optim_vars(["pose"])
         self.register_aux_vars(["pose_prior"])

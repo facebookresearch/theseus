@@ -22,13 +22,13 @@ class RelativePoseError(th.CostFunction):
         if weight is None:
             weight = th.ScaleCostWeight(torch.tensor(1.0).to(dtype=pose1.dtype))
         super().__init__(
-            cost_weight=weight.copy(),
+            cost_weight=weight,
             name=name,
         )
 
-        self.pose1 = pose1.copy()
-        self.pose2 = pose2.copy()
-        self.relative_pose = relative_pose.copy()
+        self.pose1 = pose1
+        self.pose2 = pose2
+        self.relative_pose = relative_pose
 
         self.register_optim_vars(["pose1", "pose2"])
         self.register_aux_vars(["relative_pose"])

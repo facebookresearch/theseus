@@ -1,7 +1,9 @@
 import torch
 
 import theseus as th
-import theseus.utils.examples as theg
+from theseus.utils.examples.bundle_adjustment.reprojection_error import (
+    ReprojectionError,
+)
 from theseus.utils.examples.bundle_adjustment.util import random_small_quaternion
 
 
@@ -50,7 +52,7 @@ def test_residual():
         data=point_projection.data + (torch.rand((batch_size, 2)) - 0.5) * 50,
         name="image_feature_point",
     )
-    r = theg.ReprojectionError(
+    r = ReprojectionError(
         camera_pose=cam_pose,
         focal_length=focal_length,
         calib_k1=calib_k1,

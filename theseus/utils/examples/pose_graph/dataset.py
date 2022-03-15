@@ -3,7 +3,7 @@
 # This source code is licensed under the MIT license found in the
 # LICENSE file in the root directory of this source tree.
 
-from typing import List, Tuple
+from typing import List, Optional, Tuple, Union
 
 import numpy as np
 import torch
@@ -11,27 +11,27 @@ import torch
 import theseus as th
 
 
-class PoseGraph3DEdge:
-    def __init__(self, i: int, j: int, relative_pose: th.SE3):
+class PoseGraphEdge:
+    def __init__(
+        self,
+        i: int,
+        j: int,
+        relative_pose: Union[th.SE2, th.SE3],
+        weight: Optional[th.DiagonalCostWeight] = None,
+    ):
         self.i = i
         self.j = j
-        self.measurement = relative_pose
+        self.relative_pose = relative_pose
+        self.weight = weight
 
 
-class PoseGraph2DEdge:
-    def __init__(self, i: int, j: int, relative_pose: th.SE2):
-        self.i = i
-        self.j = j
-        self.measurement = relative_pose
-
-
-def read_3D_g2o_file(path: str) -> Tuple[int, List[th.SE3], List[PoseGraph3DEdge]]:
+def read_3D_g2o_file(path: str) -> Tuple[int, List[th.SE3], List[PoseGraphEdge]]:
     with open(path, "r") as file:
         lines = file.readlines()
 
         num_vertices = 0
         verts = dict()
-        edges = []
+        edges: List[PoseGraphEdge] = []
 
         for line in lines:
             tokens = line.split()
@@ -45,12 +45,28 @@ def read_3D_g2o_file(path: str) -> Tuple[int, List[th.SE3], List[PoseGraph3DEdge
                 )
                 x_y_z_quat[3:] /= torch.norm(x_y_z_quat[3:])
                 relative_pose = th.SE3(x_y_z_quaternion=x_y_z_quat)
-                edges.append(PoseGraph3DEdge(i, j, relative_pose))
+
+                sel = [0, 6, 11, 15, 18, 20]
+                weight = th.Variable(
+                    torch.from_numpy(np.array(tokens[6:], dtype=np.float64)[sel])
+                    .sqrt()
+                    .view(1, -1)
+                )
+
+                edges.append(
+                    PoseGraphEdge(
+                        i,
+                        j,
+                        relative_pose,
+                        th.DiagonalCostWeight(
+                            weight, name="weight_{}".format(len(edges))
+                        ),
+                    )
+                )
 
                 num_vertices = max(num_vertices, i)
                 num_vertices = max(num_vertices, j)
-
-            if tokens[0] == "VERTEX_SE3:QUAT":
+            elif tokens[0] == "VERTEX_SE3:QUAT":
                 i = int(tokens[1])
 
                 x_y_z_quat = torch.from_numpy(np.array([tokens[2:]], dtype=np.float64))
@@ -72,13 +88,13 @@ def read_3D_g2o_file(path: str) -> Tuple[int, List[th.SE3], List[PoseGraph3DEdge
         return (num_vertices, vertices, edges)
 
 
-def read_2D_g2o_file(path: str) -> Tuple[int, List[th.SE2], List[PoseGraph2DEdge]]:
+def read_2D_g2o_file(path: str) -> Tuple[int, List[th.SE2], List[PoseGraphEdge]]:
     with open(path, "r") as file:
         lines = file.readlines()
 
         num_vertices = 0
         verts = dict()
-        edges = []
+        edges: List[PoseGraphEdge] = []
 
         for line in lines:
             tokens = line.split()
@@ -89,12 +105,28 @@ def read_2D_g2o_file(path: str) -> Tuple[int, List[th.SE2], List[PoseGraph2DEdge
 
                 x_y_theta = torch.from_numpy(np.array([tokens[3:6]], dtype=np.float64))
                 relative_pose = th.SE2(x_y_theta=x_y_theta)
-                edges.append(PoseGraph2DEdge(i, j, relative_pose))
+
+                sel = [0, 3, 5]
+                weight = th.Variable(
+                    torch.from_numpy(np.array(tokens[6:], dtype=np.float64)[sel])
+                    .sqrt()
+                    .view(1, -1)
+                )
+
+                edges.append(
+                    PoseGraphEdge(
+                        i,
+                        j,
+                        relative_pose,
+                        th.DiagonalCostWeight(
+                            weight, name="weight_{}".format(len(edges))
+                        ),
+                    )
+                )
 
                 num_vertices = max(num_vertices, i)
                 num_vertices = max(num_vertices, j)
-
-            if tokens[0] == "VERTEX_SE3:QUAT":
+            elif tokens[0] == "VERTEX_SE2:QUAT":
                 i = int(tokens[1])
 
                 x_y_theta = torch.from_numpy(np.array([tokens[2:]], dtype=np.float64))

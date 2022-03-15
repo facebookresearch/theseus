@@ -1,4 +1,4 @@
-from typing import cast
+from typing import Dict
 
 import torch
 import theseus as th
@@ -61,6 +61,25 @@ def get_batch(i):
     return retv
 
 
+def print_histogram(
+    ba: theg.BundleAdjustmentDataset, var_dict: Dict[str, torch.Tensor], msg: str
+):
+    print(msg)
+    theg.ba_histogram(
+        cameras=[
+            theg.Camera(
+                th.SE3(data=var_dict[c.pose.name]),
+                c.focal_length,
+                c.calib_k1,
+                c.calib_k2,
+            )
+            for c in ba.cameras
+        ],
+        points=[th.Point3(data=var_dict[pt.name]) for pt in ba.points],
+        observations=ba.observations,
+    )
+
+
 num_batches = 1
 
 
@@ -82,46 +101,11 @@ for epoch in range(num_epochs):
             loss_radius_tensor.repeat(batch_size).unsqueeze(1).clone()
         )
 
-        # histogram of optimization result, create datasets from input values
-        print("Input histograms:")
-        ba_input = theg.BundleAdjustmentDataset(
-            cameras=[
-                theg.Camera(
-                    th.SE3(data=theseus_inputs[c.pose.name]),
-                    c.focal_length,
-                    c.calib_k1,
-                    c.calib_k2,
-                )
-                for c in ba.cameras
-            ],
-            points=[theseus_inputs[pt.name] for pt in ba.points],
-            observations=ba.observations,
-        )
-        ba_input.histogram()
-
+        print_histogram(ba, theseus_inputs, "Input histogram:")
         theseus_outputs, info = theseus_optim.forward(
             input_data=theseus_inputs, optimizer_kwargs={"verbose": True}
         )
-
-        # histogram of optimization result, create datasets from optimized values
-        print("Output histograms:")
-        ba_result = theg.BundleAdjustmentDataset(
-            cameras=[
-                theg.Camera(
-                    cast(th.SE3, theseus_optim.objective.optim_vars[c.pose.name]),
-                    c.focal_length,
-                    c.calib_k1,
-                    c.calib_k2,
-                )
-                for c in ba.cameras
-            ],
-            points=[
-                cast(th.Point3, theseus_optim.objective.optim_vars[pt.name])
-                for pt in ba.points
-            ],
-            observations=ba.observations,
-        )
-        ba_result.histogram()
+        print_histogram(ba, theseus_outputs, "Output histogram:")
 
         loss: torch.Tensor = 0  # type:ignore
         for i in range(len(ba.cameras)):

@@ -159,7 +159,7 @@ class BundleAdjustmentDataset:
         self.gt_points = gt_points
 
     @staticmethod
-    def load_bal_dataset(path):
+    def load_bal_dataset(path: str):
         observations = []
         cameras = []
         points = []
@@ -202,7 +202,12 @@ class BundleAdjustmentDataset:
         return cameras, points, observations
 
     @staticmethod
-    def save_bal_dataset(path, cameras, points, observations):
+    def save_bal_dataset(
+        path: str,
+        cameras: List[Camera],
+        points: List[th.Point3],
+        observations: List[Observation],
+    ):
         with open(path, "wt") as out:
             print(f"{len(cameras)} {len(points)} {len(observations)}", file=out)
             for obs in observations:
@@ -324,3 +329,12 @@ class BundleAdjustmentDataset:
         return BundleAdjustmentDataset(
             cameras, points, observations, gt_cameras, gt_points
         )
+
+
+def ba_histogram(
+    cameras: List[Camera],
+    points: List[th.Point3],
+    observations: List[Observation],
+):
+    ba = BundleAdjustmentDataset(cameras, points, observations)
+    ba.histogram()

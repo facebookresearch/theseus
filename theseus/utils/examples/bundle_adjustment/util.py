@@ -4,6 +4,9 @@ from typing import Tuple
 import torch
 
 
+# ------------------------------------------------------------ #
+# --------------------------- LOSSES ------------------------- #
+# ------------------------------------------------------------ #
 def soft_loss_cauchy(
     x: torch.Tensor, radius: torch.Tensor
 ) -> Tuple[torch.Tensor, torch.Tensor]:
@@ -23,6 +26,9 @@ def soft_loss_huber_like(
     return val, der
 
 
+# ------------------------------------------------------------ #
+# ----------------------------- RNG -------------------------- #
+# ------------------------------------------------------------ #
 # returns a uniformly random point of the 2-sphere
 def random_s2(dtype: torch.dtype = torch.float64) -> torch.Tensor:
     theta = torch.rand(()) * math.tau

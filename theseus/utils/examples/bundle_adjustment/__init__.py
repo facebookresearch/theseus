@@ -1,2 +1,2 @@
-from .data import BundleAdjustmentDataset, Camera
+from .data import BundleAdjustmentDataset, Camera, ba_histogram
 from .reprojection_error import ReprojectionError

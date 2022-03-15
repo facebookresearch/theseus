@@ -15,7 +15,7 @@ def test_pose_prior_error():
         aux_id = torch.arange(batch_size)
         pose = th.SE3.rand(batch_size, dtype=torch.float64)
         pose_prior = th.SE3.rand(batch_size, dtype=torch.float64)
-        pose_prior_err = thpg.PosePirorError(pose, pose_prior)
+        pose_prior_err = thpg.PosePriorError(pose, pose_prior)
 
         actual = pose_prior_err.jacobians()[0][0]
 

@@ -1,12 +1,22 @@
+import random
 from typing import Dict
 
+import hydra
+import numpy as np
+import omegaconf
 import torch
-import theseus as th
 
+import theseus as th
 import theseus.utils.examples as theg
 
 
-# Smaller values result in error
+BACKWARD_MODE = {
+    "implicit": th.BackwardMode.IMPLICIT,
+    "full": th.BackwardMode.FULL,
+    "truncated": th.BackwardMode.TRUNCATED,
+}
+
+# Smaller values} result in error
 th.SO3.SO3_EPS = 1e-6
 
 
@@ -43,10 +53,13 @@ def get_batch(
     return retv
 
 
-def run():
+def run(cfg: omegaconf.OmegaConf):
     # create (or load) dataset
     ba = theg.BundleAdjustmentDataset.generate_synthetic(
-        num_cameras=10, num_points=200, average_track_length=8, track_locality=0.2
+        num_cameras=cfg.num_cameras,
+        num_points=cfg.num_points,
+        average_track_length=cfg.average_track_length,
+        track_locality=cfg.track_locality,
     )
 
     # hyper parameters (ie outer loop's parameters)
@@ -71,8 +84,8 @@ def run():
     # Create optimizer
     optimizer = th.LevenbergMarquardt(
         objective,
-        max_iterations=3,
-        step_size=0.3,
+        max_iterations=cfg.inner_optim.max_iters,
+        step_size=cfg.inner_optim.step_size,
     )
 
     # Set up Theseus layer
@@ -84,9 +97,9 @@ def run():
 
     # Outer optimization loop
     loss_radius_tensor = torch.nn.Parameter(torch.tensor([-1], dtype=torch.float64))
-    model_optimizer = torch.optim.Adam([loss_radius_tensor], lr=0.1)
+    model_optimizer = torch.optim.Adam([loss_radius_tensor], lr=cfg.outer_optim.lr)
 
-    num_epochs = 20
+    num_epochs = cfg.outer_optim.num_epochs
     camera_pose_vars = [
         theseus_optim.objective.optim_vars[c.pose.name] for c in ba.cameras
     ]
@@ -94,14 +107,16 @@ def run():
         print(f" ******************* EPOCH {epoch} ******************* ")
         model_optimizer.zero_grad()
         theseus_inputs = get_batch(ba, orig_poses, orig_points)
-        batch_size = 1
-        theseus_inputs["log_loss_radius"] = (
-            loss_radius_tensor.repeat(batch_size).unsqueeze(1).clone()
-        )
+        theseus_inputs["log_loss_radius"] = loss_radius_tensor.unsqueeze(1).clone()
 
         print_histogram(ba, theseus_inputs, "Input histogram:")
         theseus_outputs, info = theseus_optim.forward(
-            input_data=theseus_inputs, optimizer_kwargs={"verbose": True}
+            input_data=theseus_inputs,
+            optimizer_kwargs={
+                "verbose": cfg.inner_optim.verbose,
+                "track_err_history": cfg.inner_optim.track_err_history,
+                "backward_mode": BACKWARD_MODE[cfg.inner_optim.backward_mode],
+            },
         )
         print_histogram(ba, theseus_outputs, "Output histogram:")
 
@@ -119,6 +134,13 @@ def run():
         )
 
 
+@hydra.main(config_path="./configs/", config_name="bundle_adjustment")
+def main(cfg):
+    torch.manual_seed(cfg.seed)
+    np.random.seed(cfg.seed)
+    random.seed(cfg.seed)
+    run(cfg)
+
+
 if __name__ == "__main__":
-    torch.manual_seed(1)
-    run()
+    main()

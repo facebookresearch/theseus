@@ -12,9 +12,9 @@ class Camera:
     def __init__(
         self,
         pose: th.SE3,
-        focal_length: th.Variable,
-        calib_k1: th.Variable,
-        calib_k2: th.Variable,
+        focal_length: th.Vector,
+        calib_k1: th.Vector,
+        calib_k2: th.Vector,
     ):
         self.pose = pose
         self.focal_length = focal_length
@@ -39,15 +39,15 @@ class Camera:
         r = th.SO3.exp_map(torch.tensor(params[:3], dtype=torch.float64).unsqueeze(0))
         t = torch.tensor([params[3:6]], dtype=torch.float64).unsqueeze(2)
         pose = th.SE3(data=torch.cat([r.data, t], dim=2), name=name + "_pose")
-        focal_length = th.Variable(
+        focal_length = th.Vector(
             data=torch.tensor([params[6:7]], dtype=torch.float64),
             name=name + "_focal_length",
         )
-        calib_k1 = th.Variable(
+        calib_k1 = th.Vector(
             data=torch.tensor([params[7:8]], dtype=torch.float64),
             name=name + "_calib_k1",
         )
-        calib_k2 = th.Variable(
+        calib_k2 = th.Vector(
             data=torch.tensor([params[8:9]], dtype=torch.float64),
             name=name + "_calib_k2",
         )
@@ -89,7 +89,7 @@ class Camera:
         batch_size: int = 1,
         rot_random: float = 20.0,
         pos_random: float = 1.0,
-        pos_base: torch.Tensor = torch.zeros(3, dtype=torch.float64),
+        pos_base: Optional[torch.Tensor] = None,
         fl_random: float = 100.0,
         fl_base: float = 1000.0,
         k1_random: float = 0.1,
@@ -98,6 +98,8 @@ class Camera:
         k2_base: float = 0.0,
         name: str = "Cam",
     ):
+        if pos_base is None:
+            pos_base = torch.zeros(3, dtype=torch.float64)
         cam_rot = torch.cat(
             [
                 random_small_quaternion(max_degrees=rot_random).unsqueeze(0)

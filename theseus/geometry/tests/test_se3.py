@@ -64,7 +64,7 @@ def test_exp_map():
         tangent_vector = torch.cat([tangent_vector_lin, tangent_vector_ang], dim=1)
 
         check_exp_map(tangent_vector, th.SE3)
-        check_projection_for_exp_map(tangent_vector, th.SE3, 1e-6)
+        check_projection_for_exp_map(tangent_vector, th.SE3, atol=1e-6)
 
     for batch_size in [1, 20, 100]:
         tangent_vector_ang = torch.rand(batch_size, 3, generator=rng).double() - 0.5

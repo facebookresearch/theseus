@@ -19,6 +19,7 @@ from .common import (
     check_inverse,
     check_log_map,
     check_projection_for_compose,
+    check_projection_for_exp_map,
     check_projection_for_inverse,
     check_projection_for_rotate_and_transform,
 )
@@ -45,6 +46,7 @@ def test_log_map():
         u = torch.randn(batch_size, 2)
         tangent_vector = torch.cat([u, theta.unsqueeze(1)], dim=1)
         check_log_map(tangent_vector, th.SE2)
+        check_projection_for_exp_map(tangent_vector, th.SE2)
 
 
 def test_compose():

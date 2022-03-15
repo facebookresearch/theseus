@@ -155,7 +155,9 @@ class SE2(LieGroup):
         self[:, 2] = cosine
         self[:, 3] = sine
 
-    def _log_map_impl(self) -> torch.Tensor:
+    def _log_map_impl(
+        self, jacobians: Optional[List[torch.Tensor]] = None
+    ) -> torch.Tensor:
         rotation = self.rotation
         theta = rotation.log_map().view(-1)
         cosine, sine = rotation.to_cos_sin()
@@ -175,10 +177,48 @@ class SE2(LieGroup):
         ux = half_theta_by_tan_half_theta * self[:, 0] + half_theta * self[:, 1]
         uy = half_theta_by_tan_half_theta * self[:, 1] - half_theta * self[:, 0]
 
+        if jacobians is not None:
+            SE2._check_jacobians_list(jacobians)
+            jac = torch.zeros(
+                self.shape[0],
+                3,
+                3,
+                dtype=self.dtype,
+                device=self.device,
+            )
+
+            theta2 = theta**2
+            theta3 = theta * theta2
+
+            theta_nz = torch.where(small_theta, non_zero, theta)
+            one_minus_cosine_nz = torch.where(small_theta, non_zero, 1 - cosine)
+
+            half_theta_sine_by_one_minus_cosine = torch.where(
+                small_theta, 1 - theta2 / 12.0, half_theta * sine / one_minus_cosine_nz
+            )
+            jac[:, [0, 1], [0, 1]] = half_theta_sine_by_one_minus_cosine.view(-1, 1)
+            jac[:, 0, 1] = -half_theta
+            jac[:, 1, 0] = half_theta
+
+            coeff = torch.where(
+                small_theta,
+                theta / 12.0 + theta3 / 720.0,
+                1.0 / theta_nz - 0.5 * sine / one_minus_cosine_nz,
+            )
+
+            jac[:, 0, 2] = coeff * ux + 0.5 * uy
+            jac[:, 1, 2] = coeff * uy - 0.5 * ux
+
+            jac[:, 2, 2] = 1
+
+            jacobians.append(jac)
+
         return torch.stack((ux, uy, theta), dim=1)
 
     @staticmethod
-    def exp_map(tangent_vector: torch.Tensor) -> "SE2":
+    def exp_map(
+        tangent_vector: torch.Tensor, jacobians: Optional[List[torch.Tensor]] = None
+    ) -> "SE2":
         u = tangent_vector[:, :2]
         theta = tangent_vector[:, 2]
         rotation = SO2(theta=theta)
@@ -190,10 +230,12 @@ class SE2(LieGroup):
         non_zero = torch.ones(
             1, dtype=tangent_vector.dtype, device=tangent_vector.device
         )
+        theta2 = theta**2
+        theta3 = theta**3
         theta_nz = torch.where(small_theta, non_zero, theta)
-        sine_by_theta = torch.where(small_theta, 1 - theta**2 / 6, sine / theta_nz)
+        sine_by_theta = torch.where(small_theta, 1 - theta2 / 6, sine / theta_nz)
         cosine_minus_one_by_theta = torch.where(
-            small_theta, -theta / 2 + theta**3 / 24, (cosine - 1) / theta_nz
+            small_theta, -theta / 2 + theta3 / 24, (cosine - 1) / theta_nz
         )
 
         # Compute the translation
@@ -203,6 +245,38 @@ class SE2(LieGroup):
 
         se2 = SE2(dtype=tangent_vector.dtype)
         se2.update_from_rot_and_trans(rotation, translation)
+
+        if jacobians is not None:
+            SE2._check_jacobians_list(jacobians)
+            theta2_nz = torch.where(small_theta, non_zero, theta2)
+            theta_minus_sine_by_theta2 = torch.where(
+                small_theta, theta - theta3 / 120, (theta - sine) / theta2_nz
+            )
+            cosine_minus_one_by_theta2 = torch.where(
+                small_theta, -0.5 + theta2 / 24, (cosine - 1) / theta2_nz
+            )
+            jac = torch.zeros(
+                tangent_vector.shape[0],
+                3,
+                3,
+                dtype=tangent_vector.dtype,
+                device=tangent_vector.device,
+            )
+            jac[:, 0, 0] = sine_by_theta
+            jac[:, 0, 1] = -cosine_minus_one_by_theta
+            jac[:, 0, 2] = (
+                theta_minus_sine_by_theta2 * u[:, 0]
+                + cosine_minus_one_by_theta2 * u[:, 1]
+            )
+            jac[:, 1, 0] = cosine_minus_one_by_theta
+            jac[:, 1, 1] = sine_by_theta
+            jac[:, 1, 2] = (
+                theta_minus_sine_by_theta2 * u[:, 1]
+                - cosine_minus_one_by_theta2 * u[:, 0]
+            )
+            jac[:, 2, 2] = 1
+            jacobians.append(jac)
+
         return se2
 
     def _adjoint_impl(self) -> torch.Tensor:

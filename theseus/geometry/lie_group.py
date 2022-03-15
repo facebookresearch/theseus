@@ -71,15 +71,23 @@ class LieGroup(Manifold):
 
     @staticmethod
     @abc.abstractmethod
-    def exp_map(tangent_vector: torch.Tensor) -> "LieGroup":
+    def exp_map(
+        tangent_vector: torch.Tensor, jacobians: Optional[List[torch.Tensor]] = None
+    ) -> "LieGroup":
         pass
 
     @abc.abstractmethod
-    def _log_map_impl(self) -> torch.Tensor:
+    def _log_map_impl(
+        self, jacobians: Optional[List[torch.Tensor]] = None
+    ) -> torch.Tensor:
         pass
 
-    def log_map(self) -> torch.Tensor:
-        return self._log_map_impl()
+    @abc.abstractmethod
+    def to_matrix(self) -> torch.Tensor:
+        pass
+
+    def log_map(self, jacobians: Optional[List[torch.Tensor]] = None) -> torch.Tensor:
+        return self._log_map_impl(jacobians)
 
     @abc.abstractmethod
     def _adjoint_impl(self) -> torch.Tensor:

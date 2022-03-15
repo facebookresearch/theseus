@@ -3,7 +3,7 @@
 # This source code is licensed under the MIT license found in the
 # LICENSE file in the root directory of this source tree.
 
-from typing import Optional, Tuple, cast
+from typing import List, Optional, Tuple, cast
 
 import torch
 
@@ -21,7 +21,7 @@ def _prepare_dof_and_data(
             data = data.view(1, -1)
         if data.shape[1] != expected_dof:
             raise ValueError(
-                f"Provied data tensor must have shape (batch_size, {expected_dof})."
+                f"Provided data tensor must have shape (batch_size, {expected_dof})."
             )
     return dof, data
 
@@ -85,7 +85,14 @@ class Point2(Vector):
         return self[:, 1]
 
     @staticmethod
-    def exp_map(tangent_vector: torch.Tensor) -> "Point2":
+    def exp_map(
+        tangent_vector: torch.Tensor, jacobians: Optional[List[torch.Tensor]] = None
+    ) -> "Point2":
+        if tangent_vector.ndim != 2 or tangent_vector.shape[1] != 2:
+            raise ValueError("Tangent vectors of Point2 should be 2-D vectors.")
+
+        Vector._exp_map_jacobian_impl(tangent_vector, jacobians)
+
         return Point2(data=tangent_vector.clone())
 
     # added to avoid casting downstream
@@ -155,7 +162,14 @@ class Point3(Vector):
         return self[:, 2]
 
     @staticmethod
-    def exp_map(tangent_vector: torch.Tensor) -> "Point3":
+    def exp_map(
+        tangent_vector: torch.Tensor, jacobians: Optional[List[torch.Tensor]] = None
+    ) -> "Point3":
+        if tangent_vector.ndim != 2 or tangent_vector.shape[1] != 3:
+            raise ValueError("Tangent vectors of Point3 should be 3-D vectors.")
+
+        Vector._exp_map_jacobian_impl(tangent_vector, jacobians)
+
         return Point3(data=tangent_vector.clone())
 
     # added to avoid casting downstream

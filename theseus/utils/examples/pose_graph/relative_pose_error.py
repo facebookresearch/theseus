@@ -3,7 +3,7 @@
 # This source code is licensed under the MIT license found in the
 # LICENSE file in the root directory of this source tree.
 
-from typing import List, Optional, Tuple
+from typing import List, Optional, Tuple, Union
 
 import torch
 
@@ -13,9 +13,9 @@ import theseus as th
 class RelativePoseError(th.CostFunction):
     def __init__(
         self,
-        pose1: th.SE3,
-        pose2: th.SE3,
-        relative_pose: th.SE3,
+        pose1: Union[th.SE2, th.SE3],
+        pose2: Union[th.SE2, th.SE3],
+        relative_pose: Union[th.SE2, th.SE3],
         weight: Optional[th.CostWeight] = None,
         name: Optional[str] = None,
     ):

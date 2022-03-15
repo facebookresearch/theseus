@@ -52,7 +52,7 @@ def read_3D_g2o_file(path: str) -> Tuple[int, List[th.SE3], List[PoseGraphEdge]]
 
                 sel = [0, 6, 11, 15, 18, 20]
                 weight = th.Variable(
-                    torch.from_numpy(np.array(tokens[6:], dtype=np.float64)[sel])
+                    torch.from_numpy(np.array(tokens[10:], dtype=np.float64)[sel])
                     .sqrt()
                     .view(1, -1)
                 )

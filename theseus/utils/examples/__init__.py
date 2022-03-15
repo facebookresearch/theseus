@@ -2,6 +2,7 @@
 #
 # This source code is licensed under the MIT license found in the
 # LICENSE file in the root directory of this source tree.
+import warnings
 
 try:
     from .motion_planning import (
@@ -13,15 +14,7 @@ try:
         generate_trajectory_figs,
     )
 except ModuleNotFoundError:
-    print(
-        "Unable to import Motion Planning utilities. "
-        "Please make sure you have matplotlib installed."
-    )
-
-try:
-    from .pose_graph import PosePriorError, RelativePoseError
-except ModuleNotFoundError:
-    print(
+    warnings.warn(
         "Unable to import Motion Planning utilities. "
         "Please make sure you have matplotlib installed."
     )
@@ -43,7 +36,16 @@ try:
         visualize_tactile_push2d,
     )
 except ModuleNotFoundError:
-    print(
+    warnings.warn(
         "Unable to import Tactile Pose Estimation utilities. "
         "Please make sure you have matplotlib and omegaconf installed."
+    )
+
+
+try:
+    from .pose_graph import PosePriorError, RelativePoseError
+except ModuleNotFoundError:
+    warnings.warn(
+        "Unable to import Motion Planning utilities. "
+        "Please make sure you have matplotlib installed."
     )

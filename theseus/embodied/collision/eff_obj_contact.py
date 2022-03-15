@@ -3,13 +3,13 @@
 # This source code is licensed under the MIT license found in the
 # LICENSE file in the root directory of this source tree.
 
-from typing import List, Optional, Tuple
+from typing import List, Optional, Tuple, cast
 
 import torch
 
 from theseus.core import CostFunction, CostWeight, Variable
 from theseus.embodied.kinematics import IdentityModel
-from theseus.geometry import SE2
+from theseus.geometry import SE2, Point2
 
 from .signed_distance_field import SignedDistanceField2D
 
@@ -57,8 +57,8 @@ class EffectorObjectContactPlanar(CostFunction):
         )
         J_transf_obj = J_transf[0]
         J_transf_eff = J_transf[1].matmul(J_xy[0])
-        robot_state = self.robot.forward_kinematics(eff__obj)
-        dist, J_dist = self.sdf.signed_distance(robot_state)
+        robot_state = cast(Point2, self.robot.forward_kinematics(eff__obj)["state"])
+        dist, J_dist = self.sdf.signed_distance(robot_state.data.view(-1, 2, 1))
         J_out = (J_dist.matmul(J_transf_obj), J_dist.matmul(J_transf_eff))
         return dist, J_out
 

@@ -3,12 +3,7 @@
 # This source code is licensed under the MIT license found in the
 # LICENSE file in the root directory of this source tree.
 
-from .bundle_adjustment import (
-    BundleAdjustmentDataset,
-    Camera,
-    LocalizationSample,
-    ReprojectionError,
-)
+from .bundle_adjustment import BundleAdjustmentDataset, Camera, ReprojectionError
 from .motion_planning import (
     InitialTrajectoryModel,
     MotionPlanner,

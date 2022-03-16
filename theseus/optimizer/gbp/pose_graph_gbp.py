@@ -85,7 +85,7 @@ class BackwardMode(Enum):
 
 
 class Gaussian:
-    def __init__(self, mean: th.Variable):
+    def __init__(self, mean: th.Manifold):
         self.name = mean.name + "_gaussian"
         self.mean = mean
         self.lam = torch.zeros(

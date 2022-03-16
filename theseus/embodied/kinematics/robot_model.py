@@ -4,7 +4,7 @@
 # LICENSE file in the root directory of this source tree.
 
 import abc
-from typing import Dict, Union, cast
+from typing import Dict, Union
 
 import differentiable_robot_model as drm
 import torch

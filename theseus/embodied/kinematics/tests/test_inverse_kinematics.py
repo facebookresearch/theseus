@@ -16,6 +16,7 @@ from theseus.geometry import SE3, SO3
 
 NUM_DOFS = 7
 EE_NAME = "panda_virtual_ee_link"
+HOME_POSE = [-0.1394, -0.0205, -0.0520, -2.0691, 0.0506, 2.0029, -0.9168]
 torch.autograd.set_detect_anomaly(True)
 
 
@@ -73,7 +74,7 @@ cost_function = th.AutoDiffCostFunction(
 )
 objective = th.Objective()
 objective.add(cost_function)
-optimizer = th.GaussNewton(
+optimizer = th.LevenbergMarquardt(
     objective,
     max_iterations=15,
     step_size=0.5,
@@ -83,10 +84,16 @@ theseus_optim = th.TheseusLayer(optimizer)
 # Optimize
 theseus_inputs = {
     "ee_pose_target": ee_pose_target.data,
-    "theta": torch.zeros(1, 7),
+    "theta": torch.Tensor(HOME_POSE).unsqueeze(0),
 }
 with torch.no_grad():
     updated_inputs, info = theseus_optim.forward(
-        theseus_inputs, optimizer_kwargs={"track_best_solution": True, "verbose": True}
+        theseus_inputs,
+        optimizer_kwargs={
+            "track_best_solution": True,
+            "verbose": True,
+            "track_error_history": True,
+            "damping": 0.1,
+        },
     )
 print("Best solution:", info.best_solution)

@@ -232,7 +232,8 @@ def local_gaussian(
 
     jac = []
     # th.exp_map(var, mean_tp, jacobians=jac)
-    euclidean_jac(var, mean_tp, jacobians=jac)
+    var.__class__.exp_map(mean_tp, jac)
+    # euclidean_jac(var, mean_tp, jacobians=jac)
     jac = jac[0]
 
     # lam_tp is lambda matrix in the tangent plane
@@ -260,10 +261,12 @@ def retract_gaussian(
     mean = var.retract(mean_tp)
 
     jac = []
-    # th.exp_map(var, tau_a, jacobians=jac)
-    euclidean_jac(var, mean, jacobians=jac)
+    # th.exp_map(var, mean_tp, jacobians=jac)
+    var.__class__.exp_map(mean_tp, jac)
+    # euclidean_jac(var, mean_tp, jacobians=jac)
     jac = jac[0]
-    lam = torch.bmm(torch.bmm(jac.transpose(-1, -2), lam_tp), jac)
+    inv_jac = torch.inverse(jac)
+    lam = torch.bmm(torch.bmm(inv_jac.transpose(-1, -2), lam_tp), inv_jac)
 
     out_gauss.mean.update(mean.data)
     out_gauss.lam = lam

@@ -58,11 +58,11 @@ def test_residual():
     )
     r = theg.Reprojection(
         camera_pose=cam_pose,
+        world_point=world_point,
         focal_length=focal_length,
         calib_k1=calib_k1,
         calib_k2=calib_k2,
         log_loss_radius=log_loss_radius,
-        world_point=world_point,
         image_feature_point=image_feature_point,
     )
 

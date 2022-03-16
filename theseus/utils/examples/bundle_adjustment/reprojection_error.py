@@ -16,8 +16,8 @@ class Reprojection(th.CostFunction):
     def __init__(
         self,
         camera_pose: th.SE3,
-        log_loss_radius: th.Vector,
         world_point: th.Point3,
+        log_loss_radius: th.Vector,
         image_feature_point: th.Point2,
         focal_length: th.Vector,
         calib_k1: th.Vector = None,
@@ -119,9 +119,9 @@ class Reprojection(th.CostFunction):
     def _copy_impl(self):
         return Reprojection(
             self.camera_pose,
+            self.world_point,
             self.log_loss_radius,
             self.focal_length,
-            self.world_point,
             self.image_feature_point,
             weight=self.weight,
             name=self.name,

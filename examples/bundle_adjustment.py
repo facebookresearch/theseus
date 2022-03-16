@@ -77,11 +77,11 @@ def run(cfg: omegaconf.OmegaConf):
         cam = ba.cameras[obs.camera_index]
         cost_function = theg.Reprojection(
             camera_pose=cam.pose,
+            world_point=ba.points[obs.point_index],
             focal_length=cam.focal_length,
             calib_k1=cam.calib_k1,
             calib_k2=cam.calib_k2,
             log_loss_radius=log_loss_radius,
-            world_point=ba.points[obs.point_index],
             image_feature_point=obs.image_feature_point,
         )
         objective.add(cost_function)

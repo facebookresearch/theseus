@@ -2,7 +2,9 @@
 .DS_Store
 .vscode
 *.code-workspace
+debug/
 build/
+datasets/
 .mypy_cache/
 .pytest_cache/
 __pycache__/

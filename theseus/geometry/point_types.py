@@ -3,11 +3,10 @@
 # This source code is licensed under the MIT license found in the
 # LICENSE file in the root directory of this source tree.
 
-from typing import Optional, Tuple, cast
+from typing import List, Optional, Tuple, cast
 
 import torch
 
-from .lie_group import LieGroup
 from .vector import Vector
 
 
@@ -22,7 +21,7 @@ def _prepare_dof_and_data(
             data = data.view(1, -1)
         if data.shape[1] != expected_dof:
             raise ValueError(
-                f"Provied data tensor must have shape (batch_size, {expected_dof})."
+                f"Provided data tensor must have shape (batch_size, {expected_dof})."
             )
     return dof, data
 
@@ -37,6 +36,48 @@ class Point2(Vector):
         dof, data = _prepare_dof_and_data(2, data)
         super().__init__(dof=dof, data=data, name=name, dtype=dtype)
 
+    @staticmethod
+    def rand(
+        *size: int,
+        generator: Optional[torch.Generator] = None,
+        dtype: Optional[torch.dtype] = None,
+        device: Optional[torch.device] = None,
+        requires_grad: bool = False,
+    ) -> "Point2":
+        if len(size) != 1:
+            raise ValueError("The size should be 1D.")
+        return Point2(
+            data=torch.rand(
+                size[0],
+                2,
+                generator=generator,
+                dtype=dtype,
+                device=device,
+                requires_grad=requires_grad,
+            )
+        )
+
+    @staticmethod
+    def randn(
+        *size: int,
+        generator: Optional[torch.Generator] = None,
+        dtype: Optional[torch.dtype] = None,
+        device: Optional[torch.device] = None,
+        requires_grad: bool = False,
+    ) -> "Point2":
+        if len(size) != 1:
+            raise ValueError("The size should be 1D.")
+        return Point2(
+            data=torch.randn(
+                size[0],
+                2,
+                generator=generator,
+                dtype=dtype,
+                device=device,
+                requires_grad=requires_grad,
+            )
+        )
+
     def x(self) -> torch.Tensor:
         return self[:, 0]
 
@@ -44,7 +85,14 @@ class Point2(Vector):
         return self[:, 1]
 
     @staticmethod
-    def exp_map(tangent_vector: torch.Tensor) -> LieGroup:
+    def exp_map(
+        tangent_vector: torch.Tensor, jacobians: Optional[List[torch.Tensor]] = None
+    ) -> "Point2":
+        if tangent_vector.ndim != 2 or tangent_vector.shape[1] != 2:
+            raise ValueError("Tangent vectors of Point2 should be 2-D vectors.")
+
+        Vector._exp_map_jacobian_impl(tangent_vector, jacobians)
+
         return Point2(data=tangent_vector.clone())
 
     # added to avoid casting downstream
@@ -62,6 +110,48 @@ class Point3(Vector):
         dof, data = _prepare_dof_and_data(3, data)
         super().__init__(dof=dof, data=data, name=name, dtype=dtype)
 
+    @staticmethod
+    def rand(
+        *size: int,
+        generator: Optional[torch.Generator] = None,
+        dtype: Optional[torch.dtype] = None,
+        device: Optional[torch.device] = None,
+        requires_grad: bool = False,
+    ) -> "Point3":
+        if len(size) != 1:
+            raise ValueError("The size should be 1D.")
+        return Point3(
+            data=torch.rand(
+                size[0],
+                3,
+                generator=generator,
+                dtype=dtype,
+                device=device,
+                requires_grad=requires_grad,
+            )
+        )
+
+    @staticmethod
+    def randn(
+        *size: int,
+        generator: Optional[torch.Generator] = None,
+        dtype: Optional[torch.dtype] = None,
+        device: Optional[torch.device] = None,
+        requires_grad: bool = False,
+    ) -> "Point3":
+        if len(size) != 1:
+            raise ValueError("The size should be 1D.")
+        return Point3(
+            data=torch.randn(
+                size[0],
+                3,
+                generator=generator,
+                dtype=dtype,
+                device=device,
+                requires_grad=requires_grad,
+            )
+        )
+
     def x(self) -> torch.Tensor:
         return self[:, 0]
 
@@ -72,9 +162,22 @@ class Point3(Vector):
         return self[:, 2]
 
     @staticmethod
-    def exp_map(tangent_vector: torch.Tensor) -> LieGroup:
+    def exp_map(
+        tangent_vector: torch.Tensor, jacobians: Optional[List[torch.Tensor]] = None
+    ) -> "Point3":
+        if tangent_vector.ndim != 2 or tangent_vector.shape[1] != 3:
+            raise ValueError("Tangent vectors of Point3 should be 3-D vectors.")
+
+        Vector._exp_map_jacobian_impl(tangent_vector, jacobians)
+
         return Point3(data=tangent_vector.clone())
 
     # added to avoid casting downstream
     def copy(self, new_name: Optional[str] = None) -> "Point3":
         return cast(Point3, super().copy(new_name=new_name))
+
+
+rand_point2 = Point2.rand
+randn_point2 = Point2.randn
+rand_point3 = Point3.rand
+randn_point3 = Point3.randn

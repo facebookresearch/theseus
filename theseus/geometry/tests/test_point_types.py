@@ -7,6 +7,9 @@ import pytest  # noqa: F401
 import torch
 
 import theseus as th
+from theseus.constants import EPS
+
+from .common import check_projection_for_exp_map, check_projection_for_log_map
 
 
 def test_xy_point2():
@@ -47,3 +50,49 @@ def test_point_operations_return_correct_type():
         exp_map = point_cls.exp_map(p2.data)
         assert isinstance(exp_map, point_cls)
         assert exp_map.allclose(p2)
+
+
+def test_exp_map():
+    rng = torch.Generator()
+    rng.manual_seed(0)
+
+    for batch_size in [1, 20, 100]:
+        tangent_vector = torch.rand(batch_size, 2, generator=rng).double() - 0.5
+        ret = th.Point2.exp_map(tangent_vector)
+
+        assert torch.allclose(ret.data, tangent_vector, atol=EPS)
+        check_projection_for_exp_map(
+            tangent_vector, Group=th.Point2, is_projected=False
+        )
+
+    for batch_size in [1, 20, 100]:
+        tangent_vector = torch.rand(batch_size, 3, generator=rng).double() - 0.5
+        ret = th.Point3.exp_map(tangent_vector)
+
+        assert torch.allclose(ret.data, tangent_vector, atol=EPS)
+        check_projection_for_exp_map(
+            tangent_vector, Group=th.Point3, is_projected=False
+        )
+
+
+def test_log_map():
+    rng = torch.Generator()
+    rng.manual_seed(0)
+
+    for batch_size in [1, 20, 100]:
+        group = th.Point2.rand(batch_size)
+        ret = group.log_map()
+
+        assert torch.allclose(ret, group.data, atol=EPS)
+        check_projection_for_log_map(
+            tangent_vector=ret, Group=th.Point2, is_projected=False
+        )
+
+    for batch_size in [1, 20, 100]:
+        group = th.Point3.rand(batch_size)
+        ret = group.log_map()
+
+        assert torch.allclose(ret, group.data, atol=EPS)
+        check_projection_for_log_map(
+            tangent_vector=ret, Group=th.Point3, is_projected=False
+        )

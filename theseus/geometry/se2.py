@@ -37,6 +37,70 @@ class SE2(LieGroup):
             self.update_from_rot_and_trans(rotation, translation)
 
     @staticmethod
+    def rand(
+        *size: int,
+        generator: Optional[torch.Generator] = None,
+        dtype: Optional[torch.dtype] = None,
+        device: Optional[torch.device] = None,
+        requires_grad: bool = False,
+    ) -> "SE2":
+        if len(size) != 1:
+            raise ValueError("The size should be 1D.")
+        x_y_theta = torch.rand(
+            size[0],
+            3,
+            generator=generator,
+            dtype=dtype,
+            device=device,
+            requires_grad=requires_grad,
+        )
+        x_y_theta[:, 2] = 2 * theseus.constants.PI * (x_y_theta[:, 2] - 0.5)
+
+        return SE2(x_y_theta=x_y_theta)
+
+    @staticmethod
+    def randn(
+        *size: int,
+        generator: Optional[torch.Generator] = None,
+        dtype: Optional[torch.dtype] = None,
+        device: Optional[torch.device] = None,
+        requires_grad: bool = False,
+    ) -> "SE2":
+        if len(size) != 1:
+            raise ValueError("The size should be 1D.")
+        x_y_theta = torch.randn(
+            size[0],
+            3,
+            generator=generator,
+            dtype=dtype,
+            device=device,
+            requires_grad=requires_grad,
+        )
+        x_y_theta[:, 2] *= theseus.constants.PI
+
+        return SE2(x_y_theta=x_y_theta)
+
+    def _transform_shape_check(self, point: Union[Point2, torch.Tensor]):
+        err_msg = (
+            f"SE2 can only transform vectors of shape [{self.shape[0]}, 2] or [1, 2], "
+            f"but the input has shape {point.shape}."
+        )
+
+        if isinstance(point, torch.Tensor):
+            if not point.ndim == 2 or point.shape[1] != 2:
+                raise ValueError(err_msg)
+        elif point.dof() != 2:
+            raise ValueError(err_msg)
+        if (
+            point.shape[0] != self.shape[0]
+            and point.shape[0] != 1
+            and self.shape[0] != 1
+        ):
+            raise ValueError(
+                "Input point batch size is not broadcastable with group batch size."
+            )
+
+    @staticmethod
     def _init_data() -> torch.Tensor:  # type: ignore
         return torch.tensor([0.0, 0.0, 1.0, 0.0]).view(1, 4)
 
@@ -91,7 +155,9 @@ class SE2(LieGroup):
         self[:, 2] = cosine
         self[:, 3] = sine
 
-    def _log_map_impl(self) -> torch.Tensor:
+    def _log_map_impl(
+        self, jacobians: Optional[List[torch.Tensor]] = None
+    ) -> torch.Tensor:
         rotation = self.rotation
         theta = rotation.log_map().view(-1)
         cosine, sine = rotation.to_cos_sin()
@@ -111,10 +177,48 @@ class SE2(LieGroup):
         ux = half_theta_by_tan_half_theta * self[:, 0] + half_theta * self[:, 1]
         uy = half_theta_by_tan_half_theta * self[:, 1] - half_theta * self[:, 0]
 
+        if jacobians is not None:
+            SE2._check_jacobians_list(jacobians)
+            jac = torch.zeros(
+                self.shape[0],
+                3,
+                3,
+                dtype=self.dtype,
+                device=self.device,
+            )
+
+            theta2 = theta**2
+            theta3 = theta * theta2
+
+            theta_nz = torch.where(small_theta, non_zero, theta)
+            one_minus_cosine_nz = torch.where(small_theta, non_zero, 1 - cosine)
+
+            half_theta_sine_by_one_minus_cosine = torch.where(
+                small_theta, 1 - theta2 / 12.0, half_theta * sine / one_minus_cosine_nz
+            )
+            jac[:, [0, 1], [0, 1]] = half_theta_sine_by_one_minus_cosine.view(-1, 1)
+            jac[:, 0, 1] = -half_theta
+            jac[:, 1, 0] = half_theta
+
+            coeff = torch.where(
+                small_theta,
+                theta / 12.0 + theta3 / 720.0,
+                1.0 / theta_nz - 0.5 * sine / one_minus_cosine_nz,
+            )
+
+            jac[:, 0, 2] = coeff * ux + 0.5 * uy
+            jac[:, 1, 2] = coeff * uy - 0.5 * ux
+
+            jac[:, 2, 2] = 1
+
+            jacobians.append(jac)
+
         return torch.stack((ux, uy, theta), dim=1)
 
     @staticmethod
-    def exp_map(tangent_vector: torch.Tensor) -> LieGroup:
+    def exp_map(
+        tangent_vector: torch.Tensor, jacobians: Optional[List[torch.Tensor]] = None
+    ) -> "SE2":
         u = tangent_vector[:, :2]
         theta = tangent_vector[:, 2]
         rotation = SO2(theta=theta)
@@ -126,10 +230,12 @@ class SE2(LieGroup):
         non_zero = torch.ones(
             1, dtype=tangent_vector.dtype, device=tangent_vector.device
         )
+        theta2 = theta**2
+        theta3 = theta**3
         theta_nz = torch.where(small_theta, non_zero, theta)
-        sine_by_theta = torch.where(small_theta, 1 - theta**2 / 6, sine / theta_nz)
+        sine_by_theta = torch.where(small_theta, 1 - theta2 / 6, sine / theta_nz)
         cosine_minus_one_by_theta = torch.where(
-            small_theta, -theta / 2 + theta**3 / 24, (cosine - 1) / theta_nz
+            small_theta, -theta / 2 + theta3 / 24, (cosine - 1) / theta_nz
         )
 
         # Compute the translation
@@ -139,6 +245,38 @@ class SE2(LieGroup):
 
         se2 = SE2(dtype=tangent_vector.dtype)
         se2.update_from_rot_and_trans(rotation, translation)
+
+        if jacobians is not None:
+            SE2._check_jacobians_list(jacobians)
+            theta2_nz = torch.where(small_theta, non_zero, theta2)
+            theta_minus_sine_by_theta2 = torch.where(
+                small_theta, theta - theta3 / 120, (theta - sine) / theta2_nz
+            )
+            cosine_minus_one_by_theta2 = torch.where(
+                small_theta, -0.5 + theta2 / 24, (cosine - 1) / theta2_nz
+            )
+            jac = torch.zeros(
+                tangent_vector.shape[0],
+                3,
+                3,
+                dtype=tangent_vector.dtype,
+                device=tangent_vector.device,
+            )
+            jac[:, 0, 0] = sine_by_theta
+            jac[:, 0, 1] = -cosine_minus_one_by_theta
+            jac[:, 0, 2] = (
+                theta_minus_sine_by_theta2 * u[:, 0]
+                + cosine_minus_one_by_theta2 * u[:, 1]
+            )
+            jac[:, 1, 0] = cosine_minus_one_by_theta
+            jac[:, 1, 1] = sine_by_theta
+            jac[:, 1, 2] = (
+                theta_minus_sine_by_theta2 * u[:, 1]
+                - cosine_minus_one_by_theta2 * u[:, 0]
+            )
+            jac[:, 2, 2] = 1
+            jacobians.append(jac)
+
         return se2
 
     def _adjoint_impl(self) -> torch.Tensor:
@@ -169,6 +307,36 @@ class SE2(LieGroup):
         se2_inverse = SE2(dtype=self.dtype)
         se2_inverse.update_from_rot_and_trans(inverse_rotation, inverse_translation)
         return se2_inverse
+
+    def _project_impl(
+        self, euclidean_grad: torch.Tensor, is_sparse: bool = False
+    ) -> torch.Tensor:
+        self._project_check(euclidean_grad, is_sparse)
+        ret = torch.zeros(
+            euclidean_grad.shape[:-1] + torch.Size([3]),
+            dtype=self.dtype,
+            device=self.device,
+        )
+
+        temp = torch.stack((-self[:, 3], self[:, 2]), dim=1)
+
+        if is_sparse:
+            ret[..., 0] = torch.einsum(
+                "i...k,i...k->i...", euclidean_grad[..., :2], self[:, 2:]
+            )
+            ret[..., 1] = torch.einsum(
+                "i...k,i...k->i...", euclidean_grad[..., :2], temp
+            )
+            ret[..., 2] = torch.einsum(
+                "i...k,i...k->i...", euclidean_grad[..., 2:], temp
+            )
+        else:
+            ret[..., 0] = torch.einsum(
+                "...k,...k", euclidean_grad[..., :2], self[:, 2:]
+            )
+            ret[..., 1] = torch.einsum("...k,...k", euclidean_grad[..., :2], temp)
+            ret[..., 2] = torch.einsum("...k,...k", euclidean_grad[..., 2:], temp)
+        return ret
 
     def to_matrix(self) -> torch.Tensor:
         matrix = torch.zeros(self.shape[0], 3, 3).to(
@@ -213,24 +381,68 @@ class SE2(LieGroup):
         point: Union[torch.Tensor, Point2],
         jacobians: Optional[List[torch.Tensor]] = None,
     ) -> Point2:
-        point_data = point if isinstance(point, torch.Tensor) else point.data
-        translation_rel = point_data - self.xy()
-        J_rot: Optional[List[torch.Tensor]] = None
+        self._transform_shape_check(point)
+        batch_size = max(self.shape[0], point.shape[0])
+        if isinstance(point, torch.Tensor):
+            p = point
+        else:
+            p = point.data
+
+        cosine = self[:, 2]
+        sine = self[:, 3]
+        temp = p - self[:, :2]
+        ret = SO2._rotate_from_cos_sin(temp, cosine, -sine)
+
         if jacobians is not None:
             self._check_jacobians_list(jacobians)
-            J_rot = []
-        transform = self.rotation.unrotate(translation_rel, jacobians=J_rot)
+            Jg = torch.zeros(batch_size, 2, 3, dtype=self.dtype, device=self.device)
+            Jg[:, 0, 0] = -1
+            Jg[:, 1, 1] = -1
+            Jg[:, 0, 2] = ret.y()
+            Jg[:, 1, 2] = -ret.x()
+
+            Jpnt = torch.zeros(batch_size, 2, 2, dtype=self.dtype, device=self.device)
+            Jpnt[:, 0, 0] = cosine
+            Jpnt[:, 0, 1] = sine
+            Jpnt[:, 1, 0] = -sine
+            Jpnt[:, 1, 1] = cosine
+
+            jacobians.extend([Jg, Jpnt])
+
+        return ret
+
+    def transform_from(
+        self,
+        point: Union[torch.Tensor, Point2],
+        jacobians: Optional[List[torch.Tensor]] = None,
+    ) -> Point2:
+        self._transform_shape_check(point)
+        batch_size = max(self.shape[0], point.shape[0])
+
+        cosine = self[:, 2]
+        sine = self[:, 3]
+        temp = SO2._rotate_from_cos_sin(point, cosine, sine)
+        ret = Point2(data=temp.data + self[:, :2])
+
         if jacobians is not None:
-            J_rot_pose, J_rot_point = J_rot
-            J_out_pose = torch.zeros(
-                self.shape[0], 2, 3, device=self.device, dtype=self.dtype
-            )
-            J_out_pose[:, :2, :2] = -torch.eye(
-                2, device=self.device, dtype=self.dtype
-            ).unsqueeze(0)
-            J_out_pose[:, :, 2:] = J_rot_pose
-            jacobians.extend([J_out_pose, J_rot_point])
-        return transform
+            self._check_jacobians_list(jacobians)
+            Jg = torch.zeros(batch_size, 2, 3, dtype=self.dtype, device=self.device)
+            Jg[:, 0, 0] = cosine
+            Jg[:, 0, 1] = -sine
+            Jg[:, 1, 0] = sine
+            Jg[:, 1, 1] = cosine
+            Jg[:, 0, 2] = -temp.y()
+            Jg[:, 1, 2] = temp.x()
+
+            Jpnt = torch.zeros(batch_size, 2, 2, dtype=self.dtype, device=self.device)
+            Jpnt[:, 0, 0] = cosine
+            Jpnt[:, 0, 1] = -sine
+            Jpnt[:, 1, 0] = sine
+            Jpnt[:, 1, 1] = cosine
+
+            jacobians.extend([Jg, Jpnt])
+
+        return ret
 
     def _copy_impl(self, new_name: Optional[str] = None) -> "SE2":
         return SE2(data=self.data.clone(), name=new_name)
@@ -238,3 +450,7 @@ class SE2(LieGroup):
     # only added to avoid casting downstream
     def copy(self, new_name: Optional[str] = None) -> "SE2":
         return cast(SE2, super().copy(new_name=new_name))
+
+
+rand_se2 = SE2.rand
+randn_se2 = SE2.randn

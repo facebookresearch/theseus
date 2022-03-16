@@ -42,6 +42,46 @@ class Vector(LieGroup):
     def dof(self) -> int:
         return self.data.shape[1]
 
+    @staticmethod
+    def rand(
+        *size: int,
+        generator: Optional[torch.Generator] = None,
+        dtype: Optional[torch.dtype] = None,
+        device: Optional[torch.device] = None,
+        requires_grad: bool = False,
+    ) -> "Vector":
+        if len(size) != 2:
+            raise ValueError("The size should be 2D.")
+        return Vector(
+            data=torch.rand(
+                size,
+                generator=generator,
+                dtype=dtype,
+                device=device,
+                requires_grad=requires_grad,
+            )
+        )
+
+    @staticmethod
+    def randn(
+        *size: int,
+        generator: Optional[torch.Generator] = None,
+        dtype: Optional[torch.dtype] = None,
+        device: Optional[torch.device] = None,
+        requires_grad: bool = False,
+    ) -> "Vector":
+        if len(size) != 2:
+            raise ValueError("The size should be 2D.")
+        return Vector(
+            data=torch.randn(
+                size,
+                generator=generator,
+                dtype=dtype,
+                device=device,
+                requires_grad=requires_grad,
+            )
+        )
+
     def __repr__(self) -> str:
         return (
             f"{self.__class__.__name__}"
@@ -123,6 +163,9 @@ class Vector(LieGroup):
             result = torch.cat([self.data] + [vec.data for vec in vecs], 1)
         return Vector(data=result)
 
+    def to_matrix(self) -> torch.Tensor:
+        return self.data.clone()
+
     def _local_impl(self, vec2: Manifold) -> torch.Tensor:
         if not isinstance(vec2, Vector):
             raise ValueError("Non-vector inputs for Vector.local()")
@@ -157,12 +200,51 @@ class Vector(LieGroup):
             .to(self.device)
         )
 
+    def _project_impl(
+        self, euclidean_grad: torch.Tensor, is_sparse: bool = False
+    ) -> torch.Tensor:
+        self._project_check(euclidean_grad, is_sparse)
+        return euclidean_grad.clone()
+
     @staticmethod
-    def exp_map(tangent_vector: torch.Tensor) -> LieGroup:
+    def exp_map(
+        tangent_vector: torch.Tensor, jacobians: Optional[List[torch.Tensor]] = None
+    ) -> "Vector":
+        if tangent_vector.ndim != 2:
+            raise ValueError("The dimension of tangent vectors should be 2.")
+
+        Vector._exp_map_jacobian_impl(tangent_vector, jacobians)
+
         return Vector(data=tangent_vector.clone())
 
-    def _log_map_impl(self) -> torch.Tensor:
+    @staticmethod
+    def _exp_map_jacobian_impl(
+        tangent_vector: torch.Tensor, jacobians: Optional[List[torch.Tensor]]
+    ):
+        if jacobians is not None:
+            shape = tangent_vector.shape
+            LieGroup._check_jacobians_list(jacobians)
+            jacobians.append(
+                torch.eye(
+                    shape[1], dtype=tangent_vector.dtype, device=tangent_vector.device
+                ).repeat(shape[0], 1, 1)
+            )
+
+    def _log_map_impl(
+        self, jacobians: Optional[List[torch.Tensor]] = None
+    ) -> torch.Tensor:
+        self._log_map_jacobian_impl(jacobians)
         return self.data.clone()
+
+    def _log_map_jacobian_impl(self, jacobians: Optional[List[torch.Tensor]] = None):
+        if jacobians is not None:
+            shape = self.shape
+            Vector._check_jacobians_list(jacobians)
+            jacobians.append(
+                torch.eye(shape[1], dtype=self.dtype, device=self.device).repeat(
+                    shape[0], 1, 1
+                )
+            )
 
     def __hash__(self):
         return id(self)
@@ -173,3 +255,7 @@ class Vector(LieGroup):
     # added to avoid casting downstream
     def copy(self, new_name: Optional[str] = None) -> "Vector":
         return cast(Vector, super().copy(new_name=new_name))
+
+
+rand_vector = Vector.rand
+randn_vector = Vector.randn

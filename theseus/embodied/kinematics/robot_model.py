@@ -62,6 +62,8 @@ class UrdfRobotModel(KinematicsModel):
             pos, quat = self.drm_model.compute_forward_kinematics(
                 joint_states, link_name
             )
+            quat = quat / torch.linalg.norm(quat)  # normalize
+
             link_poses[link_name] = SE3(
                 x_y_z_quaternion=torch.cat([pos, quat[..., 3:], quat[..., :3]], dim=-1)
             )

@@ -4,12 +4,14 @@
 # LICENSE file in the root directory of this source tree.
 
 import abc
-from typing import Dict
+from typing import Dict, Union, cast
 
 import differentiable_robot_model as drm
 import torch
 
-from theseus.geometry import SE2, SE3, LieGroup, Point2, Vector
+from theseus.geometry import SE3, LieGroup, Point2, Vector
+
+RobotModelInput = Union[torch.Tensor, Vector]
 
 
 class KinematicsModel(abc.ABC):
@@ -17,7 +19,7 @@ class KinematicsModel(abc.ABC):
         pass
 
     @abc.abstractmethod
-    def forward_kinematics(self, robot_pose: LieGroup) -> torch.Tensor:
+    def forward_kinematics(self, robot_pose: RobotModelInput) -> Dict[str, LieGroup]:
         pass
 
     @abc.abstractmethod
@@ -29,12 +31,10 @@ class IdentityModel(KinematicsModel):
     def __init__(self):
         super().__init__()
 
-    def forward_kinematics(self, robot_pose: LieGroup) -> torch.Tensor:
-        if isinstance(robot_pose, SE2):
-            return robot_pose.translation.data.view(-1, 2, 1)
+    def forward_kinematics(self, robot_pose: RobotModelInput) -> Dict[str, LieGroup]:
         if isinstance(robot_pose, Point2) or isinstance(robot_pose, Vector):
             assert robot_pose.dof() == 2
-            return robot_pose.data.view(-1, 2, 1)
+            return {"state": robot_pose}
         raise NotImplementedError(
             f"IdentityModel not implemented for pose with type {type(robot_pose)}."
         )
@@ -47,7 +47,7 @@ class UrdfRobotModel(KinematicsModel):
     def __init__(self, urdf_path: str):
         self.drm_model = drm.DifferentiableRobotModel(urdf_path)
 
-    def forward_kinematics(self, joint_states: torch.Tensor) -> Dict[str, SE3]:
+    def forward_kinematics(self, joint_states: RobotModelInput) -> Dict[str, LieGroup]:
         """Computes forward kinematics
         Args:
             joint_states: Vector of all joint angles
@@ -57,7 +57,7 @@ class UrdfRobotModel(KinematicsModel):
         (Note: differentiable robot model uses the xyzw quaternion convention,
         while theseus uses wxyz, hence the conversion.)
         """
-        link_poses = {}
+        link_poses: Dict[str, LieGroup] = {}
         for link_name in self.drm_model.get_link_names():
             pos, quat = self.drm_model.compute_forward_kinematics(
                 joint_states, link_name

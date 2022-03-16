@@ -136,6 +136,4 @@ class Gaussian:
     def __init__(self, mean: Manifold):
         self.name = mean.name + "_gaussian"
         self.mean = mean
-        self.lam = torch.zeros(
-            mean.shape[0], mean.dof(), mean.dof(), dtype=mean.dtype
-        )
+        self.lam = torch.zeros(mean.shape[0], mean.dof(), mean.dof(), dtype=mean.dtype)

@@ -130,3 +130,12 @@ def local(
 # Alias for Manifold.retract()
 def retract(variable: Manifold, delta: torch.Tensor) -> Manifold:
     return variable.retract(delta)
+
+
+class Gaussian:
+    def __init__(self, mean: Manifold):
+        self.name = mean.name + "_gaussian"
+        self.mean = mean
+        self.lam = torch.zeros(
+            mean.shape[0], mean.dof(), mean.dof(), dtype=mean.dtype
+        )

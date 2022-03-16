@@ -108,13 +108,14 @@ def run(cfg: omegaconf.OmegaConf):
     camera_pose_vars = [
         theseus_optim.objective.optim_vars[c.pose.name] for c in ba.cameras
     ]
+
+    theseus_inputs = get_batch(ba, orig_poses, orig_points)
+    print_histogram(ba, theseus_inputs, "Input histogram:")
     for epoch in range(num_epochs):
         print(f" ******************* EPOCH {epoch} ******************* ")
         model_optimizer.zero_grad()
-        theseus_inputs = get_batch(ba, orig_poses, orig_points)
         theseus_inputs["log_loss_radius"] = loss_radius_tensor.unsqueeze(1).clone()
 
-        print_histogram(ba, theseus_inputs, "Input histogram:")
         theseus_outputs, info = theseus_optim.forward(
             input_data=theseus_inputs,
             optimizer_kwargs={

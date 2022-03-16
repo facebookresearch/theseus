@@ -4,4 +4,4 @@
 # LICENSE file in the root directory of this source tree.
 
 from .data import BundleAdjustmentDataset, Camera, ba_histogram
-from .reprojection_error import ReprojectionError
+from .reprojection_error import Reprojection

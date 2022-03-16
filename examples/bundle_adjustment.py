@@ -75,7 +75,7 @@ def run(cfg: omegaconf.OmegaConf):
 
     for obs in ba.observations:
         cam = ba.cameras[obs.camera_index]
-        cost_function = theg.ReprojectionError(
+        cost_function = theg.Reprojection(
             camera_pose=cam.pose,
             focal_length=cam.focal_length,
             calib_k1=cam.calib_k1,

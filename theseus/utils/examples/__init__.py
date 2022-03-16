@@ -7,7 +7,7 @@ import warnings
 from .bundle_adjustment import (
     BundleAdjustmentDataset,
     Camera,
-    ReprojectionError,
+    Reprojection,
     ba_histogram,
 )
 

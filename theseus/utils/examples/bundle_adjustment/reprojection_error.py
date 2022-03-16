@@ -12,7 +12,7 @@ import theseus as th
 from .util import soft_loss_huber_like
 
 
-class ReprojectionError(th.CostFunction):
+class Reprojection(th.CostFunction):
     def __init__(
         self,
         camera_pose: th.SE3,
@@ -117,7 +117,7 @@ class ReprojectionError(th.CostFunction):
         super().to(*args, **kwargs)
 
     def _copy_impl(self):
-        return ReprojectionError(
+        return Reprojection(
             self.camera_pose,
             self.log_loss_radius,
             self.focal_length,

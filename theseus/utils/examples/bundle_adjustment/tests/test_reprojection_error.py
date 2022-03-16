@@ -56,7 +56,7 @@ def test_residual():
         data=point_projection.data + (torch.rand((batch_size, 2)) - 0.5) * 50,
         name="image_feature_point",
     )
-    r = theg.ReprojectionError(
+    r = theg.Reprojection(
         camera_pose=cam_pose,
         focal_length=focal_length,
         calib_k1=calib_k1,

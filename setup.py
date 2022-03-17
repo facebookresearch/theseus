@@ -64,13 +64,11 @@ if "CUDA_HOME" in os.environ:
                 str(root_dir / "third_party" / "BaSpaCho" / "build" / "_deps" / "eigen-src"),
             ],
             library_dirs=[
-                str(root_dir / "third_party" / "BaSpaCho" / "build" / "baspacho" / "testing"),
                 str(root_dir / "third_party" / "BaSpaCho" / "build" / "baspacho" / "baspacho"),
                 str(root_dir / "third_party" / "BaSpaCho" / "build" / "_deps" / "dispenso-build" / "dispenso"),
             ],
             libraries=[
                 "BaSpaCho",
-                "testing",
                 "dispenso",
                 "cusolver",
                 "cublas",
@@ -90,13 +88,11 @@ else:
                 str(root_dir / "third_party" / "BaSpaCho" / "build" / "_deps" / "eigen-src"),
             ],
             library_dirs=[
-                str(root_dir / "third_party" / "BaSpaCho" / "build" / "baspacho" / "testing"),
                 str(root_dir / "third_party" / "BaSpaCho" / "build" / "baspacho" / "baspacho"),
                 str(root_dir / "third_party" / "BaSpaCho" / "build" / "_deps" / "dispenso-build" / "dispenso"),
             ],
             libraries=[
                 "BaSpaCho",
-                "testing",
                 "dispenso",
             ],
         ),

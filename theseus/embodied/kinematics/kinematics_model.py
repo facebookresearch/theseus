@@ -68,11 +68,19 @@ class UrdfRobotModel(KinematicsModel):
         # Check input dimensions
         assert joint_states.shape[-1] == len(self.drm_model.get_joint_limits())
 
+        # Parse input
+        if type(joint_states) is torch.Tensor:
+            joint_states_input = joint_states
+        elif type(joint_states) is Vector:
+            joint_states_input = joint_states.data
+        else:
+            raise Exception("Invalid input joint states data type.")
+
         # Compute forward kinematics for all links
         link_poses: Dict[str, LieGroup] = {}
         for link_name in self.drm_model.get_link_names():
             pos, quat = self.drm_model.compute_forward_kinematics(
-                joint_states, link_name
+                joint_states_input, link_name
             )
             quat_processed = self._postprocess_quaternion(quat)
 

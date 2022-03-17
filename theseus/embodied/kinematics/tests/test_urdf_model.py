@@ -1,5 +1,6 @@
 import json
 import os
+from enum import Enum
 
 import pytest
 import torch
@@ -11,24 +12,41 @@ URDF_REL_PATH = "data/panda_no_gripper.urdf"
 DATA_REL_PATH = "data/panda_fk_dataset.json"
 
 
+class VectorType(Enum):
+    TORCH_TENSOR = 1
+    TH_VECTOR = 2
+
+
 @pytest.fixture
 def robot_model():
     urdf_path = os.path.join(os.path.dirname(__file__), URDF_REL_PATH)
     return th.eb.UrdfRobotModel(urdf_path)
 
 
-@pytest.fixture
-def dataset():
+@pytest.fixture(params=[VectorType.TORCH_TENSOR, VectorType.TH_VECTOR])
+def dataset(request):
+    # Load data
     data_path = os.path.join(os.path.dirname(__file__), DATA_REL_PATH)
     with open(data_path) as f:
         data = json.load(f)
 
+    # Input vector type
+    if request.param == VectorType.TORCH_TENSOR:
+        joint_states_input = torch.Tensor(data["joint_states"])
+    elif request.param == VectorType.TH_VECTOR:
+        joint_states_input = th.Vector(data["joint_states"])
+    else:
+        raise Exception("Invalid vector type specified.")
+
+    # Convert ee poses (from xyzw to wxyz, then from list to tensor)
+    ee_poses = torch.Tensor(
+        [pos + quat[3:] + quat[:3] for pos, quat in data["ee_poses"]]
+    )
+
     return {
         "num_data": len(data["joint_states"]),
-        "joint_states": torch.Tensor(data["joint_states"]),
-        "ee_poses": torch.Tensor(
-            [pos + quat[3:] + quat[:3] for pos, quat in data["ee_poses"]]
-        ),
+        "joint_states": joint_states_input,
+        "ee_poses": ee_poses,
         "ee_name": data["ee_name"],
     }
 

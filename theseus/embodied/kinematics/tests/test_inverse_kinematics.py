@@ -53,7 +53,8 @@ def ee_pose_target():
     )
 
 
-def test_ik_optimization(robot_model, ee_pose_target):
+@pytest.mark.parametrize("is_grad_enabled", [True, False])
+def test_ik_optimization(robot_model, ee_pose_target, is_grad_enabled):
     """Sets up inverse kinematics as an optimization problem that uses forward kinematics"""
     # Initialize variables (joint states)
     theta = th.Vector(NUM_DOFS, name="theta")
@@ -89,7 +90,7 @@ def test_ik_optimization(robot_model, ee_pose_target):
         "ee_pose_target": ee_pose_target.data,
         "theta": torch.Tensor(HOME_POSE).unsqueeze(0),
     }
-    with torch.no_grad():
+    with torch.set_grad_enabled(is_grad_enabled):
         updated_inputs, info = theseus_optim.forward(
             theseus_inputs,
             optimizer_kwargs={

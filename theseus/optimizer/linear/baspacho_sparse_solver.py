@@ -23,6 +23,7 @@ class BaspachoSparseSolver(LinearSolver):
         linearization_cls: Optional[Type[Linearization]] = None,
         linearization_kwargs: Optional[Dict[str, Any]] = None,
         num_solver_contexts=1,
+        dev="cpu",
         **kwargs,
     ):
         linearization_cls = linearization_cls or SparseLinearization
@@ -38,7 +39,7 @@ class BaspachoSparseSolver(LinearSolver):
         self._num_solver_contexts: int = num_solver_contexts
 
         if self.linearization.structure().num_rows:
-            self.reset()
+            self.reset(dev)
 
     def reset(self, dev="cpu"):
         if dev == "cuda" and not torch.cuda.is_available():
@@ -74,10 +75,6 @@ class BaspachoSparseSolver(LinearSolver):
                 self.linearization.var_start_cols + [num_cols]),
                 (num_vars, num_cols)
             )
-        #to_blocks = csr_matrix((np.ones(num_vars), 
-        #                        self.linearization.var_start_cols,
-        #                        np.arange(num_vars+1)),
-        #                        (num_vars, self.linearization.num_cols))
         block_At_mock = to_blocks @ At_mock
         block_AtA_mock = (block_At_mock @ block_At_mock.T).tocsr()
 
@@ -87,7 +84,8 @@ class BaspachoSparseSolver(LinearSolver):
         self.symbolic_decomposition = SymbolicDecomposition(
             param_size,
             block_struct_ptrs,
-            block_struct_inds
+            block_struct_inds,
+            dev
         )
 
     def solve(

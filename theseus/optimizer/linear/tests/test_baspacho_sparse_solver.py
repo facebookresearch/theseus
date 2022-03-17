@@ -22,8 +22,7 @@ def _build_sparse_mat(batch_size):
     return 12, 10, data, col_ind, row_ptr
 
 
-@pytest.mark.cuda
-def test_sparse_solver(dev="cpu"):
+def check_sparse_solver(dev="cpu"):
 
     if dev=="cuda" and not torch.cuda.is_available():
         return
@@ -67,3 +66,12 @@ def test_sparse_solver(dev="cpu"):
 
         max_offset = torch.norm(atb - atb_check, p=float("inf"))
         assert max_offset < 1e-4
+
+
+def test_baspacho_solver_cpu():
+    check_sparse_solver(dev="cpu")
+
+
+@pytest.mark.cudaext
+def test_baspacho_solver_cuda():
+    check_sparse_solver(dev="cuda")

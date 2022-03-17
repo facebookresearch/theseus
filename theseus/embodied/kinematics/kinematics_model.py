@@ -49,12 +49,14 @@ class UrdfRobotModel(KinematicsModel):
 
     def _postprocess_quaternion(self, quat):
         # Convert quaternion convention (DRM uses xyzw, Theseus uses wxyz)
-        quat1 = torch.cat([quat[..., 3:], quat[..., :3]])
+        quat_converted = torch.cat([quat[..., 3:], quat[..., :3]], dim=-1)
 
         # Normalize quaternions
-        quat2 = quat1 / torch.linalg.norm(quat1)
+        quat_normalized = quat_converted / torch.linalg.norm(
+            quat_converted, dim=-1, keepdim=True
+        )
 
-        return quat2
+        return quat_normalized
 
     def forward_kinematics(self, joint_states: RobotModelInput) -> Dict[str, LieGroup]:
         """Computes forward kinematics
@@ -73,6 +75,7 @@ class UrdfRobotModel(KinematicsModel):
                 joint_states, link_name
             )
             quat_processed = self._postprocess_quaternion(quat)
+            print("QUAT: ", quat_processed.shape, torch.linalg.norm(quat_processed))
 
             link_poses[link_name] = SE3(
                 x_y_z_quaternion=torch.cat([pos, quat_processed], dim=-1)

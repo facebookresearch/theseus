@@ -10,7 +10,6 @@ import pytest
 import torch
 
 import theseus as th
-from theseus.embodied.kinematics import UrdfRobotModel
 from theseus.geometry import SE3, SO3
 
 NUM_DOFS = 7
@@ -25,7 +24,7 @@ def sample_vector_dist(range):
 @pytest.fixture
 def robot_model():
     urdf_path = os.path.join(os.path.dirname(__file__), "data/panda_no_gripper.urdf")
-    return UrdfRobotModel(urdf_path)
+    return th.eb.UrdfRobotModel(urdf_path)
 
 
 @pytest.fixture

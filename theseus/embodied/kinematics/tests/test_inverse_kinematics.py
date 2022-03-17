@@ -101,4 +101,4 @@ def test_ik_optimization(robot_model, ee_pose_target):
         )
 
     # Check result
-    assert info.last_err < 1e-2
+    assert info.last_err < 1e-3

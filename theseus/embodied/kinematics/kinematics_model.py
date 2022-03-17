@@ -75,7 +75,6 @@ class UrdfRobotModel(KinematicsModel):
                 joint_states, link_name
             )
             quat_processed = self._postprocess_quaternion(quat)
-            print("QUAT: ", quat_processed.shape, torch.linalg.norm(quat_processed))
 
             link_poses[link_name] = SE3(
                 x_y_z_quaternion=torch.cat([pos, quat_processed], dim=-1)

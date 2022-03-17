@@ -13,7 +13,7 @@ from theseus.utils import random_sparse_binary_matrix
 # ideally we would like to support batch_size <= init_batch_size, but
 # because of limitations of cublas those have to be always identical
 def check_baspacho(
-    init_batch_size, batch_size, num_rows, num_cols, fill, dev="cpu", verbose=False
+    batch_size, num_rows, num_cols, fill, dev="cpu", verbose=False
 ):
     # this is necessary assumption, so that the hessian is full rank
     assert num_rows >= num_cols
@@ -64,7 +64,8 @@ def check_baspacho(
 
     s = SymbolicDecomposition(torch.tensor(paramSizes, dtype=torch.int64),
                               torch.tensor(AtA_blk.indptr, dtype=torch.int64),
-                              torch.tensor(AtA_blk.indices, dtype=torch.int64))
+                              torch.tensor(AtA_blk.indices, dtype=torch.int64),
+                              dev)
     f = s.create_numeric_decomposition(batch_size)
 
     f.add_MtM(A_val, A_rowPtr, A_colInd)
@@ -90,39 +91,85 @@ def check_baspacho(
     assert all(np.linalg.norm(res) < 1e-10 for res in residuals)
 
 
-def test_lu_solver_1():
-    check_baspacho(init_batch_size=5, batch_size=5, num_rows=50, num_cols=30, fill=0.2)
+def test_baspacho_cpu_0():
+    torch.manual_seed(0)
+    check_baspacho(batch_size=2, num_rows=20, num_cols=10, fill=0.3)
 
 
-def test_lu_solver_2():
+def test_baspacho_cpu_1():
+    torch.manual_seed(1)
+    check_baspacho(batch_size=5, num_rows=50, num_cols=30, fill=0.2)
+
+
+def test_baspacho_cpu_2():
+    torch.manual_seed(2)
     check_baspacho(
-        init_batch_size=5, batch_size=5, num_rows=150, num_cols=60, fill=0.2
+        batch_size=5, num_rows=150, num_cols=60, fill=0.2
     )
 
 
-def test_lu_solver_3():
+def test_baspacho_cpu_3():
+    torch.manual_seed(3)
     check_baspacho(
-        init_batch_size=10, batch_size=10, num_rows=300, num_cols=90, fill=0.2
+        batch_size=10, num_rows=300, num_cols=90, fill=0.2
     )
 
 
-def test_lu_solver_4():
-    check_baspacho(init_batch_size=5, batch_size=5, num_rows=50, num_cols=30, fill=0.1)
+def test_baspacho_cpu_4():
+    torch.manual_seed(4)
+    check_baspacho(batch_size=5, num_rows=50, num_cols=30, fill=0.1)
 
 
-def test_lu_solver_5():
+def test_baspacho_cpu_5():
+    torch.manual_seed(5)
     check_baspacho(
-        init_batch_size=5, batch_size=5, num_rows=150, num_cols=60, fill=0.1
+        batch_size=5, num_rows=150, num_cols=60, fill=0.1
     )
 
 
-def test_lu_solver_6():
+def test_baspacho_cpu_6():
     check_baspacho(
-        init_batch_size=10, batch_size=10, num_rows=300, num_cols=90, fill=0.1
+        batch_size=10, num_rows=300, num_cols=90, fill=0.1
     )
 
 
-# would like to test when irregular batch_size < init_batch_size,
-# but this is currently not supported by cublas, maybe in the future
-# def test_lu_solver_7():
-#     check_baspacho(init_batch_size=10, batch_size=5, num_rows=150, num_cols=60, fill=0.2)
+def test_baspacho_cuda_0():
+    torch.manual_seed(0)
+    check_baspacho(batch_size=2, num_rows=20, num_cols=10, fill=0.3, dev="cuda")
+
+
+def test_baspacho_cuda_1():
+    torch.manual_seed(1)
+    check_baspacho(batch_size=5, num_rows=50, num_cols=30, fill=0.2, dev="cuda")
+
+
+def test_baspacho_cuda_2():
+    torch.manual_seed(2)
+    check_baspacho(
+        batch_size=5, num_rows=150, num_cols=60, fill=0.2, dev="cuda"
+    )
+
+
+def test_baspacho_cuda_3():
+    torch.manual_seed(3)
+    check_baspacho(
+        batch_size=10, num_rows=300, num_cols=90, fill=0.2, dev="cuda"
+    )
+
+
+def test_baspacho_cuda_4():
+    torch.manual_seed(4)
+    check_baspacho(batch_size=5, num_rows=50, num_cols=30, fill=0.1, dev="cuda")
+
+
+def test_baspacho_cuda_5():
+    torch.manual_seed(5)
+    check_baspacho(
+        batch_size=5, num_rows=150, num_cols=60, fill=0.1, dev="cuda"
+    )
+
+
+def test_baspacho_cuda_6():
+    check_baspacho(
+        batch_size=10, num_rows=300, num_cols=90, fill=0.1, dev="cuda"
+    )

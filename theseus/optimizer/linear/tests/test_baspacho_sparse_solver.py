@@ -46,7 +46,7 @@ def test_sparse_solver(dev="cpu"):
     linearization.A_row_ptr = row_ptr
     linearization.b = torch.randn((batch_size, num_rows), dtype=torch.double).to(dev)
 
-    # also need: var dims and var_start_cols (solver is blockwise)
+    # also need: var dims and var_start_cols (because baspacho is blockwise)
     linearization.var_dims = [2,1,3,1,2,1]
     linearization.var_start_cols = [0,2,3,6,7,9]
 

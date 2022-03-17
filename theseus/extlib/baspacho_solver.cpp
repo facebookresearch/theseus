@@ -1,46 +1,28 @@
 
-#include <torch/extension.h>
+
+#include "baspacho_solver.h"
 
 #include <iostream>
 
-#include "baspacho/baspacho/Solver.h"
 #include "baspacho/testing/TestingUtils.h"
 
 using namespace BaSpaCho;
 using namespace testing;
 using namespace std;
 
-struct SymbolicDecompositionData {
-    BaSpaCho::SolverPtr solver;
-    torch::Tensor toParamIndex;
-    torch::Tensor paramStart;
-    torch::Tensor paramSize;
-};
-
-class NumericDecomposition {
-   public:
-    NumericDecomposition(std::shared_ptr<SymbolicDecompositionData> dec,
-                         int64_t batchSize);
-
-    void add_M(const torch::Tensor& val, const torch::Tensor& ptrs,
-               const torch::Tensor& inds);
-
-    void add_MtM(const torch::Tensor& val, const torch::Tensor& ptrs,
-                 const torch::Tensor& inds);
-
-    void damp(double alpha, double beta);
-
-    void factor();
-
-    void solve(torch::Tensor& x);
-
-    std::shared_ptr<SymbolicDecompositionData> dec;
-    torch::Tensor data;
-};
-
 NumericDecomposition::NumericDecomposition(
     std::shared_ptr<SymbolicDecompositionData> dec, int64_t batchSize)
     : dec(dec) {
+#ifdef THESEUS_HAVE_CUDA
+    if (dec->isCuda) {
+        init_factor_data_cuda(batchSize);
+        return;
+    }
+#endif
+    init_factor_data(batchSize);
+}
+
+void NumericDecomposition::init_factor_data(int64_t batchSize) {
     auto xOptions = torch::TensorOptions().dtype(torch::kFloat64);
     data = torch::zeros({(long)batchSize, (long)(dec->solver->dataSize())},
                         xOptions);
@@ -49,6 +31,13 @@ NumericDecomposition::NumericDecomposition(
 void NumericDecomposition::add_M(const torch::Tensor& val,
                                  const torch::Tensor& ptrs,
                                  const torch::Tensor& inds) {
+#ifdef THESEUS_HAVE_CUDA
+    if (dec->isCuda) {
+        add_M_cuda(val, ptrs, inds);
+        return;
+    }
+#endif
+
     int64_t batchSize = data.size(0);
     int64_t factorBatchStride = data.size(1);
 
@@ -111,6 +100,13 @@ void NumericDecomposition::add_M(const torch::Tensor& val,
 void NumericDecomposition::add_MtM(const torch::Tensor& val,
                                    const torch::Tensor& ptrs,
                                    const torch::Tensor& inds) {
+#ifdef THESEUS_HAVE_CUDA
+    if (dec->isCuda) {
+        add_MtM_cuda(val, ptrs, inds);
+        return;
+    }
+#endif
+
     int64_t batchSize = data.size(0);
     int64_t factorBatchStride = data.size(1);
 
@@ -175,6 +171,13 @@ void NumericDecomposition::add_MtM(const torch::Tensor& val,
 }
 
 void NumericDecomposition::damp(double alpha, double beta) {
+#ifdef THESEUS_HAVE_CUDA
+    if (dec->isCuda) {
+        damp_cuda(alpha, beta);
+        return;
+    }
+#endif
+
     int64_t batchSize = data.size(0);
     int64_t factorSize = data.size(1);
     double* pFactor = data.data_ptr<double>();
@@ -192,6 +195,13 @@ void NumericDecomposition::damp(double alpha, double beta) {
 }
 
 void NumericDecomposition::factor() {
+#ifdef THESEUS_HAVE_CUDA
+    if (dec->isCuda) {
+        factor_cuda();
+        return;
+    }
+#endif
+
     int64_t batchSize = data.size(0);
     int64_t factorSize = data.size(1);
     double* pFactor = data.data_ptr<double>();
@@ -203,6 +213,13 @@ void NumericDecomposition::factor() {
 }
 
 void NumericDecomposition::solve(torch::Tensor& x) {
+#ifdef THESEUS_HAVE_CUDA
+    if (dec->isCuda) {
+        solve_cuda(x);
+        return;
+    }
+#endif
+
     int64_t batchSize = data.size(0);
     int64_t order = dec->solver->order();
     TORCH_CHECK(x.device().is_cpu());
@@ -250,22 +267,9 @@ void NumericDecomposition::solve(torch::Tensor& x) {
     }
 }
 
-class SymbolicDecomposition {
-   public:
-    SymbolicDecomposition(const torch::Tensor& paramSize,
-                          const torch::Tensor& sparseStructPtrs,
-                          const torch::Tensor& sparseStructInds);
-
-    NumericDecomposition createNumericDecomposition(int64_t batchSize) {
-        return NumericDecomposition(dec, batchSize);  // TODO: CUDA/CPU flags
-    }
-
-    std::shared_ptr<SymbolicDecompositionData> dec;
-};
-
 SymbolicDecomposition::SymbolicDecomposition(
     const torch::Tensor& paramSize, const torch::Tensor& sparseStructPtrs,
-    const torch::Tensor& sparseStructInds) {
+    const torch::Tensor& sparseStructInds, const std::string& device) {
     TORCH_CHECK(paramSize.device().is_cpu());
     TORCH_CHECK(sparseStructPtrs.device().is_cpu());
     TORCH_CHECK(sparseStructInds.device().is_cpu());
@@ -276,6 +280,11 @@ SymbolicDecomposition::SymbolicDecomposition(
     TORCH_CHECK(sparseStructPtrs.dim() == 1);
     TORCH_CHECK(sparseStructInds.dim() == 1);
     TORCH_CHECK(paramSize.size(0) + 1 == sparseStructPtrs.size(0));
+#ifdef THESEUS_HAVE_CUDA
+    TORCH_CHECK(device == "cpu" || device == "cuda");
+#else
+    TORCH_CHECK(device == "cpu");
+#endif
 
     int64_t nParams = paramSize.size(0);
     int64_t nPtrs = sparseStructPtrs.size(0);
@@ -290,7 +299,14 @@ SymbolicDecomposition::SymbolicDecomposition(
 
     SparseStructure ss(move(ptrsVec), move(indsVec));
     dec = std::make_shared<SymbolicDecompositionData>();
-    dec->solver = createSolver({}, paramSizeVec, ss);
+    BaSpaCho::Settings solverSettings;
+#ifdef THESEUS_HAVE_CUDA
+    if(device == "cuda") {
+        dec->isCuda = true;
+        solverSettings.backend = BaSpaCho::BackendCuda;
+    }
+#endif
+    dec->solver = createSolver(solverSettings, paramSizeVec, ss);
 
     // those data will be used
     int64_t totParamSize = 0;
@@ -310,6 +326,19 @@ SymbolicDecomposition::SymbolicDecomposition(
             *toParamIndexP++ = i;
         }
     }
+
+#ifdef THESEUS_HAVE_CUDA
+    if (dec->isCuda) {
+        dec->toParamIndex = dec->toParamIndex.cuda();
+        dec->paramSize = dec->paramSize.cuda();
+        dec->paramStart = dec->paramStart.cuda();
+    }
+#endif
+}
+
+NumericDecomposition SymbolicDecomposition::createNumericDecomposition(
+    int64_t batchSize) {
+    return NumericDecomposition(dec, batchSize);  // TODO: CUDA/CPU flags
 }
 
 PYBIND11_MODULE(baspacho_solver, m) {
@@ -317,13 +346,13 @@ PYBIND11_MODULE(baspacho_solver, m) {
     py::class_<SymbolicDecomposition>(m, "SymbolicDecomposition",
                                       "Symbolic decomposition")
         .def(py::init<const torch::Tensor&, const torch::Tensor&,
-                      const torch::Tensor&>(),
+                      const torch::Tensor&, const std::string&>(),
              "Initialization, it computes the fill-reducing permutation,\n"
              "performs the symbolic factorization, preparing the data\n"
              "structures. It takes as inputs the ptrs/inds of the sparse\n"
              "block-structure, and param_size with sizes of blocks",
              py::arg("param_size"), py::arg("sparse_struct_ptrs"),
-             py::arg("sparse_struct_inds"))
+             py::arg("sparse_struct_inds"), py::arg("device") = "cpu")
         .def("create_numeric_decomposition",
              &SymbolicDecomposition::createNumericDecomposition,
              "Creates an object that can contain a factor, that can "

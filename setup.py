@@ -44,10 +44,21 @@ if "CUDA_HOME" in os.environ:
         torch_cpp_ext.CUDAExtension(
             name="theseus.extlib.baspacho_solver",
             sources=[
-                "theseus/extlib/baspacho_cuda_utils.cu",
+                "theseus/extlib/baspacho_solver_cuda.cu",
                 "theseus/extlib/baspacho_solver.cpp",
             ],
-            extra_compile_args=["-std=c++17"],
+            define_macros=[
+                ("THESEUS_HAVE_CUDA", "1")
+            ],
+            extra_compile_args={
+                'cxx': [
+                    "-std=c++17"
+                ],
+                'nvcc': [
+                    "-std=c++17",
+                    # "--expt-relaxed-constexpr", given to CXX too for some reason?
+                ]
+            },
             include_dirs=[
                 str(root_dir / "third_party" / "BaSpaCho"),
                 str(root_dir / "third_party" / "BaSpaCho" / "build" / "_deps" / "eigen-src"),

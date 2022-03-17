@@ -1,15 +1,20 @@
+# Copyright (c) Meta Platforms, Inc. and affiliates.
+#
+# This source code is licensed under the MIT license found in the
+# LICENSE file in the root directory of this source tree.
 
 from scipy.sparse import csr_matrix, tril
 from theseus.extlib.baspacho_solver import SymbolicDecomposition
 import torch
 import numpy as np
+import pytest  # noqa: F401
 
-def test_simple(verbose=False):
+def check_simple(verbose=False, dev="cpu"):
    param_sizes = torch.tensor([2, 3, 5, 2], dtype=torch.int64)
    ss_inds = torch.tensor([0, 0, 1, 1, 2, 0, 3], dtype=torch.int64)
    ss_ptrs = torch.tensor([0, 1, 3, 5, 7], dtype=torch.int64)
 
-   s = SymbolicDecomposition(param_sizes, ss_ptrs, ss_inds)
+   s = SymbolicDecomposition(param_sizes, ss_ptrs, ss_inds, dev)
 
    batch_size = 2
    f = s.create_numeric_decomposition(batch_size)
@@ -70,9 +75,9 @@ def test_simple(verbose=False):
 
    mFulls = [tril(m, -1).transpose().tocsr() + m for m in ms]
 
-   f.add_M(torch.tensor(mVals, dtype=torch.double),
-         torch.tensor(mRowPtr, dtype=torch.int64),
-         torch.tensor(mColInd, dtype=torch.int64))
+   f.add_M(torch.tensor(mVals, dtype=torch.double).to(dev),
+         torch.tensor(mRowPtr, dtype=torch.int64).to(dev),
+         torch.tensor(mColInd, dtype=torch.int64).to(dev))
 
    f.factor()
 
@@ -82,9 +87,9 @@ def test_simple(verbose=False):
    ]
    b = torch.tensor(bData, dtype=torch.double)
 
-   x = b.clone()
-
+   x = b.clone().to(dev)
    f.solve(x)
+   x = x.cpu()
 
    if verbose:
       print("b:", b)
@@ -100,3 +105,12 @@ def test_simple(verbose=False):
       print("residuals:", residuals)
 
    assert all(np.linalg.norm(res) < 1e-10 for res in residuals)
+
+
+def test_simple_cpu():
+   check_simple(dev="cpu")
+
+
+@pytest.mark.cudaext
+def test_simple_cuda():
+   check_simple(dev="cuda")

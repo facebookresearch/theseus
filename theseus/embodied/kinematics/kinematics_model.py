@@ -47,25 +47,35 @@ class UrdfRobotModel(KinematicsModel):
     def __init__(self, urdf_path: str):
         self.drm_model = drm.DifferentiableRobotModel(urdf_path)
 
+    def _postprocess_quaternion(self, quat):
+        # Convert quaternion convention (DRM uses xyzw, Theseus uses wxyz)
+        quat1 = torch.cat([quat[..., 3:], quat[..., :3]])
+
+        # Normalize quaternions
+        quat2 = quat1 / torch.linalg.norm(quat1)
+
+        return quat2
+
     def forward_kinematics(self, joint_states: RobotModelInput) -> Dict[str, LieGroup]:
         """Computes forward kinematics
         Args:
             joint_states: Vector of all joint angles
         Outputs:
-             Dictionary that maps link name to link pose
-
-        (Note: differentiable robot model uses the xyzw quaternion convention,
-        while theseus uses wxyz, hence the conversion.)
+            Dictionary that maps link name to link pose
         """
+        # Check input dimensions
+        assert joint_states.shape[-1] == len(self.drm_model.get_joint_limits())
+
+        # Compute forward kinematics for all links
         link_poses: Dict[str, LieGroup] = {}
         for link_name in self.drm_model.get_link_names():
             pos, quat = self.drm_model.compute_forward_kinematics(
                 joint_states, link_name
             )
-            quat = quat / torch.linalg.norm(quat)  # normalize
+            quat_processed = self._postprocess_quaternion(quat)
 
             link_poses[link_name] = SE3(
-                x_y_z_quaternion=torch.cat([pos, quat[..., 3:], quat[..., :3]], dim=-1)
+                x_y_z_quaternion=torch.cat([pos, quat_processed], dim=-1)
             )
 
         return link_poses

@@ -213,10 +213,16 @@ def inverse(
 
 
 # Alias for LieGroup.log_map()
-def log_map(variable: LieGroup) -> torch.Tensor:
-    return variable.log_map()
+def log_map(
+    variable: LieGroup, jacobians: Optional[List[torch.Tensor]] = None
+) -> torch.Tensor:
+    return variable.log_map(jacobians=jacobians)
 
 
 # Alias for LieGroup.exp_map()
-def exp_map(variable: LieGroup, tangent_vector: torch.Tensor) -> LieGroup:
-    return variable.__class__.exp_map(tangent_vector)
+def exp_map(
+    variable: LieGroup,
+    tangent_vector: torch.Tensor,
+    jacobians: Optional[List[torch.Tensor]] = None,
+) -> LieGroup:
+    return variable.__class__.exp_map(tangent_vector, jacobians=jacobians)

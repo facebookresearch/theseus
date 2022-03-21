@@ -271,13 +271,9 @@ def check_projection_for_log_map(tangent_vector, Group, is_projected=True, atol=
     assert torch.allclose(actual[0], expected, atol=atol)
 
 
-def check_jacobian_for_local(
-    tangent_vector, dtangent_vector, Group, is_projected=True, atol=1e-8
-):
-    batch_size = tangent_vector.shape[0]
+def check_jacobian_for_local(group0, group1, Group, is_projected=True, atol=1e-8):
+    batch_size = group0.shape[0]
     aux_id = torch.arange(batch_size)
-    group0 = Group.exp_map(tangent_vector)
-    group1 = group0.compose(Group.exp_map(dtangent_vector))
 
     def local_func(group0, group1):
         return Group(data=group0).local(Group(data=group1))

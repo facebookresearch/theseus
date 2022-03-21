@@ -25,6 +25,9 @@ class PoseGraphEdge:
         self.weight = weight
 
 
+# This function reads a file in g2o formate and returns the number of of poses, initial
+# values and edges.
+# g2O format: https://github.com/RainerKuemmerle/g2o/wiki/File-format-slam-3d
 def read_3D_g2o_file(path: str) -> Tuple[int, List[th.SE3], List[PoseGraphEdge]]:
     with open(path, "r") as file:
         lines = file.readlines()
@@ -90,6 +93,9 @@ def read_3D_g2o_file(path: str) -> Tuple[int, List[th.SE3], List[PoseGraphEdge]]
         return (num_vertices, vertices, edges)
 
 
+# This function reads a file in g2o formate and returns the number of of poses, initial
+# values and edges
+# g2o format: https://github.com/RainerKuemmerle/g2o/wiki/File-Format-SLAM-2D
 def read_2D_g2o_file(path: str) -> Tuple[int, List[th.SE2], List[PoseGraphEdge]]:
     with open(path, "r") as file:
         lines = file.readlines()

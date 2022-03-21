@@ -289,7 +289,7 @@ def check_jacobian_for_local(
             group1.project(jac_raw[1][aux_id, :, aux_id], is_sparse=True),
         ]
     else:
-        expected = jac_raw
+        expected = [jac_raw[0][aux_id, :, aux_id], jac_raw[1][aux_id, :, aux_id]]
 
     actual = []
     _ = group0.local(group1, jacobians=actual)

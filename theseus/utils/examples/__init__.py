@@ -42,10 +42,4 @@ except ModuleNotFoundError:
     )
 
 
-try:
-    from .pose_graph import PosePriorError, RelativePoseError
-except ModuleNotFoundError:
-    warnings.warn(
-        "Unable to import Motion Planning utilities. "
-        "Please make sure you have matplotlib installed."
-    )
+from .pose_graph import PosePriorError, RelativePoseError

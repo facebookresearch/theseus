@@ -83,10 +83,10 @@ class Camera:
         pert = th.SE3(pert_data)
         pert_pose = cast(th.SE3, pert.compose(self.pose))
         return Camera(
-            pert_pose.copy(new_name=self.pose.name),
-            self.focal_length.copy(new_name=self.focal_length.name),
-            self.calib_k1.copy(new_name=self.calib_k1.name),
-            self.calib_k2.copy(new_name=self.calib_k2.name),
+            pert_pose.copy(new_name=self.pose.name + "_copy"),
+            self.focal_length.copy(new_name=self.focal_length.name + "_copy"),
+            self.calib_k1.copy(new_name=self.calib_k1.name + "_copy"),
+            self.calib_k2.copy(new_name=self.calib_k2.name + "_copy"),
         )
 
     @staticmethod
@@ -302,7 +302,7 @@ class BundleAdjustmentDataset:
         points = [
             th.Point3(
                 data=gt_points[i].data + (torch.rand((1, 3)) * 2 - 1) * 0.2,
-                name=gt_points[i].name,
+                name=gt_points[i].name + "_copy",
             )
             for i in range(num_points)
         ]

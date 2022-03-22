@@ -177,12 +177,7 @@ class LieGroup(Manifold):
             LieGroup._check_jacobians_list(jacobians)
             dlog: List[torch.Tensor] = []
             ret = diff.log_map(dlog)
-            shape = dlog[0].shape
-            jacobians.append(
-                -(
-                    diff.inverse().adjoint() @ dlog[0].view(shape[0], -1, shape[-1])
-                ).view(shape)
-            )
+            jacobians.append(-diff.inverse().adjoint() @ dlog[0])
             jacobians.append(dlog[0])
         else:
             ret = diff.log_map()

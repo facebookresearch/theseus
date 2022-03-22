@@ -130,7 +130,6 @@ class SO2(LieGroup):
                 torch.ones(
                     tangent_vector.shape[0],
                     1,
-                    1,
                     dtype=tangent_vector.dtype,
                     device=tangent_vector.device,
                 )
@@ -146,7 +145,6 @@ class SO2(LieGroup):
             jacobians.append(
                 torch.ones(
                     self.shape[0],
-                    1,
                     1,
                     dtype=self.dtype,
                     device=self.device,

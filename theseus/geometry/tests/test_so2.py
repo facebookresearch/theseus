@@ -17,6 +17,7 @@ from .common import (
     check_compose,
     check_exp_map,
     check_inverse,
+    check_jacobian_for_local,
     check_log_map,
     check_projection_for_compose,
     check_projection_for_exp_map,
@@ -146,3 +147,14 @@ def test_projection():
 
             # Test SO2.inverse
             check_projection_for_inverse(th.SO2, batch_size, rng)
+
+
+def test_local_map():
+    rng = torch.Generator()
+    rng.manual_seed(0)
+
+    for batch_size in [1, 20, 100]:
+        group0 = th.SO2.rand(batch_size)
+        group1 = th.SO2.rand(batch_size)
+
+        check_jacobian_for_local(group0, group1, Group=th.SO2, is_projected=True)

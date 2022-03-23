@@ -4,7 +4,7 @@
 # LICENSE file in the root directory of this source tree.
 
 import random
-from typing import Dict
+from typing import Dict, Type
 
 import hydra
 import numpy as np
@@ -85,9 +85,34 @@ def run(cfg: omegaconf.OmegaConf):
             image_feature_point=obs.image_feature_point,
         )
         objective.add(cost_function)
+    dtype = objective.dtype
+
+    # Add regularization
+    if cfg.inner_optim.regularize:
+        zero_point3 = th.Point3(dtype=dtype, name="zero_point")
+        identity_se3 = th.SE3(dtype=dtype, name="zero_se3")
+        w = np.sqrt(cfg.inner_optim.reg_w)
+        damping_weight = th.ScaleCostWeight(w * torch.ones(1, dtype=dtype))
+        for name, var in objective.optim_vars.items():
+            target: th.LieGroup
+            if isinstance(var, th.SE3):
+                target = identity_se3
+            elif isinstance(var, th.Point3):
+                target = zero_point3
+            else:
+                assert False
+            objective.add(
+                th.eb.VariableDifference(
+                    var, damping_weight, target, name=f"reg_{name}"
+                )
+            )
+
 
     # Create optimizer
-    optimizer = th.LevenbergMarquardt(
+    optimizer_cls: Type[th.NonlinearLeastSquares] = getattr(
+        th, cfg.inner_optim.optimizer_cls
+    )
+    optimizer = optimizer_cls(
         objective,
         max_iterations=cfg.inner_optim.max_iters,
         step_size=cfg.inner_optim.step_size,

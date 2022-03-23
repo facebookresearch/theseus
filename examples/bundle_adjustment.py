@@ -2,9 +2,12 @@
 #
 # This source code is licensed under the MIT license found in the
 # LICENSE file in the root directory of this source tree.
-
+import logging
+import os
+import pathlib
 import random
-from typing import Dict, Type
+import time
+from typing import Dict, List, Type
 
 import hydra
 import numpy as np
@@ -24,12 +27,15 @@ BACKWARD_MODE = {
 # Smaller values} result in error
 th.SO3.SO3_EPS = 1e-6
 
+# Logger
+log = logging.getLogger(__name__)
+
 
 def print_histogram(
     ba: theg.BundleAdjustmentDataset, var_dict: Dict[str, torch.Tensor], msg: str
 ):
-    print(msg)
-    theg.ba_histogram(
+    log.info(msg)
+    histogram = theg.ba_histogram(
         cameras=[
             theg.Camera(
                 th.SE3(data=var_dict[c.pose.name]),
@@ -42,6 +48,8 @@ def print_histogram(
         points=[th.Point3(data=var_dict[pt.name]) for pt in ba.points],
         observations=ba.observations,
     )
+    for line in histogram.split("\n"):
+        log.info(line)
 
 
 # loads (the only) batch
@@ -58,14 +66,49 @@ def get_batch(
     return retv
 
 
-def run(cfg: omegaconf.OmegaConf):
+def save_epoch(
+    results_path: pathlib.Path,
+    epoch: int,
+    log_loss_radius: th.Vector,
+    theseus_outputs: Dict[str, torch.Tensor],
+    info: th.optimizer.OptimizerInfo,
+    loss_value: float,
+    total_time: float,
+):
+    def _clone(t_):
+        return t_.detach().cpu().clone()
+
+    results = {
+        "log_loss_radius": _clone(log_loss_radius.data),
+        "theseus_outputs": dict((s, _clone(t)) for s, t in theseus_outputs.items()),
+        "err_history": info.err_history,  # type: ignore
+        "loss": loss_value,
+        "total_time": total_time,
+    }
+    torch.save(results, results_path / f"results_epoch{epoch}.pt")
+
+
+def camera_loss(
+    ba: theg.BundleAdjustmentDataset, camera_pose_vars: List[th.LieGroup]
+) -> torch.Tensor:
+    loss: torch.Tensor = 0  # type:ignore
+    for i in range(len(ba.cameras)):
+        camera_loss = th.local(camera_pose_vars[i], ba.gt_cameras[i].pose).norm(dim=1)
+        loss += camera_loss
+    return loss
+
+
+def run(cfg: omegaconf.OmegaConf, results_path: pathlib.Path):
     # create (or load) dataset
     ba = theg.BundleAdjustmentDataset.generate_synthetic(
         num_cameras=cfg.num_cameras,
         num_points=cfg.num_points,
         average_track_length=cfg.average_track_length,
         track_locality=cfg.track_locality,
+        feat_random=1.5,
+        outlier_feat_random=70,
     )
+    ba.save_to_file(results_path / "ba.txt", gt_path=results_path / "ba_gt.txt")
 
     # hyper parameters (ie outer loop's parameters)
     log_loss_radius = th.Vector(1, name="log_loss_radius", dtype=torch.float64)
@@ -94,7 +137,7 @@ def run(cfg: omegaconf.OmegaConf):
         w = np.sqrt(cfg.inner_optim.reg_w)
         damping_weight = th.ScaleCostWeight(w * torch.ones(1, dtype=dtype))
         for name, var in objective.optim_vars.items():
-            target: th.LieGroup
+            target: th.Manifold
             if isinstance(var, th.SE3):
                 target = identity_se3
             elif isinstance(var, th.Point3):
@@ -107,7 +150,9 @@ def run(cfg: omegaconf.OmegaConf):
                 )
             )
 
-    camera_pose_vars = [objective.optim_vars[c.pose.name] for c in ba.cameras]
+    camera_pose_vars: List[th.LieGroup] = [
+        objective.optim_vars[c.pose.name] for c in ba.cameras  # type: ignore
+    ]
     if cfg.inner_optim.ratio_known_cameras > 0.0:
         w = 100.0
         camera_weight = th.ScaleCostWeight(100 * torch.ones(1, dtype=dtype))
@@ -141,18 +186,21 @@ def run(cfg: omegaconf.OmegaConf):
     orig_points = {pt.name: pt.data.clone() for pt in ba.points}
 
     # Outer optimization loop
-    loss_radius_tensor = torch.nn.Parameter(torch.tensor([-1], dtype=torch.float64))
+    loss_radius_tensor = torch.nn.Parameter(torch.tensor([3.0], dtype=torch.float64))
     model_optimizer = torch.optim.Adam([loss_radius_tensor], lr=cfg.outer_optim.lr)
 
     num_epochs = cfg.outer_optim.num_epochs
-    camera_pose_vars = [
-        theseus_optim.objective.optim_vars[c.pose.name] for c in ba.cameras
-    ]
 
     theseus_inputs = get_batch(ba, orig_poses, orig_points)
+    theseus_inputs["log_loss_radius"] = loss_radius_tensor.unsqueeze(1).clone()
+
+    with torch.no_grad():
+        camera_loss_ref = camera_loss(ba, camera_pose_vars).item()
+    log.info(f"CAMERA LOSS (no learning):  {camera_loss_ref: .3f}")
     print_histogram(ba, theseus_inputs, "Input histogram:")
     for epoch in range(num_epochs):
-        print(f" ******************* EPOCH {epoch} ******************* ")
+        log.info(f" ******************* EPOCH {epoch} ******************* ")
+        start_time = time.time_ns()
         model_optimizer.zero_grad()
         theseus_inputs["log_loss_radius"] = loss_radius_tensor.unsqueeze(1).clone()
 
@@ -162,21 +210,32 @@ def run(cfg: omegaconf.OmegaConf):
                 "verbose": cfg.inner_optim.verbose,
                 "track_err_history": cfg.inner_optim.track_err_history,
                 "backward_mode": BACKWARD_MODE[cfg.inner_optim.backward_mode],
+                "__keep_final_step_size__": cfg.inner_optim.keep_step_size,
             },
         )
-        print_histogram(ba, theseus_outputs, "Output histogram:")
 
-        loss: torch.Tensor = 0  # type:ignore
-        for i in range(len(ba.cameras)):
-            loss += th.local(camera_pose_vars[i], ba.gt_cameras[i].pose).norm(dim=1)
+        loss = (camera_loss(ba, camera_pose_vars) - camera_loss_ref) / camera_loss_ref
         loss.backward()
         model_optimizer.step()
         loss_value = torch.sum(loss.detach()).item()
+        end_time = time.time_ns()
 
-        print(
+        print_histogram(ba, theseus_outputs, "Output histogram:")
+        log.info(
             f"Epoch: {epoch} Loss: {loss_value} "
             f"Kernel Radius: exp({loss_radius_tensor.data.item()})="
             f"{torch.exp(loss_radius_tensor.data).item()}"
+        )
+        log.info(f"Epoch took {(end_time - start_time) / 1e9: .3f} seconds")
+
+        save_epoch(
+            results_path,
+            epoch,
+            log_loss_radius,
+            theseus_outputs,
+            info,
+            loss_value,
+            end_time - start_time,
         )
 
 
@@ -185,7 +244,9 @@ def main(cfg):
     torch.manual_seed(cfg.seed)
     np.random.seed(cfg.seed)
     random.seed(cfg.seed)
-    run(cfg)
+
+    results_path = pathlib.Path(os.getcwd())
+    run(cfg, results_path)
 
 
 if __name__ == "__main__":

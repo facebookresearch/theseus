@@ -251,7 +251,7 @@ class BundleAdjustmentDataset:
                 gt_path, self.gt_cameras, self.gt_points, self.observations
             )
 
-    def histogram(self):
+    def histogram(self) -> str:
         buckets = np.zeros(11)
         for obs in self.observations:
             proj_pt = self.cameras[obs.camera_index].project_point(
@@ -261,11 +261,13 @@ class BundleAdjustmentDataset:
             idx = min(int(error), len(buckets) - 1)
             buckets[idx] += 1
         max_buckets = max(buckets)
+        hist_str = ""
         for i in range(len(buckets)):
             bi = buckets[i]
             label = f"{i}-{i+1}" if i + 1 < len(buckets) else f"{i}+"
             barlen = round(bi * 80 / max_buckets)
-            print(f"{label}: {'#' * barlen} {bi}")
+            hist_str += f"{label}: {'#' * barlen} {bi}\n"
+        return hist_str
 
     @staticmethod
     def generate_synthetic(
@@ -340,6 +342,6 @@ def ba_histogram(
     cameras: List[Camera],
     points: List[th.Point3],
     observations: List[Observation],
-):
+) -> str:
     ba = BundleAdjustmentDataset(cameras, points, observations)
-    ba.histogram()
+    return ba.histogram()

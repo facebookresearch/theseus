@@ -107,6 +107,21 @@ def run(cfg: omegaconf.OmegaConf):
                 )
             )
 
+    camera_pose_vars = [objective.optim_vars[c.pose.name] for c in ba.cameras]
+    if cfg.inner_optim.ratio_known_cameras > 0.0:
+        w = 100.0
+        camera_weight = th.ScaleCostWeight(100 * torch.ones(1, dtype=dtype))
+        for i in range(len(ba.cameras)):
+            if np.random.rand() > cfg.inner_optim.ratio_known_cameras:
+                continue
+            objective.add(
+                th.eb.VariableDifference(
+                    camera_pose_vars[i],
+                    camera_weight,
+                    ba.gt_cameras[i].pose,
+                    name=f"camera_diff_{i}",
+                )
+            )
 
     # Create optimizer
     optimizer_cls: Type[th.NonlinearLeastSquares] = getattr(

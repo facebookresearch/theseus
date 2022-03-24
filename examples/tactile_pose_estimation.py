@@ -3,6 +3,7 @@
 # This source code is licensed under the MIT license found in the
 # LICENSE file in the root directory of this source tree.
 
+import os
 import pathlib
 import random
 
@@ -64,7 +65,14 @@ plt.ion()
 def run_learning_loop(cfg):
     dataset_path = EXP_PATH / "datasets" / f"{cfg.dataset_name}.json"
     sdf_path = EXP_PATH / "sdfs" / f"{cfg.sdf_name}.json"
-    dataset = theg.TactilePushingDataset(dataset_path, sdf_path, cfg.episode, device)
+    dataset = theg.TactilePushingDataset(
+        dataset_path,
+        sdf_path,
+        cfg.episode_length,
+        cfg.train.batch_size,
+        cfg.max_episodes,
+        device,
+    )
 
     # -------------------------------------------------------------------- #
     # Create pose estimator (which wraps a TheseusLayer)
@@ -108,15 +116,20 @@ def run_learning_loop(cfg):
     # -------------------------------------------------------------------- #
     # Use theseus_layer in an outer learning loop to learn different cost
     # function parameters:
-    measurements = dataset.get_measurements(
-        cfg.train.batch_size, cfg.train.num_batches, time_steps
-    )
-    obj_poses_gt = dataset.obj_poses[0:time_steps, :].clone().requires_grad_(True)
-    eff_poses_gt = dataset.eff_poses[0:time_steps, :].clone().requires_grad_(True)
-    theseus_inputs = {}
-    for _ in range(cfg.train.num_epochs):
+    measurements = dataset.get_measurements(time_steps)
+    for epoch in range(cfg.train.num_epochs):
+        print(" ********************* EPOCH {epoch} *********************")
         losses = []
+        image_idx = 0
         for batch_idx, batch in enumerate(measurements):
+            pose_and_motion_batch = dataset.get_start_pose_and_motion_for_batch(
+                batch_idx, time_steps
+            )  # x_y_theta_format
+            pose_estimator.update_start_pose_and_motion_from_batch(
+                pose_and_motion_batch
+            )
+            theseus_inputs = {}
+            # Updates the above with measurement factor data
             theg.update_tactile_pushing_inputs(
                 dataset=dataset,
                 batch=batch,
@@ -129,15 +142,18 @@ def run_learning_loop(cfg):
                 theseus_inputs=theseus_inputs,
             )
 
-            theseus_inputs, _ = pose_estimator.forward(
+            theseus_outputs, _ = pose_estimator.forward(
                 theseus_inputs, optimizer_kwargs={"verbose": True}
             )
 
             obj_poses_opt, eff_poses_opt = theg.get_tactile_poses_from_values(
-                values=theseus_inputs, time_steps=time_steps
+                values=theseus_outputs, time_steps=time_steps
+            )
+            obj_poses_gt, eff_poses_gt = dataset.get_gt_data_for_batch(
+                batch_idx, time_steps
             )
 
-            loss = F.mse_loss(obj_poses_opt[batch_idx, :], obj_poses_gt)
+            loss = F.mse_loss(obj_poses_opt, obj_poses_gt)
             loss.backward()
 
             nn.utils.clip_grad_norm_(qsp_model.parameters(), 100, norm_type=2)
@@ -162,15 +178,22 @@ def run_learning_loop(cfg):
 
             losses.append(loss.item())
 
-        if cfg.options.vis_traj:
-            theg.visualize_tactile_push2d(
-                obj_poses=obj_poses_opt[0, :],
-                eff_poses=eff_poses_opt[0, :],
-                obj_poses_gt=obj_poses_gt,
-                eff_poses_gt=eff_poses_gt,
-                rect_len_x=cfg.shape.rect_len_x,
-                rect_len_y=cfg.shape.rect_len_y,
-            )
+            if cfg.options.vis_traj:
+                base_save_dir = pathlib.Path(os.getcwd())
+                for i in range(len(obj_poses_gt)):
+                    save_dir = base_save_dir / f"img_{image_idx}"
+                    save_dir.mkdir(parents=True, exist_ok=True)
+                    save_fname = save_dir / f"epoch{epoch}.png"
+                    theg.visualize_tactile_push2d(
+                        obj_poses=obj_poses_opt[i],
+                        eff_poses=eff_poses_opt[i],
+                        obj_poses_gt=obj_poses_gt[i],
+                        eff_poses_gt=eff_poses_gt[i],
+                        rect_len_x=cfg.shape.rect_len_x,
+                        rect_len_y=cfg.shape.rect_len_y,
+                        save_fname=save_fname,
+                    )
+                    image_idx += 1
 
         print(f"AVG. LOSS: {np.mean(losses)}")
 

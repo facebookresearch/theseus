@@ -1,4 +1,4 @@
-from typing import Dict, List, Tuple
+from typing import Dict, List, Optional, Tuple
 
 import matplotlib.patches as mpatches
 import matplotlib.pyplot as plt
@@ -15,11 +15,14 @@ class TactilePushingDataset:
         self,
         data_fname: str,
         sdf_fname: str,
-        episode: int,
+        episode_length: int,
+        batch_size: int,
+        max_episodes: int,
         device: torch.device,
     ):
+        batch_size = min(batch_size, max_episodes)
         data = TactilePushingDataset._load_dataset_from_file(
-            data_fname, episode, device
+            data_fname, episode_length, max_episodes, device
         )
         (
             self.sdf_data_tensor,
@@ -32,13 +35,21 @@ class TactilePushingDataset:
         self.obj_poses = data["obj_poses"]
         self.contact_episode = data["contact_episode"]
         self.contact_flag = data["contact_flag"]
+        self.dataset_size: int = -1
         for key, val in data.items():
             setattr(self, key, val)
+            if self.dataset_size == -1:
+                self.dataset_size = val.shape[0]
+            else:
+                assert self.dataset_size == val.shape[0]
+        self.batch_size = batch_size
 
     @staticmethod
     def _load_dataset_from_file(
-        filename: str, episode: int, device: torch.device
+        filename: str, episode_length: int, max_episodes: int, device: torch.device
     ) -> Dict[str, torch.Tensor]:
+
+        # Load all episode data
         with open(filename) as f:
             import json
 
@@ -61,11 +72,30 @@ class TactilePushingDataset:
             data_from_file["contact_flag"], device=device
         )
 
-        data = {}
-        ds_idxs = torch.nonzero(dataset_all["contact_episode"] == episode).squeeze()
-        for key, val in dataset_all.items():
-            data[key] = val[ds_idxs]
-        return data
+        # Read all episodes and filter those with length less than desired
+        episode_indices = [
+            idx.item() for idx in dataset_all["contact_episode"].unique()
+        ]
+        data: Dict[str, List[torch.Tensor]] = dict(
+            [(k, []) for k in dataset_all.keys()]
+        )
+
+        for i, episode in enumerate(episode_indices):
+            if i == max_episodes:
+                break
+            ds_idxs = torch.nonzero(dataset_all["contact_episode"] == episode).squeeze()
+            if len(ds_idxs) < episode_length:
+                continue
+            ds_idxs = ds_idxs[:episode_length]
+            for key, val in dataset_all.items():
+                data[key].append(val[ds_idxs])
+
+        # Stack all episode data into single tensors
+        data_tensors = {}
+        for key in data:
+            data_tensors[key] = torch.stack(data[key])
+        print(f"Read {len(data_tensors[key])} episodes of length {episode_length}.")
+        return data_tensors
 
     @staticmethod
     def _load_tactile_sdf_from_file(
@@ -97,19 +127,41 @@ class TactilePushingDataset:
         return sdf_data_tensor, cell_size, origin
 
     def get_measurements(
-        self, batch_size: int, num_batches: int, time_steps: int
+        self, time_steps: int
     ) -> List[Tuple[torch.Tensor, torch.Tensor, torch.Tensor]]:
-        def _process(tensor: torch.Tensor) -> torch.Tensor:
-            return tensor.unsqueeze(0).repeat(batch_size, 1, 1)
-
-        return [
-            (
-                _process(self.img_feats[0:time_steps]),
-                _process(self.eff_poses[0:time_steps]),
-                _process(self.obj_poses[0:time_steps]),
+        num_batches = (self.dataset_size - 1) // self.batch_size + 1
+        batches = []
+        for batch_idx in range(num_batches):
+            start = batch_idx * self.batch_size
+            end = min(start + self.batch_size, self.dataset_size)
+            batches.append(
+                (
+                    self.img_feats[start:end, 0:time_steps],
+                    self.eff_poses[start:end, 0:time_steps],
+                    self.obj_poses[start:end, 0:time_steps],
+                )
             )
-            for _ in range(num_batches)
-        ]
+        return batches
+
+    def get_start_pose_and_motion_for_batch(
+        self, batch_idx: int, time_steps: int
+    ) -> Dict[str, torch.Tensor]:
+        pose_and_motion_batch = {}
+        start = batch_idx * self.batch_size
+        end = min(start + self.batch_size, self.dataset_size)
+        pose_and_motion_batch["obj_start_pose"] = self.obj_poses[start:end, 0]
+        for i in range(time_steps):
+            pose_and_motion_batch[f"motion_capture_{i}"] = self.eff_poses[start:end, i]
+        return pose_and_motion_batch
+
+    def get_gt_data_for_batch(
+        self, batch_idx: int, time_steps: int
+    ) -> Tuple[torch.Tensor, torch.Tensor]:
+        start = batch_idx * self.batch_size
+        end = min(start + self.batch_size, self.dataset_size)
+        obj_poses_gt = self.obj_poses[start:end, :time_steps, :].clone()
+        eff_poses_gt = self.eff_poses[start:end, :time_steps, :].clone()
+        return obj_poses_gt, eff_poses_gt
 
 
 # ----------------------------------------------------------------------------------- #
@@ -192,6 +244,7 @@ def visualize_tactile_push2d(
     eff_poses_gt: torch.Tensor,
     rect_len_x: float,
     rect_len_y: float,
+    save_fname: Optional[str] = None,
 ):
 
     plt.cla()
@@ -211,3 +264,6 @@ def visualize_tactile_push2d(
 
     plt.show()
     plt.pause(1e-9)
+
+    if save_fname is not None:
+        plt.savefig(save_fname)

@@ -1,4 +1,4 @@
-from typing import Tuple
+from typing import Dict, List, Tuple
 
 import numpy as np
 import torch
@@ -20,7 +20,8 @@ class TactilePoseEstimator:
         device: torch.device,
     ):
         self.dataset = dataset
-        self.time_steps = np.minimum(max_steps, len(self.dataset.obj_poses))
+        # obj_poses is shape (batch_size, episode_length, 3)
+        self.time_steps = np.minimum(max_steps, self.dataset.obj_poses.shape[1])
 
         # -------------------------------------------------------------------- #
         # Creating optimization variables
@@ -40,18 +41,13 @@ class TactilePoseEstimator:
         #  - nn_measurements: tactile measurement prediction from image features
         #  - sdf_data, sdf_cell_size, sdf_origin: signed distance field data,
         #    cell_size and origin
-        obj_start_pose = th.SE2(
-            x_y_theta=self.dataset.obj_poses[0].unsqueeze(0), name="obj_start_pose"
-        )
+        obj_start_pose = th.SE2(name="obj_start_pose")
+        self.obj_start_pose = obj_start_pose
 
-        motion_captures = []
+        motion_captures: List[th.SE2] = []
         for i in range(self.time_steps):
-            motion_captures.append(
-                th.SE2(
-                    x_y_theta=self.dataset.eff_poses[i].unsqueeze(0),
-                    name=f"motion_capture_{i}",
-                )
-            )
+            motion_captures.append(th.SE2(name=f"motion_capture_{i}"))
+        self.motion_captures = motion_captures
 
         nn_measurements = []
         for i in range(min_window_moving_frame, self.time_steps):
@@ -188,3 +184,10 @@ class TactilePoseEstimator:
         self.theseus_layer.to(device=device, dtype=torch.double)
 
         self.forward = self.theseus_layer.forward
+
+    # This method updates the start pose and motion catpure variables with the
+    # xytheta data coming from the batch
+    def update_start_pose_and_motion_from_batch(self, batch: Dict[str, torch.Tensor]):
+        self.obj_start_pose.update_from_x_y_theta(batch[self.obj_start_pose.name])
+        for motion_capture_var in self.motion_captures:
+            motion_capture_var.update_from_x_y_theta(batch[motion_capture_var.name])

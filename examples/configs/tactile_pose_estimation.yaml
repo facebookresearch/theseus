@@ -3,8 +3,9 @@ seed: 0
 dataset_name: "rectangle-pushing-corners-keypoints"
 sdf_name: "rect"
 
-episode: 0
+episode_length: 100
 max_steps: 100
+max_episodes: 1
 
 # 0: disc, 1: rect-edges, 2: rect-corners, 3: ellip
 class_label: 2
@@ -24,11 +25,9 @@ tactile_cost:
 
 train:
   # options: "weights_only" or "weights_and_measurement_nn"
-  mode: "weights_only"
+  mode: "weights_and_measurement_nn"
 
-  batch_size: 1
-  num_batches: 1
-
+  batch_size: 4
   num_epochs: 100
   eps_tracking_loss: 1e-5
 

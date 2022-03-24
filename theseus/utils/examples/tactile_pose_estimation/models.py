@@ -275,8 +275,9 @@ def update_tactile_pushing_inputs(
     time_steps: int,
     theseus_inputs: Dict[str, torch.Tensor],
 ):
+    batch_size = batch[0].shape[0]
     theseus_inputs["sdf_data"] = (
-        (dataset.sdf_data_tensor.data).repeat(cfg.train.batch_size, 1, 1).to(device)
+        (dataset.sdf_data_tensor.data).repeat(batch_size, 1, 1).to(device)
     )
 
     theseus_inputs.update(

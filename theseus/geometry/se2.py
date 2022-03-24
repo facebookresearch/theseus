@@ -32,9 +32,7 @@ class SE2(LieGroup):
             dtype = x_y_theta.dtype
         super().__init__(data=data, name=name, dtype=dtype)
         if x_y_theta is not None:
-            rotation = SO2(theta=x_y_theta[:, 2:])
-            translation = Point2(data=x_y_theta[:, :2])
-            self.update_from_rot_and_trans(rotation, translation)
+            self.update_from_x_y_theta(x_y_theta)
 
     @staticmethod
     def rand(
@@ -144,6 +142,11 @@ class SE2(LieGroup):
             J_out[:, :2, :2] = rotation.to_matrix()
             jacobians.append(J_out)
         return self.translation.data
+
+    def update_from_x_y_theta(self, x_y_theta: torch.Tensor):
+        rotation = SO2(theta=x_y_theta[:, 2:])
+        translation = Point2(data=x_y_theta[:, :2])
+        self.update_from_rot_and_trans(rotation, translation)
 
     def update_from_rot_and_trans(self, rotation: SO2, translation: Point2):
         batch_size = rotation.shape[0]

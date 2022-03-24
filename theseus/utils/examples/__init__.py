@@ -40,3 +40,6 @@ except ModuleNotFoundError:
         "Unable to import Tactile Pose Estimation utilities. "
         "Please make sure you have matplotlib and omegaconf installed."
     )
+
+
+from .pose_graph import PosePriorError, RelativePoseError

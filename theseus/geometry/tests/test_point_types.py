@@ -10,7 +10,11 @@ import torch
 import theseus as th
 from theseus.constants import EPS
 
-from .common import check_projection_for_exp_map, check_projection_for_log_map
+from .common import (
+    check_jacobian_for_local,
+    check_projection_for_exp_map,
+    check_projection_for_log_map,
+)
 
 
 def test_xy_point2():
@@ -103,3 +107,20 @@ def test_log_map():
         check_projection_for_log_map(
             tangent_vector=ret, Group=th.Point3, is_projected=False
         )
+
+
+def test_local_map():
+    rng = torch.Generator()
+    rng.manual_seed(0)
+
+    for batch_size in [1, 20, 100]:
+        group0 = th.Point2.rand(batch_size)
+        group1 = th.Point2.rand(batch_size)
+
+        check_jacobian_for_local(group0, group1, Group=th.Point2, is_projected=False)
+
+    for batch_size in [1, 20, 100]:
+        group0 = th.Point3.rand(batch_size)
+        group1 = th.Point3.rand(batch_size)
+
+        check_jacobian_for_local(group0, group1, Group=th.Point3, is_projected=False)

@@ -269,3 +269,26 @@ def check_projection_for_log_map(tangent_vector, Group, is_projected=True, atol=
     _ = group.log_map(jacobians=actual)
 
     assert torch.allclose(actual[0], expected, atol=atol)
+
+
+def check_jacobian_for_local(group0, group1, Group, is_projected=True, atol=1e-8):
+    batch_size = group0.shape[0]
+    aux_id = torch.arange(batch_size)
+
+    def local_func(group0, group1):
+        return Group(data=group0).local(Group(data=group1))
+
+    jac_raw = torch.autograd.functional.jacobian(local_func, (group0.data, group1.data))
+    if is_projected:
+        expected = [
+            group0.project(jac_raw[0][aux_id, :, aux_id], is_sparse=True),
+            group1.project(jac_raw[1][aux_id, :, aux_id], is_sparse=True),
+        ]
+    else:
+        expected = [jac_raw[0][aux_id, :, aux_id], jac_raw[1][aux_id, :, aux_id]]
+
+    actual = []
+    _ = group0.local(group1, jacobians=actual)
+
+    assert torch.allclose(actual[0], expected[0], atol=atol)
+    assert torch.allclose(actual[1], expected[1], atol=atol)

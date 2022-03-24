@@ -166,17 +166,13 @@ class Vector(LieGroup):
     def to_matrix(self) -> torch.Tensor:
         return self.data.clone()
 
-    def _local_impl(self, vec2: Manifold) -> torch.Tensor:
+    def _local_impl(
+        self, vec2: Manifold, jacobians: List[torch.Tensor] = None
+    ) -> torch.Tensor:
         if not isinstance(vec2, Vector):
             raise ValueError("Non-vector inputs for Vector.local()")
         else:
-            return vec2.data - self.data
-
-    def _local_jacobian(self, _: Manifold) -> Tuple[torch.Tensor, torch.Tensor]:
-        identity = torch.eye(self.dof(), dtype=self.dtype, device=self.device).repeat(
-            self.shape[0], 1, 1
-        )
-        return -identity, identity
+            return LieGroup._local_impl(self, vec2, jacobians)
 
     def _retract_impl(self, delta: torch.Tensor) -> "Vector":
         return self.__class__(data=torch.add(self.data, delta))

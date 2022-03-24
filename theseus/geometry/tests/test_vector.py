@@ -11,7 +11,11 @@ import theseus as th
 from theseus.constants import EPS
 from theseus.core.tests.common import check_copy_var
 
-from .common import check_projection_for_exp_map, check_projection_for_log_map
+from .common import (
+    check_jacobian_for_local,
+    check_projection_for_exp_map,
+    check_projection_for_log_map,
+)
 
 torch.manual_seed(0)
 
@@ -209,3 +213,15 @@ def test_log_map():
         check_projection_for_log_map(
             tangent_vector=ret, Group=th.Vector, is_projected=False
         )
+
+
+def test_local_map():
+    rng = torch.Generator()
+    rng.manual_seed(0)
+
+    for batch_size in [1, 20, 100]:
+        dim = torch.randint(1, 10, size=[1], generator=rng)[0]
+        group0 = th.Vector.rand(batch_size, dim, generator=rng)
+        group1 = th.Vector.rand(batch_size, dim, generator=rng)
+
+        check_jacobian_for_local(group0, group1, Group=th.Vector, is_projected=False)

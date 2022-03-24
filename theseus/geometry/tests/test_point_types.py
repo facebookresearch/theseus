@@ -3,6 +3,7 @@
 # This source code is licensed under the MIT license found in the
 # LICENSE file in the root directory of this source tree.
 
+import mypy.api
 import pytest  # noqa: F401
 import torch
 
@@ -50,6 +51,12 @@ def test_point_operations_return_correct_type():
         exp_map = point_cls.exp_map(p2.data)
         assert isinstance(exp_map, point_cls)
         assert exp_map.allclose(p2)
+
+
+def test_operations_mypy_cast():
+
+    result = mypy.api.run(["theseus/geometry/tests/point_types_mypy_check.py"])
+    assert result[2] == 0
 
 
 def test_exp_map():

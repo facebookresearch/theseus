@@ -7,6 +7,11 @@ episode_length: 100
 max_steps: 100
 max_episodes: 1
 
+inner_optim:
+  max_iters: 3
+  optimizer: GaussNewton
+  reg_w: 1e-4
+
 # 0: disc, 1: rect-edges, 2: rect-corners, 3: ellip
 class_label: 2
 num_classes: 4

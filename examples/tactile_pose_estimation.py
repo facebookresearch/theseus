@@ -85,6 +85,9 @@ def run_learning_loop(cfg):
         step_window_moving_frame=cfg.tactile_cost.step_win_mf,
         rectangle_shape=(cfg.shape.rect_len_x, cfg.shape.rect_len_y),
         device=device,
+        optimizer_cls=getattr(th, cfg.inner_optim.optimizer),
+        max_iterations=cfg.inner_optim.max_iters,
+        regularization_w=cfg.inner_optim.reg_w,
     )
     time_steps = pose_estimator.time_steps
 

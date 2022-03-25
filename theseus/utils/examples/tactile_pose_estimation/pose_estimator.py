@@ -1,9 +1,10 @@
-from typing import Dict, List, Tuple
+from typing import Dict, List, Optional, Tuple, Type
 
 import numpy as np
 import torch
 
 import theseus as th
+from theseus.optimizer.nonlinear.levenberg_marquardt import LevenbergMarquardt
 
 from .misc import TactilePushingDataset
 
@@ -18,6 +19,9 @@ class TactilePoseEstimator:
         step_window_moving_frame: int,
         rectangle_shape: Tuple[float, float],
         device: torch.device,
+        optimizer_cls: Optional[Type[th.NonlinearLeastSquares]] = LevenbergMarquardt,
+        max_iterations: int = 3,
+        regularization_w: float = 0.0,
     ):
         self.dataset = dataset
         # obj_poses is shape (batch_size, episode_length, 3)
@@ -171,14 +175,26 @@ class TactilePoseEstimator:
                 )
             )
 
+        if regularization_w > 0.0:
+            reg_w = th.ScaleCostWeight(np.sqrt(regularization_w))
+            reg_w.to(dtype=torch.double)
+            identity_se2 = th.SE2(name="identity")
+            for pose_list in [obj_poses, eff_poses]:
+                for pose in pose_list:
+                    objective.add(
+                        th.eb.VariableDifference(
+                            pose, reg_w, identity_se2, name=f"reg_{pose.name}"
+                        )
+                    )
+
         # -------------------------------------------------------------------- #
         # Creating TheseusLayer
         # -------------------------------------------------------------------- #
         # Wrap the objective and inner-loop optimizer into a `TheseusLayer`.
         # Inner-loop optimizer here is the Levenberg-Marquardt nonlinear optimizer
         # coupled with a dense linear solver based on Cholesky decomposition.
-        nl_optimizer = th.LevenbergMarquardt(
-            objective, th.CholeskyDenseSolver, max_iterations=3
+        nl_optimizer = optimizer_cls(
+            objective, th.CholeskyDenseSolver, max_iterations=max_iterations
         )
         self.theseus_layer = th.TheseusLayer(nl_optimizer)
         self.theseus_layer.to(device=device, dtype=torch.double)

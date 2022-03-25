@@ -12,9 +12,9 @@ import matplotlib.pyplot as plt
 import numpy as np
 import torch
 import torch.nn as nn
-import torch.nn.functional as F
 import torch.optim as optim
 
+import theseus as th
 import theseus.utils.examples as theg
 
 # To run this example, you will need a tactile pushing dataset available at
@@ -124,7 +124,7 @@ def run_learning_loop(cfg):
         for batch_idx, batch in enumerate(measurements):
             pose_and_motion_batch = dataset.get_start_pose_and_motion_for_batch(
                 batch_idx, time_steps
-            )  # x_y_theta_format
+            )  # x_y_theta format
             pose_estimator.update_start_pose_and_motion_from_batch(
                 pose_and_motion_batch
             )
@@ -153,11 +153,14 @@ def run_learning_loop(cfg):
                 batch_idx, time_steps
             )
 
-            loss = F.mse_loss(obj_poses_opt, obj_poses_gt)
+            se2_opt = th.SE2(x_y_theta=obj_poses_opt.view(-1, 3))
+            se2_gt = th.SE2(x_y_theta=obj_poses_gt.view(-1, 3))
+            loss = se2_opt.local(se2_gt).norm()
             loss.backward()
 
             nn.utils.clip_grad_norm_(qsp_model.parameters(), 100, norm_type=2)
             nn.utils.clip_grad_norm_(mf_between_model.parameters(), 100, norm_type=2)
+            nn.utils.clip_grad_norm_(measurements_model.parameters(), 100, norm_type=2)
 
             with torch.no_grad():
                 for name, param in qsp_model.named_parameters():
@@ -165,8 +168,13 @@ def run_learning_loop(cfg):
                 for name, param in mf_between_model.named_parameters():
                     print(name, param.data)
 
-                print("    grad qsp", qsp_model.param.grad.norm().item())
-                print("    grad mfb", mf_between_model.param.grad.norm().item())
+                def _print_grad(msg_, param_):
+                    print(msg_, param_.grad.norm().item())
+
+                _print_grad("    grad qsp", qsp_model.param)
+                _print_grad("    grad mfb", mf_between_model.param)
+                _print_grad("    grad nn_weight", measurements_model.fc1.weight)
+                _print_grad("    grad nn_bias", measurements_model.fc1.bias)
 
             outer_optim.step()
 

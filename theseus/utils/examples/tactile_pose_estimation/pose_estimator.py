@@ -21,6 +21,7 @@ class TactilePoseEstimator:
         device: torch.device,
         optimizer_cls: Optional[Type[th.NonlinearLeastSquares]] = LevenbergMarquardt,
         max_iterations: int = 3,
+        step_size: float = 1.0,
         regularization_w: float = 0.0,
     ):
         self.dataset = dataset
@@ -194,7 +195,10 @@ class TactilePoseEstimator:
         # Inner-loop optimizer here is the Levenberg-Marquardt nonlinear optimizer
         # coupled with a dense linear solver based on Cholesky decomposition.
         nl_optimizer = optimizer_cls(
-            objective, th.CholeskyDenseSolver, max_iterations=max_iterations
+            objective,
+            th.CholeskyDenseSolver,
+            max_iterations=max_iterations,
+            step_size=step_size,
         )
         self.theseus_layer = th.TheseusLayer(nl_optimizer)
         self.theseus_layer.to(device=device, dtype=torch.double)

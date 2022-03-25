@@ -11,6 +11,9 @@ inner_optim:
   max_iters: 3
   optimizer: GaussNewton
   reg_w: 1e-4
+  backward_mode: IMPLICIT
+  step_size: 1.0
+  keep_step_size: true
 
 # 0: disc, 1: rect-edges, 2: rect-corners, 3: ellip
 class_label: 2

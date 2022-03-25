@@ -87,6 +87,7 @@ def run_learning_loop(cfg):
         device=device,
         optimizer_cls=getattr(th, cfg.inner_optim.optimizer),
         max_iterations=cfg.inner_optim.max_iters,
+        step_size=cfg.inner_optim.step_size,
         regularization_w=cfg.inner_optim.reg_w,
     )
     time_steps = pose_estimator.time_steps
@@ -146,7 +147,14 @@ def run_learning_loop(cfg):
             )
 
             theseus_outputs, _ = pose_estimator.forward(
-                theseus_inputs, optimizer_kwargs={"verbose": True}
+                theseus_inputs,
+                optimizer_kwargs={
+                    "verbose": True,
+                    "backward_mode": getattr(
+                        th.BackwardMode, cfg.inner_optim.backward_mode
+                    ),
+                    "__keep_final_step_size__": cfg.inner_optim.keep_step_size,
+                },
             )
 
             obj_poses_opt, eff_poses_opt = theg.get_tactile_poses_from_values(

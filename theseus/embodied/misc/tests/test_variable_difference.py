@@ -46,7 +46,7 @@ def test_jacobian_variable_difference():
 
         def new_error_fn(groups):
             new_cost_function = th.eb.VariableDifference(groups[0], cost_weight, target)
-            return new_cost_function.target.retract(new_cost_function.error())
+            return th.Vector(data=new_cost_function.error())
 
         expected_jacs = numeric_jacobian(new_error_fn, [v0])
         jacobians, error_jac = cost_function.jacobians()

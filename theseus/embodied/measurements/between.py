@@ -37,10 +37,9 @@ class Between(CostFunction):
 
     def jacobians(self) -> Tuple[List[torch.Tensor], torch.Tensor]:
         Jlist: List[torch.Tensor] = []
-        expected = self.v0.compose(self.measurement)
-        var_diff = expected.between(self.v1)
+        var_diff = between(self.v0, self.v1)
         log_jac: List[torch.Tensor] = []
-        error = var_diff.log_map(jacobians=log_jac)
+        error = self.measurement.inverse().compose(var_diff).log_map(jacobians=log_jac)
         dlog = log_jac[0]
         Jlist.extend([-dlog @ var_diff.inverse().adjoint(), dlog])
         return Jlist, error

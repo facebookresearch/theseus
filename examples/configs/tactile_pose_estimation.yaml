@@ -1,4 +1,5 @@
 seed: 0
+save_all: true
 
 dataset_name: "rectangle-pushing-corners-keypoints"
 sdf_name: "rect"

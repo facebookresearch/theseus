@@ -2,10 +2,12 @@
 #
 # This source code is licensed under the MIT license found in the
 # LICENSE file in the root directory of this source tree.
-
+import logging
 import os
 import pathlib
 import random
+import time
+from typing import Dict
 
 import hydra
 import matplotlib.pyplot as plt
@@ -16,6 +18,9 @@ import torch.optim as optim
 
 import theseus as th
 import theseus.utils.examples as theg
+
+# Logger
+logger = logging.getLogger(__name__)
 
 # To run this example, you will need a tactile pushing dataset available at
 # https://dl.fbaipublicfiles.com/theseus/tactile_pushing_data.tar.gz
@@ -62,7 +67,31 @@ plt.ion()
 # 2021 (https://arxiv.org/abs/1705.10664)
 
 
+def pack_batch_results(
+    theseus_outputs: Dict[str, torch.Tensor],
+    qsp_state_dict: torch.Tensor,
+    mfb_state_dict: torch.Tensor,
+    meas_state_dict: torch.Tensor,
+    info: th.optimizer.OptimizerInfo,
+    loss_value: float,
+    total_time: float,
+) -> Dict:
+    def _clone(t_):
+        return t_.detach().cpu().clone()
+
+    return {
+        "theseus_outputs": dict((s, _clone(t)) for s, t in theseus_outputs.items()),
+        "qsp_state_dict": qsp_state_dict,
+        "mfb_state_dict": mfb_state_dict,
+        "meas_state_dict": meas_state_dict,
+        "err_history": info.err_history,  # type: ignore
+        "loss": loss_value,
+        "total_time": total_time,
+    }
+
+
 def run_learning_loop(cfg):
+    root_path = pathlib.Path(os.getcwd())
     dataset_path = EXP_PATH / "datasets" / f"{cfg.dataset_name}.json"
     sdf_path = EXP_PATH / "sdfs" / f"{cfg.sdf_name}.json"
     dataset = theg.TactilePushingDataset(
@@ -121,8 +150,10 @@ def run_learning_loop(cfg):
     # Use theseus_layer in an outer learning loop to learn different cost
     # function parameters:
     measurements = dataset.get_measurements(time_steps)
+    results = {}
     for epoch in range(cfg.train.num_epochs):
-        print(" ********************* EPOCH {epoch} *********************")
+        results[epoch] = {}
+        logger.info(" ********************* EPOCH {epoch} *********************")
         losses = []
         image_idx = 0
         for batch_idx, batch in enumerate(measurements):
@@ -146,16 +177,19 @@ def run_learning_loop(cfg):
                 theseus_inputs=theseus_inputs,
             )
 
-            theseus_outputs, _ = pose_estimator.forward(
+            start_time = time.time_ns()
+            theseus_outputs, info = pose_estimator.forward(
                 theseus_inputs,
                 optimizer_kwargs={
                     "verbose": True,
+                    "track_err_history": True,
                     "backward_mode": getattr(
                         th.BackwardMode, cfg.inner_optim.backward_mode
                     ),
                     "__keep_final_step_size__": cfg.inner_optim.keep_step_size,
                 },
             )
+            end_time = time.time_ns()
 
             obj_poses_opt, eff_poses_opt = theg.get_tactile_poses_from_values(
                 values=theseus_outputs, time_steps=time_steps
@@ -175,12 +209,12 @@ def run_learning_loop(cfg):
 
             with torch.no_grad():
                 for name, param in qsp_model.named_parameters():
-                    print(name, param.data)
+                    logger.info(f"{name} {param.data}")
                 for name, param in mf_between_model.named_parameters():
-                    print(name, param.data)
+                    logger.info(f"{name} {param.data}")
 
                 def _print_grad(msg_, param_):
-                    print(msg_, param_.grad.norm().item())
+                    logger.info(f"{msg_} {param_.grad.norm().item()}")
 
                 _print_grad("    grad qsp", qsp_model.param)
                 _print_grad("    grad mfb", mf_between_model.param)
@@ -197,10 +231,21 @@ def run_learning_loop(cfg):
 
             losses.append(loss.item())
 
+            if cfg.save_all:
+                results[epoch][batch_idx] = pack_batch_results(
+                    theseus_outputs,
+                    qsp_model.state_dict(),
+                    mf_between_model.state_dict(),
+                    measurements_model.state_dict(),
+                    info,
+                    loss.item(),
+                    end_time - start_time,
+                )
+                torch.save(results, root_path / "results.pt")
+
             if cfg.options.vis_traj:
-                base_save_dir = pathlib.Path(os.getcwd())
                 for i in range(len(obj_poses_gt)):
-                    save_dir = base_save_dir / f"img_{image_idx}"
+                    save_dir = root_path / f"img_{image_idx}"
                     save_dir.mkdir(parents=True, exist_ok=True)
                     save_fname = save_dir / f"epoch{epoch}.png"
                     theg.visualize_tactile_push2d(
@@ -214,7 +259,7 @@ def run_learning_loop(cfg):
                     )
                     image_idx += 1
 
-        print(f"AVG. LOSS: {np.mean(losses)}")
+        logger.info(f"AVG. LOSS: {np.mean(losses)}")
 
         if np.mean(losses) < eps_tracking_loss:
             break

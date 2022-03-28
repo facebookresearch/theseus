@@ -11,8 +11,27 @@ from theseus.core.tests.common import (
     check_another_theseus_function_is_copy,
     check_another_theseus_tensor_is_copy,
 )
-from theseus.geometry.tests.test_se2 import create_random_se2
 from theseus.utils import numeric_jacobian
+
+
+def evaluate_jacobian_variable_difference(Group, tol):
+    rng = torch.Generator()
+    rng.manual_seed(1)
+    cost_weight = th.ScaleCostWeight(1)
+    for batch_size in [1, 10, 100]:
+        v0 = Group.rand(batch_size, dtype=torch.float64, generator=rng)
+        target = Group.rand(batch_size, dtype=torch.float64, generator=rng)
+        cost_function = th.eb.VariableDifference(v0, cost_weight, target)
+
+        def new_error_fn(groups):
+            new_cost_function = th.eb.VariableDifference(groups[0], cost_weight, target)
+            return th.Vector(data=new_cost_function.error())
+
+        expected_jacs = numeric_jacobian(new_error_fn, [v0])
+        jacobians, error_jac = cost_function.jacobians()
+        error = cost_function.error()
+        assert torch.allclose(error_jac, error)
+        assert torch.allclose(jacobians[0], expected_jacs[0], atol=tol)
 
 
 def test_copy_variable_difference():
@@ -36,23 +55,10 @@ def test_copy_variable_difference():
 
 
 def test_jacobian_variable_difference():
-    rng = torch.Generator()
-    rng.manual_seed(0)
-    cost_weight = th.ScaleCostWeight(1)
-    for batch_size in [1, 10, 100]:
-        v0 = create_random_se2(batch_size, rng)
-        target = create_random_se2(batch_size, rng)
-        cost_function = th.eb.VariableDifference(v0, cost_weight, target)
-
-        def new_error_fn(groups):
-            new_cost_function = th.eb.VariableDifference(groups[0], cost_weight, target)
-            return th.Vector(data=new_cost_function.error())
-
-        expected_jacs = numeric_jacobian(new_error_fn, [v0])
-        jacobians, error_jac = cost_function.jacobians()
-        error = cost_function.error()
-        assert torch.allclose(error_jac, error)
-        assert torch.allclose(jacobians[0], expected_jacs[0], atol=1e-8)
+    evaluate_jacobian_variable_difference(th.SO2, 1e-6)
+    evaluate_jacobian_variable_difference(th.SE2, 1e-8)
+    evaluate_jacobian_variable_difference(th.SO3, 1e-6)
+    evaluate_jacobian_variable_difference(th.SE3, 1e-6)
 
 
 def test_error_variable_difference_point2():

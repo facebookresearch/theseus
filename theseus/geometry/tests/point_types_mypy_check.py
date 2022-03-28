@@ -12,3 +12,6 @@ def mypy_operations_check():
         z: point_cls = x - y  # noqa: F841
         z: point_cls = x * y  # noqa: F841
         z: point_cls = x / y  # noqa: F841
+        z: point_cls = -x  # noqa: F841
+        z: point_cls = x.cat(y)  # noqa: F841
+        z: point_cls = x.abs()  # noqa: F841

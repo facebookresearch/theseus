@@ -90,6 +90,15 @@ class Point2(Vector):
     def __truediv__(self, other: Union["Vector", torch.Tensor]) -> "Point2":
         return cast(Point2, super().__truediv__(other))
 
+    def __neg__(self) -> "Point2":
+        return cast(Point2, super().__neg__())
+
+    def cat(self, vecs: Union["Vector", Tuple["Vector"], List["Vector"]]) -> "Point2":
+        return cast(Point2, super().cat(vecs))
+
+    def abs(self) -> "Point2":
+        return cast(Point2, super().abs())
+
     def x(self) -> torch.Tensor:
         return self[:, 0]
 
@@ -175,6 +184,15 @@ class Point3(Vector):
 
     def __truediv__(self, other: Union["Vector", torch.Tensor]) -> "Point3":
         return cast(Point3, super().__truediv__(other))
+
+    def __neg__(self) -> "Point3":
+        return cast(Point3, super().__neg__())
+
+    def cat(self, vecs: Union["Vector", Tuple["Vector"], List["Vector"]]) -> "Point3":
+        return cast(Point3, super().cat(vecs))
+
+    def abs(self) -> "Point3":
+        return cast(Point3, super().abs())
 
     def x(self) -> torch.Tensor:
         return self[:, 0]

@@ -14,6 +14,30 @@ from theseus.core.tests.common import (
 from theseus.utils import numeric_jacobian
 
 
+def evaluate_numberical_jacobian_between(Group, tol):
+    rng = torch.Generator()
+    rng.manual_seed(0)
+    cost_weight = th.ScaleCostWeight(1)
+    for batch_size in [1, 10, 100]:
+        v0 = Group.rand(batch_size, dtype=torch.float64, generator=rng)
+        v1 = Group.rand(batch_size, dtype=torch.float64, generator=rng)
+        measurement = Group.rand(batch_size, dtype=torch.float64, generator=rng)
+        cost_function = th.eb.Between(v0, v1, cost_weight, measurement)
+
+        def new_error_fn(groups):
+            new_cost_function = th.eb.Between(
+                groups[0], groups[1], cost_weight, measurement
+            )
+            return th.Vector(data=new_cost_function.error())
+
+        expected_jacs = numeric_jacobian(new_error_fn, [v0, v1])
+        jacobians, error_jac = cost_function.jacobians()
+        error = cost_function.error()
+        assert torch.allclose(error_jac, error)
+        assert torch.allclose(jacobians[0], expected_jacs[0], atol=tol)
+        assert torch.allclose(jacobians[1], expected_jacs[1], atol=tol)
+
+
 def test_copy_between():
     v0 = th.SE2()
     v1 = th.SE2()
@@ -35,27 +59,10 @@ def test_copy_between():
 
 
 def test_jacobian_between():
-    rng = torch.Generator()
-    rng.manual_seed(0)
-    cost_weight = th.ScaleCostWeight(1)
-    for batch_size in [1, 10, 100]:
-        v0 = th.SE2.rand(batch_size, dtype=torch.float64, generator=rng)
-        v1 = th.SE2.rand(batch_size, dtype=torch.float64, generator=rng)
-        measurement = th.SE2.rand(batch_size, dtype=torch.float64, generator=rng)
-        cost_function = th.eb.Between(v0, v1, cost_weight, measurement)
-
-        def new_error_fn(groups):
-            new_cost_function = th.eb.Between(
-                groups[0], groups[1], cost_weight, measurement
-            )
-            return th.Vector(data=new_cost_function.error())
-
-        expected_jacs = numeric_jacobian(new_error_fn, [v0, v1])
-        jacobians, error_jac = cost_function.jacobians()
-        error = cost_function.error()
-        assert torch.allclose(error_jac, error)
-        assert torch.allclose(jacobians[0], expected_jacs[0], atol=1e-8)
-        assert torch.allclose(jacobians[1], expected_jacs[1], atol=1e-8)
+    evaluate_numberical_jacobian_between(th.SO2, 1e-8)
+    evaluate_numberical_jacobian_between(th.SO3, 1e-6)
+    evaluate_numberical_jacobian_between(th.SE2, 1e-8)
+    evaluate_numberical_jacobian_between(th.SE3, 1e-6)
 
 
 def test_error_between_point2():

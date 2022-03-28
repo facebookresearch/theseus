@@ -135,14 +135,11 @@ def run_learning_loop(cfg):
         qsp_model,
         mf_between_model,
         learnable_params,
-        hyperparameters,
     ) = theg.create_tactile_models(
         cfg.train.mode, device, measurements_model_path=measurements_model_path
     )
-    eps_tracking_loss = hyperparameters.get(
-        "eps_tracking_loss", cfg.train.eps_tracking_loss
-    )
-    outer_optim = optim.Adam(learnable_params, lr=hyperparameters["learning_rate"])
+    eps_tracking_loss = cfg.train.eps_tracking_loss
+    outer_optim = optim.Adam(learnable_params, lr=cfg.train.lr)
 
     # -------------------------------------------------------------------- #
     # Main learning loop

@@ -65,8 +65,7 @@ def create_tactile_models(
     model_type: str,
     device: torch.device,
     measurements_model_path: Optional[pathlib.Path] = None,
-) -> Tuple[nn.Module, nn.Module, nn.Module, List[nn.Parameter], Dict[str, float]]:
-    hyperparams = {}
+) -> Tuple[nn.Module, nn.Module, nn.Module, List[nn.Parameter]]:
     if model_type == "weights_only":
         qsp_model = TactileWeightModel(
             device, wt_init=torch.tensor([[50.0, 50.0, 50.0]])
@@ -76,7 +75,6 @@ def create_tactile_models(
         )
         measurements_model = None
 
-        hyperparams["learning_rate"] = 5.0
         learnable_params = list(qsp_model.parameters()) + list(
             mf_between_model.parameters()
         )
@@ -93,8 +91,6 @@ def create_tactile_models(
             )
         measurements_model.to(device)
 
-        hyperparams["learning_rate"] = 1.0e-3
-        hyperparams["eps_tracking_loss"] = 5.0e-4  # early stopping
         learnable_params = (
             list(measurements_model.parameters())
             + list(qsp_model.parameters())
@@ -108,7 +104,6 @@ def create_tactile_models(
         qsp_model,
         mf_between_model,
         learnable_params,
-        hyperparams,
     )
 
 

@@ -37,8 +37,9 @@ train:
   mode: "weights_and_measurement_nn"
 
   batch_size: 4
-  num_epochs: 100
-  eps_tracking_loss: 1e-5
+  num_epochs: 50
+  lr: 1e-3  # 5.0 for weights_only
+  eps_tracking_loss: 1e-10
 
 options:
   vis_traj: True

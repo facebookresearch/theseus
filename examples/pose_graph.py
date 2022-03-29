@@ -17,8 +17,8 @@ num_verts, verts, edges = theg.pose_graph.read_3D_g2o_file(file_path)
 objective = th.Objective(torch.float64)
 
 for edge in edges:
-    cost_function = theg.RelativePoseError(
-        verts[edge.i], verts[edge.j], edge.relative_pose, edge.weight
+    cost_function = th.eb.Between(
+        verts[edge.i], verts[edge.j], edge.weight, edge.relative_pose
     )
     objective.add(cost_function)
 
@@ -33,16 +33,17 @@ num_verts, verts, edges = theg.pose_graph.read_3D_g2o_file(file_path)
 objective = th.Objective(torch.float64)
 
 for edge in edges:
-    cost_func = theg.RelativePoseError(
-        verts[edge.i], verts[edge.j], edge.relative_pose, edge.weight
+    cost_func = th.eb.Between(
+        verts[edge.i], verts[edge.j], edge.weight, edge.relative_pose
     )
     objective.add(cost_func)
 
-objective.add(
-    theg.PosePriorError(
-        pose=verts[0], pose_prior=verts[0].copy(new_name=verts[0].name + "PRIOR")
-    )
+pose_prior = th.eb.VariableDifference(
+    var=verts[0],
+    cost_weight=th.ScaleCostWeight(torch.tensor(1e-6, dtype=torch.float64)),
+    target=verts[0].copy(new_name=verts[0].name + "PRIOR"),
 )
+objective.add(pose_prior)
 
 optimizer = th.LevenbergMarquardt(  # GaussNewton(
     objective,

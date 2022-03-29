@@ -14,7 +14,7 @@ from theseus.core.tests.common import (
 from theseus.utils import numeric_jacobian
 
 
-def evaluate_numberical_jacobian_between(Group, tol):
+def evaluate_numerical_jacobian_between(Group, tol):
     rng = torch.Generator()
     rng.manual_seed(0)
     cost_weight = th.ScaleCostWeight(1)
@@ -59,10 +59,10 @@ def test_copy_between():
 
 
 def test_jacobian_between():
-    evaluate_numberical_jacobian_between(th.SO2, 1e-8)
-    evaluate_numberical_jacobian_between(th.SO3, 1e-6)
-    evaluate_numberical_jacobian_between(th.SE2, 1e-8)
-    evaluate_numberical_jacobian_between(th.SE3, 1e-6)
+    evaluate_numerical_jacobian_between(th.SO2, 1e-8)
+    evaluate_numerical_jacobian_between(th.SO3, 1e-6)
+    evaluate_numerical_jacobian_between(th.SE2, 1e-8)
+    evaluate_numerical_jacobian_between(th.SE3, 1e-6)
 
 
 def test_error_between_point2():

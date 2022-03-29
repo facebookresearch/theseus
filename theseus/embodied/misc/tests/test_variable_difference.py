@@ -14,7 +14,7 @@ from theseus.core.tests.common import (
 from theseus.utils import numeric_jacobian
 
 
-def evaluate_jacobian_variable_difference(Group, tol):
+def evaluate_numerical_jacobian_variable_difference(Group, tol):
     rng = torch.Generator()
     rng.manual_seed(1)
     cost_weight = th.ScaleCostWeight(1)
@@ -55,10 +55,10 @@ def test_copy_variable_difference():
 
 
 def test_jacobian_variable_difference():
-    evaluate_jacobian_variable_difference(th.SO2, 1e-6)
-    evaluate_jacobian_variable_difference(th.SE2, 1e-8)
-    evaluate_jacobian_variable_difference(th.SO3, 1e-6)
-    evaluate_jacobian_variable_difference(th.SE3, 1e-6)
+    evaluate_numerical_jacobian_variable_difference(th.SO2, 1e-6)
+    evaluate_numerical_jacobian_variable_difference(th.SE2, 1e-8)
+    evaluate_numerical_jacobian_variable_difference(th.SO3, 1e-6)
+    evaluate_numerical_jacobian_variable_difference(th.SE3, 1e-6)
 
 
 def test_error_variable_difference_point2():

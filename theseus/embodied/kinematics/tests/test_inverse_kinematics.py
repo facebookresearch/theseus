@@ -10,7 +10,6 @@ import pytest
 import torch
 
 import theseus as th
-from theseus.geometry import SE3, SO3
 
 NUM_DOFS = 7
 EE_NAME = "panda_virtual_ee_link"
@@ -40,14 +39,14 @@ def ee_pose_target():
     ee_pos_target = ee_pos_mid + sample_vector_dist(ee_pos_range)
     ee_quat_target = (
         (
-            SO3.unit_quaternion_to_SO3(
+            th.SO3.unit_quaternion_to_SO3(
                 ee_quat_mid / torch.linalg.norm(ee_quat_mid)
-            ).compose(SO3().exp_map(sample_vector_dist(ee_quat_range).unsqueeze(0)))
+            ).compose(th.SO3().exp_map(sample_vector_dist(ee_quat_range).unsqueeze(0)))
         )
         .to_quaternion()
         .squeeze()
     )
-    return SE3(
+    return th.SE3(
         x_y_z_quaternion=torch.cat([ee_pos_target, ee_quat_target]),
         name="ee_pose_target",
     )

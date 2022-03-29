@@ -9,9 +9,9 @@ from typing import Dict, Union
 import differentiable_robot_model as drm
 import torch
 
-from theseus.geometry import SE3, LieGroup, Point2, Vector
+import theseus as th
 
-RobotModelInput = Union[torch.Tensor, Vector]
+RobotModelInput = Union[torch.Tensor, th.Vector]
 
 
 class KinematicsModel(abc.ABC):
@@ -19,7 +19,7 @@ class KinematicsModel(abc.ABC):
         pass
 
     @abc.abstractmethod
-    def forward_kinematics(self, robot_pose: RobotModelInput) -> Dict[str, LieGroup]:
+    def forward_kinematics(self, robot_pose: RobotModelInput) -> Dict[str, th.LieGroup]:
         pass
 
     @abc.abstractmethod
@@ -31,8 +31,8 @@ class IdentityModel(KinematicsModel):
     def __init__(self):
         super().__init__()
 
-    def forward_kinematics(self, robot_pose: RobotModelInput) -> Dict[str, LieGroup]:
-        if isinstance(robot_pose, Point2) or isinstance(robot_pose, Vector):
+    def forward_kinematics(self, robot_pose: RobotModelInput) -> Dict[str, th.LieGroup]:
+        if isinstance(robot_pose, th.Point2) or isinstance(robot_pose, th.Vector):
             assert robot_pose.dof() == 2
             return {"state": robot_pose}
         raise NotImplementedError(
@@ -58,7 +58,9 @@ class UrdfRobotModel(KinematicsModel):
 
         return quat_normalized
 
-    def forward_kinematics(self, joint_states: RobotModelInput) -> Dict[str, LieGroup]:
+    def forward_kinematics(
+        self, joint_states: RobotModelInput
+    ) -> Dict[str, th.LieGroup]:
         """Computes forward kinematics
         Args:
             joint_states: Vector of all joint angles
@@ -71,20 +73,20 @@ class UrdfRobotModel(KinematicsModel):
         # Parse input
         if type(joint_states) is torch.Tensor:
             joint_states_input = joint_states
-        elif type(joint_states) is Vector:
+        elif type(joint_states) is th.Vector:
             joint_states_input = joint_states.data
         else:
             raise Exception("Invalid input joint states data type.")
 
         # Compute forward kinematics for all links
-        link_poses: Dict[str, LieGroup] = {}
+        link_poses: Dict[str, th.LieGroup] = {}
         for link_name in self.drm_model.get_link_names():
             pos, quat = self.drm_model.compute_forward_kinematics(
                 joint_states_input, link_name
             )
             quat_processed = self._postprocess_quaternion(quat)
 
-            link_poses[link_name] = SE3(
+            link_poses[link_name] = th.SE3(
                 x_y_z_quaternion=torch.cat([pos, quat_processed], dim=-1)
             )
 

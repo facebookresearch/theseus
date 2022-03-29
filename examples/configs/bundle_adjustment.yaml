@@ -1,0 +1,26 @@
+seed: 1
+
+num_cameras: 10
+num_points: 200
+average_track_length: 8
+track_locality: 0.2
+
+inner_optim:
+  optimizer_cls: GaussNewton
+  max_iters: 10
+  step_size: 0.1
+  backward_mode: implicit
+  verbose: true
+  track_err_history: true
+  keep_step_size: true
+  regularize: true
+  ratio_known_cameras: 0.1
+  reg_w: 1e-4
+
+outer_optim:
+  lr: 0.1
+  num_epochs: 20
+
+hydra:
+  run:
+    dir: examples/outputs

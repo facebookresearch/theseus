@@ -150,7 +150,7 @@ def run_learning_loop(cfg):
     results = {}
     for epoch in range(cfg.train.num_epochs):
         results[epoch] = {}
-        logger.info(" ********************* EPOCH {epoch} *********************")
+        logger.info(f" ********************* EPOCH f{epoch} *********************")
         losses = []
         image_idx = 0
         for batch_idx, batch in enumerate(measurements):

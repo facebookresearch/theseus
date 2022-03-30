@@ -223,40 +223,14 @@ def get_tactile_initial_optim_vars(
     device: torch.device,
     time_steps: int,
 ):
-    inputs_ = {}
-    eff_captures_ = batch[1].to(device)
-    obj_captures_ = batch[2].to(device)
-
+    inputs = {}
+    eff_captures = batch[1].to(device)
+    obj_captures = batch[2].to(device)
     for step in range(time_steps):
-        eff_xyth_ = eff_captures_[:, step, :]
-        eff_xycs_ = torch.stack(
-            [
-                eff_xyth_[:, 0],
-                eff_xyth_[:, 1],
-                eff_xyth_[:, 2].cos(),
-                eff_xyth_[:, 2].sin(),
-            ],
-            dim=1,
-        )
+        inputs[f"obj_pose_{step}"] = th.SE2(x_y_theta=obj_captures[:, 0].clone()).data
+        inputs[f"eff_pose_{step}"] = th.SE2(x_y_theta=eff_captures[:, 0].clone()).data
 
-        obj_xyth_ = obj_captures_[:, step, :]
-        obj_xycs_ = torch.stack(
-            [
-                obj_xyth_[:, 0],
-                obj_xyth_[:, 1],
-                obj_xyth_[:, 2].cos(),
-                obj_xyth_[:, 2].sin(),
-            ],
-            dim=1,
-        )
-
-        # layer will route this to the optimization variables with the given name
-        inputs_[f"obj_pose_{step}"] = obj_xycs_.clone() + 0.0 * torch.cat(
-            [torch.randn((1, 2)), torch.zeros((1, 2))], dim=1
-        ).to(device)
-        inputs_[f"eff_pose_{step}"] = eff_xycs_.clone()
-
-    return inputs_
+    return inputs
 
 
 def update_tactile_pushing_inputs(

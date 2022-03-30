@@ -1,17 +1,24 @@
 import theseus as th
 
+x = th.Point2()
+y = th.Point2()
 
-def mypy_operations_check():
+z1: th.Point2 = x + y  # noqa: F841
+z2: th.Point2 = x - y  # noqa: F841
+z3: th.Point2 = x * y  # noqa: F841
+z4: th.Point2 = x / y  # noqa: F841
+z5: th.Point2 = -x  # noqa: F841
+z6: th.Point2 = x.cat(y)  # noqa: F841
+z7: th.Point2 = x.abs()  # noqa: F841
 
-    for point_cls in [th.Point2, th.Point3]:
 
-        x = point_cls()
-        y = point_cls()
+x1 = th.Point3()
+y1 = th.Point3()
 
-        z: point_cls = x + y  # noqa: F841
-        z: point_cls = x - y  # noqa: F841
-        z: point_cls = x * y  # noqa: F841
-        z: point_cls = x / y  # noqa: F841
-        z: point_cls = -x  # noqa: F841
-        z: point_cls = x.cat(y)  # noqa: F841
-        z: point_cls = x.abs()  # noqa: F841
+w1: th.Point3 = x1 + y1  # noqa: F841
+w2: th.Point3 = x1 - y1  # noqa: F841
+w3: th.Point3 = x1 * y1  # noqa: F841
+w4: th.Point3 = x1 / y1  # noqa: F841
+w5: th.Point3 = -x1  # noqa: F841
+w6: th.Point3 = x1.cat(y1)  # noqa: F841
+w7: th.Point3 = x1.abs()  # noqa: F841

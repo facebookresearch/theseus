@@ -37,11 +37,9 @@ class VariableDifference(CostFunction):
         return self.target.local(self.var)
 
     def jacobians(self) -> Tuple[List[torch.Tensor], torch.Tensor]:
-        return [
-            torch.eye(self.dim(), dtype=self.var.dtype)
-            .repeat(self.var.shape[0], 1, 1)
-            .to(self.var.device)
-        ], self.error()
+        Jlist: List[torch.Tensor] = []
+        self.target.local(self.var, jacobians=Jlist)
+        return [Jlist[1]], self.error()
 
     def dim(self) -> int:
         return self.var.dof()

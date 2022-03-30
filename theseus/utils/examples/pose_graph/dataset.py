@@ -28,7 +28,9 @@ class PoseGraphEdge:
 # This function reads a file in g2o formate and returns the number of of poses, initial
 # values and edges.
 # g2O format: https://github.com/RainerKuemmerle/g2o/wiki/File-format-slam-3d
-def read_3D_g2o_file(path: str) -> Tuple[int, List[th.SE3], List[PoseGraphEdge]]:
+def read_3D_g2o_file(
+    path: str, dtype: Optional[torch.dtype] = None
+) -> Tuple[int, List[th.SE3], List[PoseGraphEdge]]:
     with open(path, "r") as file:
         lines = file.readlines()
 
@@ -47,7 +49,7 @@ def read_3D_g2o_file(path: str) -> Tuple[int, List[th.SE3], List[PoseGraphEdge]]
 
                 x_y_z_quat = torch.from_numpy(
                     np.array([tokens[3:10]], dtype=np.float64)
-                )
+                ).to(dtype)
                 x_y_z_quat[3:] /= torch.norm(x_y_z_quat[3:])
                 relative_pose = th.SE3(
                     x_y_z_quaternion=x_y_z_quat, name="EDGE_SE3__{}".format(n)
@@ -56,6 +58,7 @@ def read_3D_g2o_file(path: str) -> Tuple[int, List[th.SE3], List[PoseGraphEdge]]
                 sel = [0, 6, 11, 15, 18, 20]
                 weight = th.Variable(
                     torch.from_numpy(np.array(tokens[10:], dtype=np.float64)[sel])
+                    .to(dtype)
                     .sqrt()
                     .view(1, -1)
                 )
@@ -74,7 +77,9 @@ def read_3D_g2o_file(path: str) -> Tuple[int, List[th.SE3], List[PoseGraphEdge]]
             elif tokens[0] == "VERTEX_SE3:QUAT":
                 i = int(tokens[1])
 
-                x_y_z_quat = torch.from_numpy(np.array([tokens[2:]], dtype=np.float64))
+                x_y_z_quat = torch.from_numpy(
+                    np.array([tokens[2:]], dtype=np.float64)
+                ).to(dtype)
                 x_y_z_quat[3:] /= torch.norm(x_y_z_quat[3:])
                 verts[i] = x_y_z_quat
 
@@ -96,7 +101,9 @@ def read_3D_g2o_file(path: str) -> Tuple[int, List[th.SE3], List[PoseGraphEdge]]
 # This function reads a file in g2o formate and returns the number of of poses, initial
 # values and edges
 # g2o format: https://github.com/RainerKuemmerle/g2o/wiki/File-Format-SLAM-2D
-def read_2D_g2o_file(path: str) -> Tuple[int, List[th.SE2], List[PoseGraphEdge]]:
+def read_2D_g2o_file(
+    path: str, dtype: Optional[torch.dtype] = None
+) -> Tuple[int, List[th.SE2], List[PoseGraphEdge]]:
     with open(path, "r") as file:
         lines = file.readlines()
 
@@ -113,7 +120,9 @@ def read_2D_g2o_file(path: str) -> Tuple[int, List[th.SE2], List[PoseGraphEdge]]
 
                 n = len(edges)
 
-                x_y_theta = torch.from_numpy(np.array([tokens[3:6]], dtype=np.float64))
+                x_y_theta = torch.from_numpy(
+                    np.array([tokens[3:6]], dtype=np.float64)
+                ).to(dtype)
                 relative_pose = th.SE2(
                     x_y_theta=x_y_theta, name="EDGE_SE2__{}".format(n)
                 )
@@ -121,6 +130,7 @@ def read_2D_g2o_file(path: str) -> Tuple[int, List[th.SE2], List[PoseGraphEdge]]
                 sel = [0, 3, 5]
                 weight = th.Variable(
                     torch.from_numpy(np.array(tokens[6:], dtype=np.float64)[sel])
+                    .to(dtype)
                     .sqrt()
                     .view(1, -1)
                 )
@@ -139,7 +149,9 @@ def read_2D_g2o_file(path: str) -> Tuple[int, List[th.SE2], List[PoseGraphEdge]]
             elif tokens[0] == "VERTEX_SE2:QUAT":
                 i = int(tokens[1])
 
-                x_y_theta = torch.from_numpy(np.array([tokens[2:]], dtype=np.float64))
+                x_y_theta = torch.from_numpy(
+                    np.array([tokens[2:]], dtype=np.float64)
+                ).to(dtype)
                 verts[i] = x_y_theta
 
                 num_vertices = max(num_vertices, i)

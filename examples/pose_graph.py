@@ -12,25 +12,13 @@ torch.manual_seed(1)
 
 file_path = "datasets/tinyGrid3D.g2o"
 
-num_verts, verts, edges = theg.pose_graph.read_3D_g2o_file(file_path)
-
-objective = th.Objective(torch.float64)
-
-for edge in edges:
-    cost_function = th.eb.Between(
-        verts[edge.i], verts[edge.j], edge.weight, edge.relative_pose
-    )
-    objective.add(cost_function)
-
-torch.manual_seed(1)
-
-file_path = "datasets/tinyGrid3D.g2o"
-
 th.SO3.SO3_EPS = 1e-6
 
-num_verts, verts, edges = theg.pose_graph.read_3D_g2o_file(file_path)
+num_verts, verts, edges = theg.pose_graph.read_3D_g2o_file(
+    file_path, dtype=torch.float32
+)
 
-objective = th.Objective(torch.float64)
+objective = th.Objective(torch.float32)
 
 for edge in edges:
     cost_func = th.eb.Between(
@@ -40,7 +28,7 @@ for edge in edges:
 
 pose_prior = th.eb.VariableDifference(
     var=verts[0],
-    cost_weight=th.ScaleCostWeight(torch.tensor(1e-6, dtype=torch.float64)),
+    cost_weight=th.ScaleCostWeight(torch.tensor(1e-6, dtype=torch.float32)),
     target=verts[0].copy(new_name=verts[0].name + "PRIOR"),
 )
 objective.add(pose_prior)

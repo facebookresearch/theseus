@@ -3,7 +3,7 @@
 # This source code is licensed under the MIT license found in the
 # LICENSE file in the root directory of this source tree.
 
-from typing import List, Optional, Tuple, cast
+from typing import List, Optional, Tuple, Union, cast
 
 import torch
 
@@ -78,6 +78,27 @@ class Point2(Vector):
             )
         )
 
+    def __add__(self, other: Vector) -> "Point2":
+        return cast(Point2, super().__add__(other))
+
+    def __sub__(self, other: Vector) -> "Point2":
+        return cast(Point2, super().__sub__(other))
+
+    def __mul__(self, other: Union["Vector", torch.Tensor]) -> "Point2":
+        return cast(Point2, super().__mul__(other))
+
+    def __truediv__(self, other: Union["Vector", torch.Tensor]) -> "Point2":
+        return cast(Point2, super().__truediv__(other))
+
+    def __neg__(self) -> "Point2":
+        return cast(Point2, super().__neg__())
+
+    def cat(self, vecs: Union["Vector", Tuple["Vector"], List["Vector"]]) -> "Point2":
+        return cast(Point2, super().cat(vecs))
+
+    def abs(self) -> "Point2":
+        return cast(Point2, super().abs())
+
     def x(self) -> torch.Tensor:
         return self[:, 0]
 
@@ -151,6 +172,27 @@ class Point3(Vector):
                 requires_grad=requires_grad,
             )
         )
+
+    def __add__(self, other: Vector) -> "Point3":
+        return cast(Point3, super().__add__(other))
+
+    def __sub__(self, other: Vector) -> "Point3":
+        return cast(Point3, super().__sub__(other))
+
+    def __mul__(self, other: Union["Vector", torch.Tensor]) -> "Point3":
+        return cast(Point3, super().__mul__(other))
+
+    def __truediv__(self, other: Union["Vector", torch.Tensor]) -> "Point3":
+        return cast(Point3, super().__truediv__(other))
+
+    def __neg__(self) -> "Point3":
+        return cast(Point3, super().__neg__())
+
+    def cat(self, vecs: Union["Vector", Tuple["Vector"], List["Vector"]]) -> "Point3":
+        return cast(Point3, super().cat(vecs))
+
+    def abs(self) -> "Point3":
+        return cast(Point3, super().abs())
 
     def x(self) -> torch.Tensor:
         return self[:, 0]

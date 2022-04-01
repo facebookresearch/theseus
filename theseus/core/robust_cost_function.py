@@ -42,7 +42,7 @@ class RobustCostFunction(th.CostFunction):
         weighted_jacobians, weighted_error = self.weighted_jacobians_error()
         squared_norm = torch.sum(weighted_error**2, dim=1, keepdim=True)
         loss_radius = torch.exp(self.log_loss_radius.data)
-        rescale = self.loss.linearize(squared_norm, loss_radius)
+        rescale = self.loss.linearize(squared_norm, loss_radius).sqrt()
 
         return [
             (rescale * jacobian.view(jacobian.shape[0], -1)).view(jacobian.shape[0])

@@ -348,7 +348,7 @@ class Objective:
                 for var in self.optim_vars:
                     old_data[var] = self.optim_vars[var].data
             self.update(input_data=input_data)
-        error_vector = torch.zeros(self.batch_size, self.dim()).to(
+        error_vector = torch.zeros(self.batch_size, len(self.cost_functions)).to(
             device=self.device, dtype=self.dtype
         )
         pos = 0

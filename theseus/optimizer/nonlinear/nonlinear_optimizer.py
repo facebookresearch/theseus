@@ -112,7 +112,7 @@ class NonlinearOptimizer(Optimizer, abc.ABC):
         self, track_best_solution: bool, track_err_history: bool, verbose: bool
     ) -> NonlinearOptimizerInfo:
         with torch.no_grad():
-            last_err = self.objective.error_squared_norm() / 2
+            last_err = self.objective.objective_value() / 2
         best_err = last_err.clone() if track_best_solution else None
         if track_err_history:
             err_history = (
@@ -267,7 +267,7 @@ class NonlinearOptimizer(Optimizer, abc.ABC):
 
             # check for convergence
             with torch.no_grad():
-                err = self.objective.error_squared_norm() / 2
+                err = self.objective.objective_value() / 2
                 self._update_info(info, it_, err, converged_indices)
                 if verbose:
                     print(

@@ -353,10 +353,8 @@ class Objective:
         )
         pos = 0
         for cost_function in self.cost_functions.values():
-            error_vector[
-                :, pos : pos + cost_function.dim()
-            ] = cost_function.weighted_error()
-            pos += cost_function.dim()
+            error_vector[:, pos : pos + 1] = cost_function.value()
+            pos += 1
         if not also_update:
             self.update(old_data)
         return error_vector
@@ -366,9 +364,7 @@ class Objective:
         input_data: Optional[Dict[str, torch.Tensor]] = None,
         also_update: bool = False,
     ) -> torch.Tensor:
-        return (self.error(input_data=input_data, also_update=also_update) ** 2).sum(
-            dim=1
-        )
+        return self.error(input_data=input_data, also_update=also_update).sum(dim=1)
 
     def copy(self) -> "Objective":
         new_objective = Objective()

@@ -348,13 +348,15 @@ class Objective:
                 for var in self.optim_vars:
                     old_data[var] = self.optim_vars[var].data
             self.update(input_data=input_data)
-        error_vector = torch.zeros(self.batch_size, len(self.cost_functions)).to(
+        error_vector = torch.zeros(self.batch_size, self.dim()).to(
             device=self.device, dtype=self.dtype
         )
         pos = 0
         for cost_function in self.cost_functions.values():
-            error_vector[:, pos : pos + 1] = cost_function.value()
-            pos += 1
+            error_vector[
+                :, pos : pos + cost_function.dim()
+            ] = cost_function.weighted_error()
+            pos += cost_function.dim()
         if not also_update:
             self.update(old_data)
         return error_vector
@@ -364,7 +366,40 @@ class Objective:
         input_data: Optional[Dict[str, torch.Tensor]] = None,
         also_update: bool = False,
     ) -> torch.Tensor:
-        return self.error(input_data=input_data, also_update=also_update).sum(dim=1)
+        return (self.error(input_data=input_data, also_update=also_update) ** 2).sum(
+            dim=1
+        )
+
+    def function_value(
+        self,
+        input_data: Optional[Dict[str, torch.Tensor]] = None,
+        also_update: bool = False,
+    ) -> torch.Tensor:
+        old_data = {}
+        if input_data is not None:
+            if not also_update:
+                for var in self.optim_vars:
+                    old_data[var] = self.optim_vars[var].data
+            self.update(input_data=input_data)
+        function_value_vector = torch.zeros(
+            self.batch_size, len(self.cost_functions)
+        ).to(device=self.device, dtype=self.dtype)
+        pos = 0
+        for cost_function in self.cost_functions.values():
+            function_value_vector[:, pos : pos + 1] = cost_function.function_value()
+            pos += 1
+        if not also_update:
+            self.update(old_data)
+        return function_value_vector
+
+    def objective_value(
+        self,
+        input_data: Optional[Dict[str, torch.Tensor]] = None,
+        also_update: bool = False,
+    ) -> torch.Tensor:
+        return self.function_value(input_data=input_data, also_update=also_update).sum(
+            dim=1
+        )
 
     def copy(self) -> "Objective":
         new_objective = Objective()

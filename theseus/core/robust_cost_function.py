@@ -9,16 +9,21 @@ import torch
 
 import theseus as th
 
-from .loss import Loss
+from .loss_function import LossFunction
 
 
 class RobustCostFunction(th.CostFunction):
     def __init__(
         self,
-        loss_function: Loss,
+        loss_function: LossFunction,
         log_loss_radius: th.Vector,
         cost_function: th.CostFunction,
     ):
+        if isinstance(cost_function, RobustCostFunction):
+            raise ValueError(
+                "{} is alreay a robust cost function.".format(cost_function.name)
+            )
+
         self.loss_function = loss_function
         self.cost_function = cost_function
         self.log_loss_radius = log_loss_radius
@@ -36,9 +41,9 @@ class RobustCostFunction(th.CostFunction):
         return self.cost_function.weighted_error()
 
     def weighted_jacobians_error(self) -> Tuple[List[torch.Tensor], torch.Tensor]:
-        return self.weighted_jacobians_error()
+        return self.cost_function.weighted_jacobians_error()
 
-    def value(self) -> torch.Tensor:
+    def function_value(self) -> torch.Tensor:
         weighted_error = self.weighted_error()
         squared_norm = torch.sum(weighted_error**2, dim=1, keepdim=True)
         loss_radius = torch.exp(self.log_loss_radius.data)

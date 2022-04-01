@@ -15,11 +15,11 @@ from .loss import Loss
 class RobustCostFunction(th.CostFunction):
     def __init__(
         self,
-        loss: Loss,
+        loss_function: Loss,
         log_loss_radius: th.Vector,
         cost_function: th.CostFunction,
     ):
-        self.loss = loss
+        self.loss_function = loss_function
         self.cost_function = cost_function
         self.log_loss_radius = log_loss_radius
         self._optim_vars_attr_names = self.cost_function._optim_vars_attr_names
@@ -32,17 +32,23 @@ class RobustCostFunction(th.CostFunction):
     def jacobians(self) -> Tuple[List[torch.Tensor], torch.Tensor]:
         return self.cost_function.jacobians()
 
+    def weighted_error(self) -> torch.Tensor:
+        return self.cost_function.weighted_error()
+
+    def weighted_jacobians_error(self) -> Tuple[List[torch.Tensor], torch.Tensor]:
+        return self.weighted_jacobians_error()
+
     def value(self) -> torch.Tensor:
         weighted_error = self.weighted_error()
         squared_norm = torch.sum(weighted_error**2, dim=1, keepdim=True)
         loss_radius = torch.exp(self.log_loss_radius.data)
-        return self.loss.evaluate(squared_norm, loss_radius)
+        return self.loss_function.evaluate(squared_norm, loss_radius)
 
     def rescaled_jacobians_error(self) -> Tuple[List[torch.Tensor], torch.Tensor]:
         weighted_jacobians, weighted_error = self.weighted_jacobians_error()
         squared_norm = torch.sum(weighted_error**2, dim=1, keepdim=True)
         loss_radius = torch.exp(self.log_loss_radius.data)
-        rescale = self.loss.linearize(squared_norm, loss_radius).sqrt()
+        rescale = self.loss_function.linearize(squared_norm, loss_radius).sqrt()
 
         return [
             (rescale * jacobian.view(jacobian.shape[0], -1)).view(jacobian.shape[0])

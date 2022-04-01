@@ -57,7 +57,7 @@ class CostFunction(TheseusFunction, abc.ABC):
         jacobian, err = self.jacobians()
         return self.weight.weight_jacobians_and_error(jacobian, err)
 
-    def value(self) -> torch.Tensor:
+    def function_value(self) -> torch.Tensor:
         weighted_error = self.weighted_error()
         return torch.sum(weighted_error**2, dim=1, keepdim=True)
 

@@ -57,6 +57,13 @@ class CostFunction(TheseusFunction, abc.ABC):
         jacobian, err = self.jacobians()
         return self.weight.weight_jacobians_and_error(jacobian, err)
 
+    def value(self) -> torch.Tensor:
+        weighted_error = self.weighted_error()
+        return torch.sum(weighted_error**2, dim=1, keepdim=True)
+
+    def rescaled_jacobians_error(self) -> Tuple[List[torch.Tensor], torch.Tensor]:
+        return self.weighted_jacobians_error()
+
     # Must copy everything
     @abc.abstractmethod
     def _copy_impl(self, new_name: Optional[str] = None) -> "CostFunction":

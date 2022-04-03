@@ -5,6 +5,11 @@
 
 from .core import (
     CostFunction,
+    RobustCostFunction,
+    RobustLoss,
+    TrivialLoss,
+    HuberLoss,
+    WelschLoss,
     CostWeight,
     DiagonalCostWeight,
     AutoDiffCostFunction,

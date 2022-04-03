@@ -7,7 +7,7 @@ from typing import List, Optional, Tuple, Union, cast
 
 import torch
 
-from theseus.core import CostFunction, CostWeight, Variable
+from theseus.core import CostFunction, CostWeight, LossFunction, Variable
 from theseus.geometry import SE2, OptionalJacobians, Point2
 from theseus.geometry.so2 import SO2
 
@@ -25,9 +25,10 @@ class QuasiStaticPushingPlanar(CostFunction):
         eff2: SE2,
         cost_weight: CostWeight,
         c_square: Union[Variable, torch.Tensor, float],
+        loss_function: Optional[LossFunction] = None,
         name: Optional[str] = None,
     ):
-        super().__init__(cost_weight, name=name)
+        super().__init__(cost_weight, loss_function=loss_function, name=name)
         self.obj1 = obj1
         self.obj2 = obj2
         self.eff1 = eff1
@@ -294,5 +295,6 @@ class QuasiStaticPushingPlanar(CostFunction):
             self.eff2.copy(),
             self.weight.copy(),
             self.c_square.copy(),
+            loss_function=self.loss_function.copy(),
             name=new_name,
         )

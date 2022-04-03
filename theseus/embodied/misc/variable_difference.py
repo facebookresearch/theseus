@@ -7,7 +7,7 @@ from typing import List, Optional, Tuple
 
 import torch
 
-from theseus import CostFunction, CostWeight
+from theseus import CostFunction, CostWeight, LossFunction
 from theseus.geometry import LieGroup
 
 
@@ -17,9 +17,10 @@ class VariableDifference(CostFunction):
         var: LieGroup,
         cost_weight: CostWeight,
         target: LieGroup,
+        loss_function: Optional[LossFunction] = None,
         name: Optional[str] = None,
     ):
-        super().__init__(cost_weight, name=name)
+        super().__init__(cost_weight, loss_function=loss_function, name=name)
         if not isinstance(var, target.__class__):
             raise ValueError(
                 "Variable for the VariableDifference inconsistent with the given target."
@@ -46,5 +47,9 @@ class VariableDifference(CostFunction):
 
     def _copy_impl(self, new_name: Optional[str] = None) -> "VariableDifference":
         return VariableDifference(  # type: ignore
-            self.var.copy(), self.weight.copy(), self.target.copy(), name=new_name
+            self.var.copy(),
+            self.weight.copy(),
+            self.target.copy(),
+            loss_function=self.loss_function.copy(),
+            name=new_name,
         )

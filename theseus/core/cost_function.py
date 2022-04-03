@@ -10,6 +10,7 @@ import torch
 import torch.autograd.functional as autogradF
 from typing_extensions import Protocol
 
+from theseus.core.loss_function import LossFunction, TrivialLoss
 from theseus.geometry import Manifold
 
 from .cost_weight import CostWeight, ScaleCostWeight
@@ -28,11 +29,16 @@ class CostFunction(TheseusFunction, abc.ABC):
         self,
         cost_weight: CostWeight,
         *args: Any,
+        loss_function: Optional[LossFunction] = None,
         name: Optional[str] = None,
         **kwargs: Any,
     ):
         super().__init__(name=name)
         self.weight = cost_weight
+        if loss_function is None:
+            loss_function = TrivialLoss()
+
+        self.loss_function = loss_function
 
     @abc.abstractmethod
     def error(self) -> torch.Tensor:
@@ -58,11 +64,11 @@ class CostFunction(TheseusFunction, abc.ABC):
         return self.weight.weight_jacobians_and_error(jacobian, err)
 
     def function_value(self) -> torch.Tensor:
-        weighted_error = self.weighted_error()
-        return torch.sum(weighted_error**2, dim=1, keepdim=True)
+        return self.loss_function.function_value(self.weighted_error())
 
-    def reweighted_jacobians_error(self) -> Tuple[List[torch.Tensor], torch.Tensor]:
-        return self.weighted_jacobians_error()
+    def rescaled_jacobians_error(self) -> Tuple[List[torch.Tensor], torch.Tensor]:
+        weighted_jacobians, weighted_error = self.weighted_jacobians_error()
+        return self.loss_function.rescale(weighted_jacobians, weighted_error)
 
     # Must copy everything
     @abc.abstractmethod
@@ -73,15 +79,18 @@ class CostFunction(TheseusFunction, abc.ABC):
     def copy(
         self, new_name: Optional[str] = None, keep_variable_names: bool = False
     ) -> "CostFunction":
-        return cast(
+        cost_func = cast(
             CostFunction,
             super().copy(new_name=new_name, keep_variable_names=keep_variable_names),
         )
+        cost_func.loss_function = self.loss_function.copy()
+        return cost_func
 
     # calls to() on the cost weight, variables and any internal tensors
     def to(self, *args, **kwargs):
         super().to(*args, **kwargs)
         self.weight.to(*args, **kwargs)
+        self.loss_function.to(*args, **kwargs)
 
 
 # Function protocol for learnable cost functions. `optim_vars` and `aux_vars` are

@@ -102,7 +102,7 @@ class SparseLinearization(Linearization):
 
         err_row_idx = 0
         for f_idx, cost_function in enumerate(self.objective):
-            jacobians, error = cost_function.reweighted_jacobians_error()
+            jacobians, error = cost_function.rescaled_jacobians_error()
             num_rows = cost_function.dim()
             row_slice = slice(err_row_idx, err_row_idx + num_rows)
 

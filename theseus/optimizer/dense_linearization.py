@@ -39,7 +39,7 @@ class DenseLinearization(Linearization):
             dtype=self.objective.dtype,
         )
         for cost_function in self.objective:
-            jacobians, error = cost_function.reweighted_jacobians_error()
+            jacobians, error = cost_function.rescaled_jacobians_error()
             num_rows = cost_function.dim()
             for var_idx_in_cost_function, var_jacobian in enumerate(jacobians):
                 var_idx_in_order = self.ordering.index_of(

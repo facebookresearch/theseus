@@ -11,14 +11,13 @@ import theseus.utils.examples as theg
 torch.manual_seed(1)
 
 file_path = "datasets/tinyGrid3D.g2o"
+dtype = torch.float64
 
 th.SO3.SO3_EPS = 1e-6
 
-num_verts, verts, edges = theg.pose_graph.read_3D_g2o_file(
-    file_path, dtype=torch.float32
-)
+num_verts, verts, edges = theg.pose_graph.read_3D_g2o_file(file_path, dtype=dtype)
 
-objective = th.Objective(torch.float32)
+objective = th.Objective(dtype)
 
 for edge in edges:
     cost_func = th.eb.Between(
@@ -28,7 +27,7 @@ for edge in edges:
 
 pose_prior = th.eb.VariableDifference(
     var=verts[0],
-    cost_weight=th.ScaleCostWeight(torch.tensor(1e-6, dtype=torch.float32)),
+    cost_weight=th.ScaleCostWeight(torch.tensor(1e-6, dtype=dtype)),
     target=verts[0].copy(new_name=verts[0].name + "PRIOR"),
 )
 objective.add(pose_prior)

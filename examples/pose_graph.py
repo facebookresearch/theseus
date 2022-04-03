@@ -20,24 +20,15 @@ num_verts, verts, edges = theg.pose_graph.read_3D_g2o_file(file_path, dtype=dtyp
 objective = th.Objective(dtype)
 
 for edge in edges:
-    cost_function = theg.RelativePoseError(
-        verts[edge.i], verts[edge.j], edge.relative_pose, edge.weight
+    loss_function = th.HuberLoss(
+        log_loss_radius=th.Vector(data=torch.tensor([[0]], dtype=dtype))
     )
-    objective.add(cost_function)
-
-torch.manual_seed(1)
-
-file_path = "datasets/tinyGrid3D.g2o"
-
-th.SO3.SO3_EPS = 1e-6
-
-num_verts, verts, edges = theg.pose_graph.read_3D_g2o_file(file_path)
-
-objective = th.Objective(torch.float64)
-
-for edge in edges:
-    cost_func = theg.RelativePoseError(
-        verts[edge.i], verts[edge.j], edge.relative_pose, edge.weight
+    cost_func = th.eb.Between(
+        verts[edge.i],
+        verts[edge.j],
+        edge.weight,
+        edge.relative_pose,
+        loss_function=loss_function,
     )
     objective.add(cost_func)
 

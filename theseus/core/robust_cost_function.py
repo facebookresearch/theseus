@@ -49,7 +49,7 @@ class RobustCostFunction(th.CostFunction):
         loss_radius = torch.exp(self.log_loss_radius.data)
         return self.loss_function.evaluate(squared_norm, loss_radius)
 
-    def rescaled_jacobians_error(self) -> Tuple[List[torch.Tensor], torch.Tensor]:
+    def reweighted_jacobians_error(self) -> Tuple[List[torch.Tensor], torch.Tensor]:
         weighted_jacobians, weighted_error = self.weighted_jacobians_error()
         squared_norm = torch.sum(weighted_error**2, dim=1, keepdim=True)
         loss_radius = torch.exp(self.log_loss_radius.data)

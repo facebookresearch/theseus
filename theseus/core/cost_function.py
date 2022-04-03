@@ -61,7 +61,7 @@ class CostFunction(TheseusFunction, abc.ABC):
         weighted_error = self.weighted_error()
         return torch.sum(weighted_error**2, dim=1, keepdim=True)
 
-    def rescaled_jacobians_error(self) -> Tuple[List[torch.Tensor], torch.Tensor]:
+    def reweighted_jacobians_error(self) -> Tuple[List[torch.Tensor], torch.Tensor]:
         return self.weighted_jacobians_error()
 
     # Must copy everything

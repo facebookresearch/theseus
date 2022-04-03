@@ -79,12 +79,10 @@ class CostFunction(TheseusFunction, abc.ABC):
     def copy(
         self, new_name: Optional[str] = None, keep_variable_names: bool = False
     ) -> "CostFunction":
-        cost_func = cast(
+        return cast(
             CostFunction,
             super().copy(new_name=new_name, keep_variable_names=keep_variable_names),
         )
-        cost_func.loss_function = self.loss_function.copy()
-        return cost_func
 
     # calls to() on the cost weight, variables and any internal tensors
     def to(self, *args, **kwargs):
@@ -117,13 +115,14 @@ class AutoDiffCostFunction(CostFunction):
         dim: int,
         cost_weight: Optional[CostWeight] = None,
         aux_vars: Optional[List[Variable]] = None,
+        loss_function: Optional[LossFunction] = None,
         name: Optional[str] = None,
         autograd_strict: bool = False,
         autograd_vectorize: bool = False,
     ):
         if cost_weight is None:
             cost_weight = ScaleCostWeight(1.0)
-        super().__init__(cost_weight, name=name)
+        super().__init__(cost_weight, loss_function=loss_function, name=name)
         # this avoids doing aux_vars=[], which is a bad default since [] is mutable
         aux_vars = aux_vars or []
 
@@ -208,6 +207,7 @@ class AutoDiffCostFunction(CostFunction):
             self._dim,
             aux_vars=[v.copy() for v in self.aux_vars],
             cost_weight=self.weight.copy(),
+            loss_function=self.loss_function.copy(),
             name=new_name,
         )
 

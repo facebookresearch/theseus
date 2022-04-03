@@ -7,7 +7,7 @@ from typing import List, Optional, Tuple
 
 import torch
 
-from theseus.core import CostFunction, CostWeight
+from theseus.core import CostFunction, CostWeight, LossFunction
 from theseus.geometry import LieGroup, between
 
 
@@ -18,9 +18,10 @@ class Between(CostFunction):
         v1: LieGroup,
         cost_weight: CostWeight,
         measurement: LieGroup,
+        loss_function: Optional[LossFunction] = None,
         name: Optional[str] = None,
     ):
-        super().__init__(cost_weight, name=name)
+        super().__init__(cost_weight, loss_function=loss_function, name=name)
         self.v0 = v0
         self.v1 = v1
         self.register_optim_vars(["v0", "v1"])
@@ -53,5 +54,6 @@ class Between(CostFunction):
             self.v1.copy(),
             self.weight.copy(),
             self.measurement.copy(),
+            loss_function=self.loss_function.copy(),
             name=new_name,
         )

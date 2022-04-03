@@ -7,7 +7,7 @@ from typing import List, Optional, Tuple
 
 import torch
 
-from theseus.core import CostFunction, CostWeight
+from theseus.core import CostFunction, CostWeight, LossFunction
 from theseus.geometry import LieGroup, between
 
 
@@ -20,6 +20,7 @@ class MovingFrameBetween(CostFunction):
         pose2: LieGroup,
         cost_weight: CostWeight,
         measurement: LieGroup,
+        loss_function: Optional[LossFunction] = None,
         name: Optional[str] = None,
     ):
         seen_classes = set(
@@ -28,7 +29,7 @@ class MovingFrameBetween(CostFunction):
         if len(seen_classes) > 1:
             raise ValueError("Inconsistent types between input variables.")
 
-        super().__init__(cost_weight, name=name)
+        super().__init__(cost_weight, loss_function=loss_function, name=name)
         self.frame1 = frame1
         self.frame2 = frame2
         self.pose1 = pose1
@@ -73,5 +74,6 @@ class MovingFrameBetween(CostFunction):
             self.pose2.copy(),
             self.weight.copy(),
             self.measurement.copy(),
+            loss_function=self.loss_function.copy(),
             name=new_name,
         )

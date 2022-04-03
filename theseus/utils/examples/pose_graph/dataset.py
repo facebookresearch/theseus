@@ -47,8 +47,8 @@ def read_3D_g2o_file(path: str) -> Tuple[int, List[th.SE3], List[PoseGraphEdge]]
 
                 x_y_z_quat = torch.from_numpy(
                     np.array([tokens[3:10]], dtype=np.float64)
-                )
-                x_y_z_quat[3:] /= torch.norm(x_y_z_quat[3:])
+                ).to(dtype)
+                x_y_z_quat[:, 3:] /= torch.norm(x_y_z_quat[:, 3:], dim=1)
                 relative_pose = th.SE3(
                     x_y_z_quaternion=x_y_z_quat, name="EDGE_SE3__{}".format(n)
                 )
@@ -74,8 +74,10 @@ def read_3D_g2o_file(path: str) -> Tuple[int, List[th.SE3], List[PoseGraphEdge]]
             elif tokens[0] == "VERTEX_SE3:QUAT":
                 i = int(tokens[1])
 
-                x_y_z_quat = torch.from_numpy(np.array([tokens[2:]], dtype=np.float64))
-                x_y_z_quat[3:] /= torch.norm(x_y_z_quat[3:])
+                x_y_z_quat = torch.from_numpy(
+                    np.array([tokens[2:]], dtype=np.float64)
+                ).to(dtype)
+                x_y_z_quat[:, 3:] /= torch.norm(x_y_z_quat[:, 3:], dim=1)
                 verts[i] = x_y_z_quat
 
                 num_vertices = max(num_vertices, i)

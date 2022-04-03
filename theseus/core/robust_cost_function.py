@@ -29,8 +29,12 @@ class RobustCostFunction(CostFunction):
         self.robust_loss = robust_loss
         self.cost_function = cost_function
         self.log_loss_radius = log_loss_radius
-        self._optim_vars_attr_names = self.cost_function._optim_vars_attr_names
-        self._aux_vars_attr_names = self.cost_function._aux_vars_attr_names
+        self.register_optim_vars(self.cost_function._optim_vars_attr_names)
+        for attr in self._optim_vars_attr_names:
+            setattr(self, attr, getattr(self.cost_function, attr))
+        self.register_aux_vars(self.cost_function._aux_vars_attr_names)
+        for attr in self._aux_vars_attr_names:
+            setattr(self, attr, getattr(self.cost_function, attr))
         self.register_aux_var("log_loss_radius")
 
     def error(self) -> torch.Tensor:
@@ -61,7 +65,7 @@ class RobustCostFunction(CostFunction):
         rescale = self.robust_loss.linearize(squared_norm, loss_radius).sqrt()
 
         return [
-            (rescale * jacobian.view(jacobian.shape[0], -1)).view(jacobian.shape[0])
+            (rescale * jacobian.view(jacobian.shape[0], -1)).view(jacobian.shape)
             for jacobian in weighted_jacobians
         ], rescale * weighted_error
 

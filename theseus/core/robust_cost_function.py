@@ -9,13 +9,13 @@ import torch
 
 import theseus as th
 
-from .loss_function import LossFunction
+from .robust_loss import RobustLoss
 
 
 class RobustCostFunction(th.CostFunction):
     def __init__(
         self,
-        loss_function: LossFunction,
+        loss_function: RobustLoss,
         log_loss_radius: th.Vector,
         cost_function: th.CostFunction,
     ):

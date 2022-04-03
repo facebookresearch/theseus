@@ -112,7 +112,9 @@ class HuberLoss(RobustLoss):
 
     def evaluate(self, s: torch.Tensor) -> torch.Tensor:
         radius = self.log_loss_radius.data.exp()
-        return torch.min(s, 2 * torch.sqrt(radius * s) - radius)
+        return torch.where(
+            s > radius, 2 * torch.sqrt(radius * s.max(radius)) - radius, s
+        )
 
     def linearize(self, s: torch.Tensor) -> torch.Tensor:
         radius = self.log_loss_radius.data.exp()

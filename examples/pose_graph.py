@@ -11,38 +11,26 @@ import theseus.utils.examples as theg
 torch.manual_seed(1)
 
 file_path = "datasets/tinyGrid3D.g2o"
-
-num_verts, verts, edges = theg.pose_graph.read_3D_g2o_file(file_path)
-
-objective = th.Objective(torch.float64)
-
-for edge in edges:
-    cost_function = theg.RelativePoseError(
-        verts[edge.i], verts[edge.j], edge.relative_pose, edge.weight
-    )
-    objective.add(cost_function)
-
-torch.manual_seed(1)
-
-file_path = "datasets/tinyGrid3D.g2o"
+dtype = torch.float64
 
 th.SO3.SO3_EPS = 1e-6
 
-num_verts, verts, edges = theg.pose_graph.read_3D_g2o_file(file_path)
+num_verts, verts, edges = theg.pose_graph.read_3D_g2o_file(file_path, dtype=dtype)
 
-objective = th.Objective(torch.float64)
+objective = th.Objective(dtype)
 
 for edge in edges:
-    cost_func = theg.RelativePoseError(
-        verts[edge.i], verts[edge.j], edge.relative_pose, edge.weight
+    cost_func = th.eb.Between(
+        verts[edge.i], verts[edge.j], edge.weight, edge.relative_pose
     )
     objective.add(cost_func)
 
-objective.add(
-    theg.PosePriorError(
-        pose=verts[0], pose_prior=verts[0].copy(new_name=verts[0].name + "PRIOR")
-    )
+pose_prior = th.eb.VariableDifference(
+    var=verts[0],
+    cost_weight=th.ScaleCostWeight(torch.tensor(1e-6, dtype=dtype)),
+    target=verts[0].copy(new_name=verts[0].name + "PRIOR"),
 )
+objective.add(pose_prior)
 
 optimizer = th.LevenbergMarquardt(  # GaussNewton(
     objective,

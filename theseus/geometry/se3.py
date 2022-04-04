@@ -22,12 +22,13 @@ class SE3(LieGroup):
         data: Optional[torch.Tensor] = None,
         name: Optional[str] = None,
         dtype: Optional[torch.dtype] = None,
+        requires_check: bool = True,
     ):
         if x_y_z_quaternion is not None and data is not None:
             raise ValueError("Please provide only one of x_y_z_quaternion or data.")
         if x_y_z_quaternion is not None:
             dtype = x_y_z_quaternion.dtype
-        if data is not None:
+        if data is not None and requires_check:
             self._SE3_matrix_check(data)
         super().__init__(data=data, name=name, dtype=dtype)
         if x_y_z_quaternion is not None:
@@ -463,7 +464,8 @@ class SE3(LieGroup):
         rotT = self.data[:, :3, :3].transpose(1, 2)
         ret[:, :, :3] = rotT
         ret[:, :, 3] = -(rotT @ self.data[:, :3, 3].unsqueeze(2)).view(-1, 3)
-        return SE3(data=ret)
+        # if self.data is a valid SE(3), so is the inverse
+        return SE3(data=ret, requires_check=False)
 
     def to_matrix(self) -> torch.Tensor:
         ret = torch.zeros(self.shape[0], 4, 4).to(dtype=self.dtype, device=self.device)
@@ -505,7 +507,8 @@ class SE3(LieGroup):
         return torch.cat((matrix[:, :3, 3], SO3.vee(matrix[:, :3, :3])), dim=1)
 
     def _copy_impl(self, new_name: Optional[str] = None) -> "SE3":
-        return SE3(data=self.data.clone(), name=new_name)
+        # if self.data is a valid SE(3), so is the copy
+        return SE3(data=self.data.clone(), name=new_name, requires_check=False)
 
     # only added to avoid casting downstream
     def copy(self, new_name: Optional[str] = None) -> "SE3":

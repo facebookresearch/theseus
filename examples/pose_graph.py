@@ -19,10 +19,12 @@ num_verts, verts, edges = theg.pose_graph.read_3D_g2o_file(file_path, dtype=dtyp
 
 objective = th.Objective(dtype)
 
+log_loss_radius = th.Vector(
+    data=torch.tensor([[0]], dtype=dtype), name="log_loss_radius"
+)
+loss_function = th.HuberLoss(log_loss_radius=log_loss_radius, name="huber_loss")
+
 for edge in edges:
-    loss_function = th.HuberLoss(
-        log_loss_radius=th.Vector(data=torch.tensor([[0]], dtype=dtype))
-    )
     cost_func = th.eb.Between(
         verts[edge.i],
         verts[edge.j],

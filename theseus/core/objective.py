@@ -371,7 +371,7 @@ class Objective:
         )
 
     def copy(self) -> "Objective":
-        new_objective = Objective()
+        new_objective = Objective(dtype=self.dtype)
 
         # First copy all individual cost weights
         old_to_new_cost_weight_map: Dict[CostWeight, CostWeight] = {}

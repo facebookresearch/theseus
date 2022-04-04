@@ -13,6 +13,8 @@ torch.manual_seed(1)
 file_path = "datasets/tinyGrid3D.g2o"
 dtype = torch.float64
 
+th.SO3.SO3_EPS = 1e-6
+
 num_verts, verts, edges = theg.pose_graph.read_3D_g2o_file(file_path, dtype=dtype)
 
 objective = th.Objective(dtype)
@@ -37,6 +39,7 @@ pose_prior = th.eb.VariableDifference(
     cost_weight=th.ScaleCostWeight(torch.tensor(1e-6, dtype=dtype)),
     target=verts[0].copy(new_name=verts[0].name + "PRIOR"),
 )
+objective.add(pose_prior)
 
 optimizer = th.LevenbergMarquardt(  # GaussNewton(
     objective,

@@ -58,6 +58,7 @@ def read_3D_g2o_file(
                 sel = [0, 6, 11, 15, 18, 20]
                 weight = th.Variable(
                     torch.from_numpy(np.array(tokens[10:], dtype=np.float64)[sel])
+                    .to(dtype)
                     .sqrt()
                     .view(1, -1)
                 )
@@ -119,7 +120,9 @@ def read_2D_g2o_file(
 
                 n = len(edges)
 
-                x_y_theta = torch.from_numpy(np.array([tokens[3:6]], dtype=np.float64))
+                x_y_theta = torch.from_numpy(
+                    np.array([tokens[3:6]], dtype=np.float64)
+                ).to(dtype)
                 relative_pose = th.SE2(
                     x_y_theta=x_y_theta, name="EDGE_SE2__{}".format(n)
                 )
@@ -127,6 +130,7 @@ def read_2D_g2o_file(
                 sel = [0, 3, 5]
                 weight = th.Variable(
                     torch.from_numpy(np.array(tokens[6:], dtype=np.float64)[sel])
+                    .to(dtype)
                     .sqrt()
                     .view(1, -1)
                 )
@@ -145,7 +149,9 @@ def read_2D_g2o_file(
             elif tokens[0] == "VERTEX_SE2:QUAT":
                 i = int(tokens[1])
 
-                x_y_theta = torch.from_numpy(np.array([tokens[2:]], dtype=np.float64))
+                x_y_theta = torch.from_numpy(
+                    np.array([tokens[2:]], dtype=np.float64)
+                ).to(dtype)
                 verts[i] = x_y_theta
 
                 num_vertices = max(num_vertices, i)

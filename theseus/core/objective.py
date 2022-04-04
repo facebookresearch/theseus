@@ -191,19 +191,18 @@ class Objective:
 
         if cost_function.loss_function not in self.cost_functions_for_loss_functions:
             # ----- Book-keeping for the loss function ------- #
-            # adds information about the variables in this cost function's weight
+            # adds information about the variables in this cost function's loss function
             self._add_function_variables(
                 cost_function.loss_function, optim_vars=True, is_loss_function=True
             )
-
-            # adds information about the auxiliary variables in this cost function's weight
+            # adds information about the auxiliary variables in this cost function's loss function
             self._add_function_variables(
                 cost_function.loss_function, optim_vars=False, is_loss_function=True
             )
 
             self.cost_functions_for_loss_functions[cost_function.loss_function] = []
 
-            if cost_function.weight.num_optim_vars() > 0:
+            if cost_function.loss_function.num_optim_vars() > 0:
                 warnings.warn(
                     f"The loss function associated to {cost_function.name} receives one "
                     "or more optimization variables. Differentiating loss functions "
@@ -330,7 +329,7 @@ class Objective:
                 self._erase_function_variables(
                     loss_function, optim_vars=False, is_loss_function=True
                 )
-                del self.cost_functions_for_loss_functions[loss_function][cost_fn_idx]
+                del self.cost_functions_for_loss_functions[loss_function]
 
             # finally, delete the cost function
             del self.cost_functions[name]
@@ -529,7 +528,7 @@ class Objective:
             # LossFunction
             for i, var in enumerate(cost_function.loss_function.optim_vars):
                 if var.name in new_objective.loss_function_optim_vars:
-                    cost_function.weight.set_optim_var_at(
+                    cost_function.loss_function.set_optim_var_at(
                         i, new_objective.loss_function_optim_vars[var.name]
                     )
             for i, aux_var in enumerate(cost_function.loss_function.aux_vars):
@@ -579,6 +578,14 @@ class Objective:
                 warnings.warn(
                     "Updated a variable declared as optimization, but it is "
                     "only associated to cost weights and not to any cost functions. "
+                    "Theseus optimizers will only update optimization variables "
+                    "that are associated to one or more cost functions."
+                )
+            elif var_name in self.loss_function_optim_vars:
+                self.loss_function_optim_vars[var_name].update(data)
+                warnings.warn(
+                    "Updated a variable declared as optimization, but it is "
+                    "only associated to loss functions and not to any cost functions. "
                     "Theseus optimizers will only update optimization variables "
                     "that are associated to one or more cost functions."
                 )

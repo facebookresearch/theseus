@@ -220,8 +220,8 @@ class PoseGraphDataset:
         generator: Optional[torch.Generator] = None,
         dtype: Optional[torch.dtype] = None,
     ) -> Tuple["PoseGraphDataset", List[bool]]:
-        poses = list()
-        gt_poses = list()
+        poses: List[th.SE3] = list()
+        gt_poses: List[th.SE3] = list()
         edges = list()
         inliers = list()
 
@@ -308,6 +308,18 @@ class PoseGraphDataset:
                 edges.append(
                     PoseGraphEdge(i, j, relative_pose=relative_pose, weight=weight)
                 )
+
+        for i in range(len(poses)):
+            noise_pose = th.SE3.exp_map(
+                torch.cat(
+                    [
+                        rotation_noise * (2 * torch.rand(1, 3, dtype=dtype) - 1),
+                        translation_noise * (2.0 * torch.rand(1, 3, dtype=dtype) - 1),
+                    ],
+                    dim=1,
+                )
+            )
+            poses[i].data = gt_poses[i].compose(noise_pose).data
 
         return PoseGraphDataset(poses, edges, gt_poses), inliers
 

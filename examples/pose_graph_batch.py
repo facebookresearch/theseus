@@ -5,14 +5,14 @@
 
 import logging
 
-# import os
+import os
 import pathlib
 
-# import random
+import random
 import time
 from typing import Dict, List, Type, cast
 
-# import hydra
+import hydra
 import numpy as np
 import omegaconf
 import torch
@@ -32,6 +32,15 @@ th.SO3.SO3_EPS = 1e-6
 
 # Logger
 log = logging.getLogger(__name__)
+
+
+def print_histogram(
+    pg: theg.PoseGraphDataset, var_dict: Dict[str, torch.Tensor], msg: str
+):
+    log.info(msg)
+    histogram = theg.pg_histogram(poses=pg.poses, edges=pg.edges)
+    for line in histogram.split("\n"):
+        log.info(line)
 
 
 def get_batch(
@@ -166,7 +175,7 @@ def run(cfg: omegaconf.OmegaConf, results_path: pathlib.Path):
         pose_loss_ref = pose_loss(pg, pose_vars).item()
     log.info(f"POSE LOSS (no learning):  {pose_loss_ref: .3f}")
 
-    # print_histogram(ba, theseus_inputs, "Input histogram:")
+    print_histogram(pg, theseus_inputs, "Input histogram:")
 
     for epoch in range(num_epochs):
         log.info(f" ******************* EPOCH {epoch} ******************* ")
@@ -190,7 +199,7 @@ def run(cfg: omegaconf.OmegaConf, results_path: pathlib.Path):
         loss_value = torch.sum(loss.detach()).item()
         end_time = time.time_ns()
 
-        # print_histogram(ba, theseus_outputs, "Output histogram:")
+        print_histogram(pg, theseus_outputs, "Output histogram:")
         log.info(
             f"Epoch: {epoch} Loss: {loss_value} "
             f"Kernel Radius: exp({loss_radius_tensor.data.item()})="
@@ -207,3 +216,17 @@ def run(cfg: omegaconf.OmegaConf, results_path: pathlib.Path):
             loss_value,
             end_time - start_time,
         )
+
+
+@hydra.main(config_path="./configs/", config_name="pose_graph")
+def main(cfg):
+    torch.manual_seed(cfg.seed)
+    np.random.seed(cfg.seed)
+    random.seed(cfg.seed)
+
+    results_path = pathlib.Path(os.getcwd())
+    run(cfg, results_path)
+
+
+if __name__ == "__main__":
+    main()

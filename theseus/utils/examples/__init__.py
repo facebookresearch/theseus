@@ -53,4 +53,5 @@ from .pose_graph import (
     PoseGraphEdge,
     PosePriorError,
     RelativePoseError,
+    pg_histogram,
 )

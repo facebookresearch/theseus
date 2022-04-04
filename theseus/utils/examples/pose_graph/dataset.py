@@ -182,6 +182,24 @@ class PoseGraphDataset:
         _, poses, edges = read_2D_g2o_file(path, dtype)
         return PoseGraphDataset(poses, edges)
 
+    def histogram(self) -> str:
+        buckets = np.zeros(11)
+        for edge in self.edges:
+            error = self.poses[edge.j].local(
+                self.poses[edge.i].compose(edge.relative_pose)
+            )
+            error_norm = float(error.norm())
+            idx = min(int(10 * error_norm), len(buckets) - 1)
+            buckets[idx] += 1
+        max_buckets = max(buckets)
+        hist_str = ""
+        for i in range(len(buckets)):
+            bi = buckets[i]
+            label = f"{i}-{i+1}" if i + 1 < len(buckets) else f"{i}+"
+            barlen = round(bi * 80 / max_buckets)
+            hist_str += f"{label}: {'#' * barlen} {bi}\n"
+        return hist_str
+
     @staticmethod
     def generate_synthetic_3D(
         num_poses: int,
@@ -282,3 +300,10 @@ class PoseGraphDataset:
                 )
 
         return PoseGraphDataset(poses, edges, gt_poses), inliers
+
+
+def pg_histogram(
+    poses: Union[List[th.SE2], List[th.SE3]], edges: List[PoseGraphEdge]
+) -> str:
+    pg = PoseGraphDataset(poses=poses, edges=edges)
+    return pg.histogram()

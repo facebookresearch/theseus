@@ -9,6 +9,7 @@ from typing import Dict, List, Optional, Sequence, Union
 
 import torch
 
+from theseus.core.loss_function import LossFunction
 from theseus.core.theseus_function import TheseusFunction
 from theseus.geometry.manifold import Manifold
 
@@ -27,6 +28,10 @@ class Objective:
         # that were registered when adding cost weights.
         self.cost_weight_optim_vars: OrderedDict[str, Manifold] = OrderedDict()
 
+        # maps variable names to variables objects, for optimization variables
+        # that were registered when adding loss functions.
+        self.loss_function_optim_vars: OrderedDict[str, Manifold] = OrderedDict()
+
         # maps aux. variable names to the container objects
         self.aux_vars: OrderedDict[str, Variable] = OrderedDict()
 
@@ -40,6 +45,13 @@ class Objective:
         # this is used when deleting cost function to check if the cost weight
         # variables can be deleted as well (when no other function uses them)
         self.cost_functions_for_weights: Dict[CostWeight, List[CostFunction]] = {}
+
+        # maps loss functions to the cost functions that use them
+        # this is used when deleting cost function to check if the cost weight
+        # variables can be deleted as well (when no other function uses them)
+        self.cost_functions_for_loss_functions: Dict[
+            LossFunction, List[CostFunction]
+        ] = {}
 
         # ---- The following two methods are used just to get info from
         # ---- the objective, they don't affect the optimization logic.
@@ -66,14 +78,18 @@ class Objective:
         function: TheseusFunction,
         optim_vars: bool = True,
         is_cost_weight: bool = False,
+        is_loss_function: bool = False,
     ):
 
         if optim_vars:
             function_vars = function.optim_vars
             self_var_to_fn_map = self.functions_for_optim_vars
-            self_vars_of_this_type = (
-                self.cost_weight_optim_vars if is_cost_weight else self.optim_vars
-            )
+            if is_cost_weight:
+                self_vars_of_this_type = self.cost_weight_optim_vars
+            elif is_loss_function:
+                self_vars_of_this_type = self.loss_function_optim_vars
+            else:
+                self_vars_of_this_type = self.optim_vars
         else:
             function_vars = function.aux_vars  # type: ignore
             self_var_to_fn_map = self.functions_for_aux_vars  # type: ignore
@@ -104,7 +120,7 @@ class Objective:
                 self_var_to_fn_map[variable] = []
 
             # add to either self.optim_vars,
-            # self.cost_weight_optim_vars or self.aux_vars
+            # self.cost_weight_optim_vars, self.loss_function_optim_vars or self.aux_vars
             self_vars_of_this_type[variable.name] = variable
 
             # add to list of functions connected to this variable
@@ -173,6 +189,36 @@ class Objective:
 
         self.cost_functions_for_weights[cost_function.weight].append(cost_function)
 
+        if cost_function.loss_function not in self.cost_functions_for_loss_functions:
+            # ----- Book-keeping for the loss function ------- #
+            # adds information about the variables in this cost function's weight
+            self._add_function_variables(
+                cost_function.loss_function, optim_vars=True, is_loss_function=True
+            )
+
+            # adds information about the auxiliary variables in this cost function's weight
+            self._add_function_variables(
+                cost_function.loss_function, optim_vars=False, is_loss_function=True
+            )
+
+            self.cost_functions_for_loss_functions[cost_function.loss_function] = []
+
+            if cost_function.weight.num_optim_vars() > 0:
+                warnings.warn(
+                    f"The loss function associated to {cost_function.name} receives one "
+                    "or more optimization variables. Differentiating loss functions "
+                    "with respect to optimization variables is not currently "
+                    "supported, thus jacobians computed by our optimizers will be "
+                    "incorrect. You may want to consider moving the loss function computation "
+                    "inside the cost function, so that the loss function only receives "
+                    "auxiliary variables.",
+                    RuntimeWarning,
+                )
+
+        self.cost_functions_for_loss_functions[cost_function.loss_function].append(
+            cost_function
+        )
+
         if self.optim_vars.keys() & self.aux_vars.keys():
             raise ValueError(
                 "Objective does not support a variable being both "
@@ -212,12 +258,16 @@ class Objective:
         function: TheseusFunction,
         optim_vars: bool = True,
         is_cost_weight: bool = False,
+        is_loss_function: bool = False,
     ):
         if optim_vars:
             fn_var_list = function.optim_vars
-            self_vars_of_this_type = (
-                self.cost_weight_optim_vars if is_cost_weight else self.optim_vars
-            )
+            if is_cost_weight:
+                self_vars_of_this_type = self.cost_weight_optim_vars
+            elif is_loss_function:
+                self_vars_of_this_type = self.loss_function_optim_vars
+            else:
+                self_vars_of_this_type = self.optim_vars
             self_var_to_fn_map = self.functions_for_optim_vars
         else:
             fn_var_list = function.aux_vars  # type: ignore
@@ -263,6 +313,24 @@ class Objective:
                     cost_weight, optim_vars=False, is_cost_weight=True
                 )
                 del self.cost_functions_for_weights[cost_weight]
+
+            # delete cost function from list of cost functions connected to its loss function
+            loss_function = cost_function.loss_function
+            cost_fn_idx = self.cost_functions_for_loss_functions[loss_function].index(
+                cost_function
+            )
+            del self.cost_functions_for_loss_functions[loss_function][cost_fn_idx]
+
+            # No more cost functions associated to this weight, so can also delete
+            if len(self.cost_functions_for_loss_functions[loss_function]) == 0:
+                # erase its variables (if needed)
+                self._erase_function_variables(
+                    loss_function, optim_vars=True, is_loss_function=True
+                )
+                self._erase_function_variables(
+                    loss_function, optim_vars=False, is_loss_function=True
+                )
+                del self.cost_functions_for_loss_functions[loss_function][cost_fn_idx]
 
             # finally, delete the cost function
             del self.cost_functions[name]
@@ -412,6 +480,14 @@ class Objective:
             )
             old_to_new_cost_weight_map[cost_weight] = new_cost_weight
 
+        # Then copy all individual loss functions
+        old_to_new_loss_function_map: Dict[LossFunction, LossFunction] = {}
+        for loss_function in self.cost_functions_for_loss_functions:
+            new_loss_function = loss_function.copy(
+                new_name=loss_function.name, keep_variable_names=True
+            )
+            old_to_new_loss_function_map[loss_function] = new_loss_function
+
         # Now copy the cost functions and assign the corresponding cost weight copy
         new_cost_functions: List[CostFunction] = []
         for cost_function in self.cost_functions.values():
@@ -420,6 +496,9 @@ class Objective:
             )
             # we assign the allocated weight copies to avoid saving duplicates
             new_cost_function.weight = old_to_new_cost_weight_map[cost_function.weight]
+            new_cost_function.loss_function = old_to_new_loss_function_map[
+                cost_function.loss_function
+            ]
             new_cost_functions.append(new_cost_function)
 
         # Handle case where a variable is copied in 2+ cost functions or cost weights,
@@ -447,6 +526,18 @@ class Objective:
                     cost_function.weight.set_aux_var_at(
                         i, new_objective.aux_vars[aux_var.name]
                     )
+            # LossFunction
+            for i, var in enumerate(cost_function.loss_function.optim_vars):
+                if var.name in new_objective.loss_function_optim_vars:
+                    cost_function.weight.set_optim_var_at(
+                        i, new_objective.loss_function_optim_vars[var.name]
+                    )
+            for i, aux_var in enumerate(cost_function.loss_function.aux_vars):
+                if new_objective.has_aux_var(aux_var.name):
+                    cost_function.loss_function.set_aux_var_at(
+                        i, new_objective.aux_vars[aux_var.name]
+                    )
+
             new_objective.add(cost_function)
         return new_objective
 

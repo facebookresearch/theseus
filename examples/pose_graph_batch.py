@@ -163,7 +163,7 @@ def run(cfg: omegaconf.OmegaConf, results_path: pathlib.Path):
     orig_poses = {pose.name: pose.data.clone() for pose in pg.poses}
 
     # Outer optimization loop
-    loss_radius_tensor = torch.nn.Parameter(torch.tensor([3.0], dtype=torch.float64))
+    loss_radius_tensor = torch.nn.Parameter(torch.tensor([1.0], dtype=torch.float64))
     model_optimizer = torch.optim.Adam([loss_radius_tensor], lr=cfg.outer_optim.lr)
 
     num_epochs = cfg.outer_optim.num_epochs

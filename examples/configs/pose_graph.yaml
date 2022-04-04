@@ -4,11 +4,11 @@ num_poses: 100
 rotation_noise: 0.05
 translation_noise: 0.02
 loop_closure_ratio: 0.2
-loop_closure_outlier_ratio: 0.05
+loop_closure_outlier_ratio: 0.25
 
 
 inner_optim:
-  optimizer_cls: GaussNewton
+  optimizer_cls: LevenbergMarquardt
   max_iters: 10
   step_size: 0.1
   backward_mode: implicit
@@ -17,7 +17,7 @@ inner_optim:
   keep_step_size: true
   regularize: true
   ratio_known_poses: 0.1
-  reg_w: 1e-4
+  reg_w: 1e-3
 
 outer_optim:
   lr: 0.1

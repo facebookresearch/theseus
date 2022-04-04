@@ -13,8 +13,6 @@ torch.manual_seed(1)
 file_path = "datasets/tinyGrid3D.g2o"
 dtype = torch.float64
 
-num_verts, verts, edges = theg.pose_graph.read_3D_g2o_file(file_path)
-
 num_verts, verts, edges = theg.pose_graph.read_3D_g2o_file(file_path, dtype=dtype)
 
 objective = th.Objective(dtype)

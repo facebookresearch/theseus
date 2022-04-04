@@ -50,6 +50,7 @@ except ModuleNotFoundError:
 
 
 from .pose_graph import (
+    PoseGraphDataset,
     PoseGraphEdge,
     PosePriorError,
     RelativePoseError,

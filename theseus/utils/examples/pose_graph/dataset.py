@@ -262,7 +262,7 @@ class PoseGraphDataset:
 
             if np.random.rand(1) <= loop_closure_ratio and n - 1 > 0:
                 i = np.random.randint(n - 1)
-                j = n - 1
+                j = n
 
                 gt_relative_pose = cast(
                     th.SE3, gt_poses[i].inverse().compose(gt_poses[j])

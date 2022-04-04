@@ -249,7 +249,13 @@ class NonlinearOptimizer(Optimizer, abc.ABC):
                     return info
 
             if truncated_grad_loop:
-                step_size = 1.0
+                # This is a "secret" option that is currently being tested in the
+                # context of implicit differentiation. Might be added as a supported
+                # kwarg in the future with a different name, or removed altogether.
+                if "__keep_final_step_size__" in kwargs:
+                    step_size = self.params.step_size
+                else:
+                    step_size = 1.0
                 force_update = True
             else:
                 step_size = self.params.step_size

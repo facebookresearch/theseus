@@ -65,8 +65,7 @@ def create_tactile_models(
     model_type: str,
     device: torch.device,
     measurements_model_path: Optional[pathlib.Path] = None,
-) -> Tuple[nn.Module, nn.Module, nn.Module, List[nn.Parameter], Dict[str, float]]:
-    hyperparams = {}
+) -> Tuple[nn.Module, nn.Module, nn.Module, List[nn.Parameter]]:
     if model_type == "weights_only":
         qsp_model = TactileWeightModel(
             device, wt_init=torch.tensor([[50.0, 50.0, 50.0]])
@@ -76,7 +75,6 @@ def create_tactile_models(
         )
         measurements_model = None
 
-        hyperparams["learning_rate"] = 5.0
         learnable_params = list(qsp_model.parameters()) + list(
             mf_between_model.parameters()
         )
@@ -93,8 +91,6 @@ def create_tactile_models(
             )
         measurements_model.to(device)
 
-        hyperparams["learning_rate"] = 1.0e-3
-        hyperparams["eps_tracking_loss"] = 5.0e-4  # early stopping
         learnable_params = (
             list(measurements_model.parameters())
             + list(qsp_model.parameters())
@@ -108,7 +104,6 @@ def create_tactile_models(
         qsp_model,
         mf_between_model,
         learnable_params,
-        hyperparams,
     )
 
 
@@ -228,40 +223,14 @@ def get_tactile_initial_optim_vars(
     device: torch.device,
     time_steps: int,
 ):
-    inputs_ = {}
-    eff_captures_ = batch[1].to(device)
-    obj_captures_ = batch[2].to(device)
-
+    inputs = {}
+    eff_captures = batch[1].to(device)
+    obj_captures = batch[2].to(device)
     for step in range(time_steps):
-        eff_xyth_ = eff_captures_[:, step, :]
-        eff_xycs_ = torch.stack(
-            [
-                eff_xyth_[:, 0],
-                eff_xyth_[:, 1],
-                eff_xyth_[:, 2].cos(),
-                eff_xyth_[:, 2].sin(),
-            ],
-            dim=1,
-        )
+        inputs[f"obj_pose_{step}"] = th.SE2(x_y_theta=obj_captures[:, 0].clone()).data
+        inputs[f"eff_pose_{step}"] = th.SE2(x_y_theta=eff_captures[:, 0].clone()).data
 
-        obj_xyth_ = obj_captures_[:, step, :]
-        obj_xycs_ = torch.stack(
-            [
-                obj_xyth_[:, 0],
-                obj_xyth_[:, 1],
-                obj_xyth_[:, 2].cos(),
-                obj_xyth_[:, 2].sin(),
-            ],
-            dim=1,
-        )
-
-        # layer will route this to the optimization variables with the given name
-        inputs_[f"obj_pose_{step}"] = obj_xycs_.clone() + 0.0 * torch.cat(
-            [torch.randn((1, 2)), torch.zeros((1, 2))], dim=1
-        ).to(device)
-        inputs_[f"eff_pose_{step}"] = eff_xycs_.clone()
-
-    return inputs_
+    return inputs
 
 
 def update_tactile_pushing_inputs(
@@ -275,8 +244,9 @@ def update_tactile_pushing_inputs(
     time_steps: int,
     theseus_inputs: Dict[str, torch.Tensor],
 ):
+    batch_size = batch[0].shape[0]
     theseus_inputs["sdf_data"] = (
-        (dataset.sdf_data_tensor.data).repeat(cfg.train.batch_size, 1, 1).to(device)
+        (dataset.sdf_data_tensor.data).repeat(batch_size, 1, 1).to(device)
     )
 
     theseus_inputs.update(

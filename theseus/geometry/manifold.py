@@ -5,7 +5,7 @@
 
 import abc
 import warnings
-from typing import Any, List, Optional, Tuple
+from typing import Any, List, Optional
 
 import torch
 
@@ -61,13 +61,9 @@ class Manifold(Variable, abc.ABC):
         pass
 
     @abc.abstractmethod
-    def _local_impl(self, variable2: "Manifold") -> torch.Tensor:
-        pass
-
-    @abc.abstractmethod
-    def _local_jacobian(
-        self, variable2: "Manifold"
-    ) -> Tuple[torch.Tensor, torch.Tensor]:
+    def _local_impl(
+        self, variable2: "Manifold", jacobians: Optional[List[torch.Tensor]] = None
+    ) -> torch.Tensor:
         pass
 
     @abc.abstractmethod
@@ -90,10 +86,7 @@ class Manifold(Variable, abc.ABC):
         variable2: "Manifold",
         jacobians: Optional[List[torch.Tensor]] = None,
     ) -> torch.Tensor:
-        local_out = self._local_impl(variable2)
-        if jacobians is not None:
-            assert len(jacobians) == 0
-            jacobians.extend(self._local_jacobian(variable2))
+        local_out = self._local_impl(variable2, jacobians)
         return local_out
 
     def retract(self, delta: torch.Tensor) -> "Manifold":

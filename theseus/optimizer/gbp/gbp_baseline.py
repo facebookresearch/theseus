@@ -1,12 +1,13 @@
-import numpy as np
-from typing import Any, Dict, Optional, Type
-from typing import List, Callable, Optional, Union
+from typing import Callable, List, Optional, Union
 
+import matplotlib.pylab as plt
+import numpy as np
 
 """
 Defines squared loss functions that correspond to Gaussians.
 Robust losses are implemented by scaling the Gaussian covariance.
 """
+
 
 class Gaussian:
     def __init__(
@@ -46,11 +47,11 @@ class Gaussian:
 class GBPSettings:
     def __init__(
         self,
-        damping: float = 0.,
+        damping: float = 0.0,
         beta: float = 0.1,
         num_undamped_iters: int = 5,
         min_linear_iters: int = 10,
-        dropout: float = 0.,
+        dropout: float = 0.0,
         reset_iters_since_relin: List[int] = [],
     ):
         # Parameters for damping the eta component of the message
@@ -73,20 +74,17 @@ class GBPSettings:
         if iters_since_relin > self.num_undamped_iters:
             return self.damping
         else:
-            return 0.
+            return 0.0
 
 
-class SquaredLoss():
-    def __init__(
-        self,
-        dofs: int,
-        diag_cov: Union[float, np.ndarray]
-    ):
+class SquaredLoss:
+    def __init__(self, dofs: int, diag_cov: Union[float, np.ndarray]):
         """
         dofs: dofs of the measurement
         cov: diagonal elements of covariance matrix
         """
-        assert diag_cov.shape[0] == dofs
+        if isinstance(diag_cov, np.ndarray):
+            assert diag_cov.shape[0] == dofs
         mat = np.zeros([dofs, dofs])
         mat[range(dofs), range(dofs)] = diag_cov
         self.cov = mat
@@ -105,10 +103,7 @@ class SquaredLoss():
 
 class HuberLoss(SquaredLoss):
     def __init__(
-        self,
-        dofs: int,
-        diag_cov: Union[float, np.ndarray],
-        stds_transition: float
+        self, dofs: int, diag_cov: Union[float, np.ndarray], stds_transition: float
     ):
         """
         stds_transition: num standard deviations from minimum at
@@ -121,7 +116,9 @@ class HuberLoss(SquaredLoss):
         energy = residual @ np.linalg.inv(self.cov) @ residual
         mahalanobis_dist = np.sqrt(energy)
         if mahalanobis_dist > self.stds_transition:
-            denom = (2 * self.stds_transition * mahalanobis_dist - self.stds_transition ** 2)
+            denom = (
+                2 * self.stds_transition * mahalanobis_dist - self.stds_transition**2
+            )
             self.effective_cov = self.cov * mahalanobis_dist**2 / denom
         else:
             self.effective_cov = self.cov.copy()
@@ -176,8 +173,8 @@ class FactorGraph:
         self,
         gbp_settings: GBPSettings = GBPSettings(),
     ):
-        self.var_nodes = []
-        self.factors = []
+        self.var_nodes: List[VariableNode] = []
+        self.factors: List[Factor] = []
         self.gbp_settings = gbp_settings
 
     def add_var_node(
@@ -202,8 +199,7 @@ class FactorGraph:
     ) -> None:
         factorID = len(self.factors)
         adj_var_nodes = [self.var_nodes[i] for i in adj_var_ids]
-        self.factors.append(
-            Factor(factorID, adj_var_nodes, measurement, meas_model))
+        self.factors.append(Factor(factorID, adj_var_nodes, measurement, meas_model))
         for var in adj_var_nodes:
             var.adj_factors.append(self.factors[-1])
 
@@ -215,8 +211,7 @@ class FactorGraph:
         for factor in self.factors:
             dropout_off = apply_dropout and np.random.rand() > self.gbp_settings.dropout
             if dropout_off or not apply_dropout:
-                damping = self.gbp_settings.get_damping(
-                    factor.iters_since_relin)
+                damping = self.gbp_settings.get_damping(factor.iters_since_relin)
                 factor.compute_messages(damping)
 
     def linearise_all_factors(self) -> None:
@@ -239,8 +234,13 @@ class FactorGraph:
             if not factor.meas_model.linear:
                 adj_belief_means = factor.get_adj_means()
                 factor.iters_since_relin += 1
-                diff_cond = np.linalg.norm(factor.linpoint - adj_belief_means) > self.gbp_settings.beta
-                iters_cond = factor.iters_since_relin >= self.gbp_settings.min_linear_iters
+                diff_cond = (
+                    np.linalg.norm(factor.linpoint - adj_belief_means)
+                    > self.gbp_settings.beta
+                )
+                iters_cond = (
+                    factor.iters_since_relin >= self.gbp_settings.min_linear_iters
+                )
                 if diff_cond and iters_cond:
                     factor.compute_factor()
 
@@ -266,7 +266,7 @@ class FactorGraph:
         self,
         n_iters: Optional[int] = 20,
         converged_threshold: Optional[float] = 1e-6,
-        include_priors: bool = True
+        include_priors: bool = True,
     ) -> None:
         energy_log = [self.energy()]
         print(f"\nInitial Energy {energy_log[0]:.5f}")
@@ -282,10 +282,7 @@ class FactorGraph:
                     f.iters_since_relin = 1
 
             energy_log.append(self.energy(include_priors=include_priors))
-            print(
-                f"Iter {i+1}  --- "
-                f"Energy {energy_log[-1]:.5f} --- "
-            )
+            print(f"Iter {i+1}  --- " f"Energy {energy_log[-1]:.5f} --- ")
             i += 1
             if abs(energy_log[-2] - energy_log[-1]) < converged_threshold:
                 count += 1
@@ -295,9 +292,7 @@ class FactorGraph:
                 count = 0
 
     def energy(
-        self,
-        eval_point: np.ndarray = None,
-        include_priors: bool = True
+        self, eval_point: np.ndarray = None, include_priors: bool = True
     ) -> float:
         """
         Computes the sum of all of the squared errors in the graph
@@ -308,9 +303,14 @@ class FactorGraph:
         else:
             var_dofs = np.ndarray([v.dofs for v in self.var_nodes])
             var_ix = np.concatenate([np.ndarray([0]), np.cumsum(var_dofs, axis=0)[:-1]])
-            energy = 0.
+            energy = 0.0
             for f in self.factors:
-                local_eval_point = np.concatenate([eval_point[var_ix[v.variableID]: var_ix[v.variableID] + v.dofs] for v in f.adj_var_nodes])
+                local_eval_point = np.concatenate(
+                    [
+                        eval_point[var_ix[v.variableID] : var_ix[v.variableID] + v.dofs]
+                        for v in f.adj_var_nodes
+                    ]
+                )
                 energy += f.get_energy(local_eval_point)
         if include_priors:
             prior_energy = sum([var.get_prior_energy() for var in self.var_nodes])
@@ -333,8 +333,10 @@ class FactorGraph:
         counter = 0
         for var in self.var_nodes:
             var_ix[var.variableID] = int(counter)
-            joint.eta[counter:counter + var.dofs] += var.prior.eta
-            joint.lam[counter:counter + var.dofs, counter:counter + var.dofs] += var.prior.lam
+            joint.eta[counter : counter + var.dofs] += var.prior.eta
+            joint.lam[
+                counter : counter + var.dofs, counter : counter + var.dofs
+            ] += var.prior.lam
             counter += var.dofs
 
         # Other factors
@@ -343,19 +345,37 @@ class FactorGraph:
             for adj_var_node in factor.adj_var_nodes:
                 vID = adj_var_node.variableID
                 # Diagonal contribution of factor
-                joint.eta[var_ix[vID]:var_ix[vID] + adj_var_node.dofs] += \
-                    factor.factor.eta[factor_ix:factor_ix + adj_var_node.dofs]
-                joint.lam[var_ix[vID]:var_ix[vID] + adj_var_node.dofs, var_ix[vID]:var_ix[vID] + adj_var_node.dofs] += \
-                    factor.factor.lam[factor_ix:factor_ix + adj_var_node.dofs, factor_ix:factor_ix + adj_var_node.dofs]
+                joint.eta[
+                    var_ix[vID] : var_ix[vID] + adj_var_node.dofs
+                ] += factor.factor.eta[factor_ix : factor_ix + adj_var_node.dofs]
+                joint.lam[
+                    var_ix[vID] : var_ix[vID] + adj_var_node.dofs,
+                    var_ix[vID] : var_ix[vID] + adj_var_node.dofs,
+                ] += factor.factor.lam[
+                    factor_ix : factor_ix + adj_var_node.dofs,
+                    factor_ix : factor_ix + adj_var_node.dofs,
+                ]
                 other_factor_ix = 0
                 for other_adj_var_node in factor.adj_var_nodes:
                     if other_adj_var_node.variableID > adj_var_node.variableID:
                         other_vID = other_adj_var_node.variableID
                         # Off diagonal contributions of factor
-                        joint.lam[var_ix[vID]:var_ix[vID] + adj_var_node.dofs, var_ix[other_vID]:var_ix[other_vID] + other_adj_var_node.dofs] += \
-                            factor.factor.lam[factor_ix:factor_ix + adj_var_node.dofs, other_factor_ix:other_factor_ix + other_adj_var_node.dofs]
-                        joint.lam[var_ix[other_vID]:var_ix[other_vID] + other_adj_var_node.dofs, var_ix[vID]:var_ix[vID] + adj_var_node.dofs] += \
-                            factor.factor.lam[other_factor_ix:other_factor_ix + other_adj_var_node.dofs, factor_ix:factor_ix + adj_var_node.dofs]
+                        joint.lam[
+                            var_ix[vID] : var_ix[vID] + adj_var_node.dofs,
+                            var_ix[other_vID] : var_ix[other_vID]
+                            + other_adj_var_node.dofs,
+                        ] += factor.factor.lam[
+                            factor_ix : factor_ix + adj_var_node.dofs,
+                            other_factor_ix : other_factor_ix + other_adj_var_node.dofs,
+                        ]
+                        joint.lam[
+                            var_ix[other_vID] : var_ix[other_vID]
+                            + other_adj_var_node.dofs,
+                            var_ix[vID] : var_ix[vID] + adj_var_node.dofs,
+                        ] += factor.factor.lam[
+                            other_factor_ix : other_factor_ix + other_adj_var_node.dofs,
+                            factor_ix : factor_ix + adj_var_node.dofs,
+                        ]
                     other_factor_ix += other_adj_var_node.dofs
                 factor_ix += adj_var_node.dofs
 
@@ -368,11 +388,11 @@ class FactorGraph:
         return np.linalg.norm(self.get_joint().mean() - self.belief_means())
 
     def belief_means(self) -> np.ndarray:
-        """ Get an array containing all current estimates of belief means. """
+        """Get an array containing all current estimates of belief means."""
         return np.concatenate([var.belief.mean() for var in self.var_nodes])
 
     def belief_covs(self) -> List[np.ndarray]:
-        """ Get a list of all belief covariances. """
+        """Get a list of all belief covariances."""
         covs = [var.belief.cov() for var in self.var_nodes]
         return covs
 
@@ -381,10 +401,14 @@ class FactorGraph:
         print(f"# Variable nodes: {len(self.var_nodes)}")
         if not brief:
             for i, var in enumerate(self.var_nodes):
-                print(f"Variable {i}: connects to factors {[f.factorID for f in var.adj_factors]}")
+                print(
+                    f"Variable {i}: connects to factors {[f.factorID for f in var.adj_factors]}"
+                )
                 print(f"    dofs: {var.dofs}")
                 print(f"    prior mean: {var.prior.mean()}")
-                print(f"    prior covariance: diagonal sigma {np.diag(var.prior.cov())}")
+                print(
+                    f"    prior covariance: diagonal sigma {np.diag(var.prior.cov())}"
+                )
         print(f"# Factors: {len(self.factors)}")
         if not brief:
             for i, factor in enumerate(self.factors):
@@ -406,7 +430,7 @@ class VariableNode:
     def __init__(self, id: int, dofs: int):
         self.variableID = id
         self.dofs = dofs
-        self.adj_factors = []
+        self.adj_factors: List[Factor] = []
         # prior factor, implemented as part of variable node
         self.prior = Gaussian(dofs)
         self.belief = Gaussian(dofs)
@@ -426,8 +450,8 @@ class VariableNode:
             self.belief.lam += factor.messages[message_ix].lam
 
     def get_prior_energy(self) -> float:
-        energy = 0.
-        if self.prior.lam[0, 0] != 0.:
+        energy = 0.0
+        if self.prior.lam[0, 0] != 0.0:
             residual = self.belief.mean() - self.prior.mean()
             energy += 0.5 * residual @ self.prior.lam @ residual
         return energy
@@ -465,13 +489,13 @@ class Factor:
         return np.concatenate(adj_belief_means)
 
     def get_residual(self, eval_point: np.ndarray = None) -> np.ndarray:
-        """ Compute the residual vector. """
+        """Compute the residual vector."""
         if eval_point is None:
             eval_point = self.get_adj_means()
         return self.meas_model.meas_fn(eval_point) - self.measurement
 
     def get_energy(self, eval_point: np.ndarray = None) -> float:
-        """ Computes the squared error using the appropriate loss function. """
+        """Computes the squared error using the appropriate loss function."""
         residual = self.get_residual(eval_point)
         inf_mat = np.linalg.inv(self.meas_model.loss.effective_cov)
         return 0.5 * residual @ inf_mat @ residual
@@ -481,9 +505,9 @@ class Factor:
 
     def compute_factor(self) -> None:
         """
-            Compute the factor at current adjacente beliefs using robust.
-            If measurement model is linear then factor will always be
-            the same regardless of linearisation point.
+        Compute the factor at current adjacente beliefs using robust.
+        If measurement model is linear then factor will always be
+        the same regardless of linearisation point.
         """
         self.linpoint = self.get_adj_means()
         J = self.meas_model.jac_fn(self.linpoint)
@@ -491,7 +515,10 @@ class Factor:
         self.meas_model.loss.get_effective_cov(pred_measurement - self.measurement)
         effective_lam = np.linalg.inv(self.meas_model.loss.effective_cov)
         self.factor.lam = J.T @ effective_lam @ J
-        self.factor.eta = ((J.T @ effective_lam) @ (J @ self.linpoint + self.measurement - pred_measurement)).flatten()
+        self.factor.eta = (
+            (J.T @ effective_lam)
+            @ (J @ self.linpoint + self.measurement - pred_measurement)
+        ).flatten()
         self.iters_since_relin = 0
 
     def robustify_loss(self) -> None:
@@ -505,8 +532,8 @@ class Factor:
         self.factor.eta *= old_effective_cov / self.meas_model.loss.effective_cov[0, 0]
         self.factor.lam *= old_effective_cov / self.meas_model.loss.effective_cov[0, 0]
 
-    def compute_messages(self, damping: float = 0.) -> None:
-        """ Compute all outgoing messages from the factor. """
+    def compute_messages(self, damping: float = 0.0) -> None:
+        """Compute all outgoing messages from the factor."""
         messages_eta, messages_lam = [], []
 
         sdim = 0
@@ -519,33 +546,63 @@ class Factor:
             for var in range(len(self.adj_vIDs)):
                 if var != v:
                     var_dofs = self.adj_var_nodes[var].dofs
-                    eta_mess = self.adj_var_nodes[var].belief.eta - self.messages[var].eta
-                    lam_mess = self.adj_var_nodes[var].belief.lam - self.messages[var].lam
-                    eta_factor[start:start + var_dofs] += eta_mess
-                    lam_factor[start:start + var_dofs, start:start + var_dofs] += lam_mess
+                    eta_mess = (
+                        self.adj_var_nodes[var].belief.eta - self.messages[var].eta
+                    )
+                    lam_mess = (
+                        self.adj_var_nodes[var].belief.lam - self.messages[var].lam
+                    )
+                    eta_factor[start : start + var_dofs] += eta_mess
+                    lam_factor[
+                        start : start + var_dofs, start : start + var_dofs
+                    ] += lam_mess
                 start += self.adj_var_nodes[var].dofs
 
             # Divide up parameters of distribution
             dofs = self.adj_var_nodes[v].dofs
-            eo = eta_factor[sdim:sdim + dofs]
-            eno = np.concatenate((eta_factor[:sdim], eta_factor[sdim + dofs:]))
+            eo = eta_factor[sdim : sdim + dofs]
+            eno = np.concatenate((eta_factor[:sdim], eta_factor[sdim + dofs :]))
 
-            loo = lam_factor[sdim:sdim + dofs, sdim:sdim + dofs]
+            loo = lam_factor[sdim : sdim + dofs, sdim : sdim + dofs]
             lono = np.concatenate(
-                (lam_factor[sdim:sdim + dofs, :sdim], lam_factor[sdim:sdim + dofs, sdim + dofs:]),
-                axis=1)
+                (
+                    lam_factor[sdim : sdim + dofs, :sdim],
+                    lam_factor[sdim : sdim + dofs, sdim + dofs :],
+                ),
+                axis=1,
+            )
             lnoo = np.concatenate(
-                (lam_factor[:sdim, sdim:sdim + dofs], lam_factor[sdim + dofs:, sdim:sdim + dofs]),
-                axis=0)
-            lnono = np.concatenate((
-                np.concatenate((lam_factor[:sdim, :sdim], lam_factor[:sdim, sdim + dofs:]), axis=1),
-                np.concatenate((lam_factor[sdim + dofs:, :sdim], lam_factor[sdim + dofs:, sdim + dofs:]), axis=1)
-            ), axis=0)
+                (
+                    lam_factor[:sdim, sdim : sdim + dofs],
+                    lam_factor[sdim + dofs :, sdim : sdim + dofs],
+                ),
+                axis=0,
+            )
+            lnono = np.concatenate(
+                (
+                    np.concatenate(
+                        (lam_factor[:sdim, :sdim], lam_factor[:sdim, sdim + dofs :]),
+                        axis=1,
+                    ),
+                    np.concatenate(
+                        (
+                            lam_factor[sdim + dofs :, :sdim],
+                            lam_factor[sdim + dofs :, sdim + dofs :],
+                        ),
+                        axis=1,
+                    ),
+                ),
+                axis=0,
+            )
 
             new_message_lam = loo - lono @ np.linalg.inv(lnono) @ lnoo
             new_message_eta = eo - lono @ np.linalg.inv(lnono) @ eno
-            messages_eta.append((1 - damping) * new_message_eta + damping * self.messages[v].eta)
-            messages_lam.append((1 - damping) * new_message_lam + damping * self.messages[v].lam)
+            messages_eta.append(
+                (1 - damping) * new_message_eta + damping * self.messages[v].eta
+            )
+            messages_lam.append(
+                (1 - damping) * new_message_lam + damping * self.messages[v].lam
+            )
             sdim += self.adj_var_nodes[v].dofs
 
         for v in range(len(self.adj_vIDs)):
@@ -569,7 +626,10 @@ def draw(i):
     for j, cov in enumerate(fg.belief_covs()):
         circle = plt.Circle(
             (means[j, 0], means[j, 1]),
-            np.sqrt(cov[0, 0]), linewidth=0.5, color='blue', fill=False
+            np.sqrt(cov[0, 0]),
+            linewidth=0.5,
+            color="blue",
+            fill=False,
         )
         ax.add_patch(circle)
 
@@ -578,27 +638,30 @@ def draw(i):
     for j, cov in enumerate(marg_covs):
         circle = plt.Circle(
             (map_soln[j, 0], map_soln[j, 1]),
-            np.sqrt(marg_covs[j]), linewidth=0.5, color='g', fill=False
+            np.sqrt(marg_covs[j]),
+            linewidth=0.5,
+            color="g",
+            fill=False,
         )
         ax.add_patch(circle)
 
     # draw lines for factors
     for f in fg.factors:
         bels = np.array([means[f.adj_vIDs[0]], means[f.adj_vIDs[1]]])
-        plt.plot(bels[:, 0], bels[:, 1], color='black', linewidth=0.3)
+        plt.plot(bels[:, 0], bels[:, 1], color="black", linewidth=0.3)
 
     # draw lines for belief error
     for i in range(len(means)):
         xs = [means[i, 0], map_soln[i, 0]]
         ys = [means[i, 1], map_soln[i, 1]]
-        plt.plot(xs, ys, color='grey', linewidth=0.3, linestyle='dashed')
+        plt.plot(xs, ys, color="grey", linewidth=0.3, linestyle="dashed")
 
-    plt.axis('scaled')
+    plt.axis("scaled")
     plt.xlim([-1, size])
     plt.ylim([-1, size])
 
     # convert to image
-    ax.axis('off')
+    ax.axis("off")
     fig.tight_layout(pad=0)
     ax.margins(0)
     fig.canvas.draw()
@@ -607,6 +670,7 @@ def draw(i):
     plt.close()
 
     return img
+
 
 if __name__ == "__main__":
 
@@ -618,7 +682,7 @@ if __name__ == "__main__":
     prior_noise_std = 0.2
 
     gbp_settings = GBPSettings(
-        damping=0.,
+        damping=0.0,
         beta=0.1,
         num_undamped_iters=1,
         min_linear_iters=10,
@@ -634,7 +698,7 @@ if __name__ == "__main__":
 
     fg = FactorGraph(gbp_settings)
 
-    init_noises = np.random.normal(np.zeros([size*size, 2]), prior_noise_std)
+    init_noises = np.random.normal(np.zeros([size * size, 2]), prior_noise_std)
     meas_noises = np.random.normal(np.zeros([100, 2]), np.sqrt(noise_cov[0]))
 
     for i in range(size):
@@ -653,21 +717,21 @@ if __name__ == "__main__":
     for i in range(size):
         for j in range(size):
             if j < size - 1:
-                meas = np.array([1., 0.])
+                meas = np.array([1.0, 0.0])
                 meas += meas_noises[m]
                 fg.add_factor(
                     [i * size + j, i * size + j + 1],
                     meas,
-                    LinearDisplacementModel(SquaredLoss(dim, noise_cov))
+                    LinearDisplacementModel(SquaredLoss(dim, noise_cov)),
                 )
                 m += 1
             if i < size - 1:
-                meas = np.array([0., 1.])
+                meas = np.array([0.0, 1.0])
                 meas += meas_noises[m]
                 fg.add_factor(
                     [i * size + j, (i + 1) * size + j],
                     meas,
-                    LinearDisplacementModel(SquaredLoss(dim, noise_cov))
+                    LinearDisplacementModel(SquaredLoss(dim, noise_cov)),
                 )
                 m += 1
 
@@ -682,7 +746,7 @@ if __name__ == "__main__":
     # # run gbp ---------------
 
     gbp_settings = GBPSettings(
-        damping=0.,
+        damping=0.0,
         beta=0.1,
         num_undamped_iters=1,
         min_linear_iters=10,
@@ -691,7 +755,9 @@ if __name__ == "__main__":
 
     # fg.compute_all_messages()
 
-    import ipdb; ipdb.set_trace()
+    import ipdb
+
+    ipdb.set_trace()
 
     # i = 0
     n_iters = 5
@@ -706,13 +772,14 @@ if __name__ == "__main__":
         fg.synchronous_iteration()
         i += 1
 
-        for f in fg.factors:
-            for m in f.messages:
-                print(np.linalg.inv(m.lam) @ m.eta)
+        # for f in fg.factors:
+        #     for m in f.messages:
+        #         print(np.linalg.inv(m.lam) @ m.eta)
 
         print(fg.belief_means())
 
-        import ipdb; ipdb.set_trace()
+        import ipdb
 
+        ipdb.set_trace()
 
         # time.sleep(0.05)

@@ -1,19 +1,11 @@
-#!/usr/bin/env python3
 # Copyright (c) Meta Platforms, Inc. and affiliates.
 #
 # This source code is licensed under the MIT license found in the
 # LICENSE file in the root directory of this source tree.
-#
-# This example illustrates the Gaussian Belief Propagation (GBP) optimizer
-# for a 2D pose graph optimization problem.
-# Linear problem where we are estimating the (x, y)position of 9 nodes,
-# arranged in a 3x3 grid.
-# Linear factors connect each node to its adjacent nodes.
 
 import abc
 import math
 from dataclasses import dataclass
-from enum import Enum
 from typing import Any, Dict, List, Optional, Sequence, Tuple, Type
 
 import numpy as np
@@ -22,7 +14,13 @@ import torch
 import theseus as th
 import theseus.constants
 from theseus.core import CostFunction, Objective
-from theseus.optimizer import Linearization, Optimizer, OptimizerInfo, VariableOrdering
+from theseus.geometry import Manifold
+from theseus.optimizer import Linearization, Optimizer, VariableOrdering
+from theseus.optimizer.nonlinear.nonlinear_optimizer import (
+    BackwardMode,
+    NonlinearOptimizerInfo,
+    NonlinearOptimizerStatus,
+)
 
 """
 TODO
@@ -32,6 +30,11 @@ TODO
  - add class for message schedule
  - damping for lie algebra vars
  - solving inverse problem to compute message mean
+"""
+
+
+"""
+Utitily functions
 """
 
 
@@ -49,34 +52,32 @@ class GBPOptimizerParams:
                 raise ValueError(f"Invalid nonlinear optimizer parameter {param}.")
 
 
-class NonlinearOptimizerStatus(Enum):
-    START = 0
-    CONVERGED = 1
-    MAX_ITERATIONS = 2
-    FAIL = -1
-
-
-# All info information is batched
-@dataclass
-class NonlinearOptimizerInfo(OptimizerInfo):
-    converged_iter: torch.Tensor
-    best_iter: torch.Tensor
-    err_history: Optional[torch.Tensor]
-    last_err: torch.Tensor
-    best_err: torch.Tensor
-
-
-class BackwardMode(Enum):
-    FULL = 0
-    IMPLICIT = 1
-    TRUNCATED = 2
-
-
+# Stores variable beliefs that converge towards the marginals
 class Gaussian:
-    def __init__(self, mean: th.Manifold):
-        self.name = mean.name + "_gaussian"
-        self.mean = mean
-        self.lam = torch.zeros(mean.shape[0], mean.dof(), mean.dof(), dtype=mean.dtype)
+    def __init__(self, variable: Manifold):
+        self.name = variable.name + "_gaussian"
+        self.mean = variable
+        self.tot_dof = variable.dof()
+
+        # tot_dof = 0
+        # for v in variables:
+        #     tot_dof += v.dof()
+        # self.tot_dof = tot_dof
+
+        self.precision = torch.zeros(
+            self.mean.shape[0], self.tot_dof, self.tot_dof, dtype=variable.dtype
+        )
+
+    def dof(self) -> int:
+        return self.tot_dof
+
+
+class Marginals(Gaussian):
+    pass
+
+
+class Message(Gaussian):
+    pass
 
 
 class CostFunctionOrdering:
@@ -129,6 +130,11 @@ class CostFunctionOrdering:
     @property
     def complete(self):
         return len(self._cf_order) == self.objective.size_variables()
+
+
+"""
+GBP functions
+"""
 
 
 # Compute the factor at current adjacent beliefs.
@@ -197,22 +203,22 @@ def pass_fac_to_var_messages(
     return ftov_msgs_eta, ftov_msgs_lam
 
 
-# Transforms message to tangent plane at var
+# Transforms message gaussian to tangent plane at var
 # if return_mean is True, return the (mean, lam) else return (eta, lam).
 # Generalises the local function by transforming the covariance as well as mean.
 def local_gaussian(
-    gauss: Gaussian,
+    mess: Message,
     var: th.LieGroup,
     return_mean: bool = True,
 ) -> Tuple[torch.Tensor, torch.Tensor]:
     # mean_tp is message mean in tangent space / plane at var
-    mean_tp = var.local(gauss.mean)
+    mean_tp = var.local(mess.mean)
 
     jac: List[torch.Tensor] = []
     th.exp_map(var, mean_tp, jacobians=jac)
 
-    # lam_tp is lambda matrix in the tangent plane
-    lam_tp = torch.bmm(torch.bmm(jac[0].transpose(-1, -2), gauss.lam), jac[0])
+    # lam_tp is the precision matrix in the tangent plane
+    lam_tp = torch.bmm(torch.bmm(jac[0].transpose(-1, -2), mess.precision), jac[0])
 
     if return_mean:
         return mean_tp, lam_tp
@@ -229,7 +235,7 @@ def local_gaussian(
 # out_gauss is the transformed Gaussian that is updated in place.
 def retract_gaussian(
     mean_tp: torch.Tensor,
-    lam_tp: torch.Tensor,
+    prec_tp: torch.Tensor,
     var: th.LieGroup,
     out_gauss: Gaussian,
 ):
@@ -238,10 +244,10 @@ def retract_gaussian(
     jac: List[torch.Tensor] = []
     th.exp_map(var, mean_tp, jacobians=jac)
     inv_jac = torch.inverse(jac[0])
-    lam = torch.bmm(torch.bmm(inv_jac.transpose(-1, -2), lam_tp), inv_jac)
+    precision = torch.bmm(torch.bmm(inv_jac.transpose(-1, -2), prec_tp), inv_jac)
 
     out_gauss.mean.update(mean.data)
-    out_gauss.lam = lam
+    out_gauss.precision = precision
 
 
 def pass_var_to_fac_messages_and_update_beliefs_lie(
@@ -276,7 +282,7 @@ def pass_var_to_fac_messages_and_update_beliefs_lie(
                 lam_a = lams_inc.sum(dim=0)
                 if lam_a.count_nonzero() == 0:
                     vtof_msgs[j].mean.data[:] = 0.0
-                    vtof_msgs[j].lam = lam_a
+                    vtof_msgs[j].precision = lam_a
                 else:
                     inv_lam_a = torch.inverse(lam_a)
                     sum_taus = torch.matmul(lams_inc, taus_inc.unsqueeze(-1)).sum(dim=0)
@@ -491,12 +497,14 @@ def ftov_comp_mess_lie(
     # update messages
     for v in range(num_optim_vars):
         ftov_msgs[v].mean.update(new_messages[v].mean.data)
-        ftov_msgs[v].lam = new_messages[v].lam
+        ftov_msgs[v].precision = new_messages[v].precision
 
     return new_messages
 
 
 # Follows notation from https://arxiv.org/pdf/2202.03314.pdf
+
+
 class GaussianBeliefPropagation(Optimizer, abc.ABC):
     def __init__(
         self,
@@ -509,11 +517,12 @@ class GaussianBeliefPropagation(Optimizer, abc.ABC):
         max_iterations: int = 20,
     ):
         super().__init__(objective)
+
+        # ordering is required to identify which messages to send where
         self.ordering = VariableOrdering(objective, default_order=True)
         self.cf_ordering = CostFunctionOrdering(objective)
 
         self.schedule = None
-        self.damping = None
 
         self.params = GBPOptimizerParams(
             abs_err_tolerance, rel_err_tolerance, max_iterations
@@ -540,6 +549,10 @@ class GaussianBeliefPropagation(Optimizer, abc.ABC):
                 lie_groups = True
         self.lie_groups = lie_groups
         print("lie groups:", self.lie_groups)
+
+    """
+    Copied and slightly modified from nonlinear optimizer class
+    """
 
     def set_params(self, **kwargs):
         self.params.update(kwargs)
@@ -664,6 +677,10 @@ class GaussianBeliefPropagation(Optimizer, abc.ABC):
         info.converged_iter[
             M & (grad_loop_info.status == NonlinearOptimizerStatus.MAX_ITERATIONS)
         ] = -1
+
+    """
+    GBP specific functions
+    """
 
     # Linearizes factors at current belief if beliefs have deviated
     # from the linearization point by more than the threshold.
@@ -826,10 +843,11 @@ class GaussianBeliefPropagation(Optimizer, abc.ABC):
         for cf in self.cf_ordering:
             for var in cf.optim_vars:
                 vtof_msg_mu = var.copy(new_name=f"msg_{var.name}_to_{cf.name}")
+                # mean of initial message doesn't matter as long as precision is zero
                 vtof_msg_mu.data[:] = 0
                 ftov_msg_mu = vtof_msg_mu.copy(new_name=f"msg_{cf.name}_to_{var.name}")
-                vtof_msgs.append(Gaussian(vtof_msg_mu))
-                ftov_msgs.append(Gaussian(ftov_msg_mu))
+                vtof_msgs.append(Message(vtof_msg_mu))
+                ftov_msgs.append(Message(ftov_msg_mu))
 
         # compute factor potentials for the first time
         potentials_eta = [None] * self.objective.size_cost_functions()
@@ -915,9 +933,9 @@ class GaussianBeliefPropagation(Optimizer, abc.ABC):
         **kwargs,
     ) -> NonlinearOptimizerInfo:
         if damping > 1.0 or damping < 0.0:
-            raise NotImplementedError("damping must be in between 0 and 1.")
+            raise NotImplementedError("Damping must be in between 0 and 1.")
         if dropout > 1.0 or dropout < 0.0:
-            raise NotImplementedError("dropout probability must be in between 0 and 1.")
+            raise NotImplementedError("Dropout probability must be in between 0 and 1.")
 
         with torch.no_grad():
             info = self._init_info(track_best_solution, track_err_history, verbose)
@@ -960,154 +978,3 @@ class GaussianBeliefPropagation(Optimizer, abc.ABC):
                 info.status == NonlinearOptimizerStatus.MAX_ITERATIONS
             ] = -1
             return info
-
-
-if __name__ == "__main__":
-
-    np.random.seed(1)
-    torch.manual_seed(0)
-
-    size = 3
-    dim = 2
-
-    noise_cov = np.array([0.01, 0.01])
-
-    prior_noise_std = 0.2
-    prior_sigma = np.array([1.3**2, 1.3**2])
-
-    init_noises = np.random.normal(np.zeros([size * size, 2]), prior_noise_std)
-    meas_noises = np.random.normal(np.zeros([100, 2]), np.sqrt(noise_cov[0]))
-
-    # create theseus objective -------------------------------------
-
-    objective = th.Objective()
-    inputs = {}
-
-    n_poses = size * size
-
-    # create variables
-    poses = []
-    for i in range(n_poses):
-        poses.append(th.Vector(data=torch.rand(1, 2), name=f"x{i}"))
-
-    # add prior cost constraints with VariableDifference cost
-    prior_std = 1.3
-    anchor_std = 0.01
-    prior_w = th.ScaleCostWeight(1 / prior_std, name="prior_weight")
-    anchor_w = th.ScaleCostWeight(1 / anchor_std, name="anchor_weight")
-
-    p = 0
-    for i in range(size):
-        for j in range(size):
-            init = torch.Tensor([j, i])
-            if i == 0 and j == 0:
-                w = anchor_w
-            else:
-                # noise_init = torch.normal(torch.zeros(2), prior_noise_std)
-                init = init + torch.FloatTensor(init_noises[p])
-                w = prior_w
-
-            prior_target = th.Vector(data=init, name=f"prior_{p}")
-            inputs[f"x{p}"] = init[None, :]
-            inputs[f"prior_{p}"] = init[None, :]
-
-            cf_prior = th.eb.VariableDifference(
-                poses[p], w, prior_target, name=f"prior_cost_{p}"
-            )
-
-            objective.add(cf_prior)
-
-            p += 1
-
-    # Measurement cost functions
-
-    meas_std = 0.1
-    meas_w = th.ScaleCostWeight(1 / meas_std, name="prior_weight")
-
-    m = 0
-    for i in range(size):
-        for j in range(size):
-            if j < size - 1:
-                measurement = torch.Tensor([1.0, 0.0])
-                # measurement += torch.normal(torch.zeros(2), meas_std)
-                measurement += torch.FloatTensor(meas_noises[m])
-                ix0 = i * size + j
-                ix1 = i * size + j + 1
-
-                meas = th.Vector(data=measurement, name=f"meas_{m}")
-                inputs[f"meas_{m}"] = measurement[None, :]
-
-                cf_meas = th.eb.Between(
-                    poses[ix0], poses[ix1], meas_w, meas, name=f"meas_cost_{m}"
-                )
-                objective.add(cf_meas)
-                m += 1
-
-            if i < size - 1:
-                measurement = torch.Tensor([0.0, 1.0])
-                # measurement += torch.normal(torch.zeros(2), meas_std)
-                measurement += torch.FloatTensor(meas_noises[m])
-                ix0 = i * size + j
-                ix1 = (i + 1) * size + j
-
-                meas = th.Vector(data=measurement, name=f"meas_{m}")
-                inputs[f"meas_{m}"] = measurement[None, :]
-
-                cf_meas = th.eb.Between(
-                    poses[ix0], poses[ix1], meas_w, meas, name=f"meas_cost_{m}"
-                )
-                objective.add(cf_meas)
-                m += 1
-
-    # # objective.update(init_dict)
-    # print("Initial cost:", objective.error_squared_norm())
-
-    # fg.print(brief=True)
-
-    # # for vis ---------------
-
-    # joint = fg.get_joint()
-    # marg_covs = np.diag(joint.cov())[::2]
-    # map_soln = fg.MAP().reshape([size * size, 2])
-
-    # Solve with Gauss Newton ---------------
-
-    # print("inputs", inputs)
-
-    optimizer = GaussianBeliefPropagation(
-        objective,
-        max_iterations=100,
-    )
-    theseus_optim = th.TheseusLayer(optimizer)
-
-    optim_arg = {
-        "track_best_solution": True,
-        "track_err_history": True,
-        "verbose": True,
-        "backward_mode": BackwardMode.FULL,
-        "damping": 0.6,
-        "dropout": 0.0,
-    }
-    updated_inputs, info = theseus_optim.forward(inputs, optim_arg)
-
-    print("updated_inputs", updated_inputs)
-    print("info", info)
-
-    import ipdb
-
-    ipdb.set_trace()
-
-    # optimizer = th.GaussNewton(
-    #     objective,
-    #     max_iterations=15,
-    #     step_size=0.5,
-    # )
-    # theseus_optim = th.TheseusLayer(optimizer)
-
-    # with torch.no_grad():
-    #     optim_args = {"track_best_solution": True, "verbose": True}
-    #     updated_inputs, info = theseus_optim.forward(inputs, optim_args)
-    # print("updated_inputs", updated_inputs)
-    # print("info", info)
-
-    # import ipdb; ipdb.set_trace()

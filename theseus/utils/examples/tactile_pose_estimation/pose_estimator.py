@@ -23,6 +23,7 @@ class TactilePoseEstimator:
         max_iterations: int = 3,
         step_size: float = 1.0,
         regularization_w: float = 0.0,
+        force_max_iters: bool = False,
     ):
         self.dataset = dataset
         # obj_poses is shape (batch_size, episode_length, 3)
@@ -199,6 +200,8 @@ class TactilePoseEstimator:
             th.CholeskyDenseSolver,
             max_iterations=max_iterations,
             step_size=step_size,
+            abs_err_tolerance=0 if force_max_iters else 1e-10,
+            rel_err_tolerance=0 if force_max_iters else 1e-8,
         )
         self.theseus_layer = th.TheseusLayer(nl_optimizer)
         self.theseus_layer.to(device=device, dtype=torch.double)

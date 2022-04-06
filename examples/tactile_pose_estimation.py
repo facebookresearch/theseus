@@ -6,11 +6,12 @@ import logging
 import os
 import pathlib
 import random
-from typing import Dict
+from typing import Dict, Tuple
 
 import hydra
 import matplotlib.pyplot as plt
 import numpy as np
+import omegaconf
 import torch
 import torch.nn as nn
 import torch.optim as optim
@@ -91,6 +92,35 @@ def pack_batch_results(
     }
 
 
+def get_batch_data(
+    batch: Dict[str, torch.Tensor],
+    pose_estimator: theg.TactilePoseEstimator,
+    dataset: theg.TactilePushingDataset,
+    measurements_model: nn.Module,
+    qsp_model: nn.Module,
+    mf_between_model: nn.Module,
+    device: torch.device,
+    cfg: omegaconf.DictConfig,
+) -> Tuple[Dict[str, torch.Tensor], torch.Tensor, torch.Tensor]:
+    # Initialize inputs dictionary
+    theseus_inputs = pose_estimator.get_start_pose_and_motion_capture_dict(batch)
+    # Update the above dictionary with measurement factor data
+    theg.update_tactile_pushing_inputs(
+        dataset=dataset,
+        batch=batch,
+        measurements_model=measurements_model,
+        qsp_model=qsp_model,
+        mf_between_model=mf_between_model,
+        device=device,
+        cfg=cfg,
+        theseus_inputs=theseus_inputs,
+    )
+    # Get ground truth data to use for the outer loss
+    obj_poses_gt = batch["obj_poses_gt"]
+    eff_poses_gt = batch["eff_poses_gt"]
+    return theseus_inputs, obj_poses_gt, eff_poses_gt
+
+
 def run_learning_loop(cfg):
     root_path = pathlib.Path(os.getcwd())
     logger.info(f"LOGGING TO {str(root_path)}")
@@ -159,24 +189,16 @@ def run_learning_loop(cfg):
         for batch_idx in range(dataset.num_batches):
             # ---------- Read data from batch ----------- #
             batch = dataset.get_batch(batch_idx)
-            pose_estimator.update_start_pose_and_motion_from_batch(batch)
-            theseus_inputs = {}
-            # Updates the above dictionary with measurement factor data
-            theg.update_tactile_pushing_inputs(
-                dataset=dataset,
-                batch=batch,
-                measurements_model=measurements_model,
-                qsp_model=qsp_model,
-                mf_between_model=mf_between_model,
-                device=device,
-                cfg=cfg,
-                time_steps=time_steps,
-                theseus_inputs=theseus_inputs,
+            theseus_inputs, obj_poses_gt, eff_poses_gt = get_batch_data(
+                batch,
+                pose_estimator,
+                dataset,
+                measurements_model,
+                qsp_model,
+                mf_between_model,
+                device,
+                cfg,
             )
-            # Get ground truth data to use for the outer loss
-            obj_poses_gt = batch["obj_poses_gt"]
-            eff_poses_gt = batch["eff_poses_gt"]
-
             # ---------- Forward pass ----------- #
             start_event = torch.cuda.Event(enable_timing=True)
             end_event = torch.cuda.Event(enable_timing=True)

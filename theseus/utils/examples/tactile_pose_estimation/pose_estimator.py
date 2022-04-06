@@ -205,9 +205,13 @@ class TactilePoseEstimator:
 
         self.forward = self.theseus_layer.forward
 
-    # This method updates the start pose and motion catpure variables with the
-    # xytheta data coming from the batch
-    def update_start_pose_and_motion_from_batch(self, batch: Dict[str, torch.Tensor]):
-        self.obj_start_pose.update_from_x_y_theta(batch[self.obj_start_pose.name])
-        for motion_capture_var in self.motion_captures:
-            motion_capture_var.update_from_x_y_theta(batch[motion_capture_var.name])
+    # Gets a dictionary mapping variable names to tensors, with the batch data needed
+    # to update start pose and motion capture data (which is in xytheta format)
+    def get_start_pose_and_motion_capture_dict(
+        self, batch: Dict[str, torch.Tensor]
+    ) -> Dict[str, torch.Tensor]:
+        tensor_dict = {}
+        var_names = [self.obj_start_pose.name] + [v.name for v in self.motion_captures]
+        for name in var_names:
+            tensor_dict[name] = th.SE2(x_y_theta=batch[name]).data
+        return tensor_dict

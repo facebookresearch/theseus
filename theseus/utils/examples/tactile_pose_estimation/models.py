@@ -241,10 +241,10 @@ def update_tactile_pushing_inputs(
     mf_between_model: nn.Module,
     device: torch.device,
     cfg: omegaconf.DictConfig,
-    time_steps: int,
     theseus_inputs: Dict[str, torch.Tensor],
 ):
     batch_size = batch["img_feats"].shape[0]
+    time_steps = dataset.time_steps
     theseus_inputs["sdf_data"] = (
         (dataset.sdf_data_tensor.data).repeat(batch_size, 1, 1).to(device)
     )

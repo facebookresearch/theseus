@@ -6,7 +6,6 @@ import pytest
 import torch
 
 import theseus as th
-from theseus.geometry import SE3
 
 URDF_REL_PATH = "data/panda_no_gripper.urdf"
 DATA_REL_PATH = "data/panda_fk_dataset.json"
@@ -57,7 +56,7 @@ def test_forward_kinematics_seq(robot_model, dataset):
     for joint_state, ee_pose_target in zip(
         dataset["joint_states"], dataset["ee_poses"]
     ):
-        ee_se3_target = SE3(x_y_z_quaternion=ee_pose_target)
+        ee_se3_target = th.SE3(x_y_z_quaternion=ee_pose_target)
         ee_se3_computed = robot_model.forward_kinematics(joint_state)[ee_name]
 
         assert torch.allclose(ee_se3_target.local(ee_se3_computed), torch.zeros(6))
@@ -66,10 +65,33 @@ def test_forward_kinematics_seq(robot_model, dataset):
 def test_forward_kinematics_batched(robot_model, dataset):
     ee_name = dataset["ee_name"]
 
-    ee_se3_target = SE3(x_y_z_quaternion=dataset["ee_poses"])
+    ee_se3_target = th.SE3(x_y_z_quaternion=dataset["ee_poses"])
     ee_se3_computed = robot_model.forward_kinematics(dataset["joint_states"])[ee_name]
 
     assert torch.allclose(
         ee_se3_target.local(ee_se3_computed),
         torch.zeros(dataset["num_data"], 6),
     )
+
+
+def test_jacobian(robot_model, dataset):
+    ee_name = dataset["ee_name"]
+
+    for joint_state, ee_pose_target in zip(
+        dataset["joint_states"], dataset["ee_poses"]
+    ):
+        ee_se3_target = th.SE3(x_y_z_quaternion=ee_pose_target)
+
+        def fk_func(x):
+            ee_se3_output = robot_model.forward_kinematics(x)[ee_name]
+            return ee_se3_output.local(ee_se3_target)
+
+        jacobian_autograd = torch.autograd.functional.jacobian(
+            fk_func, joint_state
+        ).squeeze()
+        jacobian_analytical = torch.cat(
+            robot_model.drm_model.compute_endeffector_jacobian(joint_state, ee_name),
+            dim=0,
+        )
+
+        assert torch.allclose(jacobian_autograd, jacobian_analytical)

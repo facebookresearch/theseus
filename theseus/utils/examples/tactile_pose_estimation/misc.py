@@ -160,39 +160,20 @@ class TactilePushingDataset:
 
         return sdf_data_tensor, cell_size, origin
 
-    def get_measurements(self) -> List[Tuple[torch.Tensor, torch.Tensor, torch.Tensor]]:
-        batches = []
-        for batch_idx in range(self.num_batches):
-            start = batch_idx * self.batch_size
-            end = min(start + self.batch_size, self.dataset_size)
-            batches.append(
-                (
-                    self.img_feats[start:end, 0 : self.time_steps],
-                    self.eff_poses[start:end, 0 : self.time_steps],
-                    self.obj_poses[start:end, 0 : self.time_steps],
-                )
-            )
-        return batches
-
-    def get_start_pose_and_motion_for_batch(
-        self, batch_idx: int
-    ) -> Dict[str, torch.Tensor]:
-        pose_and_motion_batch = {}
+    def get_batch(self, batch_idx: int) -> Dict[str, torch.Tensor]:
+        assert batch_idx < self.num_batches
         start = batch_idx * self.batch_size
         end = min(start + self.batch_size, self.dataset_size)
-        pose_and_motion_batch["obj_start_pose"] = self.obj_poses[start:end, 0]
+        batch = {}
+        batch["img_feats"] = self.img_feats[start:end, : self.time_steps]
+        batch["eff_poses"] = self.eff_poses[start:end, : self.time_steps]
+        batch["obj_poses"] = self.obj_poses[start:end, : self.time_steps]
+        batch["obj_poses_gt"] = self.obj_poses[start:end, : self.time_steps, :].clone()
+        batch["eff_poses_gt"] = self.eff_poses[start:end, : self.time_steps, :].clone()
+        batch["obj_start_pose"] = self.obj_poses[start:end, 0]
         for i in range(self.time_steps):
-            pose_and_motion_batch[f"motion_capture_{i}"] = self.eff_poses[start:end, i]
-        return pose_and_motion_batch
-
-    def get_gt_data_for_batch(
-        self, batch_idx: int
-    ) -> Tuple[torch.Tensor, torch.Tensor]:
-        start = batch_idx * self.batch_size
-        end = min(start + self.batch_size, self.dataset_size)
-        obj_poses_gt = self.obj_poses[start:end, : self.time_steps, :].clone()
-        eff_poses_gt = self.eff_poses[start:end, : self.time_steps, :].clone()
-        return obj_poses_gt, eff_poses_gt
+            batch[f"motion_capture_{i}"] = self.eff_poses[start:end, i]
+        return batch
 
 
 # ----------------------------------------------------------------------------------- #

@@ -93,6 +93,7 @@ def pack_batch_results(
 
 def run_learning_loop(cfg):
     root_path = pathlib.Path(os.getcwd())
+    logger.info(f"LOGGING TO {str(root_path)}")
     dataset_path = EXP_PATH / "datasets" / f"{cfg.dataset_name}.json"
     sdf_path = EXP_PATH / "sdfs" / f"{cfg.sdf_name}.json"
     dataset = theg.TactilePushingDataset(
@@ -149,22 +150,18 @@ def run_learning_loop(cfg):
     # -------------------------------------------------------------------- #
     # Use theseus_layer in an outer learning loop to learn different cost
     # function parameters:
-    measurements = dataset.get_measurements()
     results = {}
     for epoch in range(cfg.train.num_epochs):
         results[epoch] = {}
         logger.info(f" ********************* EPOCH {epoch} *********************")
         losses = []
         image_idx = 0
-        for batch_idx, batch in enumerate(measurements):
-            pose_and_motion_batch = dataset.get_start_pose_and_motion_for_batch(
-                batch_idx
-            )  # x_y_theta format
-            pose_estimator.update_start_pose_and_motion_from_batch(
-                pose_and_motion_batch
-            )
+        for batch_idx in range(dataset.num_batches):
+            # ---------- Read data from batch ----------- #
+            batch = dataset.get_batch(batch_idx)
+            pose_estimator.update_start_pose_and_motion_from_batch(batch)
             theseus_inputs = {}
-            # Updates the above with measurement factor data
+            # Updates the above dictionary with measurement factor data
             theg.update_tactile_pushing_inputs(
                 dataset=dataset,
                 batch=batch,
@@ -176,7 +173,11 @@ def run_learning_loop(cfg):
                 time_steps=time_steps,
                 theseus_inputs=theseus_inputs,
             )
+            # Get ground truth data to use for the outer loss
+            obj_poses_gt = batch["obj_poses_gt"]
+            eff_poses_gt = batch["eff_poses_gt"]
 
+            # ---------- Forward pass ----------- #
             start_event = torch.cuda.Event(enable_timing=True)
             end_event = torch.cuda.Event(enable_timing=True)
             start_event.record()
@@ -196,11 +197,10 @@ def run_learning_loop(cfg):
             forward_time = start_event.elapsed_time(end_event)
             logger.info(f"Forward pass took {forward_time} ms.")
 
+            # ---------- Backward pass and update ----------- #
             obj_poses_opt, eff_poses_opt = theg.get_tactile_poses_from_values(
                 values=theseus_outputs, time_steps=time_steps
             )
-            obj_poses_gt, eff_poses_gt = dataset.get_gt_data_for_batch(batch_idx)
-
             se2_opt = th.SE2(x_y_theta=obj_poses_opt.view(-1, 3))
             se2_gt = th.SE2(x_y_theta=obj_poses_gt.view(-1, 3))
             loss = se2_opt.local(se2_gt).norm()
@@ -239,6 +239,7 @@ def run_learning_loop(cfg):
 
             losses.append(loss.item())
 
+            # ---------- Save results ----------- #
             if cfg.save_all:
                 results[epoch][batch_idx] = pack_batch_results(
                     theseus_outputs,

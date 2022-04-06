@@ -67,7 +67,11 @@ class UrdfRobotModel(KinematicsModel):
             Dictionary that maps link name to link pose
         """
         # Check input dimensions
-        assert joint_states.shape[-1] == len(self.drm_model.get_joint_limits())
+        robot_model_dofs = len(self.drm_model.get_joint_limits())
+        assert joint_states.shape[-1] == robot_model_dofs, (
+            f"Robot model dofs ({robot_model_dofs}) incompatible with "
+            f"input joint state dimensions ({joint_states.shape[-1]})."
+        )
 
         # Parse input
         print(type(joint_states))

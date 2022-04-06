@@ -67,6 +67,83 @@ plt.ion()
 # 2021 (https://arxiv.org/abs/1705.10664)
 
 
+class TactilePushingTrainer:
+    def __init__(self, cfg: omegaconf.DictConfig):
+        self.cfg = cfg
+        dataset_path = EXP_PATH / "datasets" / f"{cfg.dataset_name}.json"
+        sdf_path = EXP_PATH / "sdfs" / f"{cfg.sdf_name}.json"
+        self.dataset = theg.TactilePushingDataset(
+            str(dataset_path),
+            str(sdf_path),
+            cfg.episode_length,
+            cfg.train.batch_size,
+            cfg.max_episodes,
+            cfg.max_steps,
+            device,
+            split_episodes=cfg.split_episodes,
+        )
+
+        # -------------------------------------------------------------------- #
+        # Create pose estimator (which wraps a TheseusLayer)
+        # -------------------------------------------------------------------- #
+        self.pose_estimator = theg.TactilePoseEstimator(
+            self.dataset,
+            min_window_moving_frame=cfg.tactile_cost.min_win_mf,
+            max_window_moving_frame=cfg.tactile_cost.max_win_mf,
+            step_window_moving_frame=cfg.tactile_cost.step_win_mf,
+            rectangle_shape=(cfg.shape.rect_len_x, cfg.shape.rect_len_y),
+            device=device,
+            optimizer_cls=getattr(th, cfg.inner_optim.optimizer),
+            max_iterations=cfg.inner_optim.max_iters,
+            step_size=cfg.inner_optim.step_size,
+            regularization_w=cfg.inner_optim.reg_w,
+            force_max_iters=cfg.inner_optim.force_max_iters,
+        )
+
+        # -------------------------------------------------------------------- #
+        # Creating parameters to learn
+        # -------------------------------------------------------------------- #
+        if cfg.tactile_cost.init_pretrained_model:
+            measurements_model_path = (
+                EXP_PATH / "models" / "transform_prediction_keypoints.pt"
+            )
+        else:
+            measurements_model_path = None
+        (
+            self.measurements_model,
+            self.qsp_model,
+            self.mf_between_model,
+            learnable_params,
+        ) = theg.create_tactile_models(
+            cfg.train.mode, device, measurements_model_path=measurements_model_path
+        )
+        self.eps_tracking_loss = cfg.train.eps_tracking_loss
+        self.outer_optim = optim.Adam(learnable_params, lr=cfg.train.lr)
+
+    def get_batch_data(
+        self, batch: Dict[str, torch.Tensor], device: torch.device
+    ) -> Tuple[Dict[str, torch.Tensor], torch.Tensor, torch.Tensor]:
+        # Initialize inputs dictionary
+        theseus_inputs = self.pose_estimator.get_start_pose_and_motion_capture_dict(
+            batch
+        )
+        # Update the above dictionary with measurement factor data
+        theg.update_tactile_pushing_inputs(
+            dataset=self.dataset,
+            batch=batch,
+            measurements_model=self.measurements_model,
+            qsp_model=self.qsp_model,
+            mf_between_model=self.mf_between_model,
+            device=device,
+            cfg=self.cfg,
+            theseus_inputs=theseus_inputs,
+        )
+        # Get ground truth data to use for the outer loss
+        obj_poses_gt = batch["obj_poses_gt"]
+        eff_poses_gt = batch["eff_poses_gt"]
+        return theseus_inputs, obj_poses_gt, eff_poses_gt
+
+
 def pack_batch_results(
     theseus_outputs: Dict[str, torch.Tensor],
     qsp_state_dict: torch.Tensor,
@@ -92,88 +169,10 @@ def pack_batch_results(
     }
 
 
-def get_batch_data(
-    batch: Dict[str, torch.Tensor],
-    pose_estimator: theg.TactilePoseEstimator,
-    dataset: theg.TactilePushingDataset,
-    measurements_model: nn.Module,
-    qsp_model: nn.Module,
-    mf_between_model: nn.Module,
-    device: torch.device,
-    cfg: omegaconf.DictConfig,
-) -> Tuple[Dict[str, torch.Tensor], torch.Tensor, torch.Tensor]:
-    # Initialize inputs dictionary
-    theseus_inputs = pose_estimator.get_start_pose_and_motion_capture_dict(batch)
-    # Update the above dictionary with measurement factor data
-    theg.update_tactile_pushing_inputs(
-        dataset=dataset,
-        batch=batch,
-        measurements_model=measurements_model,
-        qsp_model=qsp_model,
-        mf_between_model=mf_between_model,
-        device=device,
-        cfg=cfg,
-        theseus_inputs=theseus_inputs,
-    )
-    # Get ground truth data to use for the outer loss
-    obj_poses_gt = batch["obj_poses_gt"]
-    eff_poses_gt = batch["eff_poses_gt"]
-    return theseus_inputs, obj_poses_gt, eff_poses_gt
-
-
 def run_learning_loop(cfg):
     root_path = pathlib.Path(os.getcwd())
     logger.info(f"LOGGING TO {str(root_path)}")
-    dataset_path = EXP_PATH / "datasets" / f"{cfg.dataset_name}.json"
-    sdf_path = EXP_PATH / "sdfs" / f"{cfg.sdf_name}.json"
-    dataset = theg.TactilePushingDataset(
-        dataset_path,
-        sdf_path,
-        cfg.episode_length,
-        cfg.train.batch_size,
-        cfg.max_episodes,
-        cfg.max_steps,
-        device,
-        split_episodes=cfg.split_episodes,
-    )
-
-    # -------------------------------------------------------------------- #
-    # Create pose estimator (which wraps a TheseusLayer)
-    # -------------------------------------------------------------------- #
-    pose_estimator = theg.TactilePoseEstimator(
-        dataset,
-        min_window_moving_frame=cfg.tactile_cost.min_win_mf,
-        max_window_moving_frame=cfg.tactile_cost.max_win_mf,
-        step_window_moving_frame=cfg.tactile_cost.step_win_mf,
-        rectangle_shape=(cfg.shape.rect_len_x, cfg.shape.rect_len_y),
-        device=device,
-        optimizer_cls=getattr(th, cfg.inner_optim.optimizer),
-        max_iterations=cfg.inner_optim.max_iters,
-        step_size=cfg.inner_optim.step_size,
-        regularization_w=cfg.inner_optim.reg_w,
-        force_max_iters=cfg.inner_optim.force_max_iters,
-    )
-    time_steps = dataset.time_steps
-
-    # -------------------------------------------------------------------- #
-    # Creating parameters to learn
-    # -------------------------------------------------------------------- #
-    if cfg.tactile_cost.init_pretrained_model:
-        measurements_model_path = (
-            EXP_PATH / "models" / "transform_prediction_keypoints.pt"
-        )
-    else:
-        measurements_model_path = None
-    (
-        measurements_model,
-        qsp_model,
-        mf_between_model,
-        learnable_params,
-    ) = theg.create_tactile_models(
-        cfg.train.mode, device, measurements_model_path=measurements_model_path
-    )
-    eps_tracking_loss = cfg.train.eps_tracking_loss
-    outer_optim = optim.Adam(learnable_params, lr=cfg.train.lr)
+    trainer = TactilePushingTrainer(cfg)
 
     # -------------------------------------------------------------------- #
     # Main learning loop
@@ -186,24 +185,18 @@ def run_learning_loop(cfg):
         logger.info(f" ********************* EPOCH {epoch} *********************")
         losses = []
         image_idx = 0
-        for batch_idx in range(dataset.num_batches):
+        for batch_idx in range(trainer.dataset.num_batches):
             # ---------- Read data from batch ----------- #
-            batch = dataset.get_batch(batch_idx)
-            theseus_inputs, obj_poses_gt, eff_poses_gt = get_batch_data(
-                batch,
-                pose_estimator,
-                dataset,
-                measurements_model,
-                qsp_model,
-                mf_between_model,
-                device,
-                cfg,
+            batch = trainer.dataset.get_batch(batch_idx)
+            theseus_inputs, obj_poses_gt, eff_poses_gt = trainer.get_batch_data(
+                batch, device
             )
+
             # ---------- Forward pass ----------- #
             start_event = torch.cuda.Event(enable_timing=True)
             end_event = torch.cuda.Event(enable_timing=True)
             start_event.record()
-            theseus_outputs, info = pose_estimator.forward(
+            theseus_outputs, info = trainer.pose_estimator.forward(
                 theseus_inputs,
                 optimizer_kwargs={
                     "verbose": True,
@@ -221,7 +214,7 @@ def run_learning_loop(cfg):
 
             # ---------- Backward pass and update ----------- #
             obj_poses_opt, eff_poses_opt = theg.get_tactile_poses_from_values(
-                values=theseus_outputs, time_steps=time_steps
+                values=theseus_outputs, time_steps=trainer.time_steps
             )
             se2_opt = th.SE2(x_y_theta=obj_poses_opt.view(-1, 3))
             se2_gt = th.SE2(x_y_theta=obj_poses_gt.view(-1, 3))
@@ -233,30 +226,34 @@ def run_learning_loop(cfg):
             backward_time = start_event.elapsed_time(end_event)
             logger.info(f"Backward pass took {backward_time} ms.")
 
-            nn.utils.clip_grad_norm_(qsp_model.parameters(), 100, norm_type=2)
-            nn.utils.clip_grad_norm_(mf_between_model.parameters(), 100, norm_type=2)
-            nn.utils.clip_grad_norm_(measurements_model.parameters(), 100, norm_type=2)
+            nn.utils.clip_grad_norm_(trainer.qsp_model.parameters(), 100, norm_type=2)
+            nn.utils.clip_grad_norm_(
+                trainer.mf_between_model.parameters(), 100, norm_type=2
+            )
+            nn.utils.clip_grad_norm_(
+                trainer.measurements_model.parameters(), 100, norm_type=2
+            )
 
             with torch.no_grad():
-                for name, param in qsp_model.named_parameters():
+                for name, param in trainer.qsp_model.named_parameters():
                     logger.info(f"{name} {param.data}")
-                for name, param in mf_between_model.named_parameters():
+                for name, param in trainer.mf_between_model.named_parameters():
                     logger.info(f"{name} {param.data}")
 
                 def _print_grad(msg_, param_):
                     logger.info(f"{msg_} {param_.grad.norm().item()}")
 
-                _print_grad("    grad qsp", qsp_model.param)
-                _print_grad("    grad mfb", mf_between_model.param)
-                _print_grad("    grad nn_weight", measurements_model.fc1.weight)
-                _print_grad("    grad nn_bias", measurements_model.fc1.bias)
+                _print_grad("    grad qsp", trainer.qsp_model.param)
+                _print_grad("    grad mfb", trainer.mf_between_model.param)
+                _print_grad("    grad nn_weight", trainer.measurements_model.fc1.weight)
+                _print_grad("    grad nn_bias", trainer.measurements_model.fc1.bias)
 
-            outer_optim.step()
+            trainer.outer_optim.step()
 
             with torch.no_grad():
-                for param in qsp_model.parameters():
+                for param in trainer.qsp_model.parameters():
                     param.data.clamp_(0)
-                for param in mf_between_model.parameters():
+                for param in trainer.mf_between_model.parameters():
                     param.data.clamp_(0)
 
             losses.append(loss.item())
@@ -265,9 +262,9 @@ def run_learning_loop(cfg):
             if cfg.save_all:
                 results[epoch][batch_idx] = pack_batch_results(
                     theseus_outputs,
-                    qsp_model.state_dict(),
-                    mf_between_model.state_dict(),
-                    measurements_model.state_dict(),
+                    trainer.qsp_model.state_dict(),
+                    trainer.mf_between_model.state_dict(),
+                    trainer.measurements_model.state_dict(),
                     info,
                     loss.item(),
                     forward_time,
@@ -293,7 +290,7 @@ def run_learning_loop(cfg):
 
         logger.info(f"AVG. LOSS: {np.mean(losses)}")
 
-        if np.mean(losses) < eps_tracking_loss:
+        if np.mean(losses) < trainer.eps_tracking_loss:
             break
 
 

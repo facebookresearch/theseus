@@ -22,12 +22,13 @@ class SO3(LieGroup):
         data: Optional[torch.Tensor] = None,
         name: Optional[str] = None,
         dtype: Optional[torch.dtype] = None,
+        requires_check: bool = True,
     ):
         if quaternion is not None and data is not None:
             raise ValueError("Please provide only one of quaternion or data.")
         if quaternion is not None:
             dtype = quaternion.dtype
-        if data is not None:
+        if data is not None and requires_check:
             self._SO3_matrix_check(data)
         super().__init__(data=data, name=name, dtype=dtype)
         if quaternion is not None:
@@ -298,7 +299,8 @@ class SO3(LieGroup):
         return ret
 
     def _inverse_impl(self, get_jacobian: bool = False) -> "SO3":
-        return SO3(data=self.data.transpose(1, 2).clone())
+        # if self.data is a valid SO(3), then self.data.transpose(1, 2) must be valid as well
+        return SO3(data=self.data.transpose(1, 2).clone(), requires_check=False)
 
     def to_matrix(self) -> torch.Tensor:
         return self.data.clone()
@@ -417,7 +419,8 @@ class SO3(LieGroup):
         return ret
 
     def _copy_impl(self, new_name: Optional[str] = None) -> "SO3":
-        return SO3(data=self.data.clone(), name=new_name)
+        # if self.data is a valid SO(3), so is the copy
+        return SO3(data=self.data.clone(), name=new_name, requires_check=False)
 
     # only added to avoid casting downstream
     def copy(self, new_name: Optional[str] = None) -> "SO3":

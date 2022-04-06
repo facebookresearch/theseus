@@ -1,9 +1,10 @@
-from typing import Tuple
+from typing import Dict, List, Optional, Tuple, Type
 
 import numpy as np
 import torch
 
 import theseus as th
+from theseus.optimizer.nonlinear.levenberg_marquardt import LevenbergMarquardt
 
 from .misc import TactilePushingDataset
 
@@ -18,9 +19,15 @@ class TactilePoseEstimator:
         step_window_moving_frame: int,
         rectangle_shape: Tuple[float, float],
         device: torch.device,
+        optimizer_cls: Optional[Type[th.NonlinearLeastSquares]] = LevenbergMarquardt,
+        max_iterations: int = 3,
+        step_size: float = 1.0,
+        regularization_w: float = 0.0,
+        force_max_iters: bool = False,
     ):
         self.dataset = dataset
-        self.time_steps = np.minimum(max_steps, len(self.dataset.obj_poses))
+        # obj_poses is shape (batch_size, episode_length, 3)
+        self.time_steps = np.minimum(max_steps, self.dataset.obj_poses.shape[1])
 
         # -------------------------------------------------------------------- #
         # Creating optimization variables
@@ -40,18 +47,13 @@ class TactilePoseEstimator:
         #  - nn_measurements: tactile measurement prediction from image features
         #  - sdf_data, sdf_cell_size, sdf_origin: signed distance field data,
         #    cell_size and origin
-        obj_start_pose = th.SE2(
-            x_y_theta=self.dataset.obj_poses[0].unsqueeze(0), name="obj_start_pose"
-        )
+        obj_start_pose = th.SE2(name="obj_start_pose")
+        self.obj_start_pose = obj_start_pose
 
-        motion_captures = []
+        motion_captures: List[th.SE2] = []
         for i in range(self.time_steps):
-            motion_captures.append(
-                th.SE2(
-                    x_y_theta=self.dataset.eff_poses[i].unsqueeze(0),
-                    name=f"motion_capture_{i}",
-                )
-            )
+            motion_captures.append(th.SE2(name=f"motion_capture_{i}"))
+        self.motion_captures = motion_captures
 
         nn_measurements = []
         for i in range(min_window_moving_frame, self.time_steps):
@@ -175,16 +177,40 @@ class TactilePoseEstimator:
                 )
             )
 
+        if regularization_w > 0.0:
+            reg_w = th.ScaleCostWeight(np.sqrt(regularization_w))
+            reg_w.to(dtype=torch.double)
+            identity_se2 = th.SE2(name="identity")
+            for pose_list in [obj_poses, eff_poses]:
+                for pose in pose_list:
+                    objective.add(
+                        th.eb.VariableDifference(
+                            pose, reg_w, identity_se2, name=f"reg_{pose.name}"
+                        )
+                    )
+
         # -------------------------------------------------------------------- #
         # Creating TheseusLayer
         # -------------------------------------------------------------------- #
         # Wrap the objective and inner-loop optimizer into a `TheseusLayer`.
         # Inner-loop optimizer here is the Levenberg-Marquardt nonlinear optimizer
         # coupled with a dense linear solver based on Cholesky decomposition.
-        nl_optimizer = th.LevenbergMarquardt(
-            objective, th.CholeskyDenseSolver, max_iterations=3
+        nl_optimizer = optimizer_cls(
+            objective,
+            th.CholeskyDenseSolver,
+            max_iterations=max_iterations,
+            step_size=step_size,
+            abs_err_tolerance=0 if force_max_iters else 1e-10,
+            rel_err_tolerance=0 if force_max_iters else 1e-8,
         )
         self.theseus_layer = th.TheseusLayer(nl_optimizer)
         self.theseus_layer.to(device=device, dtype=torch.double)
 
         self.forward = self.theseus_layer.forward
+
+    # This method updates the start pose and motion catpure variables with the
+    # xytheta data coming from the batch
+    def update_start_pose_and_motion_from_batch(self, batch: Dict[str, torch.Tensor]):
+        self.obj_start_pose.update_from_x_y_theta(batch[self.obj_start_pose.name])
+        for motion_capture_var in self.motion_captures:
+            motion_capture_var.update_from_x_y_theta(batch[motion_capture_var.name])

@@ -4,6 +4,13 @@
 # LICENSE file in the root directory of this source tree.
 import warnings
 
+from .bundle_adjustment import (
+    BundleAdjustmentDataset,
+    Camera,
+    Reprojection,
+    ba_histogram,
+)
+
 try:
     from .motion_planning import (
         InitialTrajectoryModel,
@@ -40,3 +47,6 @@ except ModuleNotFoundError:
         "Unable to import Tactile Pose Estimation utilities. "
         "Please make sure you have matplotlib and omegaconf installed."
     )
+
+
+from .pose_graph import PosePriorError, RelativePoseError

@@ -16,6 +16,7 @@ from .common import (
     check_compose,
     check_exp_map,
     check_inverse,
+    check_jacobian_for_local,
     check_projection_for_compose,
     check_projection_for_exp_map,
     check_projection_for_inverse,
@@ -240,3 +241,14 @@ def test_projection():
 
             # Test SE3.inverse
             check_projection_for_inverse(th.SE3, batch_size, rng)
+
+
+def test_local_map():
+    rng = torch.Generator()
+    rng.manual_seed(0)
+
+    for batch_size in [1, 20, 100]:
+        group0 = th.SE3.rand(batch_size, dtype=torch.float64)
+        group1 = th.SE3.rand(batch_size, dtype=torch.float64)
+
+        check_jacobian_for_local(group0, group1, Group=th.SE3, is_projected=True)

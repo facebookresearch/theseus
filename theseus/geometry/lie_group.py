@@ -167,13 +167,22 @@ class LieGroup(Manifold):
     def _inverse_jacobian(group: "LieGroup") -> torch.Tensor:
         return -group.adjoint()
 
-    def _local_impl(self, variable2: Manifold) -> torch.Tensor:
+    def _local_impl(
+        self, variable2: Manifold, jacobians: List[torch.Tensor] = None
+    ) -> torch.Tensor:
         variable2 = cast(LieGroup, variable2)
-        return self.between(variable2).log_map()
+        diff = self.between(variable2)
 
-    def _local_jacobian(self, variable2: Manifold) -> Tuple[torch.Tensor, torch.Tensor]:
-        # Need the log_map derivative which is not yet implemented
-        raise NotImplementedError
+        if jacobians is not None:
+            LieGroup._check_jacobians_list(jacobians)
+            dlog: List[torch.Tensor] = []
+            ret = diff.log_map(dlog)
+            jacobians.append(-diff.inverse().adjoint() @ dlog[0])
+            jacobians.append(dlog[0])
+        else:
+            ret = diff.log_map()
+
+        return ret
 
     def _retract_impl(self, delta: torch.Tensor) -> "LieGroup":
         return self.compose(self.exp_map(delta))
@@ -213,10 +222,16 @@ def inverse(
 
 
 # Alias for LieGroup.log_map()
-def log_map(variable: LieGroup) -> torch.Tensor:
-    return variable.log_map()
+def log_map(
+    variable: LieGroup, jacobians: Optional[List[torch.Tensor]] = None
+) -> torch.Tensor:
+    return variable.log_map(jacobians=jacobians)
 
 
 # Alias for LieGroup.exp_map()
-def exp_map(variable: LieGroup, tangent_vector: torch.Tensor) -> LieGroup:
-    return variable.__class__.exp_map(tangent_vector)
+def exp_map(
+    variable: LieGroup,
+    tangent_vector: torch.Tensor,
+    jacobians: Optional[List[torch.Tensor]] = None,
+) -> LieGroup:
+    return variable.__class__.exp_map(tangent_vector, jacobians=jacobians)

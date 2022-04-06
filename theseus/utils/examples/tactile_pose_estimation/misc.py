@@ -19,10 +19,11 @@ class TactilePushingDataset:
         batch_size: int,
         max_episodes: int,
         device: torch.device,
+        split_episodes: bool = False,
     ):
         batch_size = min(batch_size, max_episodes)
         data = TactilePushingDataset._load_dataset_from_file(
-            data_fname, episode_length, max_episodes, device
+            data_fname, episode_length, max_episodes, device, split_episodes
         )
         (
             self.sdf_data_tensor,
@@ -46,9 +47,12 @@ class TactilePushingDataset:
 
     @staticmethod
     def _load_dataset_from_file(
-        filename: str, episode_length: int, max_episodes: int, device: torch.device
+        filename: str,
+        episode_length: int,
+        max_episodes: int,
+        device: torch.device,
+        split_episodes: bool = False,
     ) -> Dict[str, torch.Tensor]:
-
         # Load all episode data
         with open(filename) as f:
             import json
@@ -80,22 +84,46 @@ class TactilePushingDataset:
             [(k, []) for k in dataset_all.keys()]
         )
 
-        for i, episode in enumerate(episode_indices):
-            if i == max_episodes:
+        for episode in episode_indices:
+            if len(data["obj_poses"]) == max_episodes:
                 break
             ds_idxs = torch.nonzero(dataset_all["contact_episode"] == episode).squeeze()
             if len(ds_idxs) < episode_length:
                 continue
-            ds_idxs = ds_idxs[:episode_length]
             for key, val in dataset_all.items():
-                data[key].append(val[ds_idxs])
+                if split_episodes:
+                    tensors = TactilePushingDataset._get_tensor_splits(
+                        val[ds_idxs], episode_length
+                    )
+                else:
+                    ds_idxs = ds_idxs[:episode_length]
+                    tensors = [val[ds_idxs]]
+                for tensor in tensors:
+                    data[key].append(tensor)
 
         # Stack all episode data into single tensors
         data_tensors = {}
         for key in data:
             data_tensors[key] = torch.stack(data[key])
-        print(f"Read {len(data_tensors[key])} episodes of length {episode_length}.")
+        num_ep_read, len_ep_read = data_tensors[key].shape[:2]
+        print(f"Read {num_ep_read} episodes of length {len_ep_read}.")
         return data_tensors
+
+    @staticmethod
+    def _get_tensor_splits(
+        tensor: torch.Tensor, episode_length: int
+    ) -> List[torch.Tensor]:
+        squeeze = False
+        if tensor.ndim == 1:
+            squeeze = True
+            tensor = tensor.view(-1, 1)
+        length, dof = tensor.shape
+        num_splits = length // episode_length
+        mod_tensor = tensor[: num_splits * episode_length]
+        reshaped_tensor = mod_tensor.view(num_splits, -1, dof)
+        if squeeze:
+            reshaped_tensor = reshaped_tensor.squeeze(2)
+        return [t for t in reshaped_tensor]
 
     @staticmethod
     def _load_tactile_sdf_from_file(

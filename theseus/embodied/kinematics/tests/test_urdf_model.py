@@ -97,13 +97,11 @@ def test_jacobian(robot_model, dataset):
             robot_model.drm_model.compute_endeffector_jacobian(joint_state, ee_name),
             dim=0,
         )
-        jacobian_e = (
-            th.eb.VariableDifference(
-                ee_se3_target, th.ScaleCostWeight(1.0), ee_se3_target
-            )
-            .jacobians()[0][0]
-            .squeeze()
+        jacobian_e = th.eb.VariableDifference(
+            ee_se3_target, th.ScaleCostWeight(1.0), ee_se3_target
+        ).jacobians()[0][0]
+        jacobian_analytical = (
+            jacobian_e @ ee_se3_target.inverse().adjoint() @ jacobian_m_analytical
         )
-        jacobian_analytical = (jacobian_m_analytical.T @ jacobian_e.T).T
 
         assert torch.allclose(jacobian_autograd, jacobian_analytical)

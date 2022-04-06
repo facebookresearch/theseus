@@ -6,7 +6,6 @@ import logging
 import os
 import pathlib
 import random
-import time
 from typing import Dict
 
 import hydra
@@ -74,7 +73,8 @@ def pack_batch_results(
     meas_state_dict: torch.Tensor,
     info: th.optimizer.OptimizerInfo,
     loss_value: float,
-    total_time: float,
+    forward_time: float,
+    backward_time: float,
 ) -> Dict:
     def _clone(t_):
         return t_.detach().cpu().clone()
@@ -86,7 +86,8 @@ def pack_batch_results(
         "meas_state_dict": meas_state_dict,
         "err_history": info.err_history,  # type: ignore
         "loss": loss_value,
-        "total_time": total_time,
+        "forward_time": forward_time,
+        "backward_time": backward_time,
     }
 
 
@@ -174,7 +175,9 @@ def run_learning_loop(cfg):
                 theseus_inputs=theseus_inputs,
             )
 
-            start_time = time.time_ns()
+            start_event = torch.cuda.Event(enable_timing=True)
+            end_event = torch.cuda.Event(enable_timing=True)
+            start_event.record()
             theseus_outputs, info = pose_estimator.forward(
                 theseus_inputs,
                 optimizer_kwargs={
@@ -186,7 +189,10 @@ def run_learning_loop(cfg):
                     "__keep_final_step_size__": cfg.inner_optim.keep_step_size,
                 },
             )
-            end_time = time.time_ns()
+            end_event.record()
+            torch.cuda.synchronize()
+            forward_time = start_event.elapsed_time(end_event)
+            logger.info(f"Forward pass took {forward_time} ms.")
 
             obj_poses_opt, eff_poses_opt = theg.get_tactile_poses_from_values(
                 values=theseus_outputs, time_steps=time_steps
@@ -198,7 +204,12 @@ def run_learning_loop(cfg):
             se2_opt = th.SE2(x_y_theta=obj_poses_opt.view(-1, 3))
             se2_gt = th.SE2(x_y_theta=obj_poses_gt.view(-1, 3))
             loss = se2_opt.local(se2_gt).norm()
+            start_event.record()
             loss.backward()
+            end_event.record()
+            torch.cuda.synchronize()
+            backward_time = start_event.elapsed_time(end_event)
+            logger.info(f"Backward pass took {backward_time} ms.")
 
             nn.utils.clip_grad_norm_(qsp_model.parameters(), 100, norm_type=2)
             nn.utils.clip_grad_norm_(mf_between_model.parameters(), 100, norm_type=2)
@@ -236,7 +247,8 @@ def run_learning_loop(cfg):
                     measurements_model.state_dict(),
                     info,
                     loss.item(),
-                    end_time - start_time,
+                    forward_time,
+                    backward_time,
                 )
                 torch.save(results, root_path / "results.pt")
 

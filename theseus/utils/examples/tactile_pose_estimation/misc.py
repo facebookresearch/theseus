@@ -18,6 +18,7 @@ class TactilePushingDataset:
         episode_length: int,
         batch_size: int,
         max_episodes: int,
+        max_steps: int,
         device: torch.device,
         split_episodes: bool = False,
     ):
@@ -43,7 +44,12 @@ class TactilePushingDataset:
                 self.dataset_size = val.shape[0]
             else:
                 assert self.dataset_size == val.shape[0]
+        # obj_poses is shape (num_episodes, episode_length, 3)
+        self.time_steps = np.minimum(max_steps, self.obj_poses.shape[1])
+
         self.batch_size = batch_size
+        self.num_batches = (self.dataset_size - 1) // self.batch_size + 1
+        self._current_batch = 0
 
     @staticmethod
     def _load_dataset_from_file(
@@ -154,41 +160,38 @@ class TactilePushingDataset:
 
         return sdf_data_tensor, cell_size, origin
 
-    def get_measurements(
-        self, time_steps: int
-    ) -> List[Tuple[torch.Tensor, torch.Tensor, torch.Tensor]]:
-        num_batches = (self.dataset_size - 1) // self.batch_size + 1
+    def get_measurements(self) -> List[Tuple[torch.Tensor, torch.Tensor, torch.Tensor]]:
         batches = []
-        for batch_idx in range(num_batches):
+        for batch_idx in range(self.num_batches):
             start = batch_idx * self.batch_size
             end = min(start + self.batch_size, self.dataset_size)
             batches.append(
                 (
-                    self.img_feats[start:end, 0:time_steps],
-                    self.eff_poses[start:end, 0:time_steps],
-                    self.obj_poses[start:end, 0:time_steps],
+                    self.img_feats[start:end, 0 : self.time_steps],
+                    self.eff_poses[start:end, 0 : self.time_steps],
+                    self.obj_poses[start:end, 0 : self.time_steps],
                 )
             )
         return batches
 
     def get_start_pose_and_motion_for_batch(
-        self, batch_idx: int, time_steps: int
+        self, batch_idx: int
     ) -> Dict[str, torch.Tensor]:
         pose_and_motion_batch = {}
         start = batch_idx * self.batch_size
         end = min(start + self.batch_size, self.dataset_size)
         pose_and_motion_batch["obj_start_pose"] = self.obj_poses[start:end, 0]
-        for i in range(time_steps):
+        for i in range(self.time_steps):
             pose_and_motion_batch[f"motion_capture_{i}"] = self.eff_poses[start:end, i]
         return pose_and_motion_batch
 
     def get_gt_data_for_batch(
-        self, batch_idx: int, time_steps: int
+        self, batch_idx: int
     ) -> Tuple[torch.Tensor, torch.Tensor]:
         start = batch_idx * self.batch_size
         end = min(start + self.batch_size, self.dataset_size)
-        obj_poses_gt = self.obj_poses[start:end, :time_steps, :].clone()
-        eff_poses_gt = self.eff_poses[start:end, :time_steps, :].clone()
+        obj_poses_gt = self.obj_poses[start:end, : self.time_steps, :].clone()
+        eff_poses_gt = self.eff_poses[start:end, : self.time_steps, :].clone()
         return obj_poses_gt, eff_poses_gt
 
 

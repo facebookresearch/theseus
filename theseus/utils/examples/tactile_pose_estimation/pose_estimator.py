@@ -13,7 +13,6 @@ class TactilePoseEstimator:
     def __init__(
         self,
         dataset: TactilePushingDataset,
-        max_steps: int,
         min_window_moving_frame: int,
         max_window_moving_frame: int,
         step_window_moving_frame: int,
@@ -25,9 +24,7 @@ class TactilePoseEstimator:
         regularization_w: float = 0.0,
         force_max_iters: bool = False,
     ):
-        self.dataset = dataset
-        # obj_poses is shape (batch_size, episode_length, 3)
-        self.time_steps = np.minimum(max_steps, self.dataset.obj_poses.shape[1])
+        time_steps = dataset.time_steps
 
         # -------------------------------------------------------------------- #
         # Creating optimization variables
@@ -35,7 +32,7 @@ class TactilePoseEstimator:
         # The optimization variables for this problem are SE2 object and end effector
         # poses over time.
         obj_poses, eff_poses = [], []
-        for i in range(self.time_steps):
+        for i in range(time_steps):
             obj_poses.append(th.SE2(name=f"obj_pose_{i}", dtype=torch.double))
             eff_poses.append(th.SE2(name=f"eff_pose_{i}", dtype=torch.double))
 
@@ -51,12 +48,12 @@ class TactilePoseEstimator:
         self.obj_start_pose = obj_start_pose
 
         motion_captures: List[th.SE2] = []
-        for i in range(self.time_steps):
+        for i in range(time_steps):
             motion_captures.append(th.SE2(name=f"motion_capture_{i}"))
         self.motion_captures = motion_captures
 
         nn_measurements = []
-        for i in range(min_window_moving_frame, self.time_steps):
+        for i in range(min_window_moving_frame, time_steps):
             for offset in range(
                 min_window_moving_frame,
                 np.minimum(i, max_window_moving_frame),
@@ -113,7 +110,7 @@ class TactilePoseEstimator:
         objective = th.Objective()
         nn_meas_idx = 0
         c_square = (np.sqrt(rectangle_shape[0] ** 2 + rectangle_shape[1] ** 2)) ** 2
-        for i in range(self.time_steps):
+        for i in range(time_steps):
             if i == 0:
                 objective.add(
                     th.eb.VariableDifference(
@@ -124,7 +121,7 @@ class TactilePoseEstimator:
                     )
                 )
 
-            if i < self.time_steps - 1:
+            if i < time_steps - 1:
                 objective.add(
                     th.eb.QuasiStaticPushingPlanar(
                         obj_poses[i],

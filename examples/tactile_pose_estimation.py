@@ -101,7 +101,9 @@ def run_learning_loop(cfg):
         cfg.episode_length,
         cfg.train.batch_size,
         cfg.max_episodes,
+        cfg.max_steps,
         device,
+        split_episodes=cfg.split_episodes,
     )
 
     # -------------------------------------------------------------------- #
@@ -109,7 +111,6 @@ def run_learning_loop(cfg):
     # -------------------------------------------------------------------- #
     pose_estimator = theg.TactilePoseEstimator(
         dataset,
-        max_steps=cfg.max_steps,
         min_window_moving_frame=cfg.tactile_cost.min_win_mf,
         max_window_moving_frame=cfg.tactile_cost.max_win_mf,
         step_window_moving_frame=cfg.tactile_cost.step_win_mf,
@@ -119,8 +120,9 @@ def run_learning_loop(cfg):
         max_iterations=cfg.inner_optim.max_iters,
         step_size=cfg.inner_optim.step_size,
         regularization_w=cfg.inner_optim.reg_w,
+        force_max_iters=cfg.inner_optim.force_max_iters,
     )
-    time_steps = pose_estimator.time_steps
+    time_steps = dataset.time_steps
 
     # -------------------------------------------------------------------- #
     # Creating parameters to learn
@@ -147,16 +149,16 @@ def run_learning_loop(cfg):
     # -------------------------------------------------------------------- #
     # Use theseus_layer in an outer learning loop to learn different cost
     # function parameters:
-    measurements = dataset.get_measurements(time_steps)
+    measurements = dataset.get_measurements()
     results = {}
     for epoch in range(cfg.train.num_epochs):
         results[epoch] = {}
-        logger.info(f" ********************* EPOCH f{epoch} *********************")
+        logger.info(f" ********************* EPOCH {epoch} *********************")
         losses = []
         image_idx = 0
         for batch_idx, batch in enumerate(measurements):
             pose_and_motion_batch = dataset.get_start_pose_and_motion_for_batch(
-                batch_idx, time_steps
+                batch_idx
             )  # x_y_theta format
             pose_estimator.update_start_pose_and_motion_from_batch(
                 pose_and_motion_batch
@@ -197,9 +199,7 @@ def run_learning_loop(cfg):
             obj_poses_opt, eff_poses_opt = theg.get_tactile_poses_from_values(
                 values=theseus_outputs, time_steps=time_steps
             )
-            obj_poses_gt, eff_poses_gt = dataset.get_gt_data_for_batch(
-                batch_idx, time_steps
-            )
+            obj_poses_gt, eff_poses_gt = dataset.get_gt_data_for_batch(batch_idx)
 
             se2_opt = th.SE2(x_y_theta=obj_poses_opt.view(-1, 3))
             se2_gt = th.SE2(x_y_theta=obj_poses_gt.view(-1, 3))

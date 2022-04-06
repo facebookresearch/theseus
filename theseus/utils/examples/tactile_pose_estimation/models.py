@@ -253,6 +253,10 @@ def update_tactile_pushing_inputs(
     theseus_inputs["sdf_data"] = (
         (dataset.sdf_data_tensor.data).repeat(batch_size, 1, 1).to(device)
     )
+    theseus_inputs["sdf_cell_size"] = dataset.sdf_cell_size.repeat(batch_size, 1).to(
+        device
+    )
+    theseus_inputs["sdf_origin"] = dataset.sdf_origin.repeat(batch_size, 1).to(device)
 
     theseus_inputs.update(
         get_tactile_nn_measurements_inputs(

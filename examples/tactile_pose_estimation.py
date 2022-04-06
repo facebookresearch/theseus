@@ -72,7 +72,7 @@ class TactilePushingTrainer:
         self.cfg = cfg
         dataset_path = EXP_PATH / "datasets" / f"{cfg.dataset_name}.json"
         sdf_path = EXP_PATH / "sdfs" / f"{cfg.sdf_name}.json"
-        self.dataset = theg.TactilePushingDataset(
+        self.dataset_train = theg.TactilePushingDataset(
             str(dataset_path),
             str(sdf_path),
             cfg.episode_length,
@@ -81,13 +81,27 @@ class TactilePushingTrainer:
             cfg.max_steps,
             device,
             split_episodes=cfg.split_episodes,
+            data_mode="train",
+        )
+        self.dataset_val = theg.TactilePushingDataset(
+            str(dataset_path),
+            str(sdf_path),
+            cfg.episode_length,
+            cfg.train.batch_size,
+            cfg.max_episodes,
+            cfg.max_steps,
+            device,
+            split_episodes=cfg.split_episodes,
+            data_mode="val",
         )
 
         # -------------------------------------------------------------------- #
         # Create pose estimator (which wraps a TheseusLayer)
         # -------------------------------------------------------------------- #
+        # self.dataset_train is used to created the correct SDF tensor shapes
+        # and also get the number of time steps
         self.pose_estimator = theg.TactilePoseEstimator(
-            self.dataset,
+            self.dataset_train,
             min_window_moving_frame=cfg.tactile_cost.min_win_mf,
             max_window_moving_frame=cfg.tactile_cost.max_win_mf,
             step_window_moving_frame=cfg.tactile_cost.step_win_mf,
@@ -146,20 +160,65 @@ class TactilePushingTrainer:
         eff_poses_gt = batch["eff_poses_gt"]
         return theseus_inputs, obj_poses_gt, eff_poses_gt
 
+    def _update(self, loss: torch.Tensor) -> float:
+        start_event = torch.cuda.Event(enable_timing=True)
+        end_event = torch.cuda.Event(enable_timing=True)
+        start_event.record()
+        loss.backward()
+        end_event.record()
+        torch.cuda.synchronize()
+        backward_time = start_event.elapsed_time(end_event)
+        logger.info(f"Backward pass took {backward_time} ms.")
+
+        nn.utils.clip_grad_norm_(self.qsp_model.parameters(), 100, norm_type=2)
+        nn.utils.clip_grad_norm_(self.mf_between_model.parameters(), 100, norm_type=2)
+        nn.utils.clip_grad_norm_(self.measurements_model.parameters(), 100, norm_type=2)
+
+        with torch.no_grad():
+            for name, param in self.qsp_model.named_parameters():
+                logger.info(f"{name} {param.data}")
+            for name, param in self.mf_between_model.named_parameters():
+                logger.info(f"{name} {param.data}")
+
+            def _print_grad(msg_, param_):
+                logger.info(f"{msg_} {param_.grad.norm().item()}")
+
+            _print_grad("    grad qsp", self.qsp_model.param)
+            _print_grad("    grad mfb", self.mf_between_model.param)
+            _print_grad("    grad nn_weight", self.measurements_model.fc1.weight)
+            _print_grad("    grad nn_bias", self.measurements_model.fc1.bias)
+
+        self.outer_optim.step()
+
+        with torch.no_grad():
+            for param in self.qsp_model.parameters():
+                param.data.clamp_(0)
+            for param in self.mf_between_model.parameters():
+                param.data.clamp_(0)
+
+        return backward_time
+
     def compute_loss(
         self, update: bool = True
     ) -> Tuple[
         List[torch.Tensor], Dict[int, Dict[str, Any]], Dict[str, List[torch.Tensor]]
     ]:
         if update:
-            dataset = self.dataset
+            dataset = self.dataset_train
         else:
-            raise NotImplementedError("Need to add validation data")
+            dataset = self.dataset_val
 
         results = {}
         losses = []
         image_data: Dict[str, List[torch.Tensor]] = dict(
             (name, []) for name in ["obj_opt", "eff_opt", "obj_gt", "eff_gt"]
+        )
+
+        # Set different number of max iterations for validation loop
+        self.pose_estimator.theseus_layer.optimizer.set_params(  # type: ignore
+            max_iterations=self.cfg.inner_optim.max_iters
+            if update
+            else self.cfg.inner_optim.val_iters
         )
         for batch_idx in range(dataset.num_batches):
             # ---------- Read data from batch ----------- #
@@ -195,46 +254,13 @@ class TactilePushingTrainer:
             se2_opt = th.SE2(x_y_theta=obj_poses_opt.view(-1, 3))
             se2_gt = th.SE2(x_y_theta=obj_poses_gt.view(-1, 3))
             loss = se2_opt.local(se2_gt).norm()
-            start_event.record()
-            loss.backward()
-            end_event.record()
-            torch.cuda.synchronize()
-            backward_time = start_event.elapsed_time(end_event)
-            logger.info(f"Backward pass took {backward_time} ms.")
 
-            nn.utils.clip_grad_norm_(self.qsp_model.parameters(), 100, norm_type=2)
-            nn.utils.clip_grad_norm_(
-                self.mf_between_model.parameters(), 100, norm_type=2
-            )
-            nn.utils.clip_grad_norm_(
-                self.measurements_model.parameters(), 100, norm_type=2
-            )
-
-            with torch.no_grad():
-                for name, param in self.qsp_model.named_parameters():
-                    logger.info(f"{name} {param.data}")
-                for name, param in self.mf_between_model.named_parameters():
-                    logger.info(f"{name} {param.data}")
-
-                def _print_grad(msg_, param_):
-                    logger.info(f"{msg_} {param_.grad.norm().item()}")
-
-                _print_grad("    grad qsp", self.qsp_model.param)
-                _print_grad("    grad mfb", self.mf_between_model.param)
-                _print_grad("    grad nn_weight", self.measurements_model.fc1.weight)
-                _print_grad("    grad nn_bias", self.measurements_model.fc1.bias)
-
-            self.outer_optim.step()
-
-            with torch.no_grad():
-                for param in self.qsp_model.parameters():
-                    param.data.clamp_(0)
-                for param in self.mf_between_model.parameters():
-                    param.data.clamp_(0)
-
-            losses.append(loss.item())
+            backward_time = -1.0
+            if update:
+                backward_time = self._update(loss)
 
             # ---------- Pack results ----------- #
+            losses.append(loss.item())
             results[batch_idx] = pack_batch_results(
                 theseus_outputs,
                 self.qsp_model.state_dict(),
@@ -245,7 +271,6 @@ class TactilePushingTrainer:
                 forward_time,
                 backward_time,
             )
-
             image_data["obj_opt"].extend([p for p in obj_poses_opt])
             image_data["eff_opt"].extend([p for p in eff_poses_opt])
             image_data["obj_gt"].extend([p for p in obj_poses_gt])
@@ -289,13 +314,19 @@ def run_learning_loop(cfg):
     # -------------------------------------------------------------------- #
     # Use theseus_layer in an outer learning loop to learn different cost
     # function parameters:
-    results = {}
+    results_train = {}
+    results_val = {}
     for epoch in range(cfg.train.num_epochs):
         logger.info(f" ********************* EPOCH {epoch} *********************")
-        losses, results_epoch, image_data = trainer.compute_loss()
-        results[epoch] = results_epoch
-        logger.info(f"AVG. LOSS: {np.mean(losses)}")
-        torch.save(results, root_path / "results.pt")
+        logger.info(" -------------- TRAINING --------------")
+        train_losses, results_train[epoch], _ = trainer.compute_loss()
+        logger.info(f"AVG. TRAIN LOSS: {np.mean(train_losses)}")
+        torch.save(results_train, root_path / "results_train.pt")
+
+        logger.info(" -------------- VALIDATION --------------")
+        val_losses, results_val[epoch], image_data = trainer.compute_loss(update=False)
+        logger.info(f"AVG. VAL LOSS: {np.mean(val_losses)}")
+        torch.save(results_val, root_path / "results_val.pt")
 
         if cfg.options.vis_traj:
             for i in range(len(image_data["obj_opt"])):

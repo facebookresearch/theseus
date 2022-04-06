@@ -21,7 +21,12 @@ class TactilePushingDataset:
         max_steps: int,
         device: torch.device,
         split_episodes: bool = False,
+        data_mode: str = "all",
+        val_ratio: float = 0.1,
+        seed: int = 1234567,
     ):
+        assert data_mode in ["all", "train", "val"]
+
         batch_size = min(batch_size, max_episodes)
         data = TactilePushingDataset._load_dataset_from_file(
             data_fname, episode_length, max_episodes, device, split_episodes
@@ -32,24 +37,34 @@ class TactilePushingDataset:
             self.sdf_origin,
         ) = TactilePushingDataset._load_tactile_sdf_from_file(sdf_fname, device)
 
-        self.img_feats = data["img_feats"]
-        self.eff_poses = data["eff_poses"]
-        self.obj_poses = data["obj_poses"]
-        self.contact_episode = data["contact_episode"]
-        self.contact_flag = data["contact_flag"]
+        # keys: img_feats, eff_poses, obj_poses, contact_episode, contact_flag
+        num_episodes = data["obj_poses"].shape[0]
+        if data_mode == "all":
+            idx = np.arange(num_episodes)
+        else:
+            rng = np.random.default_rng(seed)
+            order = rng.permutation(num_episodes)
+            stop = max(int(np.ceil(num_episodes * val_ratio)), 2)
+            idx = order[:stop] if data_mode == "val" else order[stop:]
+
+        self.img_feats = data["img_feats"][idx]
+        self.eff_poses = data["eff_poses"][idx]
+        self.obj_poses = data["obj_poses"][idx]
+        self.contact_episode = data["contact_episode"][idx]
+        self.contact_flag = data["contact_flag"][idx]
+        # Check sizes of the attributes assigned above
         self.dataset_size: int = -1
-        for key, val in data.items():
-            setattr(self, key, val)
+        for key in data:
             if self.dataset_size == -1:
-                self.dataset_size = val.shape[0]
+                self.dataset_size = getattr(self, key).shape[0]
             else:
-                assert self.dataset_size == val.shape[0]
+                assert self.dataset_size == getattr(self, key).shape[0]
+        print(f"Dataset for mode '{data_mode}' has size {self.dataset_size}.")
+
         # obj_poses is shape (num_episodes, episode_length, 3)
         self.time_steps = np.minimum(max_steps, self.obj_poses.shape[1])
-
         self.batch_size = batch_size
         self.num_batches = (self.dataset_size - 1) // self.batch_size + 1
-        self._current_batch = 0
 
     @staticmethod
     def _load_dataset_from_file(

@@ -6,7 +6,7 @@ import logging
 import os
 import pathlib
 import random
-from typing import Dict, Tuple
+from typing import Any, Dict, List, Tuple
 
 import hydra
 import matplotlib.pyplot as plt
@@ -121,7 +121,10 @@ class TactilePushingTrainer:
         self.outer_optim = optim.Adam(learnable_params, lr=cfg.train.lr)
 
     def get_batch_data(
-        self, batch: Dict[str, torch.Tensor], device: torch.device
+        self,
+        batch: Dict[str, torch.Tensor],
+        dataset: theg.TactilePushingDataset,
+        device: torch.device,
     ) -> Tuple[Dict[str, torch.Tensor], torch.Tensor, torch.Tensor]:
         # Initialize inputs dictionary
         theseus_inputs = self.pose_estimator.get_start_pose_and_motion_capture_dict(
@@ -129,7 +132,7 @@ class TactilePushingTrainer:
         )
         # Update the above dictionary with measurement factor data
         theg.update_tactile_pushing_inputs(
-            dataset=self.dataset,
+            dataset=dataset,
             batch=batch,
             measurements_model=self.measurements_model,
             qsp_model=self.qsp_model,
@@ -143,17 +146,124 @@ class TactilePushingTrainer:
         eff_poses_gt = batch["eff_poses_gt"]
         return theseus_inputs, obj_poses_gt, eff_poses_gt
 
+    def compute_loss(
+        self, update: bool = True
+    ) -> Tuple[
+        List[torch.Tensor], Dict[int, Dict[str, Any]], Dict[str, List[torch.Tensor]]
+    ]:
+        if update:
+            dataset = self.dataset
+        else:
+            raise NotImplementedError("Need to add validation data")
+
+        results = {}
+        losses = []
+        image_data: Dict[str, List[torch.Tensor]] = dict(
+            (name, []) for name in ["obj_opt", "eff_opt", "obj_gt", "eff_gt"]
+        )
+        for batch_idx in range(dataset.num_batches):
+            # ---------- Read data from batch ----------- #
+            batch = dataset.get_batch(batch_idx)
+            theseus_inputs, obj_poses_gt, eff_poses_gt = self.get_batch_data(
+                batch, dataset, device
+            )
+
+            # ---------- Forward pass ----------- #
+            start_event = torch.cuda.Event(enable_timing=True)
+            end_event = torch.cuda.Event(enable_timing=True)
+            start_event.record()
+            theseus_outputs, info = self.pose_estimator.forward(
+                theseus_inputs,
+                optimizer_kwargs={
+                    "verbose": True,
+                    "track_err_history": True,
+                    "backward_mode": getattr(
+                        th.BackwardMode, self.cfg.inner_optim.backward_mode
+                    ),
+                    "__keep_final_step_size__": self.cfg.inner_optim.keep_step_size,
+                },
+            )
+            end_event.record()
+            torch.cuda.synchronize()
+            forward_time = start_event.elapsed_time(end_event)
+            logger.info(f"Forward pass took {forward_time} ms.")
+
+            # ---------- Backward pass and update ----------- #
+            obj_poses_opt, eff_poses_opt = theg.get_tactile_poses_from_values(
+                values=theseus_outputs, time_steps=dataset.time_steps
+            )
+            se2_opt = th.SE2(x_y_theta=obj_poses_opt.view(-1, 3))
+            se2_gt = th.SE2(x_y_theta=obj_poses_gt.view(-1, 3))
+            loss = se2_opt.local(se2_gt).norm()
+            start_event.record()
+            loss.backward()
+            end_event.record()
+            torch.cuda.synchronize()
+            backward_time = start_event.elapsed_time(end_event)
+            logger.info(f"Backward pass took {backward_time} ms.")
+
+            nn.utils.clip_grad_norm_(self.qsp_model.parameters(), 100, norm_type=2)
+            nn.utils.clip_grad_norm_(
+                self.mf_between_model.parameters(), 100, norm_type=2
+            )
+            nn.utils.clip_grad_norm_(
+                self.measurements_model.parameters(), 100, norm_type=2
+            )
+
+            with torch.no_grad():
+                for name, param in self.qsp_model.named_parameters():
+                    logger.info(f"{name} {param.data}")
+                for name, param in self.mf_between_model.named_parameters():
+                    logger.info(f"{name} {param.data}")
+
+                def _print_grad(msg_, param_):
+                    logger.info(f"{msg_} {param_.grad.norm().item()}")
+
+                _print_grad("    grad qsp", self.qsp_model.param)
+                _print_grad("    grad mfb", self.mf_between_model.param)
+                _print_grad("    grad nn_weight", self.measurements_model.fc1.weight)
+                _print_grad("    grad nn_bias", self.measurements_model.fc1.bias)
+
+            self.outer_optim.step()
+
+            with torch.no_grad():
+                for param in self.qsp_model.parameters():
+                    param.data.clamp_(0)
+                for param in self.mf_between_model.parameters():
+                    param.data.clamp_(0)
+
+            losses.append(loss.item())
+
+            # ---------- Pack results ----------- #
+            results[batch_idx] = pack_batch_results(
+                theseus_outputs,
+                self.qsp_model.state_dict(),
+                self.mf_between_model.state_dict(),
+                self.measurements_model.state_dict(),
+                info,
+                loss.item(),
+                forward_time,
+                backward_time,
+            )
+
+            image_data["obj_opt"].extend([p for p in obj_poses_opt])
+            image_data["eff_opt"].extend([p for p in eff_poses_opt])
+            image_data["obj_gt"].extend([p for p in obj_poses_gt])
+            image_data["eff_gt"].extend([p for p in eff_poses_gt])
+
+        return losses, results, image_data
+
 
 def pack_batch_results(
     theseus_outputs: Dict[str, torch.Tensor],
-    qsp_state_dict: torch.Tensor,
-    mfb_state_dict: torch.Tensor,
-    meas_state_dict: torch.Tensor,
+    qsp_state_dict: Dict[str, torch.Tensor],
+    mfb_state_dict: Dict[str, torch.Tensor],
+    meas_state_dict: Dict[str, torch.Tensor],
     info: th.optimizer.OptimizerInfo,
     loss_value: float,
     forward_time: float,
     backward_time: float,
-) -> Dict:
+) -> Dict[str, Any]:
     def _clone(t_):
         return t_.detach().cpu().clone()
 
@@ -181,117 +291,26 @@ def run_learning_loop(cfg):
     # function parameters:
     results = {}
     for epoch in range(cfg.train.num_epochs):
-        results[epoch] = {}
         logger.info(f" ********************* EPOCH {epoch} *********************")
-        losses = []
-        image_idx = 0
-        for batch_idx in range(trainer.dataset.num_batches):
-            # ---------- Read data from batch ----------- #
-            batch = trainer.dataset.get_batch(batch_idx)
-            theseus_inputs, obj_poses_gt, eff_poses_gt = trainer.get_batch_data(
-                batch, device
-            )
-
-            # ---------- Forward pass ----------- #
-            start_event = torch.cuda.Event(enable_timing=True)
-            end_event = torch.cuda.Event(enable_timing=True)
-            start_event.record()
-            theseus_outputs, info = trainer.pose_estimator.forward(
-                theseus_inputs,
-                optimizer_kwargs={
-                    "verbose": True,
-                    "track_err_history": True,
-                    "backward_mode": getattr(
-                        th.BackwardMode, cfg.inner_optim.backward_mode
-                    ),
-                    "__keep_final_step_size__": cfg.inner_optim.keep_step_size,
-                },
-            )
-            end_event.record()
-            torch.cuda.synchronize()
-            forward_time = start_event.elapsed_time(end_event)
-            logger.info(f"Forward pass took {forward_time} ms.")
-
-            # ---------- Backward pass and update ----------- #
-            obj_poses_opt, eff_poses_opt = theg.get_tactile_poses_from_values(
-                values=theseus_outputs, time_steps=trainer.time_steps
-            )
-            se2_opt = th.SE2(x_y_theta=obj_poses_opt.view(-1, 3))
-            se2_gt = th.SE2(x_y_theta=obj_poses_gt.view(-1, 3))
-            loss = se2_opt.local(se2_gt).norm()
-            start_event.record()
-            loss.backward()
-            end_event.record()
-            torch.cuda.synchronize()
-            backward_time = start_event.elapsed_time(end_event)
-            logger.info(f"Backward pass took {backward_time} ms.")
-
-            nn.utils.clip_grad_norm_(trainer.qsp_model.parameters(), 100, norm_type=2)
-            nn.utils.clip_grad_norm_(
-                trainer.mf_between_model.parameters(), 100, norm_type=2
-            )
-            nn.utils.clip_grad_norm_(
-                trainer.measurements_model.parameters(), 100, norm_type=2
-            )
-
-            with torch.no_grad():
-                for name, param in trainer.qsp_model.named_parameters():
-                    logger.info(f"{name} {param.data}")
-                for name, param in trainer.mf_between_model.named_parameters():
-                    logger.info(f"{name} {param.data}")
-
-                def _print_grad(msg_, param_):
-                    logger.info(f"{msg_} {param_.grad.norm().item()}")
-
-                _print_grad("    grad qsp", trainer.qsp_model.param)
-                _print_grad("    grad mfb", trainer.mf_between_model.param)
-                _print_grad("    grad nn_weight", trainer.measurements_model.fc1.weight)
-                _print_grad("    grad nn_bias", trainer.measurements_model.fc1.bias)
-
-            trainer.outer_optim.step()
-
-            with torch.no_grad():
-                for param in trainer.qsp_model.parameters():
-                    param.data.clamp_(0)
-                for param in trainer.mf_between_model.parameters():
-                    param.data.clamp_(0)
-
-            losses.append(loss.item())
-
-            # ---------- Save results ----------- #
-            if cfg.save_all:
-                results[epoch][batch_idx] = pack_batch_results(
-                    theseus_outputs,
-                    trainer.qsp_model.state_dict(),
-                    trainer.mf_between_model.state_dict(),
-                    trainer.measurements_model.state_dict(),
-                    info,
-                    loss.item(),
-                    forward_time,
-                    backward_time,
-                )
-                torch.save(results, root_path / "results.pt")
-
-            if cfg.options.vis_traj:
-                for i in range(len(obj_poses_gt)):
-                    save_dir = root_path / f"img_{image_idx}"
-                    save_dir.mkdir(parents=True, exist_ok=True)
-                    save_fname = save_dir / f"epoch{epoch}.png"
-                    theg.visualize_tactile_push2d(
-                        obj_poses=obj_poses_opt[i],
-                        eff_poses=eff_poses_opt[i],
-                        obj_poses_gt=obj_poses_gt[i],
-                        eff_poses_gt=eff_poses_gt[i],
-                        rect_len_x=cfg.shape.rect_len_x,
-                        rect_len_y=cfg.shape.rect_len_y,
-                        save_fname=save_fname,
-                    )
-                    image_idx += 1
-
+        losses, results_epoch, image_data = trainer.compute_loss()
+        results[epoch] = results_epoch
         logger.info(f"AVG. LOSS: {np.mean(losses)}")
+        torch.save(results, root_path / "results.pt")
 
-        if np.mean(losses) < trainer.eps_tracking_loss:
-            break
+        if cfg.options.vis_traj:
+            for i in range(len(image_data["obj_opt"])):
+                save_dir = root_path / f"img_{i}"
+                save_dir.mkdir(parents=True, exist_ok=True)
+                save_fname = save_dir / f"epoch{epoch}.png"
+                theg.visualize_tactile_push2d(
+                    obj_poses=image_data["obj_opt"][i],
+                    eff_poses=image_data["eff_opt"][i],
+                    obj_poses_gt=image_data["obj_gt"][i],
+                    eff_poses_gt=image_data["eff_gt"][i],
+                    rect_len_x=cfg.shape.rect_len_x,
+                    rect_len_y=cfg.shape.rect_len_y,
+                    save_fname=save_fname,
+                )
 
 
 @hydra.main(config_path="./configs/", config_name="tactile_pose_estimation")

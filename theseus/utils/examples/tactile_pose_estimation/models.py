@@ -65,7 +65,12 @@ def create_tactile_models(
     model_type: str,
     device: torch.device,
     measurements_model_path: Optional[pathlib.Path] = None,
-) -> Tuple[nn.Module, nn.Module, nn.Module, List[nn.Parameter]]:
+) -> Tuple[
+    Optional[TactileMeasModel],
+    TactileWeightModel,
+    TactileWeightModel,
+    List[nn.Parameter],
+]:
     if model_type == "weights_only":
         qsp_model = TactileWeightModel(
             device, wt_init=torch.tensor([[50.0, 50.0, 50.0]])

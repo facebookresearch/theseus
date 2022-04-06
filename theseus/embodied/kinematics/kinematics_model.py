@@ -71,9 +71,10 @@ class UrdfRobotModel(KinematicsModel):
         assert joint_states.shape[-1] == len(self.drm_model.get_joint_limits())
 
         # Parse input
-        if type(joint_states) is torch.Tensor:
+        print(type(joint_states))
+        if isinstance(joint_states, torch.Tensor):
             joint_states_input = joint_states
-        elif type(joint_states) is th.Vector:
+        elif isinstance(joint_states, th.Variable):
             joint_states_input = joint_states.data
         else:
             raise Exception("Invalid input joint states data type.")

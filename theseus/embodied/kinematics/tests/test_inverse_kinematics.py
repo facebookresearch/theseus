@@ -58,7 +58,7 @@ def test_ik_optimization(robot_model, batch_size, ee_pose_target, is_grad_enable
     """Sets up inverse kinematics as an optimization problem that uses forward kinematics"""
     # Define cost (distance between desired and current ee pose)
     def ee_pose_err_fn(optim_vars, aux_vars):
-        theta = torch.cat([var.data for var in optim_vars], dim=0)
+        (theta,) = optim_vars
         (ee_pose_target,) = aux_vars
 
         ee_pose = robot_model.forward_kinematics(theta)[EE_NAME]
@@ -67,7 +67,7 @@ def test_ik_optimization(robot_model, batch_size, ee_pose_target, is_grad_enable
         return pose_err
 
     # Set up optimization
-    optim_vars = [th.Vector(NUM_DOFS, name=f"theta_{i}") for i in range(batch_size)]
+    optim_vars = (th.Vector(NUM_DOFS, name="theta"),)
     aux_vars = (ee_pose_target,)
 
     cost_function = th.AutoDiffCostFunction(
@@ -83,8 +83,10 @@ def test_ik_optimization(robot_model, batch_size, ee_pose_target, is_grad_enable
     theseus_optim = th.TheseusLayer(optimizer)
 
     # Optimize
-    theseus_inputs = {f"theta_{i}": HOME_POSE.unsqueeze(0) for i in range(batch_size)}
-    theseus_inputs["ee_pose_target"] = ee_pose_target.data
+    theseus_inputs = {
+        "theta": torch.tile(HOME_POSE.unsqueeze(0), (batch_size, 1)),
+        "ee_pose_target": ee_pose_target,
+    }
 
     with torch.set_grad_enabled(is_grad_enabled):
         updated_inputs, info = theseus_optim.forward(

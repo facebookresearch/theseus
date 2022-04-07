@@ -32,10 +32,8 @@ class Marginal:
         self._dof = dof
 
         self.mean = mean
-        self.precision = (
-            torch.zeros(mean[0].shape[0], self.dof, self.dof)
-            .to(mean[0].dtype)
-            .to(mean[0].device)
+        self.precision = torch.zeros(mean[0].shape[0], self.dof, self.dof).to(
+            dtype=mean[0].dtype, device=mean[0].device
         )
 
     @property

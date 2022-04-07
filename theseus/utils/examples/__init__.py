@@ -31,6 +31,7 @@ try:
         TactileMeasModel,
         TactilePoseEstimator,
         TactilePushingDataset,
+        TactilePushingTrainer,
         TactileWeightModel,
         create_tactile_models,
         get_tactile_cost_weight_inputs,

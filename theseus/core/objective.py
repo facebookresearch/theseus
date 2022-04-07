@@ -47,11 +47,15 @@ class Objective:
         self.cost_functions_for_weights: Dict[CostWeight, List[CostFunction]] = {}
 
         # maps loss functions to the cost functions that use them
-        # this is used when deleting cost function to check if the cost weight
+        # this is used when deleting cost function to check if the loss function
         # variables can be deleted as well (when no other function uses them)
         self.cost_functions_for_loss_functions: Dict[
             LossFunction, List[CostFunction]
         ] = {}
+
+        # maps cost function types to their instances
+        # this is used for parallel computation
+        self.cost_functions_for_types: Dict[type, List[CostFunction]] = {}
 
         # ---- The following two methods are used just to get info from
         # ---- the objective, they don't affect the optimization logic.
@@ -162,6 +166,8 @@ class Objective:
         # adds information about the auxiliary variables in this cost function
         self._add_function_variables(cost_function, optim_vars=False)
 
+        # adds information about cost function types
+
         if cost_function.weight not in self.cost_functions_for_weights:
             # ----- Book-keeping for the cost weight ------- #
             # adds information about the variables in this cost function's weight
@@ -223,6 +229,11 @@ class Objective:
                 "Objective does not support a variable being both "
                 "an optimization variable and an auxiliary variable."
             )
+
+        if cost_function.__class__ not in self.cost_functions_for_types:
+            self.cost_functions_for_types[cost_function.__class__] = []
+
+        self.cost_functions_for_types[cost_function.__class__].append(cost_function)
 
     # returns a reference to the cost function with the given name
     def get_cost_function(self, name: str) -> CostFunction:
@@ -320,7 +331,7 @@ class Objective:
             )
             del self.cost_functions_for_loss_functions[loss_function][cost_fn_idx]
 
-            # No more cost functions associated to this weight, so can also delete
+            # No more cost functions associated to this loss function, so can also delete
             if len(self.cost_functions_for_loss_functions[loss_function]) == 0:
                 # erase its variables (if needed)
                 self._erase_function_variables(
@@ -330,6 +341,18 @@ class Objective:
                     loss_function, optim_vars=False, is_loss_function=True
                 )
                 del self.cost_functions_for_loss_functions[loss_function]
+
+            # delete cost function from list of cost functions connected to its cost function
+            # types
+            cost_function_type = cost_function.__class__
+            cost_fn_idx = self.cost_functions_for_types[cost_function_type].index(
+                cost_function
+            )
+            del self.cost_functions_for_types[cost_function_type][cost_fn_idx]
+
+            # No more cost functions associated to the cost function type, so can also delete
+            if len(self.cost_functions_for_types[cost_function_type]) == 0:
+                del self.cost_functions_for_types[cost_function_type]
 
             # finally, delete the cost function
             del self.cost_functions[name]

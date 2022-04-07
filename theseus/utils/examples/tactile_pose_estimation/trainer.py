@@ -114,7 +114,6 @@ class TactilePushingTrainer:
         ) = create_tactile_models(
             cfg.train.mode, device, measurements_model_path=measurements_model_path
         )
-        self.eps_tracking_loss = cfg.train.eps_tracking_loss
         self.outer_optim = optim.Adam(learnable_params, lr=cfg.train.lr)
 
     def get_batch_data(

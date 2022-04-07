@@ -25,7 +25,6 @@ train:
   batch_size: 16
   num_epochs: 50
   lr: 3e-4
-  eps_tracking_loss: 1e-10
 
 # 0: disc, 1: rect-edges, 2: rect-corners, 3: ellip
 class_label: 2

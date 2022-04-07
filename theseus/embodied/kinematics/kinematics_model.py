@@ -4,7 +4,7 @@
 # LICENSE file in the root directory of this source tree.
 
 import abc
-from typing import Dict, Union
+from typing import Dict, Optional, Union
 
 import differentiable_robot_model as drm
 import torch
@@ -59,7 +59,11 @@ class UrdfRobotModel(KinematicsModel):
 
         return quat_normalized
 
-    def forward_kinematics(self, joint_states: RobotModelInput) -> Dict[str, LieGroup]:
+    def forward_kinematics(
+        self,
+        joint_states: RobotModelInput,
+        jacobians: Dict[str, Optional[torch.Tensor]] = {},
+    ) -> Dict[str, LieGroup]:
         """Computes forward kinematics
         Args:
             joint_states: Vector of all joint angles
@@ -94,6 +98,13 @@ class UrdfRobotModel(KinematicsModel):
             link_poses[link_name] = SE3(
                 x_y_z_quaternion=torch.cat([pos, quat_processed], dim=-1)
             )
+
+        # Compute jacobians
+        for link_name in jacobians.keys():
+            jac_lin, jac_rot = self.drm_model.compute_endeffector_jacobian(
+                joint_states_input, link_name
+            )
+            jacobians[link_name] = torch.cat([jac_lin, jac_rot], dim=0)
 
         return link_poses
 

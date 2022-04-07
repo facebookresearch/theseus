@@ -93,10 +93,10 @@ def test_jacobian(robot_model, dataset):
 
         # Compute analytical jacobian
         # (analytical manipulator jacobian * autograd ee-to-cost jacobian)
-        jacobian_m_analytical = torch.cat(
-            robot_model.drm_model.compute_endeffector_jacobian(joint_state, ee_name),
-            dim=0,
-        )
+        jac_fk = {ee_name: None}
+        robot_model.forward_kinematics(joint_state, jacobians=jac_fk)
+        jacobian_m_analytical = jac_fk[ee_name]
+
         jacobian_e = th.eb.VariableDifference(
             ee_se3_target, th.ScaleCostWeight(1.0), ee_se3_target
         ).jacobians()[0][0]

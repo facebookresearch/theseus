@@ -6,6 +6,7 @@
 import abc
 import math
 from dataclasses import dataclass
+from itertools import count
 from typing import Any, Dict, List, Optional, Sequence, Tuple, Type
 
 import numpy as np
@@ -24,9 +25,6 @@ from theseus.optimizer.nonlinear.nonlinear_optimizer import (
 
 """
 TODO
- - Parallelise factor to variable message comp
- - Benchmark speed
- - test jax implementation of message comp functions
  - add class for message schedule
  - damping for lie algebra vars
  - solving inverse problem to compute message mean
@@ -52,27 +50,114 @@ class GBPOptimizerParams:
                 raise ValueError(f"Invalid nonlinear optimizer parameter {param}.")
 
 
-# Stores variable beliefs that converge towards the marginals
 class Gaussian:
-    def __init__(self, variable: Manifold):
-        self.name = variable.name + "_gaussian"
-        self.mean = variable
-        self.tot_dof = variable.dof()
+    _ids = count(0)
 
-        # tot_dof = 0
-        # for v in variables:
-        #     tot_dof += v.dof()
-        # self.tot_dof = tot_dof
+    def __init__(
+        self,
+        mean: Sequence[Manifold],
+        precision: Optional[torch.Tensor] = None,
+        name: Optional[str] = None,
+    ):
+        self._id = next(Gaussian._ids)
+        if name:
+            self.name = name
+        else:
+            self.name = f"{self.__class__.__name__}__{self._id}"
 
-        self.precision = torch.zeros(
-            self.mean.shape[0], self.tot_dof, self.tot_dof, dtype=variable.dtype
+        dof = 0
+        for v in mean:
+            dof += v.dof()
+        self._dof = dof
+
+        self.mean = mean
+        self.precision = torch.zeros(mean[0].shape[0], self.dof, self.dof).to(
+            dtype=mean[0].dtype, device=mean[0].device
         )
 
+    @property
     def dof(self) -> int:
-        return self.tot_dof
+        return self._dof
+
+    @property
+    def device(self) -> torch.device:
+        return self.precision[0].device
+
+    @property
+    def dtype(self) -> torch.dtype:
+        return self.precision[0].dtype
+
+    # calls to() on the internal tensors
+    def to(self, *args, **kwargs):
+        for var in self.mean:
+            var = var.to(*args, **kwargs)
+        self.precision = self.precision.to(*args, **kwargs)
+
+    def copy(self, new_name: Optional[str] = None) -> "Gaussian":
+        if not new_name:
+            new_name = f"{self.name}_copy"
+        mean_copy = [var.copy() for var in self.mean]
+        return Gaussian(mean_copy, name=new_name)
+
+    def __deepcopy__(self, memo):
+        if id(self) in memo:
+            return memo[id(self)]
+        the_copy = self.copy()
+        memo[id(self)] = the_copy
+        return the_copy
+
+    def update(
+        self,
+        mean: Optional[Sequence[Manifold]] = None,
+        precision: Optional[torch.Tensor] = None,
+    ):
+        if mean is not None:
+            if len(mean) != len(self.mean):
+                raise ValueError(
+                    f"Tried to update mean with sequence of different"
+                    f"lenght to original mean sequence. Given {len(mean)}. "
+                    f"Expected: {len(self.mean)}"
+                )
+            for i in range(len(self.mean)):
+                self.mean[i].update(mean[i])
+
+        if precision is not None:
+            if precision.shape != self.precision.shape:
+                raise ValueError(
+                    f"Tried to update precision with data "
+                    f"incompatible with original tensor shape. Given {precision.shape}. "
+                    f"Expected: {self.precision.shape}"
+                )
+            if precision.dtype != self.dtype:
+                raise ValueError(
+                    f"Tried to update using tensor of dtype {precision.dtype} but precision "
+                    f"has dtype {self.dtype}."
+                )
+
+            self.precision = precision
 
 
-class Marginals(Gaussian):
+# # Stores variable beliefs that converge towards the marginals
+# class Gaussian:
+#     def __init__(self, variable: Manifold):
+#         self.name = variable.name + "_gaussian"
+#         self.mean = variable
+#         self.tot_dof = variable.dof()
+
+#         # tot_dof = 0
+#         # for v in variables:
+#         #     tot_dof += v.dof()
+#         # self.tot_dof = tot_dof
+
+#         self.precision = torch.zeros(
+#             self.mean.shape[0], self.tot_dof, self.tot_dof, dtype=variable.dtype
+#         )
+
+#     def dof(self) -> int:
+#         return self.tot_dof
+
+
+class Marginal(Gaussian):
     pass
 
 
@@ -212,7 +297,7 @@ def local_gaussian(
     return_mean: bool = True,
 ) -> Tuple[torch.Tensor, torch.Tensor]:
     # mean_tp is message mean in tangent space / plane at var
-    mean_tp = var.local(mess.mean)
+    mean_tp = var.local(mess.mean[0])
 
     jac: List[torch.Tensor] = []
     th.exp_map(var, mean_tp, jacobians=jac)
@@ -246,8 +331,7 @@ def retract_gaussian(
     inv_jac = torch.inverse(jac[0])
     precision = torch.bmm(torch.bmm(inv_jac.transpose(-1, -2), prec_tp), inv_jac)
 
-    out_gauss.mean.update(mean.data)
-    out_gauss.precision = precision
+    out_gauss.update(mean=[mean], precision=precision)
 
 
 def pass_var_to_fac_messages_and_update_beliefs_lie(
@@ -281,7 +365,7 @@ def pass_var_to_fac_messages_and_update_beliefs_lie(
 
                 lam_a = lams_inc.sum(dim=0)
                 if lam_a.count_nonzero() == 0:
-                    vtof_msgs[j].mean.data[:] = 0.0
+                    vtof_msgs[j].mean[0].data[:] = 0.0
                     vtof_msgs[j].precision = lam_a
                 else:
                     inv_lam_a = torch.inverse(lam_a)
@@ -297,7 +381,7 @@ def pass_var_to_fac_messages_and_update_beliefs_lie(
             sum_taus = torch.matmul(lams_tp, taus.unsqueeze(-1)).sum(dim=0)
             tau = torch.matmul(inv_lam_tau, sum_taus).squeeze(-1)
 
-            belief = Gaussian(var)
+            belief = Gaussian([var])
             retract_gaussian(tau, lam_tau, var, belief)
 
 
@@ -481,14 +565,14 @@ def ftov_comp_mess_lie(
         # new_mess_lam = (1 - damping[v]) * new_mess_lam + damping[v] * prev_mess_lam[0]
 
         if new_mess_lam.count_nonzero() == 0:
-            new_mess = Gaussian(lin_points[v].copy())
-            new_mess.mean.data[:] = 0.0
+            new_mess = Gaussian([lin_points[v].copy()])
+            new_mess.mean[0].data[:] = 0.0
         else:
             new_mess_mean = torch.matmul(torch.inverse(new_mess_lam), new_mess_eta)
             new_mess_mean = new_mess_mean[None, ...]
             new_mess_lam = new_mess_lam[None, ...]
 
-            new_mess = Gaussian(lin_points[v].copy())
+            new_mess = Gaussian([lin_points[v].copy()])
             retract_gaussian(new_mess_mean, new_mess_lam, lin_points[v], new_mess)
         new_messages.append(new_mess)
 
@@ -496,8 +580,9 @@ def ftov_comp_mess_lie(
 
     # update messages
     for v in range(num_optim_vars):
-        ftov_msgs[v].mean.update(new_messages[v].mean.data)
-        ftov_msgs[v].precision = new_messages[v].precision
+        ftov_msgs[v].update(
+            mean=new_messages[v].mean, precision=new_messages[v].precision
+        )
 
     return new_messages
 
@@ -846,8 +931,8 @@ class GaussianBeliefPropagation(Optimizer, abc.ABC):
                 # mean of initial message doesn't matter as long as precision is zero
                 vtof_msg_mu.data[:] = 0
                 ftov_msg_mu = vtof_msg_mu.copy(new_name=f"msg_{cf.name}_to_{var.name}")
-                vtof_msgs.append(Message(vtof_msg_mu))
-                ftov_msgs.append(Message(ftov_msg_mu))
+                vtof_msgs.append(Message([vtof_msg_mu]))
+                ftov_msgs.append(Message([ftov_msg_mu]))
 
         # compute factor potentials for the first time
         potentials_eta = [None] * self.objective.size_cost_functions()

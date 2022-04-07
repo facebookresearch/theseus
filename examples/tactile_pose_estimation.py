@@ -81,7 +81,10 @@ def run_learning_loop(cfg):
         torch.save(results_train, root_path / "results_train.pt")
 
         logger.info(" -------------- VALIDATION --------------")
-        val_losses, results_val[epoch], image_data = trainer.compute_loss(update=False)
+        with torch.no_grad():
+            val_losses, results_val[epoch], image_data = trainer.compute_loss(
+                update=False
+            )
         logger.info(f"AVG. VAL LOSS: {np.mean(val_losses)}")
         torch.save(results_val, root_path / "results_val.pt")
 

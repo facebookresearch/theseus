@@ -12,3 +12,4 @@ from .models import (
     update_tactile_pushing_inputs,
 )
 from .pose_estimator import TactilePoseEstimator
+from .trainer import TactilePushingTrainer

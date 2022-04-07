@@ -74,13 +74,14 @@ class UrdfRobotModel(KinematicsModel):
         )
 
         # Parse input
-        print(type(joint_states))
         if isinstance(joint_states, torch.Tensor):
             joint_states_input = joint_states
         elif isinstance(joint_states, Variable):
             joint_states_input = joint_states.data
         else:
-            raise Exception("Invalid input joint states data type.")
+            raise Exception(
+                "Invalid input joint states data type. Valid types are torch.Tensor and th.Vector."
+            )
 
         # Compute forward kinematics for all links
         link_poses: Dict[str, LieGroup] = {}

@@ -7,6 +7,7 @@ import logging
 
 import os
 import pathlib
+import pstats
 
 import random
 import time
@@ -20,6 +21,8 @@ import torch
 import theseus as th
 import theseus.utils.examples as theg
 
+import cProfile
+import io
 
 BACKWARD_MODE = {
     "implicit": th.BackwardMode.IMPLICIT,
@@ -163,7 +166,7 @@ def run(cfg: omegaconf.OmegaConf, results_path: pathlib.Path):
     orig_poses = {pose.name: pose.data.clone() for pose in pg.poses}
 
     # Outer optimization loop
-    loss_radius_tensor = torch.nn.Parameter(torch.tensor([1.0], dtype=torch.float64))
+    loss_radius_tensor = torch.nn.Parameter(torch.tensor([3.0], dtype=torch.float64))
     model_optimizer = torch.optim.Adam([loss_radius_tensor], lr=cfg.outer_optim.lr)
 
     num_epochs = cfg.outer_optim.num_epochs
@@ -177,9 +180,12 @@ def run(cfg: omegaconf.OmegaConf, results_path: pathlib.Path):
 
     print_histogram(pg, theseus_inputs, "Input histogram:")
 
+    pr = cProfile.Profile()
+
     for epoch in range(num_epochs):
         log.info(f" ******************* EPOCH {epoch} ******************* ")
         start_time = time.time_ns()
+        pr.enable()
         model_optimizer.zero_grad()
         theseus_inputs["log_loss_radius"] = loss_radius_tensor.unsqueeze(1).clone()
 
@@ -197,6 +203,7 @@ def run(cfg: omegaconf.OmegaConf, results_path: pathlib.Path):
         loss.backward()
         model_optimizer.step()
         loss_value = torch.sum(loss.detach()).item()
+        pr.disable()
         end_time = time.time_ns()
 
         print_histogram(pg, theseus_outputs, "Output histogram:")
@@ -216,6 +223,12 @@ def run(cfg: omegaconf.OmegaConf, results_path: pathlib.Path):
             loss_value,
             end_time - start_time,
         )
+
+    s = io.StringIO()
+    sortby = pstats.SortKey.CUMULATIVE
+    ps = pstats.Stats(pr, stream=s).sort_stats(sortby)
+    ps.print_stats()
+    print(s.getvalue())
 
 
 @hydra.main(config_path="./configs/", config_name="pose_graph")

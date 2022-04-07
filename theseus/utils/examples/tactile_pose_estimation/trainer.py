@@ -200,7 +200,7 @@ class TactilePushingTrainer:
         # Set different number of max iterations for validation loop
         self.pose_estimator.theseus_layer.optimizer.set_params(  # type: ignore
             max_iterations=self.cfg.inner_optim.max_iters
-            if update
+            if update or self.cfg.inner_optim.val_iters < 1
             else self.cfg.inner_optim.val_iters
         )
         for batch_idx in range(dataset.num_batches):

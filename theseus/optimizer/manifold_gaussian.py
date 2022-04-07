@@ -11,7 +11,7 @@ import torch
 from theseus.geometry import Manifold
 
 
-class Marginal:
+class ManifoldGaussian:
     _ids = count(0)
 
     def __init__(
@@ -20,7 +20,7 @@ class Marginal:
         precision: Optional[torch.Tensor] = None,
         name: Optional[str] = None,
     ):
-        self._id = next(Marginal._ids)
+        self._id = next(ManifoldGaussian._ids)
         if name:
             self.name = name
         else:
@@ -54,11 +54,11 @@ class Marginal:
             var = var.to(*args, **kwargs)
         self.precision = self.precision.to(*args, **kwargs)
 
-    def copy(self, new_name: Optional[str] = None) -> "Marginal":
+    def copy(self, new_name: Optional[str] = None) -> "ManifoldGaussian":
         if not new_name:
             new_name = f"{self.name}_copy"
         mean_copy = [var.copy() for var in self.mean]
-        return Marginal(mean_copy, name=new_name)
+        return ManifoldGaussian(mean_copy, name=new_name)
 
     def __deepcopy__(self, memo):
         if id(self) in memo:

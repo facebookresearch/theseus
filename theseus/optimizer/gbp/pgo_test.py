@@ -7,7 +7,7 @@ import numpy as np
 import torch
 
 import theseus as th
-from theseus.optimizer.gbp import GaussianBeliefPropagation
+from theseus.optimizer.gbp import GaussianBeliefPropagation, synchronous_schedule
 
 # This example illustrates the Gaussian Belief Propagation (GBP) optimizer
 # for a 2D pose graph optimization problem.
@@ -125,11 +125,13 @@ for i in range(size):
 
 # print("inputs", inputs)
 
+max_iterations = 100
 optimizer = GaussianBeliefPropagation(
     objective,
-    max_iterations=100,
+    max_iterations=max_iterations,
 )
 theseus_optim = th.TheseusLayer(optimizer)
+
 
 optim_arg = {
     "track_best_solution": True,
@@ -138,6 +140,7 @@ optim_arg = {
     "backward_mode": th.BackwardMode.FULL,
     "damping": 0.6,
     "dropout": 0.0,
+    "schedule": synchronous_schedule(max_iterations, optimizer.n_edges),
 }
 updated_inputs, info = theseus_optim.forward(inputs, optim_arg)
 

@@ -234,7 +234,7 @@ class Objective:
         if group_name is None:
             self.ungrouped_cost_functions[cost_function.name] = cost_function
         else:
-            if group_name not in self.group_names_for_cost_functions:
+            if group_name not in self.grouped_cost_functions:
                 batch_cost_function = cost_function.copy(group_name + "__cost_function")
 
                 batch_size = None
@@ -303,6 +303,10 @@ class Objective:
                     var = cast(Variable, getattr(cost_function, var_name))
                     batch_var = cast(Variable, getattr(batch_cost_function, var_name))
                     batch_var.data = torch.cat([batch_var.data, var.data], dim=0)
+
+                orig_cost_functions.append(cost_function)
+
+            self.group_names_for_cost_functions[cost_function.name] = group_name
 
         if self.optim_vars.keys() & self.aux_vars.keys():
             raise ValueError(

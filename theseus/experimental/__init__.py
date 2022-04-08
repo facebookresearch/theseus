@@ -1,1 +1,1 @@
-from .loss import HuberLoss, Loss, RobustLoss, TrivialLoss, WelschLoss
+from .loss import HuberLoss, Loss, WelschLoss

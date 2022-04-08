@@ -101,7 +101,54 @@ class SparseLinearization(Linearization):
         )
 
         err_row_idx = 0
-        for f_idx, cost_function in enumerate(self.objective):
+        f_idx = 0
+
+        batch_size = self.objective.batch_size
+        for (
+            batch_cost_function,
+            cost_functions,
+        ) in self.objective.grouped_cost_functions.values():
+            batch_jacobians, batch_errors = batch_cost_function.jacobians()
+            # TODO: Implement FuncTorch
+            batch_pos = 0
+            for cost_function in cost_functions:
+                jacobians = [
+                    jacobian[batch_pos : batch_pos + batch_size]
+                    for jacobian in batch_jacobians
+                ]
+                error = batch_errors[batch_pos : batch_pos + batch_size]
+                batch_pos += batch_size
+                (
+                    weighted_jacobians,
+                    weighted_error,
+                ) = cost_function.weight.weight_jacobians_and_error(jacobians, error)
+                jacobians, error = cost_function.loss_function.rescale(
+                    weighted_jacobians, weighted_error
+                )
+
+                num_rows = cost_function.dim()
+                row_slice = slice(err_row_idx, err_row_idx + num_rows)
+
+                # we will view the blocks of rows inside `A_val` as `num_rows` x `stride` matrix
+                block_start = self.cost_function_row_block_starts[f_idx]
+                stride = self.cost_function_stride[f_idx]
+                block = self.A_val[
+                    :, block_start : block_start + stride * num_rows
+                ].view(-1, num_rows, stride)
+                block_pointers = self.cost_function_block_pointers[f_idx]
+
+                for var_idx_in_cost_function, var_jacobian in enumerate(jacobians):
+
+                    # the proper block is written, using the precomputed index in `block_pointers`
+                    num_cols = var_jacobian.shape[2]
+                    pointer = block_pointers[var_idx_in_cost_function]
+                    block[:, :, pointer : pointer + num_cols] = var_jacobian
+
+                self.b[:, row_slice] = -error
+                err_row_idx += cost_function.dim()
+                f_idx += 1
+
+        for cost_function in self.objective.ungrouped_cost_functions.values():
             jacobians, error = cost_function.rescaled_jacobians_error()
             num_rows = cost_function.dim()
             row_slice = slice(err_row_idx, err_row_idx + num_rows)
@@ -123,6 +170,7 @@ class SparseLinearization(Linearization):
 
             self.b[:, row_slice] = -error
             err_row_idx += cost_function.dim()
+            f_idx += 1
 
     def structure(self):
         return SparseStructure(

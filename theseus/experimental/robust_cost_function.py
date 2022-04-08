@@ -29,12 +29,11 @@ class RobustCostFunction(th.CostFunction, abc.ABC):
     def __init__(
         self,
         cost_function: th.CostFunction,
-        cost_weight: th.CostWeight,
         loss_cls: Type[Loss],
         log_loss_radius: th.Vector,
         name: Optional[str] = None,
     ):
-        super().__init__(cost_weight, name=name)
+        super().__init__(cost_function.weight, name=name)
 
         self.cost_function = cost_function
         # Register optimization variables of the underlying cost function
@@ -86,8 +85,7 @@ class RobustCostFunction(th.CostFunction, abc.ABC):
         rescale = self.loss.linearize(squared_norm, loss_radius)
 
         return [
-            (rescale * jacobian.view(jacobian.shape[0], -1)).view(jacobian.shape[0])
-            for jacobian in weighted_jacobians
+            rescale.view(-1, 1, 1) * jacobian for jacobian in weighted_jacobians
         ], rescale * weighted_error
 
     def dim(self) -> int:
@@ -95,8 +93,7 @@ class RobustCostFunction(th.CostFunction, abc.ABC):
 
     def _copy_impl(self, new_name: Optional[str] = None) -> "RobustCostFunction":
         return RobustCostFunction(
-            self.cost_function,
-            self.weight.copy(),
+            self.cost_function.copy(),
             type(self.loss),
             self.log_loss_radius.copy(),
             name=new_name,

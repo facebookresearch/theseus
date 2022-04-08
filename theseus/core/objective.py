@@ -5,17 +5,17 @@
 
 import warnings
 from collections import OrderedDict
-from typing import Dict, List, Optional, Sequence, Union
+from typing import Dict, List, Optional, Sequence, Tuple, Union, cast
 
 import torch
 
 from theseus.core.loss_function import LossFunction
 from theseus.core.theseus_function import TheseusFunction
+from theseus.core.variable import Variable
 from theseus.geometry.manifold import Manifold
 
 from .cost_function import CostFunction
 from .cost_weight import CostWeight
-from .variable import Variable
 
 
 # If dtype is None, uses torch.get_default_dtype()
@@ -53,9 +53,16 @@ class Objective:
             LossFunction, List[CostFunction]
         ] = {}
 
-        # maps cost function types to their instances
-        # this is used for parallel computation
-        self.cost_functions_for_types: Dict[type, List[CostFunction]] = {}
+        # maps cost function group names to the corresponding grouped cost functions
+        self.grouped_cost_functions: OrderedDict[
+            str, Tuple[CostFunction, List[CostFunction]]
+        ] = OrderedDict()
+
+        # maps cost function names to ungrouped functions
+        self.ungrouped_cost_functions: OrderedDict[str, CostFunction] = OrderedDict()
+
+        # maps grouped cost function names to their group names
+        self.group_names_for_cost_functions: OrderedDict[str, str] = OrderedDict()
 
         # ---- The following two methods are used just to get info from
         # ---- the objective, they don't affect the optimization logic.
@@ -141,7 +148,7 @@ class Objective:
     # set of objective's variables, they are kept in a separate container.
     # Update method will check if any of these are not registered as
     # cost function variables, and throw a warning.
-    def add(self, cost_function: CostFunction):
+    def add(self, cost_function: CostFunction, group_name: Optional[str] = None):
         # adds the cost function if not already present
         if cost_function.name in self.cost_functions:
             if cost_function is not self.cost_functions[cost_function.name]:
@@ -224,18 +231,87 @@ class Objective:
             cost_function
         )
 
+        if group_name is None:
+            self.ungrouped_cost_functions[cost_function.name] = cost_function
+        else:
+            if group_name not in self.group_names_for_cost_functions:
+                batch_cost_function = cost_function.copy(group_name + "__cost_function")
+
+                batch_size = None
+
+                for var_name in batch_cost_function._optim_vars_attr_names:
+                    var = cast(Variable, getattr(batch_cost_function, var_name))
+                    var.name = cost_function.name + "__" + var_name
+
+                    if batch_size is None:
+                        batch_size = var.shape[0]
+                    elif var.shape[0] != batch_size:
+                        raise ValueError(
+                            "All the variables should have the same batch size."
+                        )
+
+                for var_name in batch_cost_function._aux_vars_attr_names:
+                    var = cast(Variable, getattr(batch_cost_function, var_name))
+                    var.name = cost_function.name + "__" + var_name
+
+                    if batch_size is None:
+                        batch_size = var.shape[0]
+                    elif var.shape[0] != batch_size:
+                        raise ValueError(
+                            "All the variables should have the same batch size."
+                        )
+
+                self.grouped_cost_functions[group_name] = (
+                    batch_cost_function,
+                    [cost_function],
+                )
+            else:
+                batch_cost_function, orig_cost_functions = self.grouped_cost_functions[
+                    group_name
+                ]
+                orig_cost_function = orig_cost_functions[0]
+
+                if cost_function.__class__ != orig_cost_function.__class__:
+                    raise ValueError(
+                        f"The cost function must be the type of {orig_cost_function.__class__}"
+                    )
+
+                for var_name in orig_cost_function._optim_vars_attr_names:
+                    var = cast(Variable, getattr(cost_function, var_name))
+                    orig_var = cast(Variable, getattr(orig_cost_function, var_name))
+
+                    if var.shape != orig_var.shape:
+                        raise ValueError(
+                            f"The shape of {var_name} must be {orig_var.shape}"
+                        )
+
+                for var_name in orig_cost_function._aux_vars_attr_names:
+                    var = cast(Variable, getattr(cost_function, var_name))
+                    orig_var = cast(Variable, getattr(orig_cost_function, var_name))
+
+                    if var.shape != orig_var.shape:
+                        raise ValueError(
+                            f"The shape of {var_name} must be {orig_var.shape}"
+                        )
+
+                for var_name in batch_cost_function._optim_vars_attr_names:
+                    var = cast(Variable, getattr(cost_function, var_name))
+                    batch_var = cast(Variable, getattr(batch_cost_function, var_name))
+                    batch_var.data = torch.cat([batch_var.data, var.data], dim=0)
+
+                for var_name in batch_cost_function._aux_vars_attr_names:
+                    var = cast(Variable, getattr(cost_function, var_name))
+                    batch_var = cast(Variable, getattr(batch_cost_function, var_name))
+                    batch_var.data = torch.cat([batch_var.data, var.data], dim=0)
+
         if self.optim_vars.keys() & self.aux_vars.keys():
             raise ValueError(
                 "Objective does not support a variable being both "
                 "an optimization variable and an auxiliary variable."
             )
 
-        if cost_function.__class__ not in self.cost_functions_for_types:
-            self.cost_functions_for_types[cost_function.__class__] = []
-
-        self.cost_functions_for_types[cost_function.__class__].append(cost_function)
-
     # returns a reference to the cost function with the given name
+
     def get_cost_function(self, name: str) -> CostFunction:
         return self.cost_functions.get(name, None)
 
@@ -341,18 +417,6 @@ class Objective:
                     loss_function, optim_vars=False, is_loss_function=True
                 )
                 del self.cost_functions_for_loss_functions[loss_function]
-
-            # delete cost function from list of cost functions connected to its cost function
-            # types
-            cost_function_type = cost_function.__class__
-            cost_fn_idx = self.cost_functions_for_types[cost_function_type].index(
-                cost_function
-            )
-            del self.cost_functions_for_types[cost_function_type][cost_fn_idx]
-
-            # No more cost functions associated to the cost function type, so can also delete
-            if len(self.cost_functions_for_types[cost_function_type]) == 0:
-                del self.cost_functions_for_types[cost_function_type]
 
             # finally, delete the cost function
             del self.cost_functions[name]

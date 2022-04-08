@@ -38,10 +38,6 @@ def test_residual():
         data=torch.tensor([0.01], dtype=torch.float64).repeat(batch_size).unsqueeze(1),
         name="calib_k2",
     )
-    log_loss_radius = th.Vector(
-        data=torch.tensor([0], dtype=torch.float64).repeat(batch_size).unsqueeze(1),
-        name="log_loss_radius",
-    )
     world_point = th.Vector(
         data=torch.rand((batch_size, 3), dtype=torch.float64), name="worldPoint"
     )
@@ -62,7 +58,6 @@ def test_residual():
         focal_length=focal_length,
         calib_k1=calib_k1,
         calib_k2=calib_k2,
-        log_loss_radius=log_loss_radius,
         image_feature_point=image_feature_point,
     )
 

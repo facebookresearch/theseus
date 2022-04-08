@@ -124,10 +124,15 @@ def run(cfg: omegaconf.OmegaConf, results_path: pathlib.Path):
             focal_length=cam.focal_length,
             calib_k1=cam.calib_k1,
             calib_k2=cam.calib_k2,
-            log_loss_radius=log_loss_radius,
             image_feature_point=obs.image_feature_point,
         )
-        objective.add(cost_function)
+        robust_cost_function = th.RobustCostFunction(
+            cost_function,
+            th.HuberLoss,
+            log_loss_radius,
+            name=f"robust_{cost_function.name}",
+        )
+        objective.add(robust_cost_function)
     dtype = objective.dtype
 
     # Add regularization
@@ -177,7 +182,7 @@ def run(cfg: omegaconf.OmegaConf, results_path: pathlib.Path):
     )
 
     # Set up Theseus layer
-    theseus_optim = th.TheseusLayer(optimizer)
+    theseus_optim = th.TheseusLayer(optimizer, vectorize=False)
 
     # copy the poses/pts to feed them to each outer iteration
     orig_poses = {cam.pose.name: cam.pose.data.clone() for cam in ba.cameras}

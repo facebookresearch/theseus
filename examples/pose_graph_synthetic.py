@@ -119,7 +119,7 @@ def run(cfg: omegaconf.OmegaConf, results_path: pathlib.Path):
             edge.relative_pose,
             loss_function=robust_loss,
         )
-        objective.add(relative_pose_cost)
+        objective.add(relative_pose_cost, "EDGE_SE3")
 
     if cfg.inner_optim.regularize:
         pose_prior_cost = th.eb.VariableDifference(

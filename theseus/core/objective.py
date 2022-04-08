@@ -422,6 +422,38 @@ class Objective:
                 )
                 del self.cost_functions_for_loss_functions[loss_function]
 
+            if name in self.ungrouped_cost_functions:
+                del self.ungrouped_cost_functions[name]
+            else:
+                group_name = self.group_names_for_cost_functions[name]
+                batch_cost_function, orig_cost_functions = self.grouped_cost_functions[
+                    group_name
+                ]
+
+                cost_fn_idx = orig_cost_functions.index(cost_function)
+                del orig_cost_functions[cost_fn_idx]
+
+                if len(orig_cost_functions) == 0:
+                    del self.grouped_cost_functions[group_name]
+                else:
+                    for var_name in batch_cost_function._optim_vars_attr_names:
+                        var = cast(Variable, getattr(cost_function, var_name))
+                        orig_var_data = [
+                            cast(Variable, getattr(orig_cost_function, var_name)).data
+                            for orig_cost_function in orig_cost_functions
+                        ]
+                        var.data = torch.cat(orig_var_data, dim=0)
+
+                    for var_name in batch_cost_function._aux_vars_attr_names:
+                        var = cast(Variable, getattr(cost_function, var_name))
+                        orig_var_data = [
+                            cast(Variable, getattr(orig_cost_function, var_name)).data
+                            for orig_cost_function in orig_cost_functions
+                        ]
+                        var.data = torch.cat(orig_var_data, dim=0)
+
+                del self.group_names_for_cost_functions[name]
+
             # finally, delete the cost function
             del self.cost_functions[name]
         else:

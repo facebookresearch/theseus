@@ -38,7 +38,46 @@ class DenseLinearization(Linearization):
             device=self.objective.device,
             dtype=self.objective.dtype,
         )
-        for cost_function in self.objective:
+
+        batch_size = self.objective.batch_size
+        for (
+            batch_cost_function,
+            cost_functions,
+        ) in self.objective.grouped_cost_functions.values():
+            batch_jacobians, batch_errors = batch_cost_function.jacobians()
+            # TODO: Implement FuncTorch
+            batch_pos = 0
+            for cost_function in cost_functions:
+                jacobians = [
+                    jacobian[batch_pos : batch_pos + batch_size]
+                    for jacobian in batch_jacobians
+                ]
+                error = batch_errors[batch_pos : batch_pos + batch_size]
+                batch_pos += batch_size
+                (
+                    weighted_jacobians,
+                    weighted_error,
+                ) = cost_function.weight.weight_jacobians_and_error(jacobians, error)
+                jacobians, error = cost_function.loss_function.rescale(
+                    weighted_jacobians, weighted_error
+                )
+
+                num_rows = cost_function.dim()
+                for var_idx_in_cost_function, var_jacobian in enumerate(jacobians):
+                    var_idx_in_order = self.ordering.index_of(
+                        cost_function.optim_var_at(var_idx_in_cost_function).name
+                    )
+                    var_start_col = self.var_start_cols[var_idx_in_order]
+
+                    num_cols = var_jacobian.shape[2]
+                    row_slice = slice(err_row_idx, err_row_idx + num_rows)
+                    col_slice = slice(var_start_col, var_start_col + num_cols)
+                    self.A[:, row_slice, col_slice] = var_jacobian
+
+                self.b[:, row_slice] = -error
+                err_row_idx += cost_function.dim()
+
+        for cost_function in self.objective.ungrouped_cost_functions.values():
             jacobians, error = cost_function.rescaled_jacobians_error()
             num_rows = cost_function.dim()
             for var_idx_in_cost_function, var_jacobian in enumerate(jacobians):

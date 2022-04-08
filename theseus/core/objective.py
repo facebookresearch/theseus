@@ -556,7 +556,19 @@ class Objective:
             device=self.device, dtype=self.dtype
         )
         pos = 0
-        for cost_function in self.cost_functions.values():
+        for batch_cost_function, cost_functions in self.grouped_cost_functions.values():
+            batch_errors = batch_cost_function.error()
+            # TODO: Implement FuncTorch
+            batch_pos = 0
+            for cost_function in cost_functions:
+                weighted_error = cost_function.weight.weight_error(
+                    batch_errors[batch_pos : batch_pos + self.batch_size]
+                )
+                batch_pos += self.batch_size
+                error_vector[:, pos : pos + cost_function.dim()] = weighted_error
+                pos += cost_function.dim()
+
+        for cost_function in self.ungrouped_cost_functions.values():
             error_vector[
                 :, pos : pos + cost_function.dim()
             ] = cost_function.weighted_error()
@@ -589,7 +601,21 @@ class Objective:
             self.batch_size, len(self.cost_functions)
         ).to(device=self.device, dtype=self.dtype)
         pos = 0
-        for cost_function in self.cost_functions.values():
+        for batch_cost_function, cost_functions in self.grouped_cost_functions.values():
+            batch_errors = batch_cost_function.error()
+            # TODO: Implement FuncTorch
+            batch_pos = 0
+            for cost_function in cost_functions:
+                weighted_error = cost_function.weight.weight_error(
+                    batch_errors[batch_pos : batch_pos + self.batch_size]
+                )
+                batch_pos += self.batch_size
+                function_value_vector[
+                    :, pos : pos + 1
+                ] = cost_function.loss_function.function_value(weighted_error)
+                pos += 1
+
+        for cost_function in self.ungrouped_cost_functions.values():
             function_value_vector[:, pos : pos + 1] = cost_function.function_value()
             pos += 1
         if not also_update:

@@ -440,31 +440,31 @@ class Objective:
                 del self.ungrouped_cost_functions[name]
             else:
                 group_name = self.group_names_for_cost_functions[name]
-                batch_cost_function, orig_cost_functions = self.grouped_cost_functions[
+                batch_cost_function, cost_functions = self.grouped_cost_functions[
                     group_name
                 ]
 
-                cost_fn_idx = orig_cost_functions.index(cost_function)
-                del orig_cost_functions[cost_fn_idx]
+                cost_fn_idx = cost_functions.index(cost_function)
+                del cost_functions[cost_fn_idx]
 
-                if len(orig_cost_functions) == 0:
+                if len(cost_functions) == 0:
                     del self.grouped_cost_functions[group_name]
                 else:
                     for var_name in batch_cost_function._optim_vars_attr_names:
                         var = cast(Variable, getattr(cost_function, var_name))
-                        orig_var_data = [
-                            cast(Variable, getattr(orig_cost_function, var_name)).data
-                            for orig_cost_function in orig_cost_functions
+                        var_data = [
+                            cast(Variable, getattr(cost_function, var_name)).data
+                            for cost_function in cost_functions
                         ]
-                        var.data = torch.cat(orig_var_data, dim=0)
+                        var.data = torch.cat(var_data, dim=0)
 
                     for var_name in batch_cost_function._aux_vars_attr_names:
                         var = cast(Variable, getattr(cost_function, var_name))
-                        orig_var_data = [
-                            cast(Variable, getattr(orig_cost_function, var_name)).data
-                            for orig_cost_function in orig_cost_functions
+                        var_data = [
+                            cast(Variable, getattr(cost_function, var_name)).data
+                            for cost_function in cost_functions
                         ]
-                        var.data = torch.cat(orig_var_data, dim=0)
+                        var.data = torch.cat(var_data, dim=0)
 
                 del self.group_names_for_cost_functions[name]
 
@@ -738,7 +738,7 @@ class Objective:
         self._batch_size = _get_batch_size(batch_sizes)
 
         # Update grouped cost functions for batch processing
-        # TODO: No need to update aux_vars for each iteration
+        # TODO: No need to update aux_vars at each iteration
         for group_name, (
             batch_cost_function,
             cost_functions,

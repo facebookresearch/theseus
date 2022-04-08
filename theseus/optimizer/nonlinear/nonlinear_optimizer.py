@@ -8,13 +8,13 @@ import math
 import warnings
 from dataclasses import dataclass
 from enum import Enum
-from typing import Any, Dict, Optional, Type
+from typing import Any, Dict, Optional, Type, cast
 
 import numpy as np
 import torch
 
 import theseus.constants
-from theseus.core import Objective
+from theseus.core import Objective, Variable
 from theseus.optimizer import Linearization, Optimizer, OptimizerInfo
 from theseus.optimizer.linear import LinearSolver
 
@@ -394,3 +394,23 @@ class NonlinearOptimizer(Optimizer, abc.ABC):
             else:
                 var.update(new_var.data, batch_ignore_mask=converged_indices)
             var_idx += var.dof()
+
+        # update grouped cost functions
+        # TODO: Implement FuncTorch
+        objective = self.objective
+        for (
+            batch_cost_function,
+            cost_functions,
+        ) in objective.grouped_cost_functions.values():
+            vars_attr_names = batch_cost_function._optim_vars_attr_names
+            for var_attr_name in vars_attr_names:
+                batch_variable = cast(
+                    Variable, getattr(batch_cost_function, var_attr_name)
+                )
+                batch_pos = 0
+                for cost_function in cost_functions:
+                    variable = cast(Variable, getattr(cost_function, var_attr_name))
+                    batch_variable.data[
+                        batch_pos : batch_pos + objective.batch_size
+                    ] = variable.data
+                    batch_pos += objective.batch_size

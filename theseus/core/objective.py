@@ -769,35 +769,35 @@ class Objective:
             batch_cost_function,
             cost_functions,
         ) in self.grouped_cost_functions.items():
-            for var_att_name in batch_cost_function._optim_vars_attr_names:
+            for var_attr_name in batch_cost_function._optim_vars_attr_names:
                 batch_variable = cast(
-                    Variable, getattr(batch_cost_function, var_att_name)
+                    Variable, getattr(batch_cost_function, var_attr_name)
                 )
                 batch_variable_data = [
-                    cast(Variable, getattr(cost_function, var_att_name)).data
+                    cast(Variable, getattr(cost_function, var_attr_name)).data
                     for cost_function in cost_functions
                 ]
                 batch_variable.data = torch.cat(batch_variable_data, dim=0)
 
                 if batch_variable.shape[0] != len(cost_functions) * self.batch_size:
                     raise ValueError(
-                        f"Provided data for {var_att_name} in grouped cost function "
+                        f"Provided data for {var_attr_name} in grouped cost function "
                         f"{group_name} can not be batched."
                     )
 
-            for var_att_name in batch_cost_function._aux_vars_attr_names:
+            for var_attr_name in batch_cost_function._aux_vars_attr_names:
                 batch_variable = cast(
-                    Variable, getattr(batch_cost_function, var_att_name)
+                    Variable, getattr(batch_cost_function, var_attr_name)
                 )
                 batch_variable_data = [
-                    cast(Variable, getattr(cost_function, var_att_name)).data
+                    cast(Variable, getattr(cost_function, var_attr_name)).data
                     for cost_function in cost_functions
                 ]
                 batch_variable.data = torch.cat(batch_variable_data, dim=0)
 
                 if batch_variable.shape[0] != len(cost_functions) * self.batch_size:
                     raise ValueError(
-                        f"Provided data for {var_att_name} in grouped cost function "
+                        f"Provided data for {var_attr_name} in grouped cost function "
                         f"{group_name} can not be batched."
                     )
 

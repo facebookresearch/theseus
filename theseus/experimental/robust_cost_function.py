@@ -16,11 +16,15 @@ from .loss import Loss
 # and auxiliary variables, without copying them. During linearization, the loss is
 # applied to the error's squared norm, linearized, and used to rescale the underlying
 # cost function's error and jacobians to solve for the full robust cost function
-# (see Theory section in the Ceres link above). This is done via
+# (see Theory section at http://ceres-solver.org/nnls_modeling.html#theory and
+# references therein); here we use alpha=0. The implementation of this part is done via
 # `RobustCostFunction.weighted_jacobians_error()`
 #
-# Currently, the convention is that `RobustCostFunction.error()` and
-# `RobustCostFunction.jacobians()` just forward the underlying cost function's methods.
+# Let e := `robust_cost_fn.cost_function.error()`. Currently, the convention is that:
+#     -`robust_cost_fn.error()` returns e.
+#     -`robust_cost_fn.weighted_error()` returns a vectorized version of loss(||e||^2).
+#
+# Also, `robust_cost_fn.jacobians()` is not implemented.
 class RobustCostFunction(th.CostFunction, abc.ABC):
     def __init__(
         self,
@@ -50,8 +54,27 @@ class RobustCostFunction(th.CostFunction, abc.ABC):
     def error(self) -> torch.Tensor:
         return self.cost_function.error()
 
+    def weighted_error(self) -> torch.Tensor:
+        weighted_error = self.cost_function.weighted_error()
+        squared_norm = torch.sum(weighted_error**2, dim=1, keepdim=True)
+        loss_radius = torch.exp(self.log_loss_radius.data)
+        error_loss = self.loss.evaluate(squared_norm, loss_radius)
+
+        # The return value is a hacky way to make it so that
+        # ||weighted_error||^2 = error_loss
+        # By doing this we avoid having to change the objective's error computation
+        # specifically for robust cost functions. The issue for this type of cost
+        # function is that the theory requires us to maintain scaled errors/jacobians
+        # of dim = robust_fn.cost_function.dim() to do the linearization properly,
+        # but the actual error has dim = 1, being the result of loss(||error||^2).
+        #
+        # Other options explored so far involve adding new methods to CostFunction,
+        # and/or changing Objective/Optimizer class. I'd prefer to avoid changing
+        # core class for experimental code, as long as it is possible [lep].
+        return torch.ones_like(weighted_error) * (error_loss / self.dim()).sqrt()
+
     def jacobians(self) -> Tuple[List[torch.Tensor], torch.Tensor]:
-        return self.cost_function.jacobians()
+        raise NotImplementedError
 
     def weighted_jacobians_error(self) -> Tuple[List[torch.Tensor], torch.Tensor]:
         (

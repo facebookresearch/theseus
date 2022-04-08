@@ -33,12 +33,10 @@ class ManifoldGaussian:
 
         self.mean = mean
         if precision is None:
-            self.precision = torch.zeros(mean[0].shape[0], self.dof, self.dof).to(
+            precision = torch.zeros(mean[0].shape[0], self.dof, self.dof).to(
                 dtype=mean[0].dtype, device=mean[0].device
             )
-        else:
-            # internally checks dtype, device and shape
-            self.update(precision=precision)
+        self.update(mean, precision)
 
     @property
     def dof(self) -> int:
@@ -73,35 +71,33 @@ class ManifoldGaussian:
 
     def update(
         self,
-        mean: Optional[Sequence[Manifold]] = None,
-        precision: Optional[torch.Tensor] = None,
+        mean: Sequence[Manifold],
+        precision: torch.Tensor,
     ):
-        if mean is not None:
-            if len(mean) != len(self.mean):
-                raise ValueError(
-                    f"Tried to update mean with sequence of different"
-                    f"lenght to original mean sequence. Given {len(mean)}. "
-                    f"Expected: {len(self.mean)}"
-                )
-            for i in range(len(self.mean)):
-                self.mean[i].update(mean[i])
+        if len(mean) != len(self.mean):
+            raise ValueError(
+                f"Tried to update mean with sequence of different"
+                f"length to original mean sequence. Given: {len(mean)}. "
+                f"Expected: {len(self.mean)}"
+            )
+        for i in range(len(self.mean)):
+            self.mean[i].update(mean[i])
 
-        if precision is not None:
-            if precision.shape != self.precision.shape:
-                raise ValueError(
-                    f"Tried to update precision with data "
-                    f"incompatible with original tensor shape. Given {precision.shape}. "
-                    f"Expected: {self.precision.shape}"
-                )
-            if precision.dtype != self.dtype:
-                raise ValueError(
-                    f"Tried to update using tensor of dtype {precision.dtype} but precision "
-                    f"has dtype {self.dtype}."
-                )
-            if precision.device != self.device:
-                raise ValueError(
-                    f"Tried to update using tensor on device {precision.dtype} but precision "
-                    f"is on device {self.device}."
-                )
+        if precision.shape != torch.Size([mean[0].shape[0], self.dof, self.dof]):
+            raise ValueError(
+                f"Tried to update precision with data "
+                f"incompatible with original tensor shape. Given: {precision.shape}. "
+                f"Expected: {self.precision.shape}"
+            )
+        if precision.dtype != self.dtype:
+            raise ValueError(
+                f"Tried to update using tensor of dtype: {precision.dtype} but precision "
+                f"has dtype: {self.dtype}."
+            )
+        if precision.device != self.device:
+            raise ValueError(
+                f"Tried to update using tensor on device: {precision.dtype} but precision "
+                f"is on device: {self.device}."
+            )
 
-            self.precision = precision
+        self.precision = precision

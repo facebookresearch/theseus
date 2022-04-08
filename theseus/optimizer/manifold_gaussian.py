@@ -32,9 +32,13 @@ class ManifoldGaussian:
         self._dof = dof
 
         self.mean = mean
-        self.precision = torch.zeros(mean[0].shape[0], self.dof, self.dof).to(
-            dtype=mean[0].dtype, device=mean[0].device
-        )
+        if precision is None:
+            self.precision = torch.zeros(mean[0].shape[0], self.dof, self.dof).to(
+                dtype=mean[0].dtype, device=mean[0].device
+            )
+        else:
+            # internally checks dtype, device and shape
+            self.update(precision=precision)
 
     @property
     def dof(self) -> int:
@@ -42,11 +46,11 @@ class ManifoldGaussian:
 
     @property
     def device(self) -> torch.device:
-        return self.precision[0].device
+        return self.mean[0].device
 
     @property
     def dtype(self) -> torch.dtype:
-        return self.precision[0].dtype
+        return self.mean[0].dtype
 
     # calls to() on the internal tensors
     def to(self, *args, **kwargs):
@@ -93,6 +97,11 @@ class ManifoldGaussian:
                 raise ValueError(
                     f"Tried to update using tensor of dtype {precision.dtype} but precision "
                     f"has dtype {self.dtype}."
+                )
+            if precision.device != self.device:
+                raise ValueError(
+                    f"Tried to update using tensor on device {precision.dtype} but precision "
+                    f"is on device {self.device}."
                 )
 
             self.precision = precision

@@ -27,7 +27,6 @@ class DenseLinearization(Linearization):
         self.Atb: torch.Tensor = None
 
     def _linearize_jacobian_impl(self):
-        err_row_idx = 0
         self.A = torch.zeros(
             (self.objective.batch_size, self.num_rows, self.num_cols),
             device=self.objective.device,
@@ -54,7 +53,9 @@ class DenseLinearization(Linearization):
 
             self.b[:, row_slice] = -error
 
+        err_row_idx = 0
         batch_size = self.objective.batch_size
+
         for (
             batch_cost_function,
             cost_functions,

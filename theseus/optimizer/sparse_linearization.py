@@ -41,9 +41,7 @@ class SparseLinearization(Linearization):
         sorted_cost_functions: List[CostFunction] = []
 
         for _, cost_functions in self.objective.grouped_cost_functions.values():
-            sorted_cost_functions.extend(
-                [cost_function for cost_function in cost_functions]
-            )
+            sorted_cost_functions.extend(cost_functions)
         sorted_cost_functions.extend(
             list(self.objective.ungrouped_cost_functions.values())
         )

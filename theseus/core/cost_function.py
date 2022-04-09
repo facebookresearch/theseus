@@ -54,27 +54,34 @@ class CostFunction(TheseusFunction, abc.ABC):
         pass
 
     def weighted_error(self) -> torch.Tensor:
-        error = self.error()
-        return self.weight.weight_error(error)
+        return self.weight_error(self.error())
 
     def weighted_jacobians_error(
         self,
     ) -> Tuple[List[torch.Tensor], torch.Tensor]:
-        jacobian, err = self.jacobians()
-        return self.weight.weight_jacobians_and_error(jacobian, err)
+        jacobians, err = self.jacobians()
+        return self.weight_jacobians_error(jacobians, err)
 
     def function_value(self) -> torch.Tensor:
-        return self.loss_function.function_value(self.weighted_error())
+        return self.evaluate_function_value(self.error())
 
     def rescaled_jacobians_error(self) -> Tuple[List[torch.Tensor], torch.Tensor]:
-        weighted_jacobians, weighted_error = self.weighted_jacobians_error()
-        return self.loss_function.rescale(weighted_jacobians, weighted_error)
+        jacobians, err = self.jacobians()
+        return self.rescale_jacobians_error(jacobians, err)
+
+    def weight_error(self, error: torch.Tensor) -> torch.Tensor:
+        return self.weight.weight_error(error)
+
+    def weight_jacobians_error(
+        self, jacoians: List[torch.Tensor], error: torch.Tensor
+    ) -> Tuple[List[torch.Tensor], torch.Tensor]:
+        return self.weight.weight_jacobians_and_error(jacoians, error)
 
     def evaluate_function_value(self, error: torch.Tensor) -> torch.Tensor:
         weighted_error = self.weight.weight_error(error)
         return self.loss_function.function_value(weighted_error)
 
-    def rescale_and_weight_jacobians_error(
+    def rescale_jacobians_error(
         self, jacoians: List[torch.Tensor], error: torch.Tensor
     ) -> Tuple[List[torch.Tensor], torch.Tensor]:
         weighted_jacobians, weighted_error = self.weight.weight_jacobians_and_error(

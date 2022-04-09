@@ -606,13 +606,12 @@ class Objective:
             # TODO: Implement FuncTorch
             batch_pos = 0
             for cost_function in cost_functions:
-                weighted_error = cost_function.weight.weight_error(
+                function_value_vector[
+                    :, pos : pos + 1
+                ] = cost_function.evaluate_function_value(
                     batch_errors[batch_pos : batch_pos + self.batch_size]
                 )
                 batch_pos += self.batch_size
-                function_value_vector[
-                    :, pos : pos + 1
-                ] = cost_function.loss_function.function_value(weighted_error)
                 pos += 1
 
         for cost_function in self.ungrouped_cost_functions.values():

@@ -71,6 +71,9 @@ class Variable:
     def to(self, *args, **kwargs):
         self.data = self.data.to(*args, **kwargs)
 
+    def info(self) -> str:
+        return self.__class__.__name__ + "__" + f"{tuple(self.shape)}"
+
     @property
     def shape(self) -> torch.Size:
         return self.data.shape

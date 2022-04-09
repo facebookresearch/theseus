@@ -32,7 +32,7 @@ for edge in edges:
         edge.relative_pose,
         loss_function=loss_function,
     )
-    objective.add(cost_func)
+    objective.add(cost_func, "EDGE_SE3")
 
 pose_prior = th.eb.VariableDifference(
     var=verts[0],
@@ -45,6 +45,8 @@ optimizer = th.LevenbergMarquardt(  # GaussNewton(
     objective,
     max_iterations=20,
     step_size=0.5,
+    # linearization_cls=th.SparseLinearization,
+    # linear_solver_cls=th.CholmodSparseSolver
 )
 
 theseus_optim = th.TheseusLayer(optimizer)

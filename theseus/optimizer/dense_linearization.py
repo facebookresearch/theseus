@@ -3,7 +3,7 @@
 # This source code is licensed under the MIT license found in the
 # LICENSE file in the root directory of this source tree.
 
-from typing import Optional
+from typing import List, Optional
 
 import torch
 
@@ -39,6 +39,21 @@ class DenseLinearization(Linearization):
             dtype=self.objective.dtype,
         )
 
+        def update_A_and_b(jacobians: List[torch.Tensor], error: torch.Tensor):
+            num_rows = cost_function.dim()
+            for var_idx_in_cost_function, var_jacobian in enumerate(jacobians):
+                var_idx_in_order = self.ordering.index_of(
+                    cost_function.optim_var_at(var_idx_in_cost_function).name
+                )
+                var_start_col = self.var_start_cols[var_idx_in_order]
+
+                num_cols = var_jacobian.shape[2]
+                row_slice = slice(err_row_idx, err_row_idx + num_rows)
+                col_slice = slice(var_start_col, var_start_col + num_cols)
+                self.A[:, row_slice, col_slice] = var_jacobian
+
+            self.b[:, row_slice] = -error
+
         batch_size = self.objective.batch_size
         for (
             batch_cost_function,
@@ -57,37 +72,15 @@ class DenseLinearization(Linearization):
                     jacobians, error
                 )
 
-                num_rows = cost_function.dim()
-                for var_idx_in_cost_function, var_jacobian in enumerate(jacobians):
-                    var_idx_in_order = self.ordering.index_of(
-                        cost_function.optim_var_at(var_idx_in_cost_function).name
-                    )
-                    var_start_col = self.var_start_cols[var_idx_in_order]
-
-                    num_cols = var_jacobian.shape[2]
-                    row_slice = slice(err_row_idx, err_row_idx + num_rows)
-                    col_slice = slice(var_start_col, var_start_col + num_cols)
-                    self.A[:, row_slice, col_slice] = var_jacobian
-
-                self.b[:, row_slice] = -error
-                batch_pos += batch_size
+                update_A_and_b(jacobians, error)
                 err_row_idx += cost_function.dim()
+
+                batch_pos += batch_size
 
         for cost_function in self.objective.ungrouped_cost_functions.values():
             jacobians, error = cost_function.rescaled_jacobians_error()
-            num_rows = cost_function.dim()
-            for var_idx_in_cost_function, var_jacobian in enumerate(jacobians):
-                var_idx_in_order = self.ordering.index_of(
-                    cost_function.optim_var_at(var_idx_in_cost_function).name
-                )
-                var_start_col = self.var_start_cols[var_idx_in_order]
 
-                num_cols = var_jacobian.shape[2]
-                row_slice = slice(err_row_idx, err_row_idx + num_rows)
-                col_slice = slice(var_start_col, var_start_col + num_cols)
-                self.A[:, row_slice, col_slice] = var_jacobian
-
-            self.b[:, row_slice] = -error
+            update_A_and_b(jacobians, error)
             err_row_idx += cost_function.dim()
 
     def _linearize_hessian_impl(self):

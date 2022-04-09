@@ -78,13 +78,13 @@ class CostFunction(TheseusFunction, abc.ABC):
         return self.weight.weight_jacobians_and_error(jacoians, error)
 
     def evaluate_function_value(self, error: torch.Tensor) -> torch.Tensor:
-        weighted_error = self.weight.weight_error(error)
+        weighted_error = self.weight_error(error)
         return self.loss_function.function_value(weighted_error)
 
     def rescale_jacobians_error(
         self, jacoians: List[torch.Tensor], error: torch.Tensor
     ) -> Tuple[List[torch.Tensor], torch.Tensor]:
-        weighted_jacobians, weighted_error = self.weight.weight_jacobians_and_error(
+        weighted_jacobians, weighted_error = self.weight_jacobians_error(
             jacoians, error
         )
         return self.loss_function.rescale(weighted_jacobians, weighted_error)

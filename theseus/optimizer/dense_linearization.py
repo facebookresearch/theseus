@@ -53,13 +53,8 @@ class DenseLinearization(Linearization):
                     for jacobian in batch_jacobians
                 ]
                 error = batch_errors[batch_pos : batch_pos + batch_size]
-                batch_pos += batch_size
-                (
-                    weighted_jacobians,
-                    weighted_error,
-                ) = cost_function.weight.weight_jacobians_and_error(jacobians, error)
-                jacobians, error = cost_function.loss_function.rescale(
-                    weighted_jacobians, weighted_error
+                jacobians, error = cost_function.rescale_jacobians_error(
+                    jacobians, error
                 )
 
                 num_rows = cost_function.dim()
@@ -75,6 +70,7 @@ class DenseLinearization(Linearization):
                     self.A[:, row_slice, col_slice] = var_jacobian
 
                 self.b[:, row_slice] = -error
+                batch_pos += batch_size
                 err_row_idx += cost_function.dim()
 
         for cost_function in self.objective.ungrouped_cost_functions.values():

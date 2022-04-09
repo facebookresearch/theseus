@@ -561,11 +561,11 @@ class Objective:
             # TODO: Implement FuncTorch
             batch_pos = 0
             for cost_function in cost_functions:
-                weighted_error = cost_function.weight.weight_error(
+                weighted_error = cost_function.weight_error(
                     batch_errors[batch_pos : batch_pos + self.batch_size]
                 )
-                batch_pos += self.batch_size
                 error_vector[:, pos : pos + cost_function.dim()] = weighted_error
+                batch_pos += self.batch_size
                 pos += cost_function.dim()
 
         for cost_function in self.ungrouped_cost_functions.values():

@@ -70,6 +70,18 @@ class CostFunction(TheseusFunction, abc.ABC):
         weighted_jacobians, weighted_error = self.weighted_jacobians_error()
         return self.loss_function.rescale(weighted_jacobians, weighted_error)
 
+    def evaluate_function_value(self, error: torch.Tensor) -> torch.Tensor:
+        weighted_error = self.weight.weight_error(error)
+        return self.loss_function.function_value(weighted_error)
+
+    def rescale_and_weight(
+        self, jacoians: List[torch.Tensor], error: torch.Tensor
+    ) -> Tuple[List[torch.Tensor], torch.Tensor]:
+        weighted_jacobians, weighted_error = self.weight.weight_jacobians_and_error(
+            jacoians, error
+        )
+        return self.loss_function.rescale(weighted_jacobians, weighted_error)
+
     # Must copy everything
     @abc.abstractmethod
     def _copy_impl(self, new_name: Optional[str] = None) -> "CostFunction":

@@ -5,11 +5,12 @@
 
 import abc
 import warnings
-from typing import Any, List, Optional
+from typing import Any, List, Optional, Tuple
 
 import torch
 
 from theseus.core.variable import Variable
+from theseus.optimizer.manifold_gaussian import ManifoldGaussian
 
 OptionalJacobians = Optional[List[torch.Tensor]]
 
@@ -68,6 +69,23 @@ class Manifold(Variable, abc.ABC):
 
     @abc.abstractmethod
     def _retract_impl(self, delta: torch.Tensor) -> "Manifold":
+        pass
+
+    @abc.abstractmethod
+    def local_gaussian(
+        self,
+        gaussian: ManifoldGaussian,
+        return_mean: bool = True,
+    ) -> Tuple[torch.Tensor, torch.Tensor]:
+        pass
+
+    @abc.abstractmethod
+    def retract_gaussian(
+        self,
+        mean_tp: torch.Tensor,
+        precision_tp: torch.Tensor,
+        out_gauss: ManifoldGaussian,
+    ) -> ManifoldGaussian:
         pass
 
     @abc.abstractmethod

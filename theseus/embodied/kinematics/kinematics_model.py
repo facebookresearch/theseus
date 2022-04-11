@@ -4,7 +4,7 @@
 # LICENSE file in the root directory of this source tree.
 
 import abc
-from typing import Dict, Optional, Union
+from typing import Any, Dict, Optional, Union
 
 import differentiable_robot_model as drm
 import torch
@@ -62,7 +62,7 @@ class UrdfRobotModel(KinematicsModel):
     def forward_kinematics(
         self,
         joint_states: RobotModelInput,
-        jacobians: Dict[str, Optional[torch.Tensor]] = {},
+        jacobians: Optional[Dict[str, Any]] = None,
     ) -> Dict[str, LieGroup]:
         """Computes forward kinematics
         Args:
@@ -100,11 +100,12 @@ class UrdfRobotModel(KinematicsModel):
             )
 
         # Compute jacobians
-        for link_name in jacobians.keys():
-            jac_lin, jac_rot = self.drm_model.compute_endeffector_jacobian(
-                joint_states_input, link_name
-            )
-            jacobians[link_name] = torch.cat([jac_lin, jac_rot], dim=-2)
+        if jacobians is not None:
+            for link_name in jacobians.keys():
+                jac_lin, jac_rot = self.drm_model.compute_endeffector_jacobian(
+                    joint_states_input, link_name
+                )
+                jacobians[link_name] = torch.cat([jac_lin, jac_rot], dim=-2)
 
         return link_poses
 

@@ -9,7 +9,7 @@ from typing import Dict, Optional, Union
 import differentiable_robot_model as drm
 import torch
 
-from theseus import Variable
+from theseus.core import Variable
 from theseus.geometry import SE3, LieGroup, Point2, Vector
 
 RobotModelInput = Union[torch.Tensor, Vector]

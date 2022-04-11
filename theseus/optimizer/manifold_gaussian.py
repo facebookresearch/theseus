@@ -22,7 +22,7 @@ class ManifoldGaussian:
     ):
         self._id = next(ManifoldGaussian._ids)
         if name is None:
-            self.name = f"{self.__class__.__name__}__{self._id}"
+            name = f"{self.__class__.__name__}__{self._id}"
         self.name = name
 
         dof = 0

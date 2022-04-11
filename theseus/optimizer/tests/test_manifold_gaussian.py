@@ -127,6 +127,13 @@ def test_update():
         with pytest.raises(ValueError):
             var.update(new_mean_good, new_precision_bad)
 
+        # check raises error for non symmetric precision
+        new_precision_bad = torch.eye(dof)[None, ...].repeat(batch_size, 1, 1)
+        if dof > 1:
+            new_precision_bad[0, 1, 0] += 1.0
+            with pytest.raises(ValueError):
+                var.update(new_mean_good, new_precision_bad)
+
         # check raises error on wrong number of mean variables
         new_mean_bad = new_mean_good[:-1]
         with pytest.raises(ValueError):

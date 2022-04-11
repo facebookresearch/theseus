@@ -74,9 +74,11 @@ def test_forward_kinematics_batched(robot_model, dataset):
     )
 
 
-def test_jacobian(robot_model, dataset):
+@pytest.fixture
+def autograd_jacobians(robot_model, dataset):
     ee_name = dataset["ee_name"]
 
+    jacobians = []
     for joint_state, ee_pose_target in zip(
         dataset["joint_states"], dataset["ee_poses"]
     ):
@@ -97,11 +99,21 @@ def test_jacobian(robot_model, dataset):
             fk_func, joint_state
         ).squeeze()
 
-        # Compute analytical manipulator jacobian
-        jac_fk = {ee_name: None}
-        robot_model.forward_kinematics(joint_state, jacobians=jac_fk)
-        jacobian_analytical = jac_fk[ee_name]
+        jacobians.append(jacobian_autograd)
 
-        assert torch.allclose(
-            jacobian_autograd, jacobian_analytical, atol=1e-6, rtol=1e-3
-        )
+    return torch.stack(jacobians)
+
+
+@pytest.mark.parametrize("batch_size", [1, 3])
+def test_jacobian(robot_model, dataset, autograd_jacobians, batch_size):
+    ee_name = dataset["ee_name"]
+    joint_state = dataset["joint_states"][0:batch_size, ...]
+
+    # Compute analytical manipulator jacobian
+    jac_fk = {ee_name: None}
+    robot_model.forward_kinematics(joint_state, jacobians=jac_fk)
+    jacobian_analytical = jac_fk[ee_name]
+
+    assert torch.allclose(
+        autograd_jacobians[0:batch_size, ...], jacobian_analytical, atol=1e-6, rtol=1e-3
+    )

@@ -104,7 +104,7 @@ class UrdfRobotModel(KinematicsModel):
             jac_lin, jac_rot = self.drm_model.compute_endeffector_jacobian(
                 joint_states_input, link_name
             )
-            jacobians[link_name] = torch.cat([jac_lin, jac_rot], dim=0)
+            jacobians[link_name] = torch.cat([jac_lin, jac_rot], dim=-2)
 
         return link_poses
 

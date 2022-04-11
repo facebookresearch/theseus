@@ -71,6 +71,7 @@ class Variable:
     def to(self, *args, **kwargs):
         self.data = self.data.to(*args, **kwargs)
 
+    @property
     def info(self) -> str:
         return (
             self.__module__

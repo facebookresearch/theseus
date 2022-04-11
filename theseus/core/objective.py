@@ -38,6 +38,11 @@ class Objective:
         # maps variable name to variable, for any kind of variable added
         self._all_variables: OrderedDict[str, Variable] = OrderedDict()
 
+        # maps grouped optim variable names to the the corresponding grouped optim variables
+        self.grouped_optim_vars: OrderedDict[
+            str, Tuple[Manifold, List[Manifold]]
+        ] = OrderedDict()
+
         # maps cost function names to the cost function objects
         self.cost_functions: OrderedDict[str, CostFunction] = OrderedDict()
 
@@ -129,6 +134,39 @@ class Objective:
                 self._all_variables[variable.name] = variable
                 assert variable not in self_var_to_fn_map
                 self_var_to_fn_map[variable] = []
+
+                if self_vars_of_this_type == self.optim_vars:
+                    function_optim_vars = list(function_vars)
+                    if len(function_optim_vars) != 0:
+                        batch_size = cast(Variable, function_optim_vars[0]).shape[0]
+
+                    for variable in function_optim_vars:
+                        if variable.shape[0] != batch_size:
+                            raise ValueError(
+                                f"The batch size of variable {variable.name} is "
+                                f"{variable.shape[0]}, but the expected batch size is {batch_size}."
+                            )
+
+                        group_name = variable.info
+
+                        if group_name not in self.grouped_optim_vars:
+                            batch_optim_variable = variable.copy(
+                                new_name=group_name + "__batch_optim_var"
+                            )
+                            self.grouped_optim_vars[group_name] = (
+                                batch_optim_variable,
+                                [variable],
+                            )
+                        else:
+                            (
+                                batch_optim_variable,
+                                optim_variables,
+                            ) = self.grouped_optim_vars[group_name]
+                            batch_optim_variable.data = torch.cat(
+                                [batch_optim_variable.data, variable.data], dim=0
+                            )
+                            variable.data = batch_optim_variable.data[-batch_size:]
+                            optim_variables.append(variable)
 
             # add to either self.optim_vars,
             # self.cost_weight_optim_vars, self.loss_function_optim_vars or self.aux_vars
@@ -386,12 +424,44 @@ class Objective:
             if not self_var_to_fn_map[variable]:
                 del self_var_to_fn_map[variable]
                 del self_vars_of_this_type[variable.name]
+                del self._all_variables[variable.name]
+
+                if self_vars_of_this_type == self.optim_vars:
+                    group_name = variable.info
+                    batch_optim_variable, optim_variables = self.grouped_optim_vars[
+                        group_name
+                    ]
+                    var_idx = optim_variables.index(variable)
+                    del optim_variables[var_idx]
+
+                    if len(optim_variables) == 0:
+                        del self.grouped_optim_vars[group_name]
+                    else:
+                        var_data = [var.data for var in optim_variables]
+
+                        for i, data in enumerate(var_data):
+                            if data.shape != var_data[0].shape:
+                                raise ValueError(
+                                    f"The shape of {optim_variables[i].name} is "
+                                    f"{data.shape}, but the expected shape is {var_data[0].shape}"
+                                )
+
+                        batch_optim_variable.data = torch.cat(var_data, dim=0)
+                        batch_size = optim_variables[0].shape[0]
+                        batch_pos = 0
+
+                        for var in optim_variables:
+                            var.data = batch_optim_variable.data[
+                                batch_pos : batch_pos + batch_size
+                            ]
+                            batch_pos += batch_size
 
     # Removes a cost function from the objective given its name
     # Also removes any of its variables that are no longer associated to other
     # functions (either cost functions, or cost weights).
     # Does the same for the cost weight, but only if the weight is not associated to
     # any other cost function
+
     def erase(self, name: str):
         self.current_version += 1
         if name in self.cost_functions:

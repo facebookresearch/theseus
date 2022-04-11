@@ -144,7 +144,8 @@ class Objective:
                         if variable.shape[0] != batch_size:
                             raise ValueError(
                                 f"The batch size of variable {variable.name} is "
-                                f"{variable.shape[0]}, but the expected batch size is {batch_size}."
+                                f"{variable.shape[0]} and different from the expected "
+                                f"batch size {batch_size}."
                             )
 
                         group_name = variable.info
@@ -202,15 +203,15 @@ class Objective:
             if variable.shape != original_variable.shape:
                 raise ValueError(
                     f"The shape of variable {variable.name} in cost function "
-                    f"{cost_function.name} is {variable.shape} but the "
-                    f"expected shape is {original_variable.shape}."
+                    f"{cost_function.name} is {variable.shape} and different "
+                    f"from the expected shape {original_variable.shape}."
                 )
 
             if type(variable) != type(original_variable):
                 raise ValueError(
                     f"The type of variable {variable.name} in cost function "
-                    f"{cost_function.name} is {type(variable)} but the expected "
-                    f"type is {type(original_variable)}."
+                    f"{cost_function.name} is {type(variable)} and different "
+                    f"from the expected type {type(original_variable)}."
                 )
 
         for attr_name in vars_attr_names:
@@ -443,7 +444,8 @@ class Objective:
                             if data.shape != var_data[0].shape:
                                 raise ValueError(
                                     f"The shape of {optim_variables[i].name} is "
-                                    f"{data.shape}, but the expected shape is {var_data[0].shape}"
+                                    f"{data.shape} and different from the expected "
+                                    f"shape {var_data[0].shape}."
                                 )
 
                         batch_optim_variable.data = torch.cat(var_data, dim=0)

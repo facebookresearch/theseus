@@ -82,26 +82,26 @@ def test_jacobian(robot_model, dataset):
     ):
         ee_se3_target = th.SE3(x_y_z_quaternion=ee_pose_target)
 
+        # Compute autograd manipulator jacobian
         def fk_func(x):
             ee_se3_output = robot_model.forward_kinematics(x)[ee_name]
-            return ee_se3_target.local(ee_se3_output)
+            delta_pose_ee_frame = ee_se3_target.local(ee_se3_output)
 
-        # Compute autograd jacobian (autograd joint-to-cost jacobian)
+            adjoint_matrix = ee_se3_target.adjoint()
+            adjoint_matrix[:, 0:3, 3:6] = 0.0  # convert only rotational frame
+            delta_pose_base_frame = adjoint_matrix @ delta_pose_ee_frame.squeeze()
+
+            return delta_pose_base_frame
+
         jacobian_autograd = torch.autograd.functional.jacobian(
             fk_func, joint_state
         ).squeeze()
 
-        # Compute analytical jacobian
-        # (analytical manipulator jacobian * autograd ee-to-cost jacobian)
+        # Compute analytical manipulator jacobian
         jac_fk = {ee_name: None}
         robot_model.forward_kinematics(joint_state, jacobians=jac_fk)
-        jacobian_m_analytical = jac_fk[ee_name]
+        jacobian_analytical = jac_fk[ee_name]
 
-        jacobian_e = th.eb.VariableDifference(
-            ee_se3_target, th.ScaleCostWeight(1.0), ee_se3_target
-        ).jacobians()[0][0]
-        jacobian_analytical = (
-            jacobian_e @ ee_se3_target.inverse().adjoint() @ jacobian_m_analytical
+        assert torch.allclose(
+            jacobian_autograd, jacobian_analytical, atol=1e-6, rtol=1e-3
         )
-
-        assert torch.allclose(jacobian_autograd, jacobian_analytical)

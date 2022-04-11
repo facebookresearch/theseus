@@ -21,10 +21,9 @@ class ManifoldGaussian:
         name: Optional[str] = None,
     ):
         self._id = next(ManifoldGaussian._ids)
-        if name:
-            self.name = name
-        else:
+        if name is None:
             self.name = f"{self.__class__.__name__}__{self._id}"
+        self.name = name
 
         dof = 0
         for v in mean:

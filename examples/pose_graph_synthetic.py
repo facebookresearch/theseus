@@ -146,7 +146,8 @@ def run(cfg: omegaconf.OmegaConf, results_path: pathlib.Path):
                     pose_prior_weight,
                     pg.gt_poses[i],
                     name=f"pose_diff_{i}",
-                )
+                ),
+                "SE3_VAR_PRIOR",
             )
 
     # Create optimizer

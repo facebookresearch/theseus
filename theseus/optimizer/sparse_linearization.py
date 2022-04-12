@@ -40,10 +40,10 @@ class SparseLinearization(Linearization):
 
         sorted_cost_functions: List[CostFunction] = []
 
-        for _, cost_functions in self.objective.grouped_cost_functions.values():
+        for _, cost_functions in self.objective.batched_cost_functions.values():
             sorted_cost_functions.extend(cost_functions)
         sorted_cost_functions.extend(
-            list(self.objective.ungrouped_cost_functions.values())
+            list(self.objective.unbatched_cost_functions.values())
         )
 
         for cost_function in sorted_cost_functions:
@@ -136,7 +136,7 @@ class SparseLinearization(Linearization):
         for (
             batch_cost_function,
             cost_functions,
-        ) in self.objective.grouped_cost_functions.values():
+        ) in self.objective.batched_cost_functions.values():
             batch_jacobians, batch_errors = batch_cost_function.jacobians()
             # TODO: Implement FuncTorch
             batch_pos = 0
@@ -156,7 +156,7 @@ class SparseLinearization(Linearization):
 
                 batch_pos += batch_size
 
-        for cost_function in self.objective.ungrouped_cost_functions.values():
+        for cost_function in self.objective.unbatched_cost_functions.values():
             jacobians, error = cost_function.rescaled_jacobians_error()
 
             update_A_and_b(jacobians, error)

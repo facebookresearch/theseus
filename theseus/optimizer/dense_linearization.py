@@ -59,7 +59,7 @@ class DenseLinearization(Linearization):
         for (
             batch_cost_function,
             cost_functions,
-        ) in self.objective.grouped_cost_functions.values():
+        ) in self.objective.batched_cost_functions.values():
             batch_jacobians, batch_errors = batch_cost_function.jacobians()
             # TODO: Implement FuncTorch
             batch_pos = 0
@@ -78,7 +78,7 @@ class DenseLinearization(Linearization):
 
                 batch_pos += batch_size
 
-        for cost_function in self.objective.ungrouped_cost_functions.values():
+        for cost_function in self.objective.unbatched_cost_functions.values():
             jacobians, error = cost_function.rescaled_jacobians_error()
 
             update_A_and_b(jacobians, error)

@@ -259,8 +259,8 @@ def test_objective_error():
     def _check_variables(objective, input_data, v1_data, v2_data, also_update):
 
         if also_update:
-            assert objective.optim_vars["v1"].data is input_data["v1"]
-            assert objective.optim_vars["v2"].data is input_data["v2"]
+            assert torch.equal(objective.optim_vars["v1"].data, input_data["v1"])
+            assert torch.equal(objective.optim_vars["v2"].data, input_data["v2"])
         else:
             assert objective.optim_vars["v1"].data is not input_data["v1"]
             assert objective.optim_vars["v2"].data is not input_data["v2"]
@@ -517,21 +517,25 @@ def test_update_raises_batch_size_error():
 
     # change one of the variables, no error since batch_size = 1 is broadcastable
     input_data["var1"] = torch.ones(1, 1)
+    objective.setup(input_data=input_data)
     objective.update(input_data=input_data)
     assert objective.batch_size == batch_size
 
     # change another variable, this time throws errors since found batch size 2 and 3
     input_data["var2"] = torch.ones(batch_size + 1, 1)
     with pytest.raises(ValueError):
+        objective.setup(input_data=input_data)
         objective.update(input_data=input_data)
 
     # change back before testing the aux. variable
     input_data["var2"] = torch.ones(batch_size, 1)
+    objective.setup(input_data=input_data)
     objective.update(input_data=input_data)  # shouldn't throw error
 
     # auxiliary variables should also throw error
     input_data["aux1"] = torch.ones(batch_size + 1, 1)
     with pytest.raises(ValueError):
+        objective.setup(input_data=input_data)
         objective.update(input_data=input_data)
 
 

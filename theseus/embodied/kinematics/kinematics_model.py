@@ -108,6 +108,3 @@ class UrdfRobotModel(KinematicsModel):
                 jacobians[link_name] = torch.cat([jac_lin, jac_rot], dim=-2)
 
         return link_poses
-
-    def dim(self) -> int:
-        return len(self.drm_model.get_joint_limits())

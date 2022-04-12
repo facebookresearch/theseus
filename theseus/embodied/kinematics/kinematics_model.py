@@ -4,7 +4,7 @@
 # LICENSE file in the root directory of this source tree.
 
 import abc
-from typing import Any, Dict, Optional, Union
+from typing import Dict, Optional, Union
 
 import differentiable_robot_model as drm
 import torch
@@ -62,7 +62,7 @@ class UrdfRobotModel(KinematicsModel):
     def forward_kinematics(
         self,
         joint_states: RobotModelInput,
-        jacobians: Optional[Dict[str, Any]] = None,
+        jacobians: Optional[Dict[str, Optional[torch.Tensor]]] = None,
     ) -> Dict[str, LieGroup]:
         """Computes forward kinematics
         Args:

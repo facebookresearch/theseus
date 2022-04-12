@@ -110,7 +110,7 @@ def test_jacobian(robot_model, dataset, autograd_jacobians, batch_size):
     joint_state = dataset["joint_states"][0:batch_size, ...]
 
     # Compute analytical manipulator jacobian
-    jac_fk = {ee_name: None}
+    jac_fk = dict.fromkeys([ee_name])
     robot_model.forward_kinematics(joint_state, jacobians=jac_fk)
     jacobian_analytical = jac_fk[ee_name]
 

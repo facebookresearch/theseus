@@ -493,11 +493,11 @@ class Objective:
                         f"tensor with name {var_name}."
                     )
                 if var_name in self.optim_vars:
-                    self.optim_vars[var_name].update(data, keep_data=True)
+                    self.optim_vars[var_name].update(data, keep_shape=True)
                 elif var_name in self.aux_vars:
-                    self.aux_vars[var_name].update(data, keep_data=True)
+                    self.aux_vars[var_name].update(data, keep_shape=True)
                 elif var_name in self.cost_weight_optim_vars:
-                    self.cost_weight_optim_vars[var_name].update(data, keep_data=True)
+                    self.cost_weight_optim_vars[var_name].update(data, keep_shape=True)
                     warnings.warn(
                         "Updated a variable declared as optimization, but it is "
                         "only associated to cost weights and not to any cost functions. "

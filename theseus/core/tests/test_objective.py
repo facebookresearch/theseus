@@ -259,8 +259,8 @@ def test_objective_error():
     def _check_variables(objective, input_data, v1_data, v2_data, also_update):
 
         if also_update:
-            assert torch.equal(objective.optim_vars["v1"].data, input_data["v1"])
-            assert torch.equal(objective.optim_vars["v2"].data, input_data["v2"])
+            assert objective.optim_vars["v1"].data is input_data["v1"]
+            assert objective.optim_vars["v2"].data is input_data["v2"]
         else:
             assert objective.optim_vars["v1"].data is not input_data["v1"]
             assert objective.optim_vars["v2"].data is not input_data["v2"]

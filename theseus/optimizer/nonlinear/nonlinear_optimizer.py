@@ -385,19 +385,57 @@ class NonlinearOptimizer(Optimizer, abc.ABC):
         step_size: float,
         force_update: bool = False,
     ):
+        objective = self.objective
+
         var_idx = 0
         delta = step_size * delta
-        for var in self.linear_solver.linearization.ordering:
-            new_var = var.retract(delta[:, var_idx : var_idx + var.dof()])
-            if force_update:
-                var.update(new_var.data)
-            else:
-                var.update(new_var.data, batch_ignore_mask=converged_indices)
-            var_idx += var.dof()
+
+        # for var in self.linear_solver.linearization.ordering:
+        #     new_var = var.retract(delta[:, var_idx : var_idx + var.dof()])
+        #     if force_update:
+        #         var.update(new_var.data)
+        #     else:
+        #         var.update(new_var.data, batch_ignore_mask=converged_indices)
+        #     var_idx += var.dof()
+
+        # TODO: what does converged_indices do?
+        for variable_batch, variables in self.objective.batched_optim_vars.values():
+            cnts = variable_batch.dof() * len(variables)
+            batch_pos = 0
+
+            for variable in variables.values():
+                variable_batch.data[
+                    batch_pos : batch_pos + objective.batch_size
+                ] = variable.data
+                batch_pos += objective.batch_size
+
+            delta_batch = torch.cat(
+                [
+                    delta[:, idx : idx + variable_batch.dof()]
+                    for idx in range(var_idx, var_idx + cnts, variable_batch.dof())
+                ],
+                dim=0,
+            )
+            new_variable_batch = variable_batch.retract(delta_batch)
+
+            batch_pos = 0
+
+            for variable in variables.values():
+                new_variable = new_variable_batch[
+                    batch_pos : batch_pos + objective.batch_size
+                ]
+
+                if force_update:
+                    variable.update(new_variable)
+                else:
+                    variable.update(new_variable, batch_ignore_mask=converged_indices)
+
+                batch_pos += objective.batch_size
+
+            var_idx += cnts
 
         # update batched cost functions
         # TODO: Implement FuncTorch
-        objective = self.objective
         for (
             batch_cost_function,
             cost_functions,
@@ -409,8 +447,8 @@ class NonlinearOptimizer(Optimizer, abc.ABC):
                 )
                 batch_pos = 0
                 for cost_function in cost_functions:
-                    variable = cast(Variable, getattr(cost_function, var_attr_name))
+                    fn_var = cast(Variable, getattr(cost_function, var_attr_name))
                     batch_variable.data[
                         batch_pos : batch_pos + objective.batch_size
-                    ] = variable.data
+                    ] = fn_var.data
                     batch_pos += objective.batch_size

@@ -24,6 +24,8 @@ class OptimizerInfo:
 class Optimizer(abc.ABC):
     def __init__(self, objective: Objective, *args, **kwargs):
         self.objective = objective
+        if not self.objective.is_setup:
+            self.objective.setup()
         self._objectives_version = objective.current_version
 
     @abc.abstractmethod

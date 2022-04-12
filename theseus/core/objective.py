@@ -170,6 +170,7 @@ class Objective:
                             batch_name
                         ]
 
+                    assert variable.name not in optim_variables
                     optim_variables[variable.name] = variable
                     variable_batch.data = None
 
@@ -219,7 +220,8 @@ class Objective:
                         f"from the expected shape {original_variable.shape}."
                     )
 
-                setattr(cost_function_batch, attr_name, None)
+                variable_batch = cast(Variable, getattr(cost_function_batch, attr_name))
+                variable_batch.data = None
 
     def _add_batched_cost_function(
         self, cost_function: CostFunction, batch_name: Optional[str] = None
@@ -236,21 +238,18 @@ class Objective:
 
                 batch_sizes = []
 
-                for var_attr_name in cost_function_batch._optim_vars_attr_names:
-                    variable_batch = cast(
-                        Variable, getattr(cost_function_batch, var_attr_name)
-                    )
-                    variable_batch.name = cost_function.name + "__" + var_attr_name
-                    setattr(cost_function_batch, var_attr_name, None)
-                    batch_sizes.append(variable_batch.data.shape[0])
-
-                for var_attr_name in cost_function_batch._aux_vars_attr_names:
-                    variable_batch = cast(
-                        Variable, getattr(cost_function_batch, var_attr_name)
-                    )
-                    variable_batch.name = cost_function.name + "__" + var_attr_name
-                    setattr(cost_function_batch, var_attr_name, None)
-                    batch_sizes.append(variable_batch.data.shape[0])
+                vars_attr_names_list = [
+                    cost_function_batch._optim_vars_attr_names,
+                    cost_function_batch._aux_vars_attr_names,
+                ]
+                for vars_attr_names in vars_attr_names_list:
+                    for var_attr_name in vars_attr_names:
+                        variable_batch = cast(
+                            Variable, getattr(cost_function_batch, var_attr_name)
+                        )
+                        variable_batch.name = cost_function.name + "__" + var_attr_name
+                        batch_sizes.append(variable_batch.data.shape[0])
+                        variable_batch.data = None
 
                 unique_batch_sizes = set(batch_sizes)
 
@@ -813,37 +812,38 @@ class Objective:
             cost_function_batch,
             cost_functions,
         ) in self.batched_cost_functions.items():
-            for var_attr_name in cost_function_batch._optim_vars_attr_names:
-                variable_batch = cast(
-                    Variable, getattr(cost_function_batch, var_attr_name)
-                )
-                variable_batch_data = [
-                    cast(Variable, getattr(cost_function, var_attr_name)).data
-                    for cost_function in cost_functions
-                ]
-                variable_batch.data = torch.cat(variable_batch_data, dim=0)
-
-                if variable_batch.shape[0] != len(cost_functions) * self.batch_size:
-                    raise ValueError(
-                        f"Provided data for {var_attr_name} in batched cost function "
-                        f"{batch_name} can not be batched."
+            vars_attr_name_lists = [
+                cost_function_batch._optim_vars_attr_names,
+                cost_function_batch._aux_vars_attr_names,
+            ]
+            for vars_attr_names in vars_attr_name_lists:
+                for var_attr_name in vars_attr_names:
+                    variable_batch = cast(
+                        Variable, getattr(cost_function_batch, var_attr_name)
                     )
+                    variable_batch_data = [
+                        cast(Variable, getattr(cost_function, var_attr_name)).data
+                        for cost_function in cost_functions
+                    ]
+                    variable_batch.data = torch.cat(variable_batch_data, dim=0)
 
-            for var_attr_name in cost_function_batch._aux_vars_attr_names:
-                variable_batch = cast(
-                    Variable, getattr(cost_function_batch, var_attr_name)
+                    if variable_batch.shape[0] != len(cost_functions) * self.batch_size:
+                        raise ValueError(
+                            f"Provided data for {var_attr_name} in batched cost function "
+                            f"{batch_name} can not be batched."
+                        )
+
+    def update_batched_optim_variables(self):
+        # Update batched optim variables for batch processing
+        for batch_name, (variable_batch, variables) in self.batched_optim_vars.items():
+            variable_batch_data = [variable.data for variable in variables.values()]
+
+            variable_batch.data = torch.cat(variable_batch_data, dim=0)
+
+            if variable_batch.shape[0] != len(variables) * self.batch_size:
+                raise ValueError(
+                    f"Provided data for batched variable {batch_name} can not be batched."
                 )
-                variable_batch_data = [
-                    cast(Variable, getattr(cost_function, var_attr_name)).data
-                    for cost_function in cost_functions
-                ]
-                variable_batch.data = torch.cat(variable_batch_data, dim=0)
-
-                if variable_batch.shape[0] != len(cost_functions) * self.batch_size:
-                    raise ValueError(
-                        f"Provided data for {var_attr_name} in batched cost function "
-                        f"{batch_name} can not be batched."
-                    )
 
     def setup(self, input_data: Optional[Dict[str, torch.Tensor]] = None):
         self._batch_size = None
@@ -860,50 +860,22 @@ class Objective:
             raise ValueError("Provided data tensors must be broadcastable.")
 
         self.update_variables(input_data=input_data, keep_batch=False)
-        self.update_batched_cost_functions()
 
         # Check that the batch size of all data is consistent after update
         batch_sizes = [v.data.shape[0] for v in self.optim_vars.values()]
         batch_sizes.extend([v.data.shape[0] for v in self.aux_vars.values()])
         self._batch_size = _get_batch_size(batch_sizes)
 
-        # Update batched optim variables
-        self.batched_optim_vars = OrderedDict()
-
-        for optim_var_name, optim_var in self.optim_vars.items():
-            batch_name = self._get_cost_function_variable_batch_name(optim_var)
-
-            if optim_var.shape[0] != self.batch_size:
-                raise ValueError(
-                    f"The optim var {optim_var_name} and objective must "
-                    f"have the same batch size."
-                )
-
-            if batch_name not in self.batched_optim_vars:
-                optim_var_batch = optim_var.copy(batch_name + "__optim_var_batch")
-                optim_vars: OrderedDict[str, Manifold] = OrderedDict()
-                self.batched_optim_vars[batch_name] = (optim_var_batch, optim_vars)
-            else:
-                _, optim_vars = self.batched_optim_vars[batch_name]
-            optim_vars[optim_var.name] = optim_var
-
-        for optim_var_batch, optim_vars in self.batched_optim_vars.values():
-            optim_var_data = [optim_var.data for optim_var in optim_vars.values()]
-            optim_var_batch.data = torch.cat(optim_var_data, dim=0)
-
-            batch_pos = 0
-
-            for optim_var in optim_vars.values():
-                optim_var.data = optim_var_batch.data[
-                    batch_pos : batch_pos + self.batch_size
-                ]
-                batch_pos += self.batch_size
+        self.update_batched_cost_functions()
+        self.update_batched_optim_variables()
 
         self._is_setup = True
 
     def update(self, input_data: Optional[Dict[str, torch.Tensor]] = None):
         if self.is_setup:
             self.update_variables(input_data=input_data, keep_batch=True)
+            self.update_batched_cost_functions()
+            self.update_batched_optim_variables()
         else:
             self.setup(input_data)
 

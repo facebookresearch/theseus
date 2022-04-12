@@ -14,7 +14,6 @@ from theseus.core.theseus_function import TheseusFunction
 from theseus.core.variable import Variable
 from theseus.geometry.manifold import Manifold
 
-from .batch import VariableBatch
 from .cost_function import CostFunction
 from .cost_weight import CostWeight
 
@@ -45,12 +44,6 @@ class Objective:
         self.batched_optim_vars: OrderedDict[
             str, Tuple[Manifold, List[Manifold]]
         ] = OrderedDict()
-
-        # maps optim variable names to batch optim variable names
-        self.batch_names_for_optim_vars: OrderedDict[str, str] = OrderedDict()
-
-        # maps optim variable info to batch optim variable names
-        self.batch_names_for_optim_var_info: OrderedDict[str, str] = OrderedDict()
 
         # maps cost function names to the cost function objects
         self.cost_functions: OrderedDict[str, CostFunction] = OrderedDict()
@@ -143,51 +136,6 @@ class Objective:
                 self._all_variables[variable.name] = variable
                 assert variable not in self_var_to_fn_map
                 self_var_to_fn_map[variable] = []
-
-                if self_vars_of_this_type == self.optim_vars:
-                    function_optim_vars = list(function_vars)
-                    if len(function_optim_vars) != 0:
-                        batch_size = cast(Variable, function_optim_vars[0]).shape[0]
-
-                    for variable in function_optim_vars:
-                        if variable.shape[0] != batch_size:
-                            raise ValueError(
-                                f"The batch size of variable {variable.name} is "
-                                f"{variable.shape[0]} and different from the expected "
-                                f"batch size {batch_size}."
-                            )
-
-                        optim_var_info = variable.info
-
-                        if optim_var_info not in self.batch_names_for_optim_var_info:
-                            batch_name = VariableBatch(variable).name
-                            self.batch_names_for_optim_var_info[
-                                optim_var_info
-                            ] = batch_name
-
-                            batch_optim_variable = variable.copy(
-                                new_name=batch_name + "_batch_optim_var"
-                            )
-                            self.batched_optim_vars[batch_name] = (
-                                batch_optim_variable,
-                                [variable],
-                            )
-                        else:
-                            batch_name = self.batch_names_for_optim_var_info[
-                                optim_var_info
-                            ]
-
-                            (
-                                batch_optim_variable,
-                                optim_variables,
-                            ) = self.batched_optim_vars[batch_name]
-
-                            batch_optim_variable.data = torch.cat(
-                                [batch_optim_variable.data, variable.data], dim=0
-                            )
-                            optim_variables.append(variable)
-
-                        self.batch_names_for_optim_vars[variable.name] = batch_name
 
             # add to either self.optim_vars,
             # self.cost_weight_optim_vars, self.loss_function_optim_vars or self.aux_vars
@@ -446,40 +394,6 @@ class Objective:
                 del self_var_to_fn_map[variable]
                 del self_vars_of_this_type[variable.name]
                 del self._all_variables[variable.name]
-
-                if self_vars_of_this_type == self.optim_vars:
-                    batch_name = self.batch_names_for_optim_vars[variable.name]
-                    batch_optim_variable, optim_variables = self.batched_optim_vars[
-                        batch_name
-                    ]
-                    var_idx = optim_variables.index(variable)
-                    del optim_variables[var_idx]
-
-                    if len(optim_variables) == 0:
-                        del self.batched_optim_vars[batch_name]
-                        del self.batch_names_for_optim_var_info[variable.info]
-                    else:
-                        var_data = [var.data for var in optim_variables]
-
-                        for i, data in enumerate(var_data):
-                            if data.shape != var_data[0].shape:
-                                raise ValueError(
-                                    f"The shape of {optim_variables[i].name} is "
-                                    f"{data.shape} and different from the expected "
-                                    f"shape {var_data[0].shape}."
-                                )
-
-                        batch_optim_variable.data = torch.cat(var_data, dim=0)
-                        batch_size = optim_variables[0].shape[0]
-                        batch_pos = 0
-
-                        for var in optim_variables:
-                            var.data = batch_optim_variable.data[
-                                batch_pos : batch_pos + batch_size
-                            ]
-                            batch_pos += batch_size
-
-                    del self.batch_names_for_optim_vars[variable.name]
 
     # Removes a cost function from the objective given its name
     # Also removes any of its variables that are no longer associated to other
@@ -894,31 +808,39 @@ class Objective:
                         f"{batch_name} can not be batched."
                     )
 
-            # Update batched optim vars
-            self.batch_names_for_optim_var_info = OrderedDict()
+        # Update batched optim variables
+        self.batched_optim_vars = OrderedDict()
 
-            for batch_name, (
-                optim_variable_batch,
-                optim_variables,
-            ) in self.batched_optim_vars.items():
-                optim_var_info = optim_variables[0].info
+        for optim_var_name, optim_var in self.optim_vars.items():
+            batch_name = optim_var.info
 
-                if optim_variables[0].shape[0] != self.batch_size:
-                    raise ValueError(
-                        f"Provided data for batched optim var {batch_name} "
-                        f"must have batch size {self.batch_size}"
-                    )
+            if optim_var.shape[0] != self.batch_size:
+                raise ValueError(
+                    f"The optim var {optim_var_name} and objective must "
+                    f"have the same batch size."
+                )
 
-                for optim_variable in optim_variables:
-                    if optim_var_info != optim_variable.info:
-                        raise ValueError(
-                            f"Provided data for variable {optim_variable.name} in "
-                            f"batched optim var {batch_name} can not be batched "
-                            f"due to incosistent variable information "
-                            f"{optim_var_info} and {optim_variable.info}."
-                        )
+            if batch_name not in self.batched_optim_vars:
+                optim_var_batch = optim_var.copy(batch_name + "__optim_var_batch")
+                self.batched_optim_vars[batch_name] = (optim_var_batch, [optim_var])
+            else:
+                _, optim_vars = self.batched_optim_vars[batch_name]
+                optim_vars.append(optim_var)
+
+        for optim_var_batch, optim_vars in self.batched_optim_vars.values():
+            optim_var_data = [optim_var.data for optim_var in optim_vars]
+            optim_var_batch.data = torch.cat(optim_var_data, dim=0)
+
+            batch_pos = 0
+
+            for optim_var in optim_vars:
+                optim_var.data = optim_var_batch.data[
+                    batch_pos : batch_pos + self.batch_size
+                ]
+                batch_pos += self.batch_size
 
     # iterates over cost functions
+
     def __iter__(self):
         return iter([f for f in self.cost_functions.values()])
 

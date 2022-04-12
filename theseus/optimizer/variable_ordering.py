@@ -19,12 +19,13 @@ class VariableOrdering:
     def _compute_default_order(self, objective: Objective):
         assert not self._var_order and not self._var_name_to_index
         cur_idx = 0
-        for variable_name, variable in objective.optim_vars.items():
-            if variable_name in self._var_name_to_index:
-                continue
-            self._var_order.append(variable)
-            self._var_name_to_index[variable_name] = cur_idx
-            cur_idx += 1
+        for _, variables in objective.batched_optim_vars.values():
+            for variable_name, variable in variables.items():
+                if variable_name in self._var_name_to_index:
+                    continue
+                self._var_order.append(variable)
+                self._var_name_to_index[variable_name] = cur_idx
+                cur_idx += 1
 
     def index_of(self, key: str) -> int:
         return self._var_name_to_index[key]

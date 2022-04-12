@@ -4,11 +4,11 @@
 # LICENSE file in the root directory of this source tree.
 
 from itertools import count
-from typing import Optional, Sequence
+from typing import List, Optional, Sequence, Tuple
 
 import torch
 
-from theseus.geometry import Manifold
+from theseus.geometry import LieGroup, Manifold
 
 
 class ManifoldGaussian:
@@ -102,3 +102,38 @@ class ManifoldGaussian:
             raise ValueError("Tried to update precision with non-symmetric matrix.")
 
         self.precision = precision
+
+
+def local_gaussian(
+    variable: LieGroup,
+    gaussian: ManifoldGaussian,
+    return_mean: bool = True,
+) -> Tuple[torch.Tensor, torch.Tensor]:
+    # mean vector in the tangent space at variable
+    mean_tp = variable.local(gaussian.mean[0])
+
+    jac: List[torch.Tensor] = []
+    variable.exp_map(mean_tp, jacobians=jac)
+    # precision matrix in the tangent space at variable
+    lam_tp = torch.bmm(torch.bmm(jac[0].transpose(-1, -2), gaussian.precision), jac[0])
+
+    if return_mean:
+        return mean_tp, lam_tp
+    else:
+        eta_tp = torch.matmul(lam_tp, mean_tp.unsqueeze(-1)).squeeze(-1)
+        return eta_tp, lam_tp
+
+
+def retract_gaussian(
+    variable: LieGroup,
+    mean_tp: torch.Tensor,
+    precision_tp: torch.Tensor,
+) -> ManifoldGaussian:
+    mean = variable.retract(mean_tp)
+
+    jac: List[torch.Tensor] = []
+    variable.exp_map(mean_tp, jacobians=jac)
+    inv_jac = torch.inverse(jac[0])
+    precision = torch.bmm(torch.bmm(inv_jac.transpose(-1, -2), precision_tp), inv_jac)
+
+    return ManifoldGaussian(mean=[mean], precision=precision)

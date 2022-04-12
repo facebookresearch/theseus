@@ -9,7 +9,6 @@ from typing import Any, List, Optional, Tuple, cast
 import torch
 
 from theseus.geometry.manifold import Manifold
-from theseus.optimizer.manifold_gaussian import ManifoldGaussian
 
 
 # Abstract class to represent Lie groups.
@@ -187,44 +186,6 @@ class LieGroup(Manifold):
 
     def _retract_impl(self, delta: torch.Tensor) -> "LieGroup":
         return self.compose(self.exp_map(delta))
-
-    def local_gaussian(
-        self,
-        gaussian: ManifoldGaussian,
-        return_mean: bool = True,
-    ) -> Tuple[torch.Tensor, torch.Tensor]:
-        # mean vector in the tangent space at self
-        mean_tp = self.local(gaussian.mean[0])
-
-        jac: List[torch.Tensor] = []
-        self.exp_map(mean_tp, jacobians=jac)
-        # precision matrix in the tangent space at self
-        lam_tp = torch.bmm(
-            torch.bmm(jac[0].transpose(-1, -2), gaussian.precision), jac[0]
-        )
-
-        if return_mean:
-            return mean_tp, lam_tp
-        else:
-            eta_tp = torch.matmul(lam_tp, mean_tp.unsqueeze(-1)).squeeze(-1)
-            return eta_tp, lam_tp
-
-    def retract_gaussian(
-        self,
-        mean_tp: torch.Tensor,
-        precision_tp: torch.Tensor,
-        out_gauss: ManifoldGaussian,
-    ) -> ManifoldGaussian:
-        mean = self.retract(mean_tp)
-
-        jac: List[torch.Tensor] = []
-        self.exp_map(mean_tp, jacobians=jac)
-        inv_jac = torch.inverse(jac[0])
-        precision = torch.bmm(
-            torch.bmm(inv_jac.transpose(-1, -2), precision_tp), inv_jac
-        )
-
-        return ManifoldGaussian(mean=[mean], precision=precision)
 
     # added to avoid casting downstream
     def copy(self, new_name: Optional[str] = None) -> "LieGroup":

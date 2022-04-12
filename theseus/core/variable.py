@@ -34,10 +34,12 @@ class Variable:
 
     # batch_ignore_mask is a boolean list where batch_ignore_mask[i] = 1 means
     # variable[i] will *not* be updated
+    # keep_data is a boolean indicating whether to keep variable.data
     def update(
         self,
         data: Union[torch.Tensor, "Variable"],
         batch_ignore_mask: Optional[torch.Tensor] = None,
+        keep_data: bool = False,
     ):
         if isinstance(data, Variable):
             data = data.data
@@ -57,9 +59,19 @@ class Variable:
             )
         if batch_ignore_mask is not None and batch_ignore_mask.any():
             mask_shape = (-1,) + (1,) * (data.ndim - 1)
-            self.data = torch.where(batch_ignore_mask.view(mask_shape), self.data, data)
+            if keep_data:
+                self.data[:] = torch.where(
+                    batch_ignore_mask.view(mask_shape), self.data, data
+                )
+            else:
+                self.data = torch.where(
+                    batch_ignore_mask.view(mask_shape), self.data, data
+                )
         else:
-            self.data = data
+            if keep_data:
+                self.data[:] = data
+            else:
+                self.data = data
 
     def __repr__(self) -> str:
         return f"{self.__class__.__name__}(data={self.data}, name={self.name})"

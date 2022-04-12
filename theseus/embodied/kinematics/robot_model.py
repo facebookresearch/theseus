@@ -21,10 +21,6 @@ class RobotModel(abc.ABC):
     def forward_kinematics(self, robot_pose: RobotModelInput) -> Dict[str, LieGroup]:
         pass
 
-    @abc.abstractmethod
-    def dim(self) -> int:
-        pass
-
 
 class IdentityModel(RobotModel):
     def __init__(self):
@@ -37,6 +33,3 @@ class IdentityModel(RobotModel):
         raise NotImplementedError(
             f"IdentityModel not implemented for pose with type {type(robot_pose)}."
         )
-
-    def dim(self) -> int:
-        return 1

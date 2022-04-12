@@ -14,6 +14,7 @@ from theseus.core.theseus_function import TheseusFunction
 from theseus.core.variable import Variable
 from theseus.geometry.manifold import Manifold
 
+from .batch import VariableBatch
 from .cost_function import CostFunction
 from .cost_weight import CostWeight
 
@@ -38,10 +39,16 @@ class Objective:
         # maps variable name to variable, for any kind of variable added
         self._all_variables: OrderedDict[str, Variable] = OrderedDict()
 
-        # maps grouped optim variable names to the the corresponding grouped optim variables
-        self.grouped_optim_vars: OrderedDict[
+        # maps batched optim variable names to the the corresponding batched optim variables
+        self.batched_optim_vars: OrderedDict[
             str, Tuple[Manifold, List[Manifold]]
         ] = OrderedDict()
+
+        # maps optim variable names to batch optim variable names
+        self.batch_names_for_optim_vars: OrderedDict[str, str] = OrderedDict()
+
+        # maps optim variable info to batch optim variable names
+        self.batch_names_for_optim_var_info: OrderedDict[str, str] = OrderedDict()
 
         # maps cost function names to the cost function objects
         self.cost_functions: OrderedDict[str, CostFunction] = OrderedDict()
@@ -58,16 +65,16 @@ class Objective:
             LossFunction, List[CostFunction]
         ] = {}
 
-        # maps cost function group names to the corresponding grouped cost functions
-        self.grouped_cost_functions: OrderedDict[
+        # maps cost function batch names to the corresponding batched cost functions
+        self.batched_cost_functions: OrderedDict[
             str, Tuple[CostFunction, List[CostFunction]]
         ] = OrderedDict()
 
-        # maps cost function names to ungrouped functions
-        self.ungrouped_cost_functions: OrderedDict[str, CostFunction] = OrderedDict()
+        # maps cost function names to unbatched functions
+        self.unbatched_cost_functions: OrderedDict[str, CostFunction] = OrderedDict()
 
-        # maps grouped cost function names to their group names
-        self.group_names_for_cost_functions: OrderedDict[str, str] = OrderedDict()
+        # maps batched cost function names to their batch names
+        self.batch_names_for_cost_functions: OrderedDict[str, str] = OrderedDict()
 
         # ---- The following two methods are used just to get info from
         # ---- the objective, they don't affect the optimization logic.
@@ -148,13 +155,23 @@ class Objective:
                                 f"batch size {batch_size}."
                             )
 
-                        group_name = variable.info
+                        optim_var_info = variable.info
 
-                        if group_name not in self.grouped_optim_vars:
+                        if optim_var_info not in self.batch_names_for_optim_var_info:
+                            batch_name = VariableBatch(variable).name
+                            self.batch_names_for_optim_var_info[
+                                optim_var_info
+                            ] = batch_name
+                        else:
+                            batch_name = self.batch_names_for_optim_var_info[
+                                optim_var_info
+                            ]
+
+                        if batch_name not in self.batched_optim_vars:
                             batch_optim_variable = variable.copy(
-                                new_name=group_name + "__batch_optim_var"
+                                new_name=batch_name + "__batch_optim_var"
                             )
-                            self.grouped_optim_vars[group_name] = (
+                            self.batched_optim_vars[batch_name] = (
                                 batch_optim_variable,
                                 [variable],
                             )
@@ -162,7 +179,7 @@ class Objective:
                             (
                                 batch_optim_variable,
                                 optim_variables,
-                            ) = self.grouped_optim_vars[group_name]
+                            ) = self.batched_optim_vars[batch_name]
                             batch_optim_variable.data = torch.cat(
                                 [batch_optim_variable.data, variable.data], dim=0
                             )
@@ -176,16 +193,16 @@ class Objective:
             # add to list of functions connected to this variable
             self_var_to_fn_map[variable].append(function)
 
-    def _add_grouped_cost_function_variables(
-        self, cost_function: CostFunction, group_name: str, optim_vars: bool = True
+    def _add_batched_cost_function_variables(
+        self, cost_function: CostFunction, batch_name: str, optim_vars: bool = True
     ):
-        batch_cost_function, cost_functions = self.grouped_cost_functions[group_name]
+        batch_cost_function, cost_functions = self.batched_cost_functions[batch_name]
         original_cost_function = cost_functions[0]
 
         if cost_function.__class__ != batch_cost_function.__class__:
             raise ValueError(
                 f"Tried to add cost function {cost_function.name} with type "
-                f"{type(cost_function)} but grouped cost function's type is "
+                f"{type(cost_function)} but batched cost function's type is "
                 f"{type(batch_cost_function)}."
             )
 
@@ -231,7 +248,7 @@ class Objective:
     # Update method will check if any of these are not registered as
     # cost function variables, and throw a warning.
 
-    def add(self, cost_function: CostFunction, group_name: Optional[str] = None):
+    def add(self, cost_function: CostFunction, batch_name: Optional[str] = None):
         # adds the cost function if not already present
         if cost_function.name in self.cost_functions:
             if cost_function is not self.cost_functions[cost_function.name]:
@@ -314,12 +331,12 @@ class Objective:
             cost_function
         )
 
-        if group_name is None:
-            self.ungrouped_cost_functions[cost_function.name] = cost_function
+        if batch_name is None:
+            self.unbatched_cost_functions[cost_function.name] = cost_function
         else:
-            if group_name not in self.grouped_cost_functions:
+            if batch_name not in self.batched_cost_functions:
                 batch_cost_function = cost_function.copy(
-                    group_name + "__batch_cost_function"
+                    batch_name + "__batch_cost_function"
                 )
                 batch_cost_function.weight = None
                 batch_cost_function.loss_function = None
@@ -345,21 +362,21 @@ class Objective:
                 if len(unique_batch_sizes) != 1:
                     raise ValueError("Provided cost function can not be batched.")
 
-                self.grouped_cost_functions[group_name] = (
+                self.batched_cost_functions[batch_name] = (
                     batch_cost_function,
                     [cost_function],
                 )
             else:
-                self._add_grouped_cost_function_variables(
-                    cost_function, group_name, True
+                self._add_batched_cost_function_variables(
+                    cost_function, batch_name, True
                 )
-                self._add_grouped_cost_function_variables(
-                    cost_function, group_name, False
+                self._add_batched_cost_function_variables(
+                    cost_function, batch_name, False
                 )
 
-                self.grouped_cost_functions[group_name][1].append(cost_function)
+                self.batched_cost_functions[batch_name][1].append(cost_function)
 
-            self.group_names_for_cost_functions[cost_function.name] = group_name
+            self.batch_names_for_cost_functions[cost_function.name] = batch_name
 
         if self.optim_vars.keys() & self.aux_vars.keys():
             raise ValueError(
@@ -428,15 +445,15 @@ class Objective:
                 del self._all_variables[variable.name]
 
                 if self_vars_of_this_type == self.optim_vars:
-                    group_name = variable.info
-                    batch_optim_variable, optim_variables = self.grouped_optim_vars[
-                        group_name
+                    batch_name = variable.info
+                    batch_optim_variable, optim_variables = self.batched_optim_vars[
+                        batch_name
                     ]
                     var_idx = optim_variables.index(variable)
                     del optim_variables[var_idx]
 
                     if len(optim_variables) == 0:
-                        del self.grouped_optim_vars[group_name]
+                        del self.batched_optim_vars[batch_name]
                     else:
                         var_data = [var.data for var in optim_variables]
 
@@ -508,19 +525,19 @@ class Objective:
                 )
                 del self.cost_functions_for_loss_functions[loss_function]
 
-            if name in self.ungrouped_cost_functions:
-                del self.ungrouped_cost_functions[name]
+            if name in self.unbatched_cost_functions:
+                del self.unbatched_cost_functions[name]
             else:
-                group_name = self.group_names_for_cost_functions[name]
-                batch_cost_function, cost_functions = self.grouped_cost_functions[
-                    group_name
+                batch_name = self.batch_names_for_cost_functions[name]
+                batch_cost_function, cost_functions = self.batched_cost_functions[
+                    batch_name
                 ]
 
                 cost_fn_idx = cost_functions.index(cost_function)
                 del cost_functions[cost_fn_idx]
 
                 if len(cost_functions) == 0:
-                    del self.grouped_cost_functions[group_name]
+                    del self.batched_cost_functions[batch_name]
                 else:
                     for var_name in batch_cost_function._optim_vars_attr_names:
                         var = cast(Variable, getattr(cost_function, var_name))
@@ -538,7 +555,7 @@ class Objective:
                         ]
                         var.data = torch.cat(var_data, dim=0)
 
-                del self.group_names_for_cost_functions[name]
+                del self.batch_names_for_cost_functions[name]
 
             # finally, delete the cost function
             del self.cost_functions[name]
@@ -628,7 +645,7 @@ class Objective:
             device=self.device, dtype=self.dtype
         )
         pos = 0
-        for batch_cost_function, cost_functions in self.grouped_cost_functions.values():
+        for batch_cost_function, cost_functions in self.batched_cost_functions.values():
             batch_errors = batch_cost_function.error()
             # TODO: Implement FuncTorch
             batch_pos = 0
@@ -640,7 +657,7 @@ class Objective:
                 batch_pos += self.batch_size
                 pos += cost_function.dim()
 
-        for cost_function in self.ungrouped_cost_functions.values():
+        for cost_function in self.unbatched_cost_functions.values():
             error_vector[
                 :, pos : pos + cost_function.dim()
             ] = cost_function.weighted_error()
@@ -673,7 +690,7 @@ class Objective:
             self.batch_size, len(self.cost_functions)
         ).to(device=self.device, dtype=self.dtype)
         pos = 0
-        for batch_cost_function, cost_functions in self.grouped_cost_functions.values():
+        for batch_cost_function, cost_functions in self.batched_cost_functions.values():
             batch_errors = batch_cost_function.error()
             # TODO: Implement FuncTorch
             batch_pos = 0
@@ -686,7 +703,7 @@ class Objective:
                 batch_pos += self.batch_size
                 pos += 1
 
-        for cost_function in self.ungrouped_cost_functions.values():
+        for cost_function in self.unbatched_cost_functions.values():
             function_value_vector[:, pos : pos + 1] = cost_function.function_value()
             pos += 1
         if not also_update:
@@ -834,12 +851,12 @@ class Objective:
         batch_sizes.extend([v.data.shape[0] for v in self.aux_vars.values()])
         self._batch_size = _get_batch_size(batch_sizes)
 
-        # Update grouped cost functions for batch processing
+        # Update batched cost functions for batch processing
         # TODO: No need to update aux_vars at each iteration
-        for group_name, (
+        for batch_name, (
             batch_cost_function,
             cost_functions,
-        ) in self.grouped_cost_functions.items():
+        ) in self.batched_cost_functions.items():
             for var_attr_name in batch_cost_function._optim_vars_attr_names:
                 batch_variable = cast(
                     Variable, getattr(batch_cost_function, var_attr_name)
@@ -852,8 +869,8 @@ class Objective:
 
                 if batch_variable.shape[0] != len(cost_functions) * self.batch_size:
                     raise ValueError(
-                        f"Provided data for {var_attr_name} in grouped cost function "
-                        f"{group_name} can not be batched."
+                        f"Provided data for {var_attr_name} in batched cost function "
+                        f"{batch_name} can not be batched."
                     )
 
             for var_attr_name in batch_cost_function._aux_vars_attr_names:
@@ -868,8 +885,8 @@ class Objective:
 
                 if batch_variable.shape[0] != len(cost_functions) * self.batch_size:
                     raise ValueError(
-                        f"Provided data for {var_attr_name} in grouped cost function "
-                        f"{group_name} can not be batched."
+                        f"Provided data for {var_attr_name} in batched cost function "
+                        f"{batch_name} can not be batched."
                     )
 
     # iterates over cost functions

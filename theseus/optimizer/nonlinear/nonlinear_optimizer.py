@@ -395,13 +395,13 @@ class NonlinearOptimizer(Optimizer, abc.ABC):
                 var.update(new_var.data, batch_ignore_mask=converged_indices)
             var_idx += var.dof()
 
-        # update grouped cost functions
+        # update batched cost functions
         # TODO: Implement FuncTorch
         objective = self.objective
         for (
             batch_cost_function,
             cost_functions,
-        ) in objective.grouped_cost_functions.values():
+        ) in objective.batched_cost_functions.values():
             vars_attr_names = batch_cost_function._optim_vars_attr_names
             for var_attr_name in vars_attr_names:
                 batch_variable = cast(

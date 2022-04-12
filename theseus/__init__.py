@@ -16,6 +16,8 @@ from .core import (
     Objective,
     ScaleCostWeight,
     Variable,
+    VariableBatch,
+    CostFunctionBatch,
 )
 from .geometry import (
     SE2,

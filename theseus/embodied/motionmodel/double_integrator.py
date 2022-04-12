@@ -105,7 +105,7 @@ class GPCostWeight(CostWeight):
         if dt.data.squeeze().ndim > 1:
             raise ValueError("dt must be a 0-D or 1-D tensor.")
         self.dt = dt
-        self.dt.data = self.dt.data.view(-1, 1, 1)
+        self.dt.data = self.dt.data.view(-1, 1)
 
         if not isinstance(Qc_inv, Variable):
             Qc_inv = Variable(Qc_inv)
@@ -126,9 +126,10 @@ class GPCostWeight(CostWeight):
             dtype=self.Qc_inv.dtype,
             device=self.Qc_inv.device,
         )
-        Q11 = 12.0 * self.dt.data.pow(-3.0) * self.Qc_inv.data
-        Q12 = -6.0 * self.dt.data.pow(-2.0) * self.Qc_inv.data
-        Q22 = 4.0 * self.dt.data.reciprocal() * self.Qc_inv.data
+        dt_data = self.dt.data.view(-1, 1, 1)
+        Q11 = 12.0 * dt_data.pow(-3.0) * self.Qc_inv.data
+        Q12 = -6.0 * dt_data.pow(-2.0) * self.Qc_inv.data
+        Q22 = 4.0 * dt_data.reciprocal() * self.Qc_inv.data
         cost_weight[:, :dof, :dof] = Q11
         cost_weight[:, :dof:, dof:] = Q12
         cost_weight[:, dof:, :dof] = Q12

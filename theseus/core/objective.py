@@ -52,6 +52,8 @@ class Objective:
 
         self._batch_size: Optional[int] = None
 
+        self._is_setup: bool = False
+
         self.device: torch.device = torch.device("cpu")
 
         self.dtype: Optional[torch.dtype] = dtype or torch.get_default_dtype()
@@ -179,6 +181,8 @@ class Objective:
                 "an optimization variable and an auxiliary variable."
             )
 
+        self._is_setup = False
+
     # returns a reference to the cost function with the given name
     def get_cost_function(self, name: str) -> CostFunction:
         return self.cost_functions.get(name, None)
@@ -206,6 +210,10 @@ class Objective:
     @property
     def batch_size(self) -> int:
         return self._batch_size
+
+    @property
+    def is_setup(self) -> bool:
+        return self._is_setup
 
     def _erase_function_variables(
         self,
@@ -270,6 +278,8 @@ class Objective:
             warnings.warn(
                 "This cost function is not in the objective, nothing to be done."
             )
+
+        self._is_setup = False
 
     # gets the name associated with a cost function object (or None if not present)
     def get_cost_function_name(self, cost_function: CostFunction) -> Optional[str]:
@@ -426,7 +436,7 @@ class Objective:
         memo[id(self)] = the_copy
         return the_copy
 
-    def update(self, input_data: Optional[Dict[str, torch.Tensor]] = None):
+    def setup(self, input_data: Optional[Dict[str, torch.Tensor]] = None):
         self._batch_size = None
 
         def _get_batch_size(batch_sizes: Sequence[int]) -> int:
@@ -470,6 +480,37 @@ class Objective:
         batch_sizes = [v.data.shape[0] for v in self.optim_vars.values()]
         batch_sizes.extend([v.data.shape[0] for v in self.aux_vars.values()])
         self._batch_size = _get_batch_size(batch_sizes)
+        self._is_setup = True
+
+    def update(self, input_data: Optional[Dict[str, torch.Tensor]] = None):
+        if self.is_setup:
+            input_data = input_data or {}
+            for var_name, data in input_data.items():
+                if data.ndim < 2:
+                    raise ValueError(
+                        f"Input data tensors must have a batch dimension and "
+                        f"one ore more data dimensions, but data.ndim={data.ndim} for "
+                        f"tensor with name {var_name}."
+                    )
+                if var_name in self.optim_vars:
+                    self.optim_vars[var_name].update(data)
+                elif var_name in self.aux_vars:
+                    self.aux_vars[var_name].update(data)
+                elif var_name in self.cost_weight_optim_vars:
+                    self.cost_weight_optim_vars[var_name].update(data)
+                    warnings.warn(
+                        "Updated a variable declared as optimization, but it is "
+                        "only associated to cost weights and not to any cost functions. "
+                        "Theseus optimizers will only update optimization variables "
+                        "that are associated to one or more cost functions."
+                    )
+                else:
+                    warnings.warn(
+                        f"Attempted to update a tensor with name {var_name}, "
+                        "which is not associated to any variable in the objective."
+                    )
+        else:
+            self.setup(input_data)
 
     # iterates over cost functions
     def __iter__(self):

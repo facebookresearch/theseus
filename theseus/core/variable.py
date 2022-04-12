@@ -39,7 +39,7 @@ class Variable:
         self,
         data: Union[torch.Tensor, "Variable"],
         batch_ignore_mask: Optional[torch.Tensor] = None,
-        keep_data: Optional[bool] = None,
+        keep_data: Optional[bool] = False,
     ):
         if isinstance(data, Variable):
             data = data.data

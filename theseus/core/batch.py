@@ -29,7 +29,7 @@ class CostFunctionBatch(Batch):
     def __init__(self, cost_function: CostFunction, name: Optional[str] = None) -> None:
         super().__init__()
         if name is None:
-            self._name = f"{cost_function.__class__.__name__}__Batch__{self._id}"
+            self._name = f"{cost_function.__class__.__name__}__batch__{self._id}"
         else:
             self._name = name
 
@@ -37,4 +37,4 @@ class CostFunctionBatch(Batch):
 class VariableBatch(Batch):
     def __init__(self, variable: Variable) -> None:
         super().__init__()
-        self._name = f"{variable.__class__.__name__}__Batch__{self._id}"
+        self._name = f"{variable.__class__.__name__}__batch__{self._id}"

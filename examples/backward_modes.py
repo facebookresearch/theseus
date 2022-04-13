@@ -67,7 +67,7 @@ objective.add(cost_function)
 optimizer = th.GaussNewton(
     objective,
     max_iterations=15,
-    step_size=0.5,
+    step_size=1.0,
 )
 
 theseus_inputs = {
@@ -135,7 +135,7 @@ updated_inputs, info = theseus_optim.forward(
         "track_best_solution": True,
         "verbose": False,
         "backward_mode": th.BackwardMode.DLM,
-        "DLM_epsilon": 1e-2,
+        "DLM_epsilon": 1e-3,
     },
 )
 

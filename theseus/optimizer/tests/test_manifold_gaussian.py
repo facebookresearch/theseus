@@ -10,7 +10,7 @@ import pytest  # noqa: F401
 import torch
 
 import theseus as th
-from theseus.optimizer.manifold_gaussian import ManifoldGaussian
+from theseus import ManifoldGaussian
 
 
 def random_manifold_gaussian_params():

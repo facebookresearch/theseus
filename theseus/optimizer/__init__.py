@@ -5,6 +5,7 @@
 
 from .dense_linearization import DenseLinearization
 from .linearization import Linearization
+from .manifold_gaussian import ManifoldGaussian
 from .optimizer import Optimizer, OptimizerInfo
 from .sparse_linearization import SparseLinearization
 from .variable_ordering import VariableOrdering

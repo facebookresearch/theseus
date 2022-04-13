@@ -768,91 +768,85 @@ class Objective:
         keep_batch: bool = False,
     ):
         input_data = input_data or {}
-        with torch.enable_grad():
-            for var_name, data in input_data.items():
-                if data.ndim < 2:
-                    raise ValueError(
-                        f"Input data tensors must have a batch dimension and "
-                        f"one ore more data dimensions, but data.ndim={data.ndim} for "
-                        f"tensor with name {var_name}."
-                    )
-                if var_name in self.optim_vars:
-                    self.optim_vars[var_name].update(data, keep_batch=keep_batch)
-                elif var_name in self.aux_vars:
-                    self.aux_vars[var_name].update(data, keep_batch=keep_batch)
-                elif var_name in self.cost_weight_optim_vars:
-                    self.cost_weight_optim_vars[var_name].update(
-                        data, keep_batch=keep_batch
-                    )
-                    warnings.warn(
-                        "Updated a variable declared as optimization, but it is "
-                        "only associated to cost weights and not to any cost functions. "
-                        "Theseus optimizers will only update optimization variables "
-                        "that are associated to one or more cost functions."
-                    )
-                elif var_name in self.loss_function_optim_vars:
-                    self.loss_function_optim_vars[var_name].update(
-                        data, keep_batch=keep_batch
-                    )
-                    warnings.warn(
-                        "Updated a variable declared as optimization, but it is "
-                        "only associated to loss functions and not to any cost functions. "
-                        "Theseus optimizers will only update optimization variables "
-                        "that are associated to one or more cost functions."
-                    )
-                else:
-                    warnings.warn(
-                        f"Attempted to update a tensor with name {var_name}, "
-                        "which is not associated to any variable in the objective."
-                    )
+        for var_name, data in input_data.items():
+            if data.ndim < 2:
+                raise ValueError(
+                    f"Input data tensors must have a batch dimension and "
+                    f"one ore more data dimensions, but data.ndim={data.ndim} for "
+                    f"tensor with name {var_name}."
+                )
+            if var_name in self.optim_vars:
+                self.optim_vars[var_name].update(data, keep_batch=keep_batch)
+            elif var_name in self.aux_vars:
+                self.aux_vars[var_name].update(data, keep_batch=keep_batch)
+            elif var_name in self.cost_weight_optim_vars:
+                self.cost_weight_optim_vars[var_name].update(
+                    data, keep_batch=keep_batch
+                )
+                warnings.warn(
+                    "Updated a variable declared as optimization, but it is "
+                    "only associated to cost weights and not to any cost functions. "
+                    "Theseus optimizers will only update optimization variables "
+                    "that are associated to one or more cost functions."
+                )
+            elif var_name in self.loss_function_optim_vars:
+                self.loss_function_optim_vars[var_name].update(
+                    data, keep_batch=keep_batch
+                )
+                warnings.warn(
+                    "Updated a variable declared as optimization, but it is "
+                    "only associated to loss functions and not to any cost functions. "
+                    "Theseus optimizers will only update optimization variables "
+                    "that are associated to one or more cost functions."
+                )
+            else:
+                warnings.warn(
+                    f"Attempted to update a tensor with name {var_name}, "
+                    "which is not associated to any variable in the objective."
+                )
         self._is_setup = keep_batch
 
     def update_batched_cost_functions(self):
         # Update batched cost functions for batch processing
-        with torch.enable_grad():
-            for batch_name, (
-                cost_function_batch,
-                cost_functions,
-            ) in self.batched_cost_functions.items():
-                vars_attr_name_lists = [
-                    cost_function_batch._optim_vars_attr_names,
-                    cost_function_batch._aux_vars_attr_names,
-                ]
-                for vars_attr_names in vars_attr_name_lists:
-                    for var_attr_name in vars_attr_names:
-                        variable_batch = cast(
-                            Variable, getattr(cost_function_batch, var_attr_name)
-                        )
-                        variable_batch_data = [
-                            cast(Variable, getattr(cost_function, var_attr_name)).data
-                            for cost_function in cost_functions
-                        ]
-                        variable_batch.data = torch.cat(variable_batch_data, dim=0)
+        for batch_name, (
+            cost_function_batch,
+            cost_functions,
+        ) in self.batched_cost_functions.items():
+            vars_attr_name_lists = [
+                cost_function_batch._optim_vars_attr_names,
+                cost_function_batch._aux_vars_attr_names,
+            ]
+            for vars_attr_names in vars_attr_name_lists:
+                for var_attr_name in vars_attr_names:
+                    variable_batch = cast(
+                        Variable, getattr(cost_function_batch, var_attr_name)
+                    )
+                    variable_batch_data = [
+                        cast(Variable, getattr(cost_function, var_attr_name)).data
+                        for cost_function in cost_functions
+                    ]
+                    variable_batch.data = torch.cat(variable_batch_data, dim=0)
 
-                        if (
-                            variable_batch.shape[0]
-                            != len(cost_functions) * self.batch_size
-                        ):
-                            raise ValueError(
-                                f"Provided data for {var_attr_name} in batched cost function "
-                                f"{batch_name} can not be batched."
-                            )
+                    if variable_batch.shape[0] != len(cost_functions) * self.batch_size:
+                        raise ValueError(
+                            f"Provided data for {var_attr_name} in batched cost function "
+                            f"{batch_name} can not be batched."
+                        )
 
     def update_batched_optim_variables(self):
         # Update batched optim variables for batch processing
-        with torch.enable_grad():
-            for batch_name, (
-                variable_batch,
-                variables,
-            ) in self.batched_optim_vars.items():
-                variable_batch_data = [variable.data for variable in variables.values()]
+        for batch_name, (
+            variable_batch,
+            variables,
+        ) in self.batched_optim_vars.items():
+            variable_batch_data = [variable.data for variable in variables.values()]
 
-                variable_batch.data = torch.cat(variable_batch_data, dim=0)
+            variable_batch.data = torch.cat(variable_batch_data, dim=0)
 
-                if variable_batch.shape[0] != len(variables) * self.batch_size:
-                    raise ValueError(
-                        f"Provided data for batched variable {batch_name} can not be batched."
-                    )
+            if variable_batch.shape[0] != len(variables) * self.batch_size:
+                raise ValueError(
+                    f"Provided data for batched variable {batch_name} can not be batched."
+                )
 
     def setup(self, input_data: Optional[Dict[str, torch.Tensor]] = None):
         self._batch_size = None
@@ -875,16 +869,19 @@ class Objective:
         batch_sizes.extend([v.data.shape[0] for v in self.aux_vars.values()])
         self._batch_size = _get_batch_size(batch_sizes)
 
-        self.update_batched_cost_functions()
-        self.update_batched_optim_variables()
+        with torch.enable_grad():
+            self.update_batched_cost_functions()
+            self.update_batched_optim_variables()
 
         self._is_setup = True
 
     def update(self, input_data: Optional[Dict[str, torch.Tensor]] = None):
         if self.is_setup:
             self.update_variables(input_data=input_data, keep_batch=True)
-            self.update_batched_cost_functions()
-            self.update_batched_optim_variables()
+            if input_data is None or len(input_data) == 0:
+                with torch.enable_grad():
+                    self.update_batched_cost_functions()
+                    self.update_batched_optim_variables()
         else:
             self.setup(input_data)
 
@@ -896,6 +893,9 @@ class Objective:
     def to(self, *args, **kwargs):
         for cost_function in self.cost_functions.values():
             cost_function.to(*args, **kwargs)
+        with torch.enable_grad():
+            self.update_batched_cost_functions()
+            self.update_batched_optim_variables()
         device, dtype, *_ = torch._C._nn._parse_to(*args, **kwargs)
         self.device = device or self.device
         self.dtype = dtype or self.dtype

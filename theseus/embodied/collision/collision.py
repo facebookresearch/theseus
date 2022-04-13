@@ -38,6 +38,7 @@ class Collision2D(CostFunction):
             self.cost_eps = Variable(cost_eps)
         else:
             self.cost_eps = cost_eps
+        self.cost_eps.data = self.cost_eps.data.view(-1, 1)
         self.register_optim_vars(["pose"])
         self.register_aux_vars(["sdf_origin", "sdf_data", "sdf_cell_size", "cost_eps"])
         self.robot: RobotModel = IdentityModel()

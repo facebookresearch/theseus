@@ -38,6 +38,7 @@ class DoubleIntegrator(CostFunction):
             raise ValueError(
                 "dt data must be a 0-D or 1-D tensor with numel in {1, batch_size}."
             )
+        self.dt.data = self.dt.data.view(-1, 1)
         self.pose1 = pose1
         self.vel1 = vel1
         self.pose2 = pose2
@@ -194,6 +195,9 @@ class GPMotionModel(DoubleIntegrator):
             self.dt = Variable(dt)
         else:
             self.dt = dt
+        if dt.data.squeeze().ndim > 1:
+            raise ValueError("dt must be a 0-D or 1-D tensor.")
+        self.dt.data = self.dt.data.view(-1, 1)
         super().__init__(pose1, vel1, pose2, vel2, dt, cost_weight, name=name)
 
     def _copy_impl(self, new_name: Optional[str] = None) -> "GPMotionModel":

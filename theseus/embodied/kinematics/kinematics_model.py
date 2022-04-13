@@ -9,7 +9,6 @@ from typing import Dict, Optional, Union
 import differentiable_robot_model as drm
 import torch
 
-from theseus.core import Variable
 from theseus.geometry import SE3, LieGroup, Point2, Vector
 
 RobotModelInput = Union[torch.Tensor, Vector]
@@ -73,7 +72,7 @@ class UrdfRobotModel(KinematicsModel):
         # Parse input
         if isinstance(joint_states, torch.Tensor):
             joint_states_input = joint_states
-        elif isinstance(joint_states, Variable):
+        elif isinstance(joint_states, Vector):
             joint_states_input = joint_states.data
         else:
             raise Exception(

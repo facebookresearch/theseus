@@ -82,11 +82,12 @@ class ManifoldGaussian:
         for i in range(len(self.mean)):
             self.mean[i].update(mean[i])
 
-        if precision.shape != torch.Size([mean[0].shape[0], self.dof, self.dof]):
+        expected_shape = torch.Size([mean[0].shape[0], self.dof, self.dof])
+        if precision.shape != expected_shape:
             raise ValueError(
                 f"Tried to update precision with data "
                 f"incompatible with original tensor shape. Given: {precision.shape}. "
-                f"Expected: {self.precision.shape}"
+                f"Expected: {expected_shape}"
             )
         if precision.dtype != self.dtype:
             raise ValueError(
@@ -109,6 +110,21 @@ def local_gaussian(
     gaussian: ManifoldGaussian,
     return_mean: bool = True,
 ) -> Tuple[torch.Tensor, torch.Tensor]:
+    # assumes gaussian is over just one Manifold object
+    if len(gaussian.mean) != 1:
+        raise ValueError(
+            "ManifoldGaussian should be over just one Manifold object. "
+            f"Passed gaussian {gaussian.name} is over {len(gaussian.mean)} "
+            "Manifold objects."
+        )
+    # check variable and gaussian are of the same LieGroup class
+    if gaussian.mean[0].__class__ != variable.__class__:
+        raise ValueError(
+            "variable and gaussian mean must be instances of the same class. "
+            f"variable is of class {variable.__class__} and gaussian mean is "
+            f"of class {gaussian.mean[0].__class__}."
+        )
+
     # mean vector in the tangent space at variable
     mean_tp = variable.local(gaussian.mean[0])
 

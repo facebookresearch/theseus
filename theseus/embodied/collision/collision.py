@@ -8,7 +8,7 @@ from typing import List, Optional, Tuple, cast
 import torch
 
 from theseus.core import CostFunction, CostWeight, Variable
-from theseus.embodied.kinematics import IdentityModel, RobotModel
+from theseus.embodied.kinematics import IdentityModel, KinematicsModel
 from theseus.geometry import Point2
 
 from .signed_distance_field import SignedDistanceField2D
@@ -35,7 +35,7 @@ class Collision2D(CostFunction):
         self.cost_eps = cost_eps
         self.register_optim_vars(["pose"])
         self.register_aux_vars(["sdf_origin", "sdf_data", "sdf_cell_size", "cost_eps"])
-        self.robot: RobotModel = IdentityModel()
+        self.robot: KinematicsModel = IdentityModel()
         self.sdf = SignedDistanceField2D(sdf_origin, sdf_cell_size, sdf_data)
 
     def _compute_distances_and_jacobians(

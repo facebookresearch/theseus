@@ -53,7 +53,6 @@ class TheseusLayer(nn.Module):
                 optimizer_kwargs,
                 input_data,
                 DLM_epsilon,
-                names,
                 *tensors
             )
         else:
@@ -130,22 +129,12 @@ class TheseusLayerDLMForward(torch.autograd.Function):
 
     @staticmethod
     def forward(
-        ctx,
-        objective,
-        optimizer,
-        optimizer_kwargs,
-        input_data,
-        epsilon,
-        param_names,
-        *params
+        ctx, objective, optimizer, optimizer_kwargs, input_data, epsilon, *params
     ):
         optim_vars, info = _forward(objective, optimizer, optimizer_kwargs, input_data)
 
         ctx.input_data = input_data.copy()
-        ctx.param_names = param_names
         ctx.objective = objective
-        ctx.optimizer = optimizer
-        ctx.optimizer_kwargs = optimizer_kwargs
         ctx.epsilon = epsilon
 
         # Ideally we compute this in the backward function, but if we try to do that,
@@ -169,8 +158,6 @@ class TheseusLayerDLMForward(torch.autograd.Function):
         grad_outputs = grad_outputs[:-1]
 
         objective = ctx.objective
-        optimizer = ctx.optimizer
-        optimizer_kwargs = ctx.optimizer_kwargs
         epsilon = ctx.epsilon
 
         # Update the optim vars to their solutions.
@@ -201,8 +188,7 @@ class TheseusLayerDLMForward(torch.autograd.Function):
             max_iterations=1,
             step_size=1.0,
         )
-        # Should we use the same optimizer kwargs for the backward solve?
-        bwd_optimizer.optimize(**optimizer_kwargs)
+        bwd_optimizer.optimize()
 
         # Compute gradients.
         with torch.enable_grad():
@@ -211,7 +197,7 @@ class TheseusLayerDLMForward(torch.autograd.Function):
             )
 
         grads = [(gs - gp) / epsilon for gs, gp in zip(grad_sol, grad_perturbed)]
-        return (None, None, None, None, None, None, *grads)
+        return (None, None, None, None, None, *grads)
 
 
 def _dlm_perturbation(optim_vars, aux_vars, epsilon):

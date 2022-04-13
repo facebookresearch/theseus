@@ -221,7 +221,7 @@ for trial in range(n_trials + 1):
             "track_best_solution": True,
             "verbose": False,
             "backward_mode": th.BackwardMode.DLM,
-            "DLM_epsilon": 1e-2
+            "DLM_epsilon": 1e-2,
         },
     )
     start = time.time()
@@ -247,6 +247,4 @@ print(
 )
 
 k = "bwd_dlm"
-print(
-    f"Backward (DLM) {np.mean(times[k]):.2e} s +/- {np.std(times[k]):.2e} s"
-)
+print(f"Backward (DLM) {np.mean(times[k]):.2e} s +/- {np.std(times[k]):.2e} s")

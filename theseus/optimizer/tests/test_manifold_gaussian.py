@@ -10,7 +10,6 @@ import pytest  # noqa: F401
 import torch
 
 import theseus as th
-from theseus import ManifoldGaussian
 from theseus.optimizer.manifold_gaussian import local_gaussian, retract_gaussian
 
 
@@ -46,7 +45,7 @@ def test_init():
         dof = sum([v.dof() for v in mean])
         n_vars = len(mean)
 
-        t = ManifoldGaussian(mean, precision=precision, name=name)
+        t = th.ManifoldGaussian(mean, precision=precision, name=name)
         all_ids.append(t._id)
         if name is not None:
             assert name == t.name
@@ -69,7 +68,7 @@ def test_init():
 def test_to():
     for i in range(10):
         mean, precision = random_manifold_gaussian_params()
-        t = ManifoldGaussian(mean, precision=precision)
+        t = th.ManifoldGaussian(mean, precision=precision)
         dtype = torch.float64 if np.random.random() < 0.5 else torch.long
         t.to(dtype)
 
@@ -82,7 +81,7 @@ def test_copy():
     for i in range(10):
         mean, precision = random_manifold_gaussian_params()
         n_vars = len(mean)
-        var = ManifoldGaussian(mean, precision, name="var")
+        var = th.ManifoldGaussian(mean, precision, name="var")
 
         var.name = "old"
         new_var = var.copy(new_name="new")
@@ -103,7 +102,7 @@ def test_update():
         dof = sum([v.dof() for v in mean])
         batch_size = mean[0].shape[0]
 
-        var = ManifoldGaussian(mean, precision, name="var")
+        var = th.ManifoldGaussian(mean, precision, name="var")
 
         # check update
         new_mean_good = []
@@ -155,7 +154,7 @@ def test_local_gaussian():
         ix = np.random.randint(len(manif_types))
         mean = [manif_types[ix].rand(batch_size)]
         precision = torch.eye(mean[0].dof())[None, ...].repeat(batch_size, 1, 1)
-        gaussian = ManifoldGaussian(mean, precision)
+        gaussian = th.ManifoldGaussian(mean, precision)
         variable = manif_types[ix].rand(batch_size)
 
         mean_tp, lam_tp1 = local_gaussian(variable, gaussian, return_mean=True)
@@ -171,7 +170,7 @@ def test_local_gaussian():
         bad_mean = mean + [variable]
         dof = sum([var.dof() for var in bad_mean])
         precision = torch.zeros(batch_size, dof, dof)
-        bad_gaussian = ManifoldGaussian(bad_mean, precision)
+        bad_gaussian = th.ManifoldGaussian(bad_mean, precision)
         with pytest.raises(ValueError):
             _, _ = local_gaussian(variable, bad_gaussian, return_mean=True)
 

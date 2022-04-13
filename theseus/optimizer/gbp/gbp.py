@@ -25,9 +25,9 @@ from theseus.optimizer.nonlinear.nonlinear_optimizer import (
 
 """
 TODO
- - add class for message schedule
  - damping for lie algebra vars
  - solving inverse problem to compute message mean
+ - handle batch dim
 """
 
 
@@ -401,11 +401,19 @@ class Factor:
             new_mess_lam = loo - lono @ np.linalg.inv(lnono) @ lnoo
             new_mess_eta = eo - lono @ np.linalg.inv(lnono) @ eno
 
-            # damping in tangent space at linearisation point
-            # prev_mess_eta, prev_mess_lam = local_gaussian(
-            #     vtof_msgs[v], lin_points[v], return_mean=False)
-            # new_mess_eta = (1 - damping[v]) * new_mess_eta + damping[v] * prev_mess_eta[0]
-            # new_mess_lam = (1 - damping[v]) * new_mess_lam + damping[v] * prev_mess_lam[0]
+            # damping in tangent space at linearisation point as message
+            # is already in this tangent space. Could equally do damping
+            # in the tangent space of the new or old message mean.
+            prev_mess_mean, prev_mess_lam = local_gaussian(
+                ftov_msgs[v], self.lin_point[v], return_mean=True
+            )
+            # mean damping
+            if new_mess_lam.count_nonzero() != 0:
+                new_mess_mean = torch.matmul(torch.inverse(new_mess_lam), new_mess_eta)
+                new_mess_mean = (1 - damping[v]) * new_mess_mean + damping[
+                    v
+                ] * prev_mess_mean[0]
+                new_mess_eta = torch.matmul(new_mess_lam, new_mess_mean)
 
             if new_mess_lam.count_nonzero() == 0:
                 new_mess = ManifoldGaussian([self.cf.optim_var_at(v).copy()])

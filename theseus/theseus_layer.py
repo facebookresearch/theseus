@@ -46,7 +46,7 @@ class TheseusLayer(nn.Module):
             names = set(self.objective.aux_vars.keys()).intersection(input_data.keys())
             tensors = [input_data[n] for n in names]
             *vars, info = TheseusLayerDLMForward.apply(
-                self.objective, self.optimizer, optimizer_kwargs, input_data, DLM_epsilon, names, *tensors
+                self.objective, self.optimizer, optimizer_kwargs, input_data, DLM_epsilon, *tensors
             )
         else:
             vars, info = _forward(self.objective, self.optimizer, optimizer_kwargs, input_data)
@@ -119,14 +119,11 @@ class TheseusLayerDLMForward(torch.autograd.Function):
     """
 
     @staticmethod
-    def forward(ctx, objective, optimizer, optimizer_kwargs, input_data, epsilon, param_names, *params):
+    def forward(ctx, objective, optimizer, optimizer_kwargs, input_data, epsilon, *params):
         optim_vars, info = _forward(objective, optimizer, optimizer_kwargs, input_data)
 
         ctx.input_data = input_data.copy()
-        ctx.param_names = param_names
         ctx.objective = objective
-        ctx.optimizer = optimizer
-        ctx.optimizer_kwargs = optimizer_kwargs
         ctx.epsilon = epsilon
 
         # Ideally we compute this in the backward function, but if we try to do that,
@@ -149,8 +146,6 @@ class TheseusLayerDLMForward(torch.autograd.Function):
         grad_outputs = grad_outputs[:-1]
 
         objective = ctx.objective
-        optimizer = ctx.optimizer
-        optimizer_kwargs = ctx.optimizer_kwargs
         epsilon = ctx.epsilon
 
         # Update the optim vars to their solutions.
@@ -179,15 +174,14 @@ class TheseusLayerDLMForward(torch.autograd.Function):
             max_iterations=1,
             step_size=1.0,
         )
-        # Should we use the same optimizer kwargs for the backward solve?
-        bwd_optimizer.optimize(**optimizer_kwargs)
+        bwd_optimizer.optimize()
 
         # Compute gradients.
         with torch.enable_grad():
             grad_perturbed = torch.autograd.grad(bwd_objective.error_squared_norm().sum(), params, retain_graph=True)
 
         grads = [(gs - gp) / epsilon for gs, gp in zip(grad_sol, grad_perturbed)]
-        return (None, None, None, None, None, None, *grads)
+        return (None, None, None, None, None, *grads)
 
 
 def _dlm_perturbation(optim_vars, aux_vars, epsilon):

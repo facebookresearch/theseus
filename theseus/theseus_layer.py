@@ -5,11 +5,17 @@
 
 from typing import Any, Dict, Optional, Tuple
 
+from functools import partial
+
 import torch
 import torch.nn as nn
+from torch.autograd.function import once_differentiable
 
+from theseus import Variable, GaussNewton
+from theseus.core.cost_function import AutoDiffCostFunction
 from theseus.optimizer import Optimizer, OptimizerInfo
 from theseus.optimizer.linear import LinearSolver
+from theseus.optimizer.nonlinear import BackwardMode
 
 
 class TheseusLayer(nn.Module):
@@ -35,13 +41,26 @@ class TheseusLayer(nn.Module):
         self.objective.setup(input_data)
         self.objective.update(input_data)
         optimizer_kwargs = optimizer_kwargs or {}
-        info = self.optimizer.optimize(**optimizer_kwargs)
-        values = dict(
-            [
-                (var_name, var.data)
-                for var_name, var in self.objective.optim_vars.items()
-            ]
-        )
+        backward_mode = optimizer_kwargs.get("backward_mode", None)
+        DLM_epsilon = optimizer_kwargs.get("DLM_epsilon", 1e-2)
+        if backward_mode == BackwardMode.DLM:
+            # TODO: instantiate self.bwd_objective here.
+            names = set(self.objective.aux_vars.keys()).intersection(input_data.keys())
+            tensors = [input_data[n] for n in names]
+            *vars, info = TheseusLayerDLMForward.apply(
+                self.objective,
+                self.optimizer,
+                optimizer_kwargs,
+                input_data,
+                DLM_epsilon,
+                names,
+                *tensors
+            )
+        else:
+            vars, info = _forward(
+                self.objective, self.optimizer, optimizer_kwargs, input_data
+            )
+        values = dict(zip(self.objective.optim_vars.keys(), vars))
         return values, info
 
     def compute_samples(
@@ -94,3 +113,108 @@ class TheseusLayer(nn.Module):
     @property
     def dtype(self) -> torch.dtype:
         return self.objective.dtype
+
+
+def _forward(objective, optimizer, optimizer_kwargs, input_data):
+    objective.update(input_data)
+    info = optimizer.optimize(**optimizer_kwargs)
+    vars = [var.data for var in objective.optim_vars.values()]
+    return vars, info
+
+
+class TheseusLayerDLMForward(torch.autograd.Function):
+    """
+    Functionally the same as the forward method in a TheseusLayer
+    but computes the direct loss minimization in the backward pass.
+    """
+
+    @staticmethod
+    def forward(
+        ctx,
+        objective,
+        optimizer,
+        optimizer_kwargs,
+        input_data,
+        epsilon,
+        param_names,
+        *params
+    ):
+        optim_vars, info = _forward(objective, optimizer, optimizer_kwargs, input_data)
+
+        ctx.input_data = input_data.copy()
+        ctx.param_names = param_names
+        ctx.objective = objective
+        ctx.optimizer = optimizer
+        ctx.optimizer_kwargs = optimizer_kwargs
+        ctx.epsilon = epsilon
+
+        # Ideally we compute this in the backward function, but if we try to do that,
+        # it ends up in an infinite loop because it depends on the outputs of this function.
+        with torch.enable_grad():
+            grad_sol = torch.autograd.grad(
+                objective.error_squared_norm().sum(), params, retain_graph=True
+            )
+
+        ctx.save_for_backward(*params, *grad_sol, *optim_vars)
+        ctx.n_params = len(params)
+        return (*optim_vars, info)
+
+    @staticmethod
+    @once_differentiable
+    def backward(ctx, *grad_outputs):
+        saved_tensors = ctx.saved_tensors
+        params = saved_tensors[: ctx.n_params]
+        grad_sol = saved_tensors[ctx.n_params : 2 * ctx.n_params]
+        optim_vars = saved_tensors[2 * ctx.n_params :]
+        grad_outputs = grad_outputs[:-1]
+
+        objective = ctx.objective
+        optimizer = ctx.optimizer
+        optimizer_kwargs = ctx.optimizer_kwargs
+        epsilon = ctx.epsilon
+
+        # Update the optim vars to their solutions.
+        input_data = ctx.input_data
+        values = dict(zip(objective.optim_vars.keys(), optim_vars))
+        input_data.update(values)
+
+        # Construct backward objective.
+        bwd_objective = objective.copy()
+
+        # Can we put all of this into a single cost function?
+        for i, (name, var) in enumerate(bwd_objective.optim_vars.items()):
+            grad_var = Variable(grad_outputs[i], name=name + "_grad")
+            bwd_objective.add(
+                AutoDiffCostFunction(
+                    [var],
+                    partial(_dlm_perturbation, epsilon=epsilon),
+                    1,
+                    aux_vars=[grad_var],
+                    name="DLM_perturbation_" + name,
+                )
+            )
+
+        # Solve backward objective.
+        bwd_objective.update(input_data)
+        bwd_optimizer = GaussNewton(
+            bwd_objective,
+            max_iterations=1,
+            step_size=1.0,
+        )
+        # Should we use the same optimizer kwargs for the backward solve?
+        bwd_optimizer.optimize(**optimizer_kwargs)
+
+        # Compute gradients.
+        with torch.enable_grad():
+            grad_perturbed = torch.autograd.grad(
+                bwd_objective.error_squared_norm().sum(), params, retain_graph=True
+            )
+
+        grads = [(gs - gp) / epsilon for gs, gp in zip(grad_sol, grad_perturbed)]
+        return (None, None, None, None, None, None, *grads)
+
+
+def _dlm_perturbation(optim_vars, aux_vars, epsilon):
+    v = optim_vars[0]
+    g = aux_vars[0]
+    return epsilon * v.data - 0.5 * g.data

@@ -201,12 +201,8 @@ def run(cfg: omegaconf.OmegaConf, results_path: pathlib.Path):
         )
 
         loss = (pose_loss(pg, pose_vars) - pose_loss_ref) / pose_loss_ref
-        print(f"log_loss_radius before backward: {loss_radius_tensor.data.item()}")
         loss.backward()
         model_optimizer.step()
-        print(f"log_loss_radius after backward: {loss_radius_tensor.data.item()}")
-        with torch.no_grad():
-            print(loss_radius_tensor.data.grad.norm().item())
         loss_value = torch.sum(loss.detach()).item()
         pr.disable()
         end_time = time.time_ns()

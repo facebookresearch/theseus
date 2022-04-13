@@ -32,7 +32,7 @@ def ee_pose_target(batch_size):
     torch.manual_seed(1)
 
     ee_pos_mid = torch.Tensor([0.6, 0.0, 0.5])
-    ee_pos_range = torch.Tensor([0.2, 0.3, 0.3])
+    ee_pos_range = torch.Tensor([0.1, 0.2, 0.2])
     ee_quat_mid = torch.Tensor([0.9383, 0.3442, -0.0072, -0.0318])
     ee_quat_range = torch.Tensor([0.5, 0.5, 0.5])
 
@@ -77,7 +77,7 @@ def test_ik_optimization(robot_model, batch_size, ee_pose_target, is_grad_enable
     objective.add(cost_function)
     optimizer = th.LevenbergMarquardt(
         objective,
-        max_iterations=25,
+        max_iterations=15,
         step_size=0.5,
     )
     theseus_optim = th.TheseusLayer(optimizer)

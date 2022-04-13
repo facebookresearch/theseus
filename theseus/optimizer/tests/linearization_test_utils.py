@@ -3,6 +3,8 @@
 # This source code is licensed under the MIT license found in the
 # LICENSE file in the root directory of this source tree.
 
+from typing import Optional
+
 import torch  # noqa: F401
 
 import theseus as th
@@ -27,8 +29,10 @@ class MockVector(th.Manifold):
     def _retract_impl(self, delta):
         return self
 
-    def _copy_impl(self):
-        raise NotImplementedError
+    def _copy_impl(self, new_name: Optional[str] = None):
+        ret = MockVector(0, self.data.shape[1], new_name)
+        ret[:] = self.data
+        return ret
 
     def _project_impl(
         self, euclidean_grad: torch.Tensor, is_sparse: bool = False

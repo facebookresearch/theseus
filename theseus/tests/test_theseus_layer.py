@@ -214,6 +214,7 @@ def _run_optimizer_test(
     layer_ref.to(device)
     with torch.no_grad():
         input_values = {"coefficients": torch.ones(batch_size, 2, device=device) * 0.75}
+        layer_ref.objective.setup(input_data=input_values)
         target_vars, _ = layer_ref.forward(
             input_values, optimizer_kwargs={**optimizer_kwargs, **{"verbose": verbose}}
         )
@@ -276,6 +277,7 @@ def _run_optimizer_test(
     }
 
     with torch.no_grad():
+        layer_to_learn.objective.setup(input_data=input_values)
         pred_vars, info = layer_to_learn.forward(
             input_values, optimizer_kwargs=optimizer_kwargs
         )
@@ -438,6 +440,7 @@ def test_send_to_device():
 
     layer = create_qf_theseus_layer(xs, ys)
     input_values = {"coefficients": torch.ones(batch_size, 2, device=device) * 0.5}
+    layer.objective.setup(input_data=input_values)
     with torch.no_grad():
         if device != "cpu":
             with pytest.raises(RuntimeError):
@@ -490,6 +493,7 @@ def test_pass_optimizer_kwargs():
     )
     layer.to("cpu")
     input_values = {"coefficients": torch.ones(batch_size, 2) * 0.5}
+    layer.objective.setup(input_data=input_values)
     for tbs in [True, False]:
         _, info = layer.forward(
             input_values, optimizer_kwargs={"track_best_solution": tbs}
@@ -515,6 +519,7 @@ def test_pass_optimizer_kwargs():
 
     with mock.patch.object(th.GaussNewton, "compute_delta", _mock_compute_delta):
         layer_2 = create_qf_theseus_layer(xs, ys)
+        layer_2.objective.setup(input_data=input_values)
         layer_2.forward(input_values)
         # If fake_arg is passed correctly, the mock of compute_delta will trigger
         with pytest.raises(ValueError):

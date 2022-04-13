@@ -113,7 +113,7 @@ def local_gaussian(
     # assumes gaussian is over just one Manifold object
     if len(gaussian.mean) != 1:
         raise ValueError(
-            "ManifoldGaussian should be over just one Manifold object. "
+            "local on manifold should be over just one Manifold object. "
             f"Passed gaussian {gaussian.name} is over {len(gaussian.mean)} "
             "Manifold objects."
         )

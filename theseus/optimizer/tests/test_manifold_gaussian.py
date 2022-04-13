@@ -10,7 +10,6 @@ import pytest  # noqa: F401
 import torch
 
 import theseus as th
-from theseus.optimizer.manifold_gaussian import local_gaussian, retract_gaussian
 
 
 def random_manifold_gaussian_params():
@@ -157,8 +156,8 @@ def test_local_gaussian():
         gaussian = th.ManifoldGaussian(mean, precision)
         variable = manif_types[ix].rand(batch_size)
 
-        mean_tp, lam_tp1 = local_gaussian(variable, gaussian, return_mean=True)
-        eta_tp, lam_tp2 = local_gaussian(variable, gaussian, return_mean=False)
+        mean_tp, lam_tp1 = th.local_gaussian(variable, gaussian, return_mean=True)
+        eta_tp, lam_tp2 = th.local_gaussian(variable, gaussian, return_mean=False)
 
         assert torch.allclose(lam_tp1, lam_tp2)
 
@@ -172,13 +171,13 @@ def test_local_gaussian():
         precision = torch.zeros(batch_size, dof, dof)
         bad_gaussian = th.ManifoldGaussian(bad_mean, precision)
         with pytest.raises(ValueError):
-            _, _ = local_gaussian(variable, bad_gaussian, return_mean=True)
+            _, _ = th.local_gaussian(variable, bad_gaussian, return_mean=True)
 
         # check raises error if gaussian over mulitple Manifold objects
         bad_ix = np.mod(ix + 1, len(manif_types))
         bad_variable = manif_types[bad_ix].rand(batch_size)
         with pytest.raises(ValueError):
-            _, _ = local_gaussian(bad_variable, gaussian, return_mean=True)
+            _, _ = th.local_gaussian(bad_variable, gaussian, return_mean=True)
 
 
 def test_retract_gaussian():
@@ -192,5 +191,5 @@ def test_retract_gaussian():
         mean_tp = torch.rand(batch_size, variable.dof())
         lam_tp = torch.eye(variable.dof())[None, ...].repeat(batch_size, 1, 1)
 
-        gaussian = retract_gaussian(variable, mean_tp, lam_tp)
+        gaussian = th.retract_gaussian(variable, mean_tp, lam_tp)
         assert torch.allclose(gaussian.mean[0].data, variable.retract(mean_tp).data)

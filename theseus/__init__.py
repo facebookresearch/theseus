@@ -54,6 +54,8 @@ from .optimizer import (
     SparseLinearization,
     VariableOrdering,
     ManifoldGaussian,
+    local_gaussian,
+    retract_gaussian,
 )
 from .optimizer.linear import (
     CholeskyDenseSolver,

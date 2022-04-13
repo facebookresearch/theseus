@@ -8,6 +8,7 @@ import pytest  # noqa
 import torch
 
 import theseus as th
+from theseus.core import Variable
 from theseus.geometry.tests.test_se2 import create_random_se2
 from theseus.utils import numeric_jacobian
 
@@ -149,3 +150,37 @@ def test_eff_obj_interesect_errors():
         actual = cost_fn.error()
         expected = outputs["error"][sdf_idx, :]
         assert torch.allclose(actual, expected)
+
+
+def test_eff_obj_variable_type():
+    rng = torch.Generator()
+    rng.manual_seed(0)
+    for batch_size in [1, 10, 100]:
+        obj = create_random_se2(batch_size, rng)
+        eff = create_random_se2(batch_size, rng)
+        origin = th.Variable(torch.randn(batch_size, 2).double())
+        sdf_data = th.Variable(torch.randn(batch_size, 10, 10).double())
+        cell_size = th.Variable(torch.rand(batch_size, 1).double())
+        eff_radius = th.Variable(torch.rand(batch_size, 1).double())
+        cost_weight = th.ScaleCostWeight(1.0)
+        cost_function = th.eb.EffectorObjectContactPlanar(
+            obj, eff, cost_weight, origin, sdf_data, cell_size, eff_radius
+        )
+
+        assert isinstance(cost_function.eff_radius, Variable)
+
+        eff_radius_t = torch.rand(batch_size, 1).double()
+
+        cost_function = th.eb.EffectorObjectContactPlanar(
+            obj, eff, cost_weight, origin, sdf_data, cell_size, eff_radius_t
+        )
+
+        assert isinstance(cost_function.eff_radius, Variable)
+
+        eff_radius_f = 1.0
+
+        cost_function = th.eb.EffectorObjectContactPlanar(
+            obj, eff, cost_weight, origin, sdf_data, cell_size, eff_radius_f
+        )
+
+        assert isinstance(cost_function.eff_radius, Variable)

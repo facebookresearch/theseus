@@ -9,6 +9,7 @@ import pytest  # noqa: F401
 import torch
 
 import theseus as th
+from theseus.core import Variable
 from theseus.core.tests.common import check_another_theseus_function_is_copy
 from theseus.utils import numeric_jacobian
 
@@ -58,6 +59,30 @@ def test_gp_motion_model_cost_weight_copy():
     check_another_theseus_function_is_copy(
         cost_weight, copy.deepcopy(cost_weight), new_name="gp_copy"
     )
+
+
+def test_gp_motion_model_variable_type():
+    for dof in range(1, 10):
+        for batch_size in [1, 10, 100]:
+            aux = torch.randn(batch_size, dof, dof).double()
+            q_inv = aux.transpose(-2, -1).bmm(aux)
+            dt = torch.rand(1).double()
+            cost_weight = th.eb.GPCostWeight(q_inv, dt)
+
+            assert isinstance(cost_weight.Qc_inv, Variable)
+            assert isinstance(cost_weight.dt, Variable)
+
+            q_inv_v = Variable(q_inv)
+            dt_v = Variable(dt)
+            cost_weight = th.eb.GPCostWeight(q_inv_v, dt_v)
+            assert isinstance(cost_weight.Qc_inv, Variable)
+            assert isinstance(cost_weight.dt, Variable)
+
+            q_inv_v = Variable(q_inv)
+            dt_f = 1.0
+            cost_weight = th.eb.GPCostWeight(q_inv_v, dt_f)
+            assert isinstance(cost_weight.Qc_inv, Variable)
+            assert isinstance(cost_weight.dt, Variable)
 
 
 def test_gp_motion_model_cost_function_error_vector_vars():

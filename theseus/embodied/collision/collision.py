@@ -75,4 +75,4 @@ class Collision2D(CostFunction):
         )
 
     def dim(self) -> int:
-        return self.robot.dim()
+        return 1

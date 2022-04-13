@@ -135,7 +135,7 @@ class AutoDiffCostFunction(CostFunction):
 
         # The following are auxiliary Variable objects to hold tensor data
         # during jacobian computation without modifying the original Variable objects
-        self._tmp_optim_vars = tuple(Variable(data=v.data) for v in optim_vars)
+        self._tmp_optim_vars = tuple(v.copy() for v in optim_vars)
 
     def _compute_error(
         self,

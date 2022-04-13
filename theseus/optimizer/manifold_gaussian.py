@@ -115,6 +115,7 @@ def local_gaussian(
     jac: List[torch.Tensor] = []
     variable.exp_map(mean_tp, jacobians=jac)
     # precision matrix in the tangent space at variable
+    # Following math in section H https://arxiv.org/pdf/1812.01537.pdf
     lam_tp = torch.bmm(torch.bmm(jac[0].transpose(-1, -2), gaussian.precision), jac[0])
 
     if return_mean:

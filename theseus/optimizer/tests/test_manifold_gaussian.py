@@ -36,7 +36,7 @@ def random_manifold_gaussian_params():
 
 def test_init():
     all_ids = []
-    for i in range(100):
+    for i in range(10):
         if np.random.random() < 0.5:
             name = f"name_{i}"
         else:
@@ -52,8 +52,8 @@ def test_init():
         else:
             assert t.name == f"ManifoldGaussian__{t._id}"
         assert t.dof == dof
-        for i in range(n_vars):
-            assert t.mean[i] == mean[i]
+        for j in range(n_vars):
+            assert t.mean[j] == mean[j]
         if precision is not None:
             assert torch.isclose(t.precision, precision).all()
         else:
@@ -66,7 +66,7 @@ def test_init():
 
 
 def test_to():
-    for i in range(100):
+    for i in range(10):
         mean, precision = random_manifold_gaussian_params()
         t = ManifoldGaussian(mean, precision=precision)
         dtype = torch.float64 if np.random.random() < 0.5 else torch.long
@@ -78,7 +78,7 @@ def test_to():
 
 
 def test_copy():
-    for i in range(100):
+    for i in range(10):
         mean, precision = random_manifold_gaussian_params()
         n_vars = len(mean)
         var = ManifoldGaussian(mean, precision, name="var")
@@ -96,7 +96,7 @@ def test_copy():
 
 
 def test_update():
-    for i in range(100):
+    for i in range(10):
         mean, precision = random_manifold_gaussian_params()
         n_vars = len(mean)
         dof = sum([v.dof() for v in mean])

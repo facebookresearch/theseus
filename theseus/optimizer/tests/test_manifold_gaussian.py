@@ -11,6 +11,7 @@ import torch
 
 import theseus as th
 from theseus import ManifoldGaussian
+from theseus.optimizer.manifold_gaussian import local_gaussian, retract_gaussian
 
 
 def random_manifold_gaussian_params():
@@ -144,3 +145,53 @@ def test_update():
         new_mean_bad[-1] = th.Vector(10)
         with pytest.raises(ValueError):
             var.update(new_mean_bad, new_precision_good)
+
+
+def test_local_gaussian():
+    manif_types = [th.Point2, th.Point3, th.SE2, th.SE3, th.SO2, th.SO3]
+
+    for i in range(50):
+        batch_size = np.random.randint(1, 100)
+        ix = np.random.randint(len(manif_types))
+        mean = [manif_types[ix].rand(batch_size)]
+        precision = torch.eye(mean[0].dof())[None, ...].repeat(batch_size, 1, 1)
+        gaussian = ManifoldGaussian(mean, precision)
+        variable = manif_types[ix].rand(batch_size)
+
+        mean_tp, lam_tp1 = local_gaussian(variable, gaussian, return_mean=True)
+        eta_tp, lam_tp2 = local_gaussian(variable, gaussian, return_mean=False)
+
+        assert torch.allclose(lam_tp1, lam_tp2)
+
+        # check mean and eta are consistent
+        mean_tp_calc = torch.matmul(lam_tp1, mean_tp.unsqueeze(-1)).squeeze(-1)
+        assert torch.allclose(eta_tp, mean_tp_calc)
+
+        # check raises error if gaussian over mulitple Manifold objects
+        bad_mean = mean + [variable]
+        dof = sum([var.dof() for var in bad_mean])
+        precision = torch.zeros(batch_size, dof, dof)
+        bad_gaussian = ManifoldGaussian(bad_mean, precision)
+        with pytest.raises(ValueError):
+            _, _ = local_gaussian(variable, bad_gaussian, return_mean=True)
+
+        # check raises error if gaussian over mulitple Manifold objects
+        bad_ix = np.mod(ix + 1, len(manif_types))
+        bad_variable = manif_types[bad_ix].rand(batch_size)
+        with pytest.raises(ValueError):
+            _, _ = local_gaussian(bad_variable, gaussian, return_mean=True)
+
+
+def test_retract_gaussian():
+    manif_types = [th.Point2, th.Point3, th.SE2, th.SE3, th.SO2, th.SO3]
+
+    for i in range(50):
+        batch_size = np.random.randint(1, 100)
+        ix = np.random.randint(len(manif_types))
+        variable = manif_types[ix].rand(batch_size)
+
+        mean_tp = torch.rand(batch_size, variable.dof())
+        lam_tp = torch.eye(variable.dof())[None, ...].repeat(batch_size, 1, 1)
+
+        gaussian = retract_gaussian(variable, mean_tp, lam_tp)
+        assert torch.allclose(gaussian.mean[0].data, variable.retract(mean_tp).data)

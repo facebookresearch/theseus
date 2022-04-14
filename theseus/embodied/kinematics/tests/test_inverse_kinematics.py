@@ -67,7 +67,12 @@ def test_ik_optimization(robot_model, batch_size, ee_pose_target, is_grad_enable
         return pose_err
 
     # Set up optimization
-    optim_vars = (th.Vector(NUM_DOFS, name="theta"),)
+    optim_vars = (
+        th.Vector(
+            name="theta", data=torch.tile(HOME_POSE.unsqueeze(0), (batch_size, 1))
+        ),
+    )
+    assert optim_vars[0].dof() == NUM_DOFS
     aux_vars = (ee_pose_target,)
 
     cost_function = th.AutoDiffCostFunction(

@@ -11,7 +11,7 @@ import pstats
 
 import random
 import time
-from typing import Dict, List, Type, cast
+from typing import Union, Dict, List, Type, cast
 
 import hydra
 import numpy as np
@@ -78,12 +78,19 @@ def save_epoch(
     torch.save(results, results_path / f"results_epoch{epoch}.pt")
 
 
-def pose_loss(pg: theg.PoseGraphDataset, pose_vars: List[th.LieGroup]) -> torch.Tensor:
+def pose_loss(
+    pose_vars: List[th.LieGroup],
+    gt_pose_vars: List[th.LieGroup],
+) -> torch.Tensor:
     loss: torch.Tensor = torch.zeros(1, dtype=torch.float64)
-
-    for i in range(len(pg.gt_poses)):
-        pose_loss = th.local(pose_vars[i], pg.gt_poses[i]).norm(dim=1)
-        loss += pose_loss
+    poses_batch = th.SE3(
+        data=torch.cat([pose.data for pose in pose_vars]), requires_check=False
+    )
+    gt_poses_batch = th.SE3(
+        data=torch.cat([gt_pose.data for gt_pose in gt_pose_vars]), requires_check=False
+    )
+    pose_loss = th.local(poses_batch, gt_poses_batch).norm(dim=1)
+    loss += pose_loss.sum()
     return loss
 
 
@@ -100,6 +107,8 @@ def run(cfg: omegaconf.OmegaConf, results_path: pathlib.Path):
         translation_noise=cfg.translation_noise,
         loop_closure_ratio=cfg.loop_closure_ratio,
         loop_closure_outlier_ratio=cfg.loop_closure_outlier_ratio,
+        batch_size=cfg.batch_size,
+        dataset_size=cfg.dataset_size,
         generator=rng,
         dtype=dtype,
     )
@@ -176,7 +185,7 @@ def run(cfg: omegaconf.OmegaConf, results_path: pathlib.Path):
     theseus_inputs["log_loss_radius"] = loss_radius_tensor.unsqueeze(1).clone()
 
     with torch.no_grad():
-        pose_loss_ref = pose_loss(pg, pose_vars).item()
+        pose_loss_ref = pose_loss(pose_vars, pg.gt_poses).item()
     log.info(f"POSE LOSS (no learning):  {pose_loss_ref: .3f}")
 
     print_histogram(pg, theseus_inputs, "Input histogram:")
@@ -200,7 +209,7 @@ def run(cfg: omegaconf.OmegaConf, results_path: pathlib.Path):
             },
         )
 
-        loss = (pose_loss(pg, pose_vars) - pose_loss_ref) / pose_loss_ref
+        loss = (pose_loss(pose_vars, pg.gt_poses) - pose_loss_ref) / pose_loss_ref
         loss.backward()
         model_optimizer.step()
         loss_value = torch.sum(loss.detach()).item()

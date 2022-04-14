@@ -175,10 +175,23 @@ class PoseGraphDataset:
         poses: Union[List[th.SE2], List[th.SE3]],
         edges: List[PoseGraphEdge],
         gt_poses: Optional[Union[List[th.SE2], List[th.SE3]]] = None,
+        batch_size: int = 1,
     ):
+        dataset_sizes: List[int] = [pose.shape[0] for pose in poses]
+        if gt_poses is not None:
+            dataset_sizes.extend([gt_pose.shape[0] for gt_pose in gt_poses])
+        dataset_sizes.extend([edge.relative_pose.shape[0] for edge in edges])
+        uniqe_batch_sizes = set(dataset_sizes)
+
+        if len(uniqe_batch_sizes) != 1:
+            raise ValueError("Provided data has muliple batches.")
+
         self.poses = poses
         self.edges = edges
         self.gt_poses = gt_poses
+        self.batch_size = batch_size
+        self.dataset_size = dataset_sizes[0]
+        self.num_batches = (self.dataset_size - 1) // self.batch_size + 1
 
     def load_3D_g2o_file(
         self, path: str, dtype: Optional[torch.dtype] = None
@@ -198,9 +211,11 @@ class PoseGraphDataset:
             error = self.poses[edge.j].local(
                 self.poses[edge.i].compose(edge.relative_pose)
             )
-            error_norm = float(error.norm())
-            idx = min(int(10 * error_norm), len(buckets) - 1)
-            buckets[idx] += 1
+            error_norm = error.norm(dim=1)
+            idx = (10 * error_norm).to(dytpe=int)
+            idx = torch.where(idx > len(buckets) - 1, len(buckets) - 1, idx)
+            for i in idx:
+                buckets[i] += 1
         max_buckets = max(buckets)
         hist_str = ""
         for i in range(len(buckets)):
@@ -217,6 +232,8 @@ class PoseGraphDataset:
         translation_noise: float = 0.1,
         loop_closure_ratio: float = 0.2,
         loop_closure_outlier_ratio: float = 0.05,
+        dataset_size: int = 1,
+        batch_size: int = 1,
         generator: Optional[torch.Generator] = None,
         dtype: Optional[torch.dtype] = None,
     ) -> Tuple["PoseGraphDataset", List[bool]]:
@@ -227,17 +244,23 @@ class PoseGraphDataset:
 
         poses.append(
             th.SE3(
-                data=torch.eye(3, 4, dtype=dtype).reshape(1, 3, 4), name="VERTEX_SE3__0"
+                data=torch.tile(torch.eye(3, 4, dtype=dtype), [dataset_size, 1, 1]),
+                name="VERTEX_SE3__0",
             )
         )
-        gt_poses.append(th.SE3(data=torch.eye(3, 4, dtype=dtype).reshape(1, 3, 4)))
+        gt_poses.append(
+            th.SE3(
+                data=torch.tile(torch.eye(3, 4, dtype=dtype), [dataset_size, 1, 1]),
+                name="VERTEX_SE3_GT__0",
+            )
+        )
 
         for n in range(1, num_poses):
             gt_relative_pose = th.SE3.exp_map(
                 torch.cat(
                     [
-                        torch.rand(1, 3, dtype=dtype) - 0.5,
-                        2.0 * torch.rand(1, 3, dtype=dtype) - 1,
+                        torch.rand(dataset_size, 3, dtype=dtype) - 0.5,
+                        2.0 * torch.rand(dataset_size, 3, dtype=dtype) - 1,
                     ],
                     dim=1,
                 )
@@ -245,8 +268,10 @@ class PoseGraphDataset:
             noise_relative_pose = th.SE3.exp_map(
                 torch.cat(
                     [
-                        rotation_noise * (2 * torch.rand(1, 3, dtype=dtype) - 1),
-                        translation_noise * (2.0 * torch.rand(1, 3, dtype=dtype) - 1),
+                        rotation_noise
+                        * (2 * torch.rand(dataset_size, 3, dtype=dtype) - 1),
+                        translation_noise
+                        * (2.0 * torch.rand(dataset_size, 3, dtype=dtype) - 1),
                     ],
                     dim=1,
                 )
@@ -321,7 +346,23 @@ class PoseGraphDataset:
             )
             poses[i].data = gt_poses[i].compose(noise_pose).data
 
-        return PoseGraphDataset(poses, edges, gt_poses), inliers
+        return PoseGraphDataset(poses, edges, gt_poses, batch_size=batch_size), inliers
+
+    def get_batch_data(self, batch_idx: int):
+        assert batch_idx < self.num_batches
+        start = batch_idx * self.num_batches
+        end = min(start + self.batch_size, self.dataset_size)
+        batch = {pose.name: pose.data[start:end] for pose in self.poses}
+        batch.update(
+            {gt_pose.name: gt_pose.data[start:end] for gt_pose in self.gt_poses}
+        )
+        batch.update(
+            {
+                edge.relative_pose.name: edge.relative_pose[start:end]
+                for edge in self.edges
+            }
+        )
+        return batch
 
 
 def pg_histogram(

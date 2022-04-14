@@ -170,6 +170,15 @@ class Objective:
                             batch_name
                         ]
 
+                        original_optim_variable = next(iter(optim_variables.values()))
+
+                        if variable.shape != original_optim_variable.shape:
+                            raise ValueError(
+                                f"Tried to add variable {variable.name} with shape "
+                                f"{tuple(variable.shape)} but batched variable's required  "
+                                f"shape is {tuple(original_optim_variable.shape)}."
+                            )
+
                     assert variable.name not in optim_variables
                     optim_variables[variable.name] = variable
                     variable_batch.data = None

@@ -156,19 +156,19 @@ class TactilePushingTrainer:
         nn.utils.clip_grad_norm_(self.mf_between_model.parameters(), 100, norm_type=2)
         nn.utils.clip_grad_norm_(self.measurements_model.parameters(), 100, norm_type=2)
 
-        with torch.no_grad():
-            for name, param in self.qsp_model.named_parameters():
-                logger.info(f"{name} {param.data}")
-            for name, param in self.mf_between_model.named_parameters():
-                logger.info(f"{name} {param.data}")
+        # with torch.no_grad():
+        #     for name, param in self.qsp_model.named_parameters():
+        #         logger.info(f"{name} {param.data}")
+        #     for name, param in self.mf_between_model.named_parameters():
+        #         logger.info(f"{name} {param.data}")
 
-            def _print_grad(msg_, param_):
-                logger.info(f"{msg_} {param_.grad.norm().item()}")
+        #     def _print_grad(msg_, param_):
+        #         logger.info(f"{msg_} {param_.grad.norm().item()}")
 
-            _print_grad("    grad qsp", self.qsp_model.param)
-            _print_grad("    grad mfb", self.mf_between_model.param)
-            _print_grad("    grad nn_weight", self.measurements_model.fc1.weight)
-            _print_grad("    grad nn_bias", self.measurements_model.fc1.bias)
+        #     _print_grad("    grad qsp", self.qsp_model.param)
+        #     _print_grad("    grad mfb", self.mf_between_model.param)
+        #     _print_grad("    grad nn_weight", self.measurements_model.fc1.weight)
+        #     _print_grad("    grad nn_bias", self.measurements_model.fc1.bias)
 
         self.outer_optim.step()
 
@@ -216,7 +216,7 @@ class TactilePushingTrainer:
             theseus_outputs, info = self.pose_estimator.forward(
                 theseus_inputs,
                 optimizer_kwargs={
-                    "verbose": True,
+                    "verbose": False,
                     "track_err_history": True,
                     "backward_mode": getattr(
                         th.BackwardMode, self.cfg.inner_optim.backward_mode

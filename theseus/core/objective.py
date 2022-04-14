@@ -804,7 +804,8 @@ class Objective:
                     f"Attempted to update a tensor with name {var_name}, "
                     "which is not associated to any variable in the objective."
                 )
-        self._is_setup = keep_batch
+        if len(input_data) != 0:
+            self._is_setup = keep_batch
 
     def _update_batched_cost_functions(self):
         # Update batched cost functions for batch processing

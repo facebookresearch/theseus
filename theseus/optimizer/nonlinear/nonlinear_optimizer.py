@@ -403,11 +403,15 @@ class NonlinearOptimizer(Optimizer, abc.ABC):
             cnts = variable_batch.dof() * len(variables)
             batch_pos = 0
 
-            for variable in variables.values():
-                variable_batch.data[
-                    batch_pos : batch_pos + objective.batch_size
-                ] = variable.data
-                batch_pos += objective.batch_size
+            # for variable in variables.values():
+            #     variable_batch.data[
+            #         batch_pos : batch_pos + objective.batch_size
+            #     ] = variable.data
+            #     batch_pos += objective.batch_size
+
+            variable_batch.update(
+                torch.cat([variable.data for variable in variables.values()])
+            )
 
             delta_batch = torch.cat(
                 [
@@ -446,9 +450,15 @@ class NonlinearOptimizer(Optimizer, abc.ABC):
                     Variable, getattr(batch_cost_function, var_attr_name)
                 )
                 batch_pos = 0
-                for cost_function in cost_functions:
-                    fn_var = cast(Variable, getattr(cost_function, var_attr_name))
-                    batch_variable.data[
-                        batch_pos : batch_pos + objective.batch_size
-                    ] = fn_var.data
-                    batch_pos += objective.batch_size
+                # for cost_function in cost_functions:
+                #     fn_var = cast(Variable, getattr(cost_function, var_attr_name))
+                #     batch_variable.data[
+                #         batch_pos : batch_pos + objective.batch_size
+                #     ] = fn_var.data
+                #     batch_pos += objective.batch_size
+                batch_variable.data = torch.cat(
+                    [
+                        cast(Variable, getattr(cost_function, var_attr_name)).data
+                        for cost_function in cost_functions
+                    ]
+                )

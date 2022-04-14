@@ -190,7 +190,8 @@ class TactilePoseEstimator:
                     objective.add(
                         th.eb.VariableDifference(
                             pose, reg_w, identity_se2, name=f"reg_{pose.name}"
-                        )
+                        ),
+                        "PosePrior",
                     )
 
         # -------------------------------------------------------------------- #

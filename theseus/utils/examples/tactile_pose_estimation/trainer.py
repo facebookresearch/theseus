@@ -142,15 +142,18 @@ class TactilePushingTrainer:
         eff_poses_gt = batch["eff_poses_gt"]
         return theseus_inputs, obj_poses_gt, eff_poses_gt
 
-    def _update(self, loss: torch.Tensor) -> float:
+    def _update(self, loss: torch.Tensor) -> Tuple[float, float]:
         start_event = torch.cuda.Event(enable_timing=True)
         end_event = torch.cuda.Event(enable_timing=True)
         start_event.record()
+        torch.cuda.reset_max_memory_allocated()
         loss.backward()
         end_event.record()
         torch.cuda.synchronize()
         backward_time = start_event.elapsed_time(end_event)
+        backward_mem = torch.cuda.max_memory_allocated() / 1025 / 1024
         logger.info(f"Backward pass took {backward_time} ms.")
+        logger.info(f"Backward pass used {backward_mem} MBs.")
 
         nn.utils.clip_grad_norm_(self.qsp_model.parameters(), 100, norm_type=2)
         nn.utils.clip_grad_norm_(self.mf_between_model.parameters(), 100, norm_type=2)
@@ -178,7 +181,7 @@ class TactilePushingTrainer:
             for param in self.mf_between_model.parameters():
                 param.data.clamp_(0)
 
-        return backward_time
+        return backward_time, backward_mem
 
     def compute_loss(
         self, update: bool = True
@@ -213,6 +216,7 @@ class TactilePushingTrainer:
             start_event = torch.cuda.Event(enable_timing=True)
             end_event = torch.cuda.Event(enable_timing=True)
             start_event.record()
+            torch.cuda.reset_max_memory_allocated()
             theseus_outputs, info = self.pose_estimator.forward(
                 theseus_inputs,
                 optimizer_kwargs={
@@ -227,7 +231,9 @@ class TactilePushingTrainer:
             end_event.record()
             torch.cuda.synchronize()
             forward_time = start_event.elapsed_time(end_event)
+            forward_mem = torch.cuda.max_memory_allocated() / 1024 / 1024
             logger.info(f"Forward pass took {forward_time} ms.")
+            logger.info(f"Forward pass used {forward_mem} MBs.")
 
             # ---------- Backward pass and update ----------- #
             obj_poses_opt, eff_poses_opt = get_tactile_poses_from_values(
@@ -237,9 +243,9 @@ class TactilePushingTrainer:
             se2_gt = th.SE2(x_y_theta=obj_poses_gt.view(-1, 3))
             loss = se2_opt.local(se2_gt).norm()
 
-            backward_time = -1.0
+            backward_time, backward_mem = -1.0, -1.0
             if update:
-                backward_time = self._update(loss)
+                backward_time, backward_mem = self._update(loss)
 
             # ---------- Pack results ----------- #
             losses.append(loss.item())
@@ -252,6 +258,8 @@ class TactilePushingTrainer:
                 loss.item(),
                 forward_time,
                 backward_time,
+                forward_mem,
+                backward_mem,
             )
             image_data["obj_opt"].extend([p for p in obj_poses_opt])
             image_data["eff_opt"].extend([p for p in eff_poses_opt])
@@ -270,6 +278,8 @@ class TactilePushingTrainer:
         loss_value: float,
         forward_time: float,
         backward_time: float,
+        forward_mem: float,
+        backward_mem: float,
     ) -> Dict[str, Any]:
         def _clone(t_):
             return t_.detach().cpu().clone()
@@ -283,4 +293,6 @@ class TactilePushingTrainer:
             "loss": loss_value,
             "forward_time": forward_time,
             "backward_time": backward_time,
+            "forward_mem": forward_mem,
+            "backward_mem": backward_mem,
         }

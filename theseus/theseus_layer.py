@@ -32,6 +32,7 @@ class TheseusLayer(nn.Module):
                 "The objective was modified after the layer's construction, which is "
                 "currently not supported."
             )
+        self.objective.setup(input_data)
         self.objective.update(input_data)
         optimizer_kwargs = optimizer_kwargs or {}
         info = self.optimizer.optimize(**optimizer_kwargs)

@@ -116,7 +116,9 @@ class Objective:
         batch_sizes = [variable.shape[0] for variable in variables]
         unique_batch_sizes = set(batch_sizes)
 
-        if len(unique_batch_sizes) != 1:
+        if len(unique_batch_sizes) != 1 and (
+            len(unique_batch_sizes) != 2 or min(unique_batch_sizes) != 1
+        ):
             return None
 
         batch_name = cost_function.__module__ + "." + cost_function.__class__.__name__

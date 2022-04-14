@@ -259,25 +259,29 @@ class Objective:
                 cost_function_batch.weight = None
                 cost_function_batch.loss_function = None
 
-                batch_sizes = []
+                batch_sizes: List[List[int]] = [[], []]
 
                 vars_attr_names_list = [
                     cost_function_batch._optim_vars_attr_names,
                     cost_function_batch._aux_vars_attr_names,
                 ]
-                for vars_attr_names in vars_attr_names_list:
+                for n, vars_attr_names in enumerate(vars_attr_names_list):
                     for var_attr_name in vars_attr_names:
                         variable_batch = cast(
                             Variable, getattr(cost_function_batch, var_attr_name)
                         )
                         variable_batch.name = cost_function.name + "__" + var_attr_name
-                        batch_sizes.append(variable_batch.data.shape[0])
+                        batch_sizes[n].append(variable_batch.data.shape[0])
                         variable_batch.data = None
 
-                unique_batch_sizes = set(batch_sizes)
+                unique_batch_sizes = [set(batch_sizes[0]), set(batch_sizes[1])]
 
-                if len(unique_batch_sizes) != 1 and (
-                    len(unique_batch_sizes) != 2 or min(unique_batch_sizes) != 1
+                if len(unique_batch_sizes[0]) != 1 or (
+                    len(unique_batch_sizes[1]) != 1
+                    and (
+                        len(unique_batch_sizes[1]) != 2
+                        or min(unique_batch_sizes[1]) != 1
+                    )
                 ):
                     raise ValueError("Provided cost function can not be batched.")
 

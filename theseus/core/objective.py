@@ -22,12 +22,12 @@ from .cost_weight import CostWeight
 # Assumptions:
 # 1) Assume Objective.setup() must be called before running optimization
 # 2) Assume Variable.update() must keep Variable.shape[1:]
-# 3) Assume CostFunction.optim_vars and CostFunction.aux_vars must have the
-#    same batch size as Objective.batch_size or 1
+# 3) Assume len(CostFunction.optim_vars) = Objective.batch_size
+# 4) Assume len(CostFunction.aux_vars) = Objective.batch_size or 1
 
 
-# If dtype is None, uses torch.get_default_dtype()
 class Objective:
+    # If dtype is None, uses torch.get_default_dtype()
     def __init__(self, dtype: Optional[torch.dtype] = None):
         # maps variable names to the variable objects
         self.optim_vars: OrderedDict[str, Manifold] = OrderedDict()
@@ -210,7 +210,7 @@ class Objective:
             cost_function_batch._aux_vars_attr_names,
         ]
 
-        for vars_attr_names in vars_attr_names_list:
+        for n, vars_attr_names in enumerate(vars_attr_names_list):
             for attr_name in vars_attr_names:
                 variable = cast(Variable, getattr(cost_function, attr_name))
                 original_variable = cast(
@@ -224,12 +224,24 @@ class Objective:
                         f"from the expected type {type(original_variable)}."
                     )
 
-                if variable.shape != original_variable.shape:
-                    raise ValueError(
-                        f"The shape of variable {variable.name} in cost function "
-                        f"{cost_function.name} is {variable.shape} and different "
-                        f"from the expected shape {original_variable.shape}."
-                    )
+                if n == 0:
+                    if variable.shape != original_variable.shape:
+                        raise ValueError(
+                            f"The shape of variable {variable.name} in cost function "
+                            f"{cost_function.name} is {tuple(variable.shape)} but the "
+                            f"required shape is {tuple(original_variable.shape)}."
+                        )
+                else:
+                    if variable.shape != original_variable.shape and (
+                        variable.shape[0] != 1
+                        or variable.shape[1:] != original_variable.shape[1:]
+                    ):
+                        raise ValueError(
+                            f"The shape of variable {variable.name} in cost function "
+                            f"{cost_function.name} is {tuple(variable.shape)} but the "
+                            f"required shape is {tuple(original_variable.shape)} or "
+                            f"{tuple([-1] + list(original_variable.shape[1:]))}"
+                        )
 
                 variable_batch = cast(Variable, getattr(cost_function_batch, attr_name))
                 variable_batch.data = None

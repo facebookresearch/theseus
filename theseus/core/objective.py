@@ -98,7 +98,7 @@ class Objective:
         self.current_version = 0
 
     @staticmethod
-    def _get_cost_function_variable_batch_name(var: Manifold):
+    def _get_cost_function_variable_batch_name(var: Variable) -> str:
         return (
             var.__module__
             + "."
@@ -106,6 +106,27 @@ class Objective:
             + "__"
             + f"{tuple(var.data.shape[1:])}"
         )
+
+    @staticmethod
+    def _get_cost_function_batch_name(cost_function: CostFunction) -> Union[str, None]:
+        variables: List[Variable] = [
+            optim_var for optim_var in cost_function.optim_vars
+        ]
+        variables.extend([aux_var for aux_var in cost_function.aux_vars])
+        batch_sizes = [variable.shape[0] for variable in variables]
+        unique_batch_sizes = set(batch_sizes)
+
+        if len(unique_batch_sizes) != 1:
+            return None
+
+        batch_name = cost_function.__module__ + "." + cost_function.__class__.__name__
+
+        variable_batch_names = [
+            "-" + Objective._get_cost_function_variable_batch_name(var)
+            for var in variables
+        ]
+
+        return batch_name + "".join(variable_batch_names)
 
     def _add_function_variables(
         self,

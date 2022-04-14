@@ -119,7 +119,7 @@ def run(cfg: omegaconf.OmegaConf, results_path: pathlib.Path):
             edge.relative_pose,
             loss_function=robust_loss,
         )
-        objective.add(relative_pose_cost)
+        objective.add(relative_pose_cost, use_batches=True)
 
     if cfg.inner_optim.regularize:
         pose_prior_cost = th.eb.VariableDifference(
@@ -129,7 +129,7 @@ def run(cfg: omegaconf.OmegaConf, results_path: pathlib.Path):
             ),
             target=pg.poses[0].copy(new_name=pg.poses[0].name + "__PRIOR"),
         )
-        objective.add(pose_prior_cost)
+        objective.add(pose_prior_cost, use_batches=True)
 
     pose_vars: List[th.LieGroup] = [
         cast(th.LieGroup, objective.optim_vars[pose.name]) for pose in pg.poses
@@ -146,7 +146,8 @@ def run(cfg: omegaconf.OmegaConf, results_path: pathlib.Path):
                     pose_prior_weight,
                     pg.gt_poses[i],
                     name=f"pose_diff_{i}",
-                )
+                ),
+                use_batches=True,
             )
 
     # Create optimizer

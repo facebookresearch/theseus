@@ -879,7 +879,7 @@ class Objective:
     def update(self, input_data: Optional[Dict[str, torch.Tensor]] = None):
         if self.is_setup:
             self._update_variables(input_data=input_data, keep_batch=True)
-            if input_data is None or len(input_data) == 0:
+            if input_data is not None and len(input_data) != 0:
                 with torch.enable_grad():
                     self._update_batched_cost_functions()
                     self._update_batched_optim_variables()

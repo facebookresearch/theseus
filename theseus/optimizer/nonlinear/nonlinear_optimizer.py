@@ -390,24 +390,9 @@ class NonlinearOptimizer(Optimizer, abc.ABC):
         var_idx = 0
         delta = step_size * delta
 
-        # for var in self.linear_solver.linearization.ordering:
-        #     new_var = var.retract(delta[:, var_idx : var_idx + var.dof()])
-        #     if force_update:
-        #         var.update(new_var.data)
-        #     else:
-        #         var.update(new_var.data, batch_ignore_mask=converged_indices)
-        #     var_idx += var.dof()
-
         # TODO: what does converged_indices do?
         for variable_batch, variables in self.objective.batched_optim_vars.values():
             cnts = variable_batch.dof() * len(variables)
-            batch_pos = 0
-
-            # for variable in variables.values():
-            #     variable_batch.data[
-            #         batch_pos : batch_pos + objective.batch_size
-            #     ] = variable.data
-            #     batch_pos += objective.batch_size
 
             variable_batch.update(
                 torch.cat([variable.data for variable in variables.values()])
@@ -449,13 +434,6 @@ class NonlinearOptimizer(Optimizer, abc.ABC):
                 batch_variable = cast(
                     Variable, getattr(batch_cost_function, var_attr_name)
                 )
-                batch_pos = 0
-                # for cost_function in cost_functions:
-                #     fn_var = cast(Variable, getattr(cost_function, var_attr_name))
-                #     batch_variable.data[
-                #         batch_pos : batch_pos + objective.batch_size
-                #     ] = fn_var.data
-                #     batch_pos += objective.batch_size
                 batch_variable.data = torch.cat(
                     [
                         cast(Variable, getattr(cost_function, var_attr_name)).data

@@ -253,9 +253,8 @@ class Objective:
                 variable_batch = cast(Variable, getattr(cost_function_batch, attr_name))
                 variable_batch.data = None
 
-    def _add_batched_cost_function(
-        self, cost_function: CostFunction, batch_name: Optional[str] = None
-    ):
+    def _add_batched_cost_function(self, cost_function: CostFunction):
+        batch_name = self._get_cost_function_batch_name(cost_function)
         if batch_name is None:
             self.unbatched_cost_functions[cost_function.name] = cost_function
         else:
@@ -308,7 +307,7 @@ class Objective:
     # Update method will check if any of these are not registered as
     # cost function variables, and throw a warning.
 
-    def add(self, cost_function: CostFunction, batch_name: Optional[str] = None):
+    def add(self, cost_function: CostFunction):
         # adds the cost function if not already present
         if cost_function.name in self.cost_functions:
             if cost_function is not self.cost_functions[cost_function.name]:
@@ -391,7 +390,7 @@ class Objective:
             cost_function
         )
 
-        self._add_batched_cost_function(cost_function, batch_name)
+        self._add_batched_cost_function(cost_function)
 
         if self.optim_vars.keys() & self.aux_vars.keys():
             raise ValueError(

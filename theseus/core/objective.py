@@ -17,6 +17,7 @@ from theseus.geometry.manifold import Manifold
 from .cost_function import CostFunction
 from .cost_weight import CostWeight
 
+# TODO: automatic batching of cost functions
 # Assumptions:
 # 1) Assume Objective.setup() must be called before running optimization
 # 2) Assume Variable.update() must keep Variable.shape[1:]

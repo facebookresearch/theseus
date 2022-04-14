@@ -394,8 +394,8 @@ class NonlinearOptimizer(Optimizer, abc.ABC):
         for variable_batch, variables in self.objective.batched_optim_vars.values():
             cnts = variable_batch.dof() * len(variables)
 
-            variable_batch.update(
-                torch.cat([variable.data for variable in variables.values()])
+            variable_batch.data = torch.cat(
+                [variable.data for variable in variables.values()], dim=0
             )
 
             delta_batch = torch.cat(
@@ -438,5 +438,6 @@ class NonlinearOptimizer(Optimizer, abc.ABC):
                     [
                         cast(Variable, getattr(cost_function, var_attr_name)).data
                         for cost_function in cost_functions
-                    ]
+                    ],
+                    dim=0,
                 )

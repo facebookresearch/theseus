@@ -8,7 +8,7 @@ from typing import List, Optional
 import numpy as np
 import torch
 
-from theseus.core import Objective
+from theseus.core import CostFunction, Objective
 
 from .linear_system import SparseStructure
 from .linearization import Linearization
@@ -38,7 +38,15 @@ class SparseLinearization(Linearization):
         cost_function_row_block_starts = []  # where data start for this row block
         cost_function_stride = []  # total jacobian cols
 
-        for _, cost_function in enumerate(self.objective):
+        sorted_cost_functions: List[CostFunction] = []
+
+        for _, cost_functions in self.objective.batched_cost_functions.values():
+            sorted_cost_functions.extend(cost_functions)
+        sorted_cost_functions.extend(
+            list(self.objective.unbatched_cost_functions.values())
+        )
+
+        for cost_function in sorted_cost_functions:
             num_rows = cost_function.dim()
             col_slices_indices = []
             for var_idx_in_cost_function, variable in enumerate(
@@ -100,9 +108,7 @@ class SparseLinearization(Linearization):
             dtype=self.objective.dtype,
         )
 
-        err_row_idx = 0
-        for f_idx, cost_function in enumerate(self.objective):
-            jacobians, error = cost_function.weighted_jacobians_error()
+        def update_A_and_b(jacobians: List[torch.Tensor], error: torch.Tensor):
             num_rows = cost_function.dim()
             row_slice = slice(err_row_idx, err_row_idx + num_rows)
 
@@ -122,7 +128,40 @@ class SparseLinearization(Linearization):
                 block[:, :, pointer : pointer + num_cols] = var_jacobian
 
             self.b[:, row_slice] = -error
+
+        err_row_idx = 0
+        f_idx = 0
+        batch_size = self.objective.batch_size
+
+        for (
+            batch_cost_function,
+            cost_functions,
+        ) in self.objective.batched_cost_functions.values():
+            batch_jacobians, batch_errors = batch_cost_function.jacobians()
+            # TODO: Implement FuncTorch
+            batch_pos = 0
+            for cost_function in cost_functions:
+                jacobians = [
+                    jacobian[batch_pos : batch_pos + batch_size]
+                    for jacobian in batch_jacobians
+                ]
+                error = batch_errors[batch_pos : batch_pos + batch_size]
+                jacobians, error = cost_function.rescale_jacobians_error(
+                    jacobians, error
+                )
+
+                update_A_and_b(jacobians, error)
+                err_row_idx += cost_function.dim()
+                f_idx += 1
+
+                batch_pos += batch_size
+
+        for cost_function in self.objective.unbatched_cost_functions.values():
+            jacobians, error = cost_function.rescaled_jacobians_error()
+
+            update_A_and_b(jacobians, error)
             err_row_idx += cost_function.dim()
+            f_idx += 1
 
     def structure(self):
         return SparseStructure(

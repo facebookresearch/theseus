@@ -7,7 +7,7 @@ from typing import List, Optional, Tuple, Union, cast
 
 import torch
 
-from theseus.core import CostFunction, CostWeight, Variable
+from theseus.core import CostFunction, CostWeight, LossFunction, Variable
 from theseus.geometry import LieGroup, Vector
 
 
@@ -20,9 +20,10 @@ class DoubleIntegrator(CostFunction):
         vel2: Vector,
         dt: Variable,
         cost_weight: CostWeight,
+        loss_function: Optional[LossFunction] = None,
         name: Optional[str] = None,
     ):
-        super().__init__(cost_weight, name=name)
+        super().__init__(cost_weight, loss_function=loss_function, name=name)
         dof = pose1.dof()
         if not (vel1.dof() == pose2.dof() == vel2.dof() == dof):
             raise ValueError(
@@ -86,6 +87,7 @@ class DoubleIntegrator(CostFunction):
             self.vel2.copy(),
             self.dt.copy(),
             self.weight.copy(),
+            loss_function=self.loss_function.copy(),
             name=new_name,
         )
 
@@ -174,6 +176,7 @@ class GPMotionModel(DoubleIntegrator):
         vel2: Vector,
         dt: Variable,
         cost_weight: GPCostWeight,
+        loss_function: Optional[LossFunction] = None,
         name: Optional[str] = None,
     ):
         if not isinstance(cost_weight, GPCostWeight):
@@ -181,7 +184,16 @@ class GPMotionModel(DoubleIntegrator):
                 "GPMotionModel only accepts cost weights of type GPCostWeight. "
                 "For other weight types, consider using DoubleIntegrator instead."
             )
-        super().__init__(pose1, vel1, pose2, vel2, dt, cost_weight, name=name)
+        super().__init__(
+            pose1,
+            vel1,
+            pose2,
+            vel2,
+            dt,
+            cost_weight,
+            loss_function=loss_function,
+            name=name,
+        )
 
     def _copy_impl(self, new_name: Optional[str] = None) -> "GPMotionModel":
         return cast(GPMotionModel, super().copy(new_name=new_name))

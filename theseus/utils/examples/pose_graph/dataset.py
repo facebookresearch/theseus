@@ -180,13 +180,35 @@ class PoseGraphDataset:
         self.edges = edges
         self.gt_poses = gt_poses
 
-    def load_3D_g2o_file(self, path: str, dtype: Optional[torch.dtype] = None):
+    def load_3D_g2o_file(
+        self, path: str, dtype: Optional[torch.dtype] = None
+    ) -> "PoseGraphDataset":
         _, poses, edges = read_3D_g2o_file(path, dtype)
         return PoseGraphDataset(poses, edges)
 
-    def load_2D_g2o_file(self, path: str, dtype: Optional[torch.dtype] = None):
+    def load_2D_g2o_file(
+        self, path: str, dtype: Optional[torch.dtype] = None
+    ) -> "PoseGraphDataset":
         _, poses, edges = read_2D_g2o_file(path, dtype)
         return PoseGraphDataset(poses, edges)
+
+    def histogram(self) -> str:
+        buckets = np.zeros(11)
+        for edge in self.edges:
+            error = self.poses[edge.j].local(
+                self.poses[edge.i].compose(edge.relative_pose)
+            )
+            error_norm = float(error.norm())
+            idx = min(int(10 * error_norm), len(buckets) - 1)
+            buckets[idx] += 1
+        max_buckets = max(buckets)
+        hist_str = ""
+        for i in range(len(buckets)):
+            bi = buckets[i]
+            label = f"{i}-{i+1}" if i + 1 < len(buckets) else f"{i}+"
+            barlen = round(bi * 80 / max_buckets)
+            hist_str += f"{label}: {'#' * barlen} {bi}\n"
+        return hist_str
 
     @staticmethod
     def generate_synthetic_3D(
@@ -197,9 +219,9 @@ class PoseGraphDataset:
         loop_closure_outlier_ratio: float = 0.05,
         generator: Optional[torch.Generator] = None,
         dtype: Optional[torch.dtype] = None,
-    ):
-        poses = list()
-        gt_poses = list()
+    ) -> Tuple["PoseGraphDataset", List[bool]]:
+        poses: List[th.SE3] = list()
+        gt_poses: List[th.SE3] = list()
         edges = list()
         inliers = list()
 
@@ -250,7 +272,7 @@ class PoseGraphDataset:
 
             if np.random.rand(1) <= loop_closure_ratio and n - 1 > 0:
                 i = np.random.randint(n - 1)
-                j = n - 1
+                j = n
 
                 gt_relative_pose = cast(
                     th.SE3, gt_poses[i].inverse().compose(gt_poses[j])
@@ -280,11 +302,30 @@ class PoseGraphDataset:
                 relative_pose.name = "EDGE_SE3__{}_{}".format(i, j)
 
                 weight = th.DiagonalCostWeight(
-                    th.Variable(0.5 * torch.ones(1, 6, dtype=dtype)),
+                    th.Variable(10 * torch.ones(1, 6, dtype=dtype)),
                     name="EDGE_WEIGHT__{}_{}".format(i, j),
                 )
                 edges.append(
                     PoseGraphEdge(i, j, relative_pose=relative_pose, weight=weight)
                 )
 
+        for i in range(len(poses)):
+            noise_pose = th.SE3.exp_map(
+                torch.cat(
+                    [
+                        rotation_noise * (2 * torch.rand(1, 3, dtype=dtype) - 1),
+                        translation_noise * (2.0 * torch.rand(1, 3, dtype=dtype) - 1),
+                    ],
+                    dim=1,
+                )
+            )
+            poses[i].data = gt_poses[i].compose(noise_pose).data
+
         return PoseGraphDataset(poses, edges, gt_poses), inliers
+
+
+def pg_histogram(
+    poses: Union[List[th.SE2], List[th.SE3]], edges: List[PoseGraphEdge]
+) -> str:
+    pg = PoseGraphDataset(poses=poses, edges=edges)
+    return pg.histogram()

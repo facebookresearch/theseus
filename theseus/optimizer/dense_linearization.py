@@ -3,7 +3,7 @@
 # This source code is licensed under the MIT license found in the
 # LICENSE file in the root directory of this source tree.
 
-from typing import Optional
+from typing import List, Optional
 
 import torch
 
@@ -27,7 +27,6 @@ class DenseLinearization(Linearization):
         self.Atb: torch.Tensor = None
 
     def _linearize_jacobian_impl(self):
-        err_row_idx = 0
         self.A = torch.zeros(
             (self.objective.batch_size, self.num_rows, self.num_cols),
             device=self.objective.device,
@@ -38,8 +37,8 @@ class DenseLinearization(Linearization):
             device=self.objective.device,
             dtype=self.objective.dtype,
         )
-        for cost_function in self.objective:
-            jacobians, error = cost_function.weighted_jacobians_error()
+
+        def update_A_and_b(jacobians: List[torch.Tensor], error: torch.Tensor):
             num_rows = cost_function.dim()
             for var_idx_in_cost_function, var_jacobian in enumerate(jacobians):
                 var_idx_in_order = self.ordering.index_of(
@@ -53,6 +52,36 @@ class DenseLinearization(Linearization):
                 self.A[:, row_slice, col_slice] = var_jacobian
 
             self.b[:, row_slice] = -error
+
+        err_row_idx = 0
+        batch_size = self.objective.batch_size
+
+        for (
+            batch_cost_function,
+            cost_functions,
+        ) in self.objective.batched_cost_functions.values():
+            batch_jacobians, batch_errors = batch_cost_function.jacobians()
+            # TODO: Implement FuncTorch
+            batch_pos = 0
+            for cost_function in cost_functions:
+                jacobians = [
+                    jacobian[batch_pos : batch_pos + batch_size]
+                    for jacobian in batch_jacobians
+                ]
+                error = batch_errors[batch_pos : batch_pos + batch_size]
+                jacobians, error = cost_function.rescale_jacobians_error(
+                    jacobians, error
+                )
+
+                update_A_and_b(jacobians, error)
+                err_row_idx += cost_function.dim()
+
+                batch_pos += batch_size
+
+        for cost_function in self.objective.unbatched_cost_functions.values():
+            jacobians, error = cost_function.rescaled_jacobians_error()
+
+            update_A_and_b(jacobians, error)
             err_row_idx += cost_function.dim()
 
     def _linearize_hessian_impl(self):

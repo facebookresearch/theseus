@@ -8,13 +8,13 @@ import math
 import warnings
 from dataclasses import dataclass
 from enum import Enum
-from typing import Any, Dict, Optional, Type
+from typing import Any, Dict, Optional, Type, cast
 
 import numpy as np
 import torch
 
 import theseus.constants
-from theseus.core import Objective
+from theseus.core import Objective, Variable
 from theseus.optimizer import Linearization, Optimizer, OptimizerInfo
 from theseus.optimizer.linear import LinearSolver
 
@@ -112,7 +112,7 @@ class NonlinearOptimizer(Optimizer, abc.ABC):
         self, track_best_solution: bool, track_err_history: bool, verbose: bool
     ) -> NonlinearOptimizerInfo:
         with torch.no_grad():
-            last_err = self.objective.error_squared_norm() / 2
+            last_err = self.objective.objective_value() / 2
         best_err = last_err.clone() if track_best_solution else None
         if track_err_history:
             err_history = (
@@ -267,7 +267,7 @@ class NonlinearOptimizer(Optimizer, abc.ABC):
 
             # check for convergence
             with torch.no_grad():
-                err = self.objective.error_squared_norm() / 2
+                err = self.objective.objective_value() / 2
                 self._update_info(info, it_, err, converged_indices)
                 if verbose:
                     print(
@@ -385,12 +385,70 @@ class NonlinearOptimizer(Optimizer, abc.ABC):
         step_size: float,
         force_update: bool = False,
     ):
+        objective = self.objective
+
         var_idx = 0
         delta = step_size * delta
-        for var in self.linear_solver.linearization.ordering:
-            new_var = var.retract(delta[:, var_idx : var_idx + var.dof()])
-            if force_update:
-                var.update(new_var.data)
-            else:
-                var.update(new_var.data, batch_ignore_mask=converged_indices)
-            var_idx += var.dof()
+
+        # for var in self.linear_solver.linearization.ordering:
+        #     new_var = var.retract(delta[:, var_idx : var_idx + var.dof()])
+        #     if force_update:
+        #         var.update(new_var.data)
+        #     else:
+        #         var.update(new_var.data, batch_ignore_mask=converged_indices)
+        #     var_idx += var.dof()
+
+        # TODO: what does converged_indices do?
+        for variable_batch, variables in self.objective.batched_optim_vars.values():
+            cnts = variable_batch.dof() * len(variables)
+            batch_pos = 0
+
+            for variable in variables.values():
+                variable_batch.data[
+                    batch_pos : batch_pos + objective.batch_size
+                ] = variable.data
+                batch_pos += objective.batch_size
+
+            delta_batch = torch.cat(
+                [
+                    delta[:, idx : idx + variable_batch.dof()]
+                    for idx in range(var_idx, var_idx + cnts, variable_batch.dof())
+                ],
+                dim=0,
+            )
+            new_variable_batch = variable_batch.retract(delta_batch)
+
+            batch_pos = 0
+
+            for variable in variables.values():
+                new_variable = new_variable_batch[
+                    batch_pos : batch_pos + objective.batch_size
+                ]
+
+                if force_update:
+                    variable.update(new_variable)
+                else:
+                    variable.update(new_variable, batch_ignore_mask=converged_indices)
+
+                batch_pos += objective.batch_size
+
+            var_idx += cnts
+
+        # update batched cost functions
+        # TODO: Implement FuncTorch
+        for (
+            batch_cost_function,
+            cost_functions,
+        ) in objective.batched_cost_functions.values():
+            vars_attr_names = batch_cost_function._optim_vars_attr_names
+            for var_attr_name in vars_attr_names:
+                batch_variable = cast(
+                    Variable, getattr(batch_cost_function, var_attr_name)
+                )
+                batch_pos = 0
+                for cost_function in cost_functions:
+                    fn_var = cast(Variable, getattr(cost_function, var_attr_name))
+                    batch_variable.data[
+                        batch_pos : batch_pos + objective.batch_size
+                    ] = fn_var.data
+                    batch_pos += objective.batch_size

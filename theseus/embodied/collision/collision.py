@@ -7,7 +7,7 @@ from typing import List, Optional, Tuple, cast
 
 import torch
 
-from theseus.core import CostFunction, CostWeight, Variable
+from theseus.core import CostFunction, CostWeight, LossFunction, Variable
 from theseus.embodied.kinematics import IdentityModel, KinematicsModel
 from theseus.geometry import Point2
 
@@ -23,11 +23,12 @@ class Collision2D(CostFunction):
         sdf_data: Variable,
         sdf_cell_size: Variable,
         cost_eps: Variable,
+        loss_function: Optional[LossFunction] = None,
         name: Optional[str] = None,
     ):
         if not isinstance(pose, Point2):
             raise ValueError("Collision2D only accepts 2D poses as inputs.")
-        super().__init__(cost_weight, name=name)
+        super().__init__(cost_weight, loss_function=loss_function, name=name)
         self.pose = pose
         self.sdf_origin = sdf_origin
         self.sdf_data = sdf_data
@@ -66,6 +67,7 @@ class Collision2D(CostFunction):
             self.sdf_data.copy(),
             self.sdf_cell_size.copy(),
             self.cost_eps.copy(),
+            loss_function=self.loss_function.copy(),
             name=new_name,
         )
 

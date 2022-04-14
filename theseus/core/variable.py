@@ -34,10 +34,12 @@ class Variable:
 
     # batch_ignore_mask is a boolean list where batch_ignore_mask[i] = 1 means
     # variable[i] will *not* be updated
+    # keep_batch is a boolean indicating whether to keep batch_size
     def update(
         self,
         data: Union[torch.Tensor, "Variable"],
         batch_ignore_mask: Optional[torch.Tensor] = None,
+        keep_batch: bool = False,
     ):
         if isinstance(data, Variable):
             data = data.data
@@ -50,6 +52,13 @@ class Variable:
                 f"incompatible with original tensor shape. Given {data.shape[1:]}. "
                 f"Expected: {self.data.shape[1:]}"
             )
+        if keep_batch and self.data.shape[0] != data.shape[0]:
+            raise ValueError(
+                f"Tried to update tensor {self.name} with data "
+                f"incompatible with original tensor batch size. Given {data.shape[0]}. "
+                f"Expected: {self.data.shape[0]}"
+            )
+
         if data.dtype != self.dtype:
             raise ValueError(
                 f"Tried to update used tensor of dtype {data.dtype} but Variable "

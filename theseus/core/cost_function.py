@@ -10,6 +10,7 @@ import torch
 import torch.autograd.functional as autogradF
 from typing_extensions import Protocol
 
+from theseus.core.loss_function import LossFunction, TrivialLoss
 from theseus.geometry import Manifold
 
 from .cost_weight import CostWeight, ScaleCostWeight
@@ -28,11 +29,16 @@ class CostFunction(TheseusFunction, abc.ABC):
         self,
         cost_weight: CostWeight,
         *args: Any,
+        loss_function: Optional[LossFunction] = None,
         name: Optional[str] = None,
         **kwargs: Any,
     ):
         super().__init__(name=name)
         self.weight = cost_weight
+        if loss_function is None:
+            loss_function = TrivialLoss()
+
+        self.loss_function = loss_function
 
     @abc.abstractmethod
     def error(self) -> torch.Tensor:
@@ -48,14 +54,40 @@ class CostFunction(TheseusFunction, abc.ABC):
         pass
 
     def weighted_error(self) -> torch.Tensor:
-        error = self.error()
-        return self.weight.weight_error(error)
+        return self.weight_error(self.error())
 
     def weighted_jacobians_error(
         self,
     ) -> Tuple[List[torch.Tensor], torch.Tensor]:
-        jacobian, err = self.jacobians()
-        return self.weight.weight_jacobians_and_error(jacobian, err)
+        jacobians, err = self.jacobians()
+        return self.weight_jacobians_error(jacobians, err)
+
+    def function_value(self) -> torch.Tensor:
+        return self.evaluate_function_value(self.error())
+
+    def rescaled_jacobians_error(self) -> Tuple[List[torch.Tensor], torch.Tensor]:
+        jacobians, err = self.jacobians()
+        return self.rescale_jacobians_error(jacobians, err)
+
+    def weight_error(self, error: torch.Tensor) -> torch.Tensor:
+        return self.weight.weight_error(error)
+
+    def weight_jacobians_error(
+        self, jacoians: List[torch.Tensor], error: torch.Tensor
+    ) -> Tuple[List[torch.Tensor], torch.Tensor]:
+        return self.weight.weight_jacobians_and_error(jacoians, error)
+
+    def evaluate_function_value(self, error: torch.Tensor) -> torch.Tensor:
+        weighted_error = self.weight_error(error)
+        return self.loss_function.function_value(weighted_error)
+
+    def rescale_jacobians_error(
+        self, jacoians: List[torch.Tensor], error: torch.Tensor
+    ) -> Tuple[List[torch.Tensor], torch.Tensor]:
+        weighted_jacobians, weighted_error = self.weight_jacobians_error(
+            jacoians, error
+        )
+        return self.loss_function.rescale(weighted_jacobians, weighted_error)
 
     # Must copy everything
     @abc.abstractmethod
@@ -75,6 +107,7 @@ class CostFunction(TheseusFunction, abc.ABC):
     def to(self, *args, **kwargs):
         super().to(*args, **kwargs)
         self.weight.to(*args, **kwargs)
+        self.loss_function.to(*args, **kwargs)
 
 
 # Function protocol for learnable cost functions. `optim_vars` and `aux_vars` are
@@ -101,13 +134,14 @@ class AutoDiffCostFunction(CostFunction):
         dim: int,
         cost_weight: Optional[CostWeight] = None,
         aux_vars: Optional[List[Variable]] = None,
+        loss_function: Optional[LossFunction] = None,
         name: Optional[str] = None,
         autograd_strict: bool = False,
         autograd_vectorize: bool = False,
     ):
         if cost_weight is None:
             cost_weight = ScaleCostWeight(1.0)
-        super().__init__(cost_weight, name=name)
+        super().__init__(cost_weight, loss_function=loss_function, name=name)
         # this avoids doing aux_vars=[], which is a bad default since [] is mutable
         aux_vars = aux_vars or []
 
@@ -192,6 +226,7 @@ class AutoDiffCostFunction(CostFunction):
             self._dim,
             aux_vars=[v.copy() for v in self.aux_vars],
             cost_weight=self.weight.copy(),
+            loss_function=self.loss_function.copy(),
             name=new_name,
         )
 

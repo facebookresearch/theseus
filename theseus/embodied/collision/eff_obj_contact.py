@@ -7,7 +7,7 @@ from typing import List, Optional, Tuple, cast
 
 import torch
 
-from theseus.core import CostFunction, CostWeight, Variable
+from theseus.core import CostFunction, CostWeight, LossFunction, Variable
 from theseus.embodied.kinematics import IdentityModel
 from theseus.geometry import SE2, Point2
 
@@ -24,10 +24,11 @@ class EffectorObjectContactPlanar(CostFunction):
         sdf_data: Variable,
         sdf_cell_size: Variable,
         eff_radius: Variable,
+        loss_function: Optional[LossFunction] = None,
         name: Optional[str] = None,
         use_huber_loss: bool = False,
     ):
-        super().__init__(cost_weight, name=name)
+        super().__init__(cost_weight, loss_function=loss_function, name=name)
         self.obj = obj
         self.eff = eff
         self.sdf_origin = sdf_origin
@@ -109,6 +110,7 @@ class EffectorObjectContactPlanar(CostFunction):
             self.sdf_data.copy(),
             self.sdf_cell_size.copy(),
             self.eff_radius.copy(),
+            loss_function=self.loss_function.copy(),
             name=new_name,
         )
 

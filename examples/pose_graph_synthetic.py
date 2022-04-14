@@ -215,6 +215,9 @@ def run(cfg: omegaconf.OmegaConf, results_path: pathlib.Path):
         )
         log.info(f"Epoch took {(end_time - start_time) / 1e9: .3f} seconds")
 
+        # with torch.no_grad():
+        #     print(log_loss_radius.data.grad.norm().item())
+
         save_epoch(
             results_path,
             epoch,

@@ -120,7 +120,8 @@ class TactilePoseEstimator:
                         motion_capture_weight,
                         obj_start_pose,
                         name=f"obj_priors_{i}",
-                    )
+                    ),
+                    "PosePrior",
                 )
 
             if i < self.time_steps - 1:
@@ -133,7 +134,8 @@ class TactilePoseEstimator:
                         qsp_weight,
                         c_square,
                         name=f"qsp_{i}",
-                    )
+                    ),
+                    "QuasiStaticPushing",
                 )
             if i >= min_window_moving_frame:
                 for offset in range(
@@ -150,7 +152,8 @@ class TactilePoseEstimator:
                             mf_between_weight,
                             nn_measurements[nn_meas_idx],
                             name=f"mf_between_{i - offset}_{i}",
-                        )
+                        ),
+                        "MovingFrame",
                     )
                     nn_meas_idx = nn_meas_idx + 1
 
@@ -164,7 +167,8 @@ class TactilePoseEstimator:
                     sdf_cell_size,
                     eff_radius,
                     name=f"intersect_{i}",
-                )
+                ),
+                "EffectorObjectContact",
             )
 
             objective.add(
@@ -173,7 +177,8 @@ class TactilePoseEstimator:
                     motion_capture_weight,
                     motion_captures[i],
                     name=f"eff_priors_{i}",
-                )
+                ),
+                "PosePrior",
             )
 
         if regularization_w > 0.0:
@@ -185,7 +190,8 @@ class TactilePoseEstimator:
                     objective.add(
                         th.eb.VariableDifference(
                             pose, reg_w, identity_se2, name=f"reg_{pose.name}"
-                        )
+                        ),
+                        "PosePrior",
                     )
 
         # -------------------------------------------------------------------- #

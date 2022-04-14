@@ -762,7 +762,7 @@ class Objective:
         memo[id(self)] = the_copy
         return the_copy
 
-    def update_variables(
+    def _update_variables(
         self,
         input_data: Optional[Dict[str, torch.Tensor]] = None,
         keep_batch: bool = False,
@@ -806,7 +806,7 @@ class Objective:
                 )
         self._is_setup = keep_batch
 
-    def update_batched_cost_functions(self):
+    def _update_batched_cost_functions(self):
         # Update batched cost functions for batch processing
         for batch_name, (
             cost_function_batch,
@@ -833,7 +833,7 @@ class Objective:
                             f"{batch_name} can not be batched."
                         )
 
-    def update_batched_optim_variables(self):
+    def _update_batched_optim_variables(self):
         # Update batched optim variables for batch processing
         for batch_name, (
             variable_batch,
@@ -862,7 +862,7 @@ class Objective:
                     return max_bs
             raise ValueError("Provided data tensors must be broadcastable.")
 
-        self.update_variables(input_data=input_data, keep_batch=False)
+        self._update_variables(input_data=input_data, keep_batch=False)
 
         # Check that the batch size of all data is consistent after update
         batch_sizes = [v.data.shape[0] for v in self.optim_vars.values()]
@@ -870,18 +870,18 @@ class Objective:
         self._batch_size = _get_batch_size(batch_sizes)
 
         with torch.enable_grad():
-            self.update_batched_cost_functions()
-            self.update_batched_optim_variables()
+            self._update_batched_cost_functions()
+            self._update_batched_optim_variables()
 
         self._is_setup = True
 
     def update(self, input_data: Optional[Dict[str, torch.Tensor]] = None):
         if self.is_setup:
-            self.update_variables(input_data=input_data, keep_batch=True)
+            self._update_variables(input_data=input_data, keep_batch=True)
             if input_data is None or len(input_data) == 0:
                 with torch.enable_grad():
-                    self.update_batched_cost_functions()
-                    self.update_batched_optim_variables()
+                    self._update_batched_cost_functions()
+                    self._update_batched_optim_variables()
         else:
             self.setup(input_data)
 
@@ -893,9 +893,10 @@ class Objective:
     def to(self, *args, **kwargs):
         for cost_function in self.cost_functions.values():
             cost_function.to(*args, **kwargs)
-        with torch.enable_grad():
-            self.update_batched_cost_functions()
-            self.update_batched_optim_variables()
+        if self._is_setup:
+            with torch.enable_grad():
+                self._update_batched_cost_functions()
+                self._update_batched_optim_variables()
         device, dtype, *_ = torch._C._nn._parse_to(*args, **kwargs)
         self.device = device or self.device
         self.dtype = dtype or self.dtype

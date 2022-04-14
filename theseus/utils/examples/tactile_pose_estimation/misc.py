@@ -106,7 +106,7 @@ class TactilePushingDataset:
         )
 
         for episode in episode_indices:
-            if len(data["obj_poses"]) == max_episodes:
+            if len(data["obj_poses"]) >= max_episodes:
                 break
             ds_idxs = torch.nonzero(dataset_all["contact_episode"] == episode).squeeze()
             if len(ds_idxs) < episode_length:

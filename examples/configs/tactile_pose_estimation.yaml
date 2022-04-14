@@ -6,7 +6,7 @@ sdf_name: "rect"
 
 episode_length: 25
 max_steps: 100
-max_episodes: 100
+max_episodes: 100  # if split = true, actual number might be slightly larger
 split_episodes: true
 
 inner_optim:

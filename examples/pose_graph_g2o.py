@@ -32,7 +32,7 @@ for edge in edges:
         edge.relative_pose,
         loss_function=loss_function,
     )
-    objective.add(cost_func, "EDGE_SE3")
+    objective.add(cost_func)
 
 pose_prior = th.eb.VariableDifference(
     var=verts[0],

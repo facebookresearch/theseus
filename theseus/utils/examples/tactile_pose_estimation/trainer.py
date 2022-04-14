@@ -183,8 +183,15 @@ class TactilePushingTrainer:
 
         return backward_time, backward_mem
 
+    def _resolve_backward_mode(self, epoch: int) -> th.BackwardMode:
+        if epoch >= self.cfg.inner_optim.force_implicit_by_epoch - 1:  # 0-indexing
+            logger.info("Forcing IMPLICIT backward mode.")
+            return th.BackwardMode.IMPLICIT
+        else:
+            return getattr(th.BackwardMode, self.cfg.inner_optim.backward_mode)
+
     def compute_loss(
-        self, update: bool = True
+        self, epoch: int, update: bool = True
     ) -> Tuple[
         List[torch.Tensor], Dict[int, Dict[str, Any]], Dict[str, List[torch.Tensor]]
     ]:
@@ -222,9 +229,7 @@ class TactilePushingTrainer:
                 optimizer_kwargs={
                     "verbose": True,
                     "track_err_history": True,
-                    "backward_mode": getattr(
-                        th.BackwardMode, self.cfg.inner_optim.backward_mode
-                    ),
+                    "backward_mode": self._resolve_backward_mode(epoch),
                     "__keep_final_step_size__": self.cfg.inner_optim.keep_step_size,
                 },
             )

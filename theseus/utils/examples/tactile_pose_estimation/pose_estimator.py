@@ -13,7 +13,6 @@ class TactilePoseEstimator:
     def __init__(
         self,
         dataset: TactilePushingDataset,
-        max_steps: int,
         min_window_moving_frame: int,
         max_window_moving_frame: int,
         step_window_moving_frame: int,
@@ -23,10 +22,9 @@ class TactilePoseEstimator:
         max_iterations: int = 3,
         step_size: float = 1.0,
         regularization_w: float = 0.0,
+        force_max_iters: bool = False,
     ):
-        self.dataset = dataset
-        # obj_poses is shape (batch_size, episode_length, 3)
-        self.time_steps = np.minimum(max_steps, self.dataset.obj_poses.shape[1])
+        time_steps = dataset.time_steps
 
         # -------------------------------------------------------------------- #
         # Creating optimization variables
@@ -34,7 +32,7 @@ class TactilePoseEstimator:
         # The optimization variables for this problem are SE2 object and end effector
         # poses over time.
         obj_poses, eff_poses = [], []
-        for i in range(self.time_steps):
+        for i in range(time_steps):
             obj_poses.append(th.SE2(name=f"obj_pose_{i}", dtype=torch.double))
             eff_poses.append(th.SE2(name=f"eff_pose_{i}", dtype=torch.double))
 
@@ -50,12 +48,12 @@ class TactilePoseEstimator:
         self.obj_start_pose = obj_start_pose
 
         motion_captures: List[th.SE2] = []
-        for i in range(self.time_steps):
+        for i in range(time_steps):
             motion_captures.append(th.SE2(name=f"motion_capture_{i}"))
         self.motion_captures = motion_captures
 
         nn_measurements = []
-        for i in range(min_window_moving_frame, self.time_steps):
+        for i in range(min_window_moving_frame, time_steps):
             for offset in range(
                 min_window_moving_frame,
                 np.minimum(i, max_window_moving_frame),
@@ -112,7 +110,7 @@ class TactilePoseEstimator:
         objective = th.Objective()
         nn_meas_idx = 0
         c_square = (np.sqrt(rectangle_shape[0] ** 2 + rectangle_shape[1] ** 2)) ** 2
-        for i in range(self.time_steps):
+        for i in range(time_steps):
             if i == 0:
                 objective.add(
                     th.eb.VariableDifference(
@@ -124,7 +122,7 @@ class TactilePoseEstimator:
                     use_batches=True,
                 )
 
-            if i < self.time_steps - 1:
+            if i < time_steps - 1:
                 objective.add(
                     th.eb.QuasiStaticPushingPlanar(
                         obj_poses[i],
@@ -205,15 +203,21 @@ class TactilePoseEstimator:
             th.CholeskyDenseSolver,
             max_iterations=max_iterations,
             step_size=step_size,
+            abs_err_tolerance=0 if force_max_iters else 1e-10,
+            rel_err_tolerance=0 if force_max_iters else 1e-8,
         )
         self.theseus_layer = th.TheseusLayer(nl_optimizer)
         self.theseus_layer.to(device=device, dtype=torch.double)
 
         self.forward = self.theseus_layer.forward
 
-    # This method updates the start pose and motion catpure variables with the
-    # xytheta data coming from the batch
-    def update_start_pose_and_motion_from_batch(self, batch: Dict[str, torch.Tensor]):
-        self.obj_start_pose.update_from_x_y_theta(batch[self.obj_start_pose.name])
-        for motion_capture_var in self.motion_captures:
-            motion_capture_var.update_from_x_y_theta(batch[motion_capture_var.name])
+    # Gets a dictionary mapping variable names to tensors, with the batch data needed
+    # to update start pose and motion capture data (which is in xytheta format)
+    def get_start_pose_and_motion_capture_dict(
+        self, batch: Dict[str, torch.Tensor]
+    ) -> Dict[str, torch.Tensor]:
+        tensor_dict = {}
+        var_names = [self.obj_start_pose.name] + [v.name for v in self.motion_captures]
+        for name in var_names:
+            tensor_dict[name] = th.SE2(x_y_theta=batch[name]).data
+        return tensor_dict

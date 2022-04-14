@@ -21,7 +21,7 @@ from .cost_weight import CostWeight
 # 1) Assume Objective.setup() must be called before running optimization
 # 2) Assume Variable.update() must keep Variable.shape[1:]
 # 3) Assume CostFunction.optim_vars and CostFunction.aux_vars must have the
-#    same batch size as Objective.batch_size
+#    same batch size as Objective.batch_size or 1
 
 
 # If dtype is None, uses torch.get_default_dtype()
@@ -855,8 +855,15 @@ class Objective:
                     variable_batch = cast(
                         Variable, getattr(cost_function_batch, var_attr_name)
                     )
+                    original_variable = cast(
+                        Variable, getattr(cost_functions[0], var_attr_name)
+                    )
+                    batch_shape = [self.batch_size] + list(original_variable.shape[1:])
+
                     variable_batch_data = [
-                        cast(Variable, getattr(cost_function, var_attr_name)).data
+                        cast(
+                            Variable, getattr(cost_function, var_attr_name)
+                        ).data.expand(batch_shape)
                         for cost_function in cost_functions
                     ]
                     variable_batch.data = torch.cat(variable_batch_data, dim=0)

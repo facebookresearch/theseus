@@ -65,7 +65,12 @@ def create_tactile_models(
     model_type: str,
     device: torch.device,
     measurements_model_path: Optional[pathlib.Path] = None,
-) -> Tuple[nn.Module, nn.Module, nn.Module, List[nn.Parameter]]:
+) -> Tuple[
+    Optional[TactileMeasModel],
+    TactileWeightModel,
+    TactileWeightModel,
+    List[nn.Parameter],
+]:
     if model_type == "weights_only":
         qsp_model = TactileWeightModel(
             device, wt_init=torch.tensor([[50.0, 50.0, 50.0]])
@@ -113,7 +118,7 @@ def create_tactile_models(
 
 
 def get_tactile_nn_measurements_inputs(
-    batch: Tuple[torch.Tensor, torch.Tensor, torch.Tensor],
+    batch: Dict[str, torch.Tensor],
     device: torch.device,
     class_label: int,
     num_classes: int,
@@ -126,7 +131,7 @@ def get_tactile_nn_measurements_inputs(
     inputs = {}
 
     if model is not None:
-        images_feat_meas = batch[0].to(device)
+        images_feat_meas = batch["img_feats"].to(device)
         class_label_vec = (
             nn.functional.one_hot(torch.tensor(class_label), torch.tensor(num_classes))
             .view(1, -1)
@@ -149,15 +154,17 @@ def get_tactile_nn_measurements_inputs(
             -1, num_measurements, 4
         )  # data format (x, y, cos, sin)
     else:  # use oracle model
+        eff_poses = batch["eff_poses"]
+        obj_poses = batch["obj_poses"]
         model_measurements = []
         for i in range(min_win_mf, time_steps):
             for offset in range(min_win_mf, np.minimum(i, max_win_mf), step_win_mf):
-                eff_pose_1 = th.SE2(x_y_theta=batch[1][:, i - offset])
-                obj_pose_1 = th.SE2(x_y_theta=batch[2][:, i - offset])
+                eff_pose_1 = th.SE2(x_y_theta=eff_poses[:, i - offset])
+                obj_pose_1 = th.SE2(x_y_theta=obj_poses[:, i - offset])
                 eff_pose_1__obj = obj_pose_1.between(eff_pose_1)
 
-                eff_pose_2 = th.SE2(x_y_theta=batch[1][:, i])
-                obj_pose_2 = th.SE2(x_y_theta=batch[2][:, i])
+                eff_pose_2 = th.SE2(x_y_theta=eff_poses[:, i])
+                obj_pose_2 = th.SE2(x_y_theta=obj_poses[:, i])
                 eff_pose_2__obj = obj_pose_2.between(eff_pose_2)
 
                 meas_pose_rel = cast(th.SE2, eff_pose_1__obj.between(eff_pose_2__obj))
@@ -198,12 +205,10 @@ def get_tactile_nn_measurements_inputs(
 
 
 def get_tactile_motion_capture_inputs(
-    batch: Tuple[torch.Tensor, torch.Tensor, torch.Tensor],
-    device: torch.device,
-    time_steps: int,
+    batch: Dict[str, torch.Tensor], device: torch.device, time_steps: int
 ):
     inputs = {}
-    captures = batch[1].to(device)
+    captures = batch["eff_poses"].to(device)
     for step in range(time_steps):
         capture = captures[:, step, :]
         cature_xycs = torch.stack(
@@ -219,13 +224,13 @@ def get_tactile_cost_weight_inputs(qsp_model, mf_between_model):
 
 
 def get_tactile_initial_optim_vars(
-    batch: Tuple[torch.Tensor, torch.Tensor, torch.Tensor],
+    batch: Dict[str, torch.Tensor],
     device: torch.device,
     time_steps: int,
 ):
     inputs = {}
-    eff_captures = batch[1].to(device)
-    obj_captures = batch[2].to(device)
+    eff_captures = batch["eff_poses"].to(device)
+    obj_captures = batch["obj_poses"].to(device)
     for step in range(time_steps):
         inputs[f"obj_pose_{step}"] = th.SE2(x_y_theta=obj_captures[:, 0].clone()).data
         inputs[f"eff_pose_{step}"] = th.SE2(x_y_theta=eff_captures[:, 0].clone()).data
@@ -235,19 +240,23 @@ def get_tactile_initial_optim_vars(
 
 def update_tactile_pushing_inputs(
     dataset: TactilePushingDataset,
-    batch: Tuple[torch.Tensor, torch.Tensor, torch.Tensor],
+    batch: Dict[str, torch.Tensor],
     measurements_model: nn.Module,
     qsp_model: nn.Module,
     mf_between_model: nn.Module,
     device: torch.device,
     cfg: omegaconf.DictConfig,
-    time_steps: int,
     theseus_inputs: Dict[str, torch.Tensor],
 ):
-    batch_size = batch[0].shape[0]
+    batch_size = batch["img_feats"].shape[0]
+    time_steps = dataset.time_steps
     theseus_inputs["sdf_data"] = (
         (dataset.sdf_data_tensor.data).repeat(batch_size, 1, 1).to(device)
     )
+    theseus_inputs["sdf_cell_size"] = dataset.sdf_cell_size.repeat(batch_size, 1).to(
+        device
+    )
+    theseus_inputs["sdf_origin"] = dataset.sdf_origin.repeat(batch_size, 1).to(device)
 
     theseus_inputs.update(
         get_tactile_nn_measurements_inputs(

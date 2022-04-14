@@ -276,7 +276,9 @@ class Objective:
 
                 unique_batch_sizes = set(batch_sizes)
 
-                if len(unique_batch_sizes) != 1:
+                if len(unique_batch_sizes) != 1 and (
+                    len(unique_batch_sizes) != 2 or min(unique_batch_sizes) != 1
+                ):
                     raise ValueError("Provided cost function can not be batched.")
 
                 self.batched_cost_functions[batch_name] = (

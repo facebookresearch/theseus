@@ -25,7 +25,7 @@ The current focus is on nonlinear least squares with support for sparsity, batch
     git clone https://github.com/facebookresearch/theseus.git && cd theseus
     pip install -e .
     ```
-    If you are interested in contributing to `theseus`, also install
+    If you are interested in contributing to `theseus`, instead install
     ```bash
     pip install -e ".[dev]"
     ```

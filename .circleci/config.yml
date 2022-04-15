@@ -110,7 +110,6 @@ setup_project: &setup_project
       working_directory: ~/project
       command: |
         pip install --progress-bar off -e .
-        pip install -r requirements/dev.txt
 
 run_tests: &run_tests
   - run:

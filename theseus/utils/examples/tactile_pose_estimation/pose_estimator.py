@@ -108,6 +108,7 @@ class TactilePoseEstimator:
         # Loop over and add all cost functions,
         # cost weights, and their auxiliary variables
         objective = th.Objective()
+        use_batches = True
         nn_meas_idx = 0
         c_square = (np.sqrt(rectangle_shape[0] ** 2 + rectangle_shape[1] ** 2)) ** 2
         for i in range(time_steps):
@@ -119,7 +120,7 @@ class TactilePoseEstimator:
                         obj_start_pose,
                         name=f"obj_priors_{i}",
                     ),
-                    use_batches=True,
+                    use_batches=use_batches,
                 )
 
             if i < time_steps - 1:
@@ -133,7 +134,7 @@ class TactilePoseEstimator:
                         c_square,
                         name=f"qsp_{i}",
                     ),
-                    use_batches=True,
+                    use_batches=use_batches,
                 )
             if i >= min_window_moving_frame:
                 for offset in range(
@@ -151,7 +152,7 @@ class TactilePoseEstimator:
                             nn_measurements[nn_meas_idx],
                             name=f"mf_between_{i - offset}_{i}",
                         ),
-                        use_batches=True,
+                        use_batches=use_batches,
                     )
                     nn_meas_idx = nn_meas_idx + 1
 
@@ -166,7 +167,7 @@ class TactilePoseEstimator:
                     eff_radius,
                     name=f"intersect_{i}",
                 ),
-                use_batches=True,
+                use_batches=use_batches,
             )
 
             objective.add(
@@ -176,7 +177,7 @@ class TactilePoseEstimator:
                     motion_captures[i],
                     name=f"eff_priors_{i}",
                 ),
-                use_batches=True,
+                use_batches=use_batches,
             )
 
         if regularization_w > 0.0:
@@ -189,7 +190,7 @@ class TactilePoseEstimator:
                         th.eb.VariableDifference(
                             pose, reg_w, identity_se2, name=f"reg_{pose.name}"
                         ),
-                        use_batches=True,
+                        use_batches=use_batches,
                     )
 
         # -------------------------------------------------------------------- #

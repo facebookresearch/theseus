@@ -25,22 +25,27 @@ The current focus is on nonlinear least squares with support for sparsity, batch
     git clone https://github.com/facebookresearch/theseus.git && cd theseus
     pip install -e .
     ```
+    If you are interested in contributing to `theseus`, also install
+    ```bash
+    pip install -e ".[dev]"
+    ```
+    and follow the more detailed instructions in [CONTRIBUTING](https://github.com/facebookresearch/theseus/blob/main/CONTRIBUTING.md).
 - Running unit tests
     ```bash
     pytest theseus
     ```
   By default, unit tests include tests for our CUDA extensions. You can add the option `-m "not cudaext"` to 
   skip them when installing without CUDA support.
-- See [tutorials](tutorials/) and [examples](examples/) to learn about the API and usage.
+- See [tutorials](https://github.com/facebookresearch/theseus/blob/main/tutorials/) and [examples](https://github.com/facebookresearch/theseus/blob/main/examples/) to learn about the API and usage.
 
 
 ## Additional Information
 
 - Use [Github issues](https://github.com/facebookresearch/theseus/issues/new/choose) for questions, suggestions, and bugs.
-- See [CONTRIBUTING](CONTRIBUTING.md) if interested in helping out.
-- Theseus is being developed with the help of many contributors, see [THANKS](THANKS.md).
+- See [CONTRIBUTING](https://github.com/facebookresearch/theseus/blob/main/CONTRIBUTING.md) if interested in helping out.
+- Theseus is being developed with the help of many contributors, see [THANKS](https://github.com/facebookresearch/theseus/blob/main/THANKS.md).
 
 
 ## License
 
-Theseus is MIT licensed. See the [LICENSE](LICENSE) for details.
+Theseus is MIT licensed. See the [LICENSE](https://github.com/facebookresearch/theseus/blob/main/LICENSE) for details.

@@ -3,7 +3,6 @@
 # This source code is licensed under the MIT license found in the
 # LICENSE file in the root directory of this source tree.
 
-import mypy.api
 import pytest  # noqa: F401
 import torch
 
@@ -58,7 +57,11 @@ def test_point_operations_return_correct_type():
 
 
 def test_operations_mypy_cast():
-
+    # mypy is optional install, only needed for library contributors
+    try:
+        import mypy.api
+    except ModuleNotFoundError:
+        return
     result = mypy.api.run(["theseus/geometry/tests/point_types_mypy_check.py"])
     assert result[2] == 0
 

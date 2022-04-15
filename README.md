@@ -43,7 +43,6 @@ The current focus is on nonlinear least squares with support for sparsity, batch
 
 - Use [Github issues](https://github.com/facebookresearch/theseus/issues/new/choose) for questions, suggestions, and bugs.
 - See [CONTRIBUTING](https://github.com/facebookresearch/theseus/blob/main/CONTRIBUTING.md) if interested in helping out.
-- Theseus is being developed with the help of many contributors, see [THANKS](https://github.com/facebookresearch/theseus/blob/main/THANKS.md).
 
 
 ## License

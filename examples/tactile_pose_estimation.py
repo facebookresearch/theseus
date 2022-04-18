@@ -76,14 +76,14 @@ def run_learning_loop(cfg):
     for epoch in range(cfg.train.num_epochs):
         logger.info(f" ********************* EPOCH {epoch} *********************")
         logger.info(" -------------- TRAINING --------------")
-        train_losses, results_train[epoch], _ = trainer.compute_loss()
+        train_losses, results_train[epoch], _ = trainer.compute_loss(epoch)
         logger.info(f"AVG. TRAIN LOSS: {np.mean(train_losses)}")
         torch.save(results_train, root_path / "results_train.pt")
 
         logger.info(" -------------- VALIDATION --------------")
         with torch.no_grad():
             val_losses, results_val[epoch], image_data = trainer.compute_loss(
-                update=False
+                epoch, update=False
             )
         logger.info(f"AVG. VAL LOSS: {np.mean(val_losses)}")
         torch.save(results_val, root_path / "results_val.pt")

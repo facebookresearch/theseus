@@ -71,17 +71,19 @@ def test_gp_motion_model_variable_type():
 
             assert isinstance(cost_weight.Qc_inv, Variable)
             assert isinstance(cost_weight.dt, Variable)
+            assert torch.allclose(cost_weight.Qc_inv.data, q_inv)
+            assert torch.allclose(cost_weight.dt.data, dt)
 
             q_inv_v = Variable(q_inv)
             dt_v = Variable(dt)
             cost_weight = th.eb.GPCostWeight(q_inv_v, dt_v)
-            assert isinstance(cost_weight.Qc_inv, Variable)
             assert isinstance(cost_weight.dt, Variable)
+            assert cost_weight.Qc_inv is q_inv_v
+            assert cost_weight.dt is dt_v
 
             q_inv_v = Variable(q_inv)
-            dt_f = 1.0
+            dt_f = torch.rand(1)
             cost_weight = th.eb.GPCostWeight(q_inv_v, dt_f)
-            assert isinstance(cost_weight.Qc_inv, Variable)
             assert isinstance(cost_weight.dt, Variable)
 
 

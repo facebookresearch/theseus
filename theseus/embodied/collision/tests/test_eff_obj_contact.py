@@ -168,6 +168,7 @@ def test_eff_obj_variable_type():
         )
 
         assert isinstance(cost_function.eff_radius, Variable)
+        assert cost_function.eff_radius is eff_radius
 
         eff_radius_t = torch.rand(batch_size, 1).double()
 
@@ -176,8 +177,9 @@ def test_eff_obj_variable_type():
         )
 
         assert isinstance(cost_function.eff_radius, Variable)
+        assert torch.allclose(cost_function.eff_radius.data, eff_radius_t)
 
-        eff_radius_f = 1.0
+        eff_radius_f = torch.rand(1)
 
         cost_function = th.eb.EffectorObjectContactPlanar(
             obj, eff, cost_weight, origin, sdf_data, cell_size, eff_radius_f

@@ -26,7 +26,9 @@ def random_manifold_gaussian_params():
         dof += var.dof()
 
     if np.random.random() < 0.5:
-        precision = torch.zeros(mean[0].shape[0], dof, dof)
+        precision_sqrt = torch.rand(mean[0].shape[0], dof, dof)
+        precision = torch.bmm(precision_sqrt, precision_sqrt.t())
+        precision += torch.eye(dof)[None, ...].repeat(mean[0].shape[0], 1, 1)
     else:
         precision = None
 

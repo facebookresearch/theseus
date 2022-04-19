@@ -374,7 +374,7 @@ class PoseGraphDataset:
         )
         return batch
 
-    def get_batch(self, batch_idx: int):
+    def get_batch(self, batch_idx: int) -> "PoseGraphDataset":
         assert batch_idx < self.num_batches
         start = batch_idx * self.num_batches
         end = min(start + self.batch_size, self.dataset_size)
@@ -401,7 +401,7 @@ class PoseGraphDataset:
             for edge in self.edges
         ]
 
-        return (poses, gt_poses, edges)
+        return PoseGraphDataset(poses, edges, gt_poses, batch_size=self.batch_size)
 
     def to(self, *args, **kwargs):
         if self.gt_poses is not None:

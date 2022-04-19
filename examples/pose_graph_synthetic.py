@@ -129,8 +129,9 @@ def run(cfg: omegaconf.OmegaConf, results_path: pathlib.Path):
         generator=rng,
         dtype=dtype,
     )
-
     pg.to(device=device)
+
+    pg_batch = pg.get_batch(0)
 
     # hyper parameters (ie outer loop's parameters)
     log_loss_radius = th.Vector(1, name="log_loss_radius", dtype=dtype)
@@ -139,10 +140,10 @@ def run(cfg: omegaconf.OmegaConf, results_path: pathlib.Path):
     # Set up objective
     objective = th.Objective(dtype=torch.float64)
 
-    for edge in pg.edges:
+    for edge in pg_batch.edges:
         relative_pose_cost = th.eb.Between(
-            pg.poses[edge.i],
-            pg.poses[edge.j],
+            pg_batch.poses[edge.i],
+            pg_batch.poses[edge.j],
             edge.weight,
             edge.relative_pose,
             loss_function=robust_loss,
@@ -151,28 +152,33 @@ def run(cfg: omegaconf.OmegaConf, results_path: pathlib.Path):
 
     if cfg.inner_optim.regularize:
         pose_prior_cost = th.eb.VariableDifference(
-            var=pg.poses[0],
+            var=pg_batch.poses[0],
             cost_weight=th.ScaleCostWeight(
                 torch.tensor(cfg.inner_optim.reg_w, dtype=dtype)
             ),
-            target=pg.poses[0].copy(new_name=pg.poses[0].name + "__PRIOR"),
+            target=pg_batch.poses[0].copy(new_name=pg_batch.poses[0].name + "__PRIOR"),
         )
         objective.add(pose_prior_cost, use_batches=use_batches)
 
     pose_vars: List[th.SE3] = [
-        cast(th.SE3, objective.optim_vars[pose.name]) for pose in pg.poses
+        cast(th.SE3, objective.optim_vars[pose.name]) for pose in pg_batch.poses
+    ]
+
+    gt_pose_vars: List[th.SE3] = [
+        cast(th.SE3, objective.optim_vars[gt_pose.name])
+        for gt_pose in pg_batch.gt_poses
     ]
 
     if cfg.inner_optim.ratio_known_poses > 0.0:
         pose_prior_weight = th.ScaleCostWeight(100 * torch.ones(1, dtype=dtype))
-        for i in range(len(pg.poses)):
+        for i in range(len(pg_batch.poses)):
             if np.random.rand() > cfg.inner_optim.ratio_known_poses:
                 continue
             objective.add(
                 th.eb.VariableDifference(
                     pose_vars[i],
                     pose_prior_weight,
-                    pg.gt_poses[i],
+                    gt_pose_vars[i],
                     name=f"pose_diff_{i}",
                 ),
                 use_batches=use_batches,

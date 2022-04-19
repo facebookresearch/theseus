@@ -1,2 +1,2 @@
 seed: 0
-device: cuda:0
+use_gpu: True

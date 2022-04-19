@@ -9,7 +9,7 @@ from hydra.utils import get_original_cwd
 import kornia
 import torch.nn as nn
 
-# import theseus as th
+import theseus as th
 import torch
 from PIL import Image
 import cv2
@@ -112,8 +112,7 @@ def run(cfg):
     log_dir = "viz"
     os.makedirs(log_dir, exist_ok=True)
 
-    cuda = cfg.device == "cuda:0"
-    if cuda:
+    if torch.cuda.is_available() and cfg.use_gpu:
         img1, img2, dph = img1.cuda(), img2.cuda(), dph.cuda()
 
     # create optimizer
@@ -123,7 +122,6 @@ def run(cfg):
 
     for i in range(num_iters):
         img1_dst = dph.forward(img1)
-        # loss = torch.nn.functional.l1_loss(img1_dst, img2, reduction="none")
         loss = torch.nn.functional.mse_loss(img1_dst, img2, reduction="none")
         ones = warp_perspective_norm(dph.H_src_dst, torch.ones_like(img1))
         loss = loss.masked_select((ones > 0.9)).mean()

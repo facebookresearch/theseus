@@ -20,8 +20,7 @@ import torch
 
 import theseus as th
 import theseus.utils.examples as theg
-
-from theseus.optimizer import Linearization
+from theseus.optimizer.linearization import Linearization
 from theseus.optimizer.linear import LinearSolver
 
 import cProfile
@@ -31,6 +30,16 @@ BACKWARD_MODE = {
     "implicit": th.BackwardMode.IMPLICIT,
     "full": th.BackwardMode.FULL,
     "truncated": th.BackwardMode.TRUNCATED,
+}
+
+LINEARIZATION_MODE: Dict[str, Type[Linearization]] = {
+    "sparse": th.SparseLinearization,
+    "dense": th.DenseLinearization,
+}
+
+LINEAR_SOLVER_MODE: Dict[str, Type[LinearSolver]] = {
+    "sparse": th.CholmodSparseSolver,
+    "dense": th.CholeskyDenseSolver,
 }
 
 # Smaller values} result in error
@@ -171,19 +180,18 @@ def run(cfg: omegaconf.OmegaConf, results_path: pathlib.Path):
     optimizer_cls: Type[th.NonlinearLeastSquares] = getattr(
         th, cfg.inner_optim.optimizer_cls
     )
-    linearization_cls: Type[Linearization] = getattr(th, cfg.inner_optim.linearization)
-    linear_solver: Type[LinearSolver] = getattr(th, cfg.inner_optim.linear_solver)
+
     optimizer = optimizer_cls(
         objective,
         max_iterations=cfg.inner_optim.max_iters,
         step_size=cfg.inner_optim.step_size,
-        linearization_cls=linearization_cls,
-        linear_solver_cls=linear_solver,
+        linearization_cls=LINEARIZATION_MODE[cast(str, cfg.inner_optim.solver)],
+        linear_solver_cls=LINEAR_SOLVER_MODE[cast(str, cfg.inner_optim.solver)],
     )
 
     # Set up Theseus layer
     theseus_optim = th.TheseusLayer(optimizer)
-    theseus_optim.to(device=torch.device("cuda"))
+    theseus_optim.to(device=device)
 
     # copy the poses to feed them to each outer iteration
     orig_poses = {pose.name: pose.data.clone() for pose in pg.poses}

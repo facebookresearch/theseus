@@ -60,15 +60,13 @@ def print_histogram(
         log.info(line)
 
 
-def get_batch_data(pg_batch: theg.PoseGraphDataset,
-                   pose_indices: List[int],
-                   gt_pose_indices: List[int]):
-    batch = {pg_batch.poses[index].name: pg_batch.poses[index].data for index in pose_indices}
-    batch.update(
-        {
-            pg_batch.poses[0].name + "__PRIOR": pg_batch.poses[0].data.clone()
-        }
-    )
+def get_batch_data(
+    pg_batch: theg.PoseGraphDataset, pose_indices: List[int], gt_pose_indices: List[int]
+):
+    batch = {
+        pg_batch.poses[index].name: pg_batch.poses[index].data for index in pose_indices
+    }
+    batch.update({pg_batch.poses[0].name + "__PRIOR": pg_batch.poses[0].data.clone()})
     batch.update(
         {
             pg_batch.gt_poses[index].name: pg_batch.gt_poses[index].data
@@ -76,10 +74,7 @@ def get_batch_data(pg_batch: theg.PoseGraphDataset,
         }
     )
     batch.update(
-        {
-            edge.relative_pose.name: edge.relative_pose
-            for edge in pg_batch.edges
-        }
+        {edge.relative_pose.name: edge.relative_pose for edge in pg_batch.edges}
     )
     return batch
 
@@ -124,9 +119,9 @@ def pose_loss(
     return loss
 
 
-def run(cfg: omegaconf.OmegaConf,
-        pg: theg.PoseGraphDataset,
-        results_path: pathlib.Path):
+def run(
+    cfg: omegaconf.OmegaConf, pg: theg.PoseGraphDataset, results_path: pathlib.Path
+):
     device = torch.device(cfg.device)
     dtype = torch.float64
     pr = cProfile.Profile()
@@ -184,7 +179,9 @@ def run(cfg: omegaconf.OmegaConf,
             )
             gt_pose_indices.append(i)
 
-    pose_vars: List[th.SE3] = [cast(th.SE3, objective.optim_vars[pose.name]) for pose in pg_batch.poses]
+    pose_vars: List[th.SE3] = [
+        cast(th.SE3, objective.optim_vars[pose.name]) for pose in pg_batch.poses
+    ]
 
     # Create optimizer
     optimizer_cls: Type[th.NonlinearLeastSquares] = getattr(
@@ -204,7 +201,9 @@ def run(cfg: omegaconf.OmegaConf,
     theseus_optim.to(device=device)
 
     # Outer optimization loop
-    log_loss_radius_tensor = torch.nn.Parameter(torch.tensor([[3.0]], device=device, dtype=dtype))
+    log_loss_radius_tensor = torch.nn.Parameter(
+        torch.tensor([[3.0]], device=device, dtype=dtype)
+    )
     model_optimizer = torch.optim.Adam([log_loss_radius_tensor], lr=cfg.outer_optim.lr)
 
     num_epochs = cfg.outer_optim.num_epochs
@@ -212,9 +211,7 @@ def run(cfg: omegaconf.OmegaConf,
     def run_batch(batch_idx: int):
         pg_batch = pg.get_batch_dataset(batch_idx=batch_idx)
         theseus_inputs = get_batch_data(pg_batch, pose_indices, gt_pose_indices)
-        theseus_inputs["log_loss_radius"] = (
-            log_loss_radius_tensor.clone()
-        )
+        theseus_inputs["log_loss_radius"] = log_loss_radius_tensor.clone()
 
         with torch.no_grad():
             pose_loss_ref = pose_loss(pg_batch.poses, pg_batch.gt_poses)

@@ -359,17 +359,49 @@ class PoseGraphDataset:
         assert batch_idx < self.num_batches
         start = batch_idx * self.num_batches
         end = min(start + self.batch_size, self.dataset_size)
-        batch = {pose.name: pose.data[start:end] for pose in self.poses}
+        batch = {pose.name + "__batch": pose.data[start:end] for pose in self.poses}
         batch.update(
-            {gt_pose.name: gt_pose.data[start:end] for gt_pose in self.gt_poses}
+            {
+                gt_pose.name + "__batch": gt_pose.data[start:end]
+                for gt_pose in self.gt_poses
+            }
         )
         batch.update(
             {
-                edge.relative_pose.name: edge.relative_pose[start:end]
+                edge.relative_pose.name + "__batch": edge.relative_pose[start:end]
                 for edge in self.edges
             }
         )
         return batch
+
+    def get_batch(self, batch_idx: int):
+        assert batch_idx < self.num_batches
+        start = batch_idx * self.num_batches
+        end = min(start + self.batch_size, self.dataset_size)
+        group_cls = self.poses[0].__class__
+
+        poses = [
+            group_cls(data=pose[start:end], name=pose.name + "__batch")
+            for pose in self.poses
+        ]
+        gt_poses = [
+            group_cls(data=gt_pose[start:end], name=gt_pose.name + "__batch")
+            for gt_pose in self.gt_poses
+        ]
+        edges = [
+            PoseGraphEdge(
+                edge.i,
+                edge.j,
+                relative_pose=group_cls(
+                    data=edge.relative_pose[start:end],
+                    name=edge.relative_pose.name + "__batch",
+                ),
+                weight=edge.weight,
+            )
+            for edge in self.edges
+        ]
+
+        return (poses, gt_poses, edges)
 
     def to(self, *args, **kwargs):
         if self.gt_poses is not None:

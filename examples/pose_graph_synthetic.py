@@ -36,6 +36,9 @@ th.SO3.SO3_EPS = 1e-6
 # Logger
 log = logging.getLogger(__name__)
 
+use_batches = True
+device = torch.device("cuda")
+
 
 def print_histogram(
     pg: theg.PoseGraphDataset, var_dict: Dict[str, torch.Tensor], msg: str
@@ -79,10 +82,10 @@ def save_epoch(
 
 
 def pose_loss(
-    pose_vars: List[th.LieGroup],
-    gt_pose_vars: List[th.LieGroup],
+    pose_vars: Union[List[th.SE2], List[th.SE3]],
+    gt_pose_vars: Union[List[th.SE2], List[th.SE3]],
 ) -> torch.Tensor:
-    loss: torch.Tensor = torch.zeros(1, dtype=torch.float64)
+    loss: torch.Tensor = torch.zeros(1, dtype=torch.float64, device=device)
     poses_batch = th.SE3(
         data=torch.cat([pose.data for pose in pose_vars]), requires_check=False
     )
@@ -113,6 +116,8 @@ def run(cfg: omegaconf.OmegaConf, results_path: pathlib.Path):
         dtype=dtype,
     )
 
+    pg.to(device=device)
+
     # hyper parameters (ie outer loop's parameters)
     log_loss_radius = th.Vector(1, name="log_loss_radius", dtype=dtype)
     robust_loss = th.WelschLoss(log_loss_radius=log_loss_radius, name="welsch_loss")
@@ -128,7 +133,7 @@ def run(cfg: omegaconf.OmegaConf, results_path: pathlib.Path):
             edge.relative_pose,
             loss_function=robust_loss,
         )
-        objective.add(relative_pose_cost, use_batches=True)
+        objective.add(relative_pose_cost, use_batches=use_batches)
 
     if cfg.inner_optim.regularize:
         pose_prior_cost = th.eb.VariableDifference(
@@ -138,10 +143,10 @@ def run(cfg: omegaconf.OmegaConf, results_path: pathlib.Path):
             ),
             target=pg.poses[0].copy(new_name=pg.poses[0].name + "__PRIOR"),
         )
-        objective.add(pose_prior_cost, use_batches=True)
+        objective.add(pose_prior_cost, use_batches=use_batches)
 
-    pose_vars: List[th.LieGroup] = [
-        cast(th.LieGroup, objective.optim_vars[pose.name]) for pose in pg.poses
+    pose_vars: List[th.SE3] = [
+        cast(th.SE3, objective.optim_vars[pose.name]) for pose in pg.poses
     ]
 
     if cfg.inner_optim.ratio_known_poses > 0.0:
@@ -156,7 +161,7 @@ def run(cfg: omegaconf.OmegaConf, results_path: pathlib.Path):
                     pg.gt_poses[i],
                     name=f"pose_diff_{i}",
                 ),
-                use_batches=True,
+                use_batches=use_batches,
             )
 
     # Create optimizer
@@ -171,6 +176,7 @@ def run(cfg: omegaconf.OmegaConf, results_path: pathlib.Path):
 
     # Set up Theseus layer
     theseus_optim = th.TheseusLayer(optimizer)
+    theseus_optim.to(device=torch.device("cuda"))
 
     # copy the poses to feed them to each outer iteration
     orig_poses = {pose.name: pose.data.clone() for pose in pg.poses}
@@ -182,7 +188,9 @@ def run(cfg: omegaconf.OmegaConf, results_path: pathlib.Path):
     num_epochs = cfg.outer_optim.num_epochs
 
     theseus_inputs = get_batch(pg, orig_poses)
-    theseus_inputs["log_loss_radius"] = loss_radius_tensor.unsqueeze(1).clone()
+    theseus_inputs["log_loss_radius"] = (
+        loss_radius_tensor.unsqueeze(1).clone().to(device=device)
+    )
 
     with torch.no_grad():
         pose_loss_ref = pose_loss(pose_vars, pg.gt_poses).item()
@@ -197,7 +205,9 @@ def run(cfg: omegaconf.OmegaConf, results_path: pathlib.Path):
         start_time = time.time_ns()
         pr.enable()
         model_optimizer.zero_grad()
-        theseus_inputs["log_loss_radius"] = loss_radius_tensor.unsqueeze(1).clone()
+        theseus_inputs["log_loss_radius"] = (
+            loss_radius_tensor.unsqueeze(1).clone().to(device=device)
+        )
 
         theseus_outputs, info = theseus_optim.forward(
             input_data=theseus_inputs,
@@ -206,6 +216,8 @@ def run(cfg: omegaconf.OmegaConf, results_path: pathlib.Path):
                 "track_err_history": cfg.inner_optim.track_err_history,
                 "backward_mode": BACKWARD_MODE[cfg.inner_optim.backward_mode],
                 "__keep_final_step_size__": cfg.inner_optim.keep_step_size,
+                "linearization_cls": th.SparseLinearization,
+                "linear_solver_cls": th.CholmodSparseSolver,
             },
         )
 

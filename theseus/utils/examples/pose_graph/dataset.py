@@ -24,6 +24,10 @@ class PoseGraphEdge:
         self.relative_pose = relative_pose
         self.weight = weight
 
+    def to(self, *args, **kwargs):
+        self.weight.to(*args, **kwargs)
+        self.relative_pose.to(*args, **kwargs)
+
 
 # This function reads a file in g2o formate and returns the number of of poses, initial
 # values and edges.
@@ -176,6 +180,7 @@ class PoseGraphDataset:
         edges: List[PoseGraphEdge],
         gt_poses: Optional[Union[List[th.SE2], List[th.SE3]]] = None,
         batch_size: int = 1,
+        device: Optional[torch.device] = None,
     ):
         dataset_sizes: List[int] = [pose.shape[0] for pose in poses]
         if gt_poses is not None:
@@ -192,6 +197,8 @@ class PoseGraphDataset:
         self.batch_size = batch_size
         self.dataset_size = dataset_sizes[0]
         self.num_batches = (self.dataset_size - 1) // self.batch_size + 1
+
+        self.to(device=device)
 
     def load_3D_g2o_file(
         self, path: str, dtype: Optional[torch.dtype] = None
@@ -212,7 +219,7 @@ class PoseGraphDataset:
                 self.poses[edge.i].compose(edge.relative_pose)
             )
             error_norm = error.norm(dim=1)
-            idx = (10 * error_norm).to(dytpe=int)
+            idx = (10 * error_norm).to(dtype=int)
             idx = torch.where(idx > len(buckets) - 1, len(buckets) - 1, idx)
             for i in idx:
                 buckets[i] += 1
@@ -363,6 +370,19 @@ class PoseGraphDataset:
             }
         )
         return batch
+
+    def to(self, *args, **kwargs):
+        if self.gt_poses is not None:
+            for gt_pose in self.gt_poses:
+                gt_pose.to(*args, **kwargs)
+
+        if self.poses is not None:
+            for pose in self.poses:
+                pose.to(*args, **kwargs)
+
+        if self.edges is not None:
+            for edge in self.edges:
+                edge.to(*args, **kwargs)
 
 
 def pg_histogram(

@@ -21,6 +21,9 @@ import torch
 import theseus as th
 import theseus.utils.examples as theg
 
+from theseus.optimizer import Linearization
+from theseus.optimizer.linear import LinearSolver
+
 import cProfile
 import io
 
@@ -168,10 +171,14 @@ def run(cfg: omegaconf.OmegaConf, results_path: pathlib.Path):
     optimizer_cls: Type[th.NonlinearLeastSquares] = getattr(
         th, cfg.inner_optim.optimizer_cls
     )
+    linearization_cls: Type[Linearization] = getattr(th, cfg.inner_optim.linearization)
+    linear_solver: Type[LinearSolver] = getattr(th, cfg.inner_optim.linear_solver)
     optimizer = optimizer_cls(
         objective,
         max_iterations=cfg.inner_optim.max_iters,
         step_size=cfg.inner_optim.step_size,
+        linearization_cls=linearization_cls,
+        linear_solver_cls=linear_solver,
     )
 
     # Set up Theseus layer
@@ -216,8 +223,6 @@ def run(cfg: omegaconf.OmegaConf, results_path: pathlib.Path):
                 "track_err_history": cfg.inner_optim.track_err_history,
                 "backward_mode": BACKWARD_MODE[cfg.inner_optim.backward_mode],
                 "__keep_final_step_size__": cfg.inner_optim.keep_step_size,
-                "linearization_cls": th.SparseLinearization,
-                "linear_solver_cls": th.CholmodSparseSolver,
             },
         )
 

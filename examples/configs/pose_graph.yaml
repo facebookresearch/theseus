@@ -1,16 +1,18 @@
 seed: 1
 
-num_poses: 512
+num_poses: 1024
 rotation_noise: 0.05
 translation_noise: 0.02
 loop_closure_ratio: 0.2
 loop_closure_outlier_ratio: 0.25
-dataset_size: 64 
+dataset_size: 32 
 batch_size: 1
 
 
 inner_optim:
   optimizer_cls: LevenbergMarquardt
+  linearization: SparseLinearization
+  linear_solver: CholmodSparseSolver
   max_iters: 10 
   step_size: 0.1
   backward_mode: implicit

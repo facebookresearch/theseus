@@ -55,7 +55,11 @@ def print_histogram(
     pg: theg.PoseGraphDataset, var_dict: Dict[str, torch.Tensor], msg: str
 ):
     log.info(msg)
-    histogram = theg.pg_histogram(poses=pg.poses, edges=pg.edges)
+    with torch.no_grad():
+        poses = [
+            th.SE3(data=var_dict[pose.name], requires_check=False) for pose in pg.poses
+        ]
+        histogram = theg.pg_histogram(poses=poses, edges=pg.edges)
     for line in histogram.split("\n"):
         log.info(line)
 
@@ -74,7 +78,7 @@ def get_batch_data(
         }
     )
     batch.update(
-        {edge.relative_pose.name: edge.relative_pose for edge in pg_batch.edges}
+        {edge.relative_pose.name: edge.relative_pose.data for edge in pg_batch.edges}
     )
     return batch
 

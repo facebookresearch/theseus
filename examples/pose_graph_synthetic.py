@@ -49,7 +49,6 @@ th.SO3.SO3_EPS = 1e-6
 log = logging.getLogger(__name__)
 
 use_batches = True
-device = torch.device("cuda")
 
 
 def print_histogram(
@@ -97,7 +96,9 @@ def pose_loss(
     pose_vars: Union[List[th.SE2], List[th.SE3]],
     gt_pose_vars: Union[List[th.SE2], List[th.SE3]],
 ) -> torch.Tensor:
-    loss: torch.Tensor = torch.zeros(1, dtype=torch.float64, device=device)
+    loss: torch.Tensor = torch.zeros(
+        1, dtype=pose_vars[0].dtype, device=pose_vars[0].device
+    )
     poses_batch = th.SE3(
         data=torch.cat([pose.data for pose in pose_vars]), requires_check=False
     )
@@ -111,6 +112,7 @@ def pose_loss(
 
 def run(cfg: omegaconf.OmegaConf, results_path: pathlib.Path):
     dtype = torch.float64
+    device = torch.device(cfg.device)
 
     rng = torch.Generator()
     rng.manual_seed(0)

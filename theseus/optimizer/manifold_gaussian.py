@@ -59,7 +59,8 @@ class ManifoldGaussian:
         if not new_name:
             new_name = f"{self.name}_copy"
         mean_copy = [var.copy() for var in self.mean]
-        return ManifoldGaussian(mean_copy, name=new_name)
+        precision_copy = self.precision.clone()
+        return ManifoldGaussian(mean_copy, precision=precision_copy, name=new_name)
 
     def __deepcopy__(self, memo):
         if id(self) in memo:
@@ -105,6 +106,13 @@ class ManifoldGaussian:
         self.precision = precision
 
 
+# Projects the gaussian (ManifoldGaussian object) into the tangent plane at
+# variable. The gaussian mean is projected using the local function,
+# and the precision is approximately transformed using the jacobains of the exp_map.
+# Either returns the mean and precision of the new Gaussian in the tangent plane if
+# return_mean is True. Otherwise returns the information vector (eta) and precision.
+# See section H, eqn 55 in https://arxiv.org/pdf/1812.01537.pdf for a derivation
+# of covariance propagation in manifolds.
 def local_gaussian(
     variable: LieGroup,
     gaussian: ManifoldGaussian,
@@ -131,7 +139,6 @@ def local_gaussian(
     jac: List[torch.Tensor] = []
     variable.exp_map(mean_tp, jacobians=jac)
     # precision matrix in the tangent space at variable
-    # Following math in section H https://arxiv.org/pdf/1812.01537.pdf
     lam_tp = torch.bmm(torch.bmm(jac[0].transpose(-1, -2), gaussian.precision), jac[0])
 
     if return_mean:
@@ -141,6 +148,12 @@ def local_gaussian(
         return eta_tp, lam_tp
 
 
+# Computes the ManifoldGaussian that corresponds to the gaussian in the tangent plane
+# at variable, parameterised by hte mean (mean_tp) and precision (precision_tp).
+# The mean is transformed to a LieGroup element by retraction.
+# The precision is transformed using the inverse of the exp_map jacobians.
+# See section H, eqn 55 in https://arxiv.org/pdf/1812.01537.pdf for a derivation
+# of covariance propagation in manifolds.
 def retract_gaussian(
     variable: LieGroup,
     mean_tp: torch.Tensor,

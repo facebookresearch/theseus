@@ -32,9 +32,10 @@ class ManifoldGaussian:
 
         self.mean = mean
         if precision is None:
-            precision = torch.zeros(mean[0].shape[0], self.dof, self.dof).to(
+            precision = torch.eye(self.dof).to(
                 dtype=mean[0].dtype, device=mean[0].device
             )
+            precision = precision[None, ...].repeat(mean[0].shape[0], 1, 1)
         self.update(mean, precision)
 
     @property

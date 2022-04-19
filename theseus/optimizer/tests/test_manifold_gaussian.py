@@ -61,6 +61,8 @@ def test_init():
             precision = torch.zeros(mean[0].shape[0], dof, dof).to(
                 dtype=mean[0].dtype, device=mean[0].device
             )
+            precision = torch.eye(dof).to(dtype=mean[0].dtype, device=mean[0].device)
+            precision = precision[None, ...].repeat(mean[0].shape[0], 1, 1)
             assert torch.isclose(t.precision, precision).all()
 
     assert len(set(all_ids)) == len(all_ids)

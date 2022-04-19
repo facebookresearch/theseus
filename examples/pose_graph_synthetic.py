@@ -60,14 +60,28 @@ def print_histogram(
         log.info(line)
 
 
-def get_batch(
-    pg: theg.PoseGraphDataset, orig_poses: Dict[str, torch.Tensor]
-) -> Dict[str, torch.Tensor]:
-    retv = {}
-    for pose in pg.poses:
-        retv[pose.name] = orig_poses[pose.name]
-
-    return retv
+def get_batch_data(pg_batch: theg.PoseGraphDataset,
+                   pose_indices: List[int],
+                   gt_pose_indices: List[int]):
+    batch = {pg_batch.poses[index].name: pg_batch.poses[index].data for index in pose_indices}
+    batch.update(
+        {
+            pg_batch.poses[0].name + "__PRIOR": pg_batch.poses[0].data.clone()
+        }
+    )
+    batch.update(
+        {
+            pg_batch.gt_poses[index].name: pg_batch.gt_poses[index].data
+            for index in gt_pose_indices
+        }
+    )
+    batch.update(
+        {
+            edge.relative_pose.name: edge.relative_pose
+            for edge in pg_batch.edges
+        }
+    )
+    return batch
 
 
 def save_epoch(
@@ -110,35 +124,29 @@ def pose_loss(
     return loss
 
 
-def run(cfg: omegaconf.OmegaConf, results_path: pathlib.Path):
-    dtype = torch.float64
+def run(cfg: omegaconf.OmegaConf,
+        pg: theg.PoseGraphDataset,
+        results_path: pathlib.Path):
     device = torch.device(cfg.device)
+    dtype = torch.float64
+    pr = cProfile.Profile()
 
-    rng = torch.Generator()
-    rng.manual_seed(0)
-
-    # create (or load) dataset
-    pg, _ = theg.PoseGraphDataset.generate_synthetic_3D(
-        num_poses=cfg.num_poses,
-        rotation_noise=cfg.rotation_noise,
-        translation_noise=cfg.translation_noise,
-        loop_closure_ratio=cfg.loop_closure_ratio,
-        loop_closure_outlier_ratio=cfg.loop_closure_outlier_ratio,
-        batch_size=cfg.batch_size,
-        dataset_size=cfg.dataset_size,
-        generator=rng,
-        dtype=dtype,
-    )
     pg.to(device=device)
 
-    pg_batch = pg.get_batch(0)
+    with torch.no_grad():
+        pose_loss_ref = pose_loss(pg.poses, pg.gt_poses).item()
+    log.info(f"POSE LOSS (no learning):  {pose_loss_ref: .3f}")
 
-    # hyper parameters (ie outer loop's parameters)
+    # Create the objective
+    pg_batch = pg.get_batch_dataset(0)
+
     log_loss_radius = th.Vector(1, name="log_loss_radius", dtype=dtype)
     robust_loss = th.WelschLoss(log_loss_radius=log_loss_radius, name="welsch_loss")
 
-    # Set up objective
     objective = th.Objective(dtype=torch.float64)
+
+    pose_indices: List[int] = [index for index, _ in enumerate(pg_batch.poses)]
+    gt_pose_indices: List[int] = []
 
     for edge in pg_batch.edges:
         relative_pose_cost = th.eb.Between(
@@ -160,15 +168,6 @@ def run(cfg: omegaconf.OmegaConf, results_path: pathlib.Path):
         )
         objective.add(pose_prior_cost, use_batches=use_batches)
 
-    pose_vars: List[th.SE3] = [
-        cast(th.SE3, objective.optim_vars[pose.name]) for pose in pg_batch.poses
-    ]
-
-    gt_pose_vars: List[th.SE3] = [
-        cast(th.SE3, objective.optim_vars[gt_pose.name])
-        for gt_pose in pg_batch.gt_poses
-    ]
-
     if cfg.inner_optim.ratio_known_poses > 0.0:
         pose_prior_weight = th.ScaleCostWeight(100 * torch.ones(1, dtype=dtype))
         for i in range(len(pg_batch.poses)):
@@ -176,13 +175,16 @@ def run(cfg: omegaconf.OmegaConf, results_path: pathlib.Path):
                 continue
             objective.add(
                 th.eb.VariableDifference(
-                    pose_vars[i],
+                    pg_batch.poses[i],
                     pose_prior_weight,
-                    gt_pose_vars[i],
+                    pg_batch.gt_poses[i],
                     name=f"pose_diff_{i}",
                 ),
                 use_batches=use_batches,
             )
+            gt_pose_indices.append(i)
+
+    pose_vars: List[th.SE3] = [cast(th.SE3, objective.optim_vars[pose.name]) for pose in pg_batch.poses]
 
     # Create optimizer
     optimizer_cls: Type[th.NonlinearLeastSquares] = getattr(
@@ -201,38 +203,25 @@ def run(cfg: omegaconf.OmegaConf, results_path: pathlib.Path):
     theseus_optim = th.TheseusLayer(optimizer)
     theseus_optim.to(device=device)
 
-    # copy the poses to feed them to each outer iteration
-    orig_poses = {pose.name: pose.data.clone() for pose in pg.poses}
-
     # Outer optimization loop
-    loss_radius_tensor = torch.nn.Parameter(torch.tensor([3.0], dtype=torch.float64))
-    model_optimizer = torch.optim.Adam([loss_radius_tensor], lr=cfg.outer_optim.lr)
+    log_loss_radius_tensor = torch.nn.Parameter(torch.tensor([[3.0]], device=device, dtype=dtype))
+    model_optimizer = torch.optim.Adam([log_loss_radius_tensor], lr=cfg.outer_optim.lr)
 
     num_epochs = cfg.outer_optim.num_epochs
 
-    theseus_inputs = get_batch(pg, orig_poses)
-    theseus_inputs["log_loss_radius"] = (
-        loss_radius_tensor.unsqueeze(1).clone().to(device=device)
-    )
-
-    with torch.no_grad():
-        pose_loss_ref = pose_loss(pose_vars, pg.gt_poses).item()
-    log.info(f"POSE LOSS (no learning):  {pose_loss_ref: .3f}")
-
-    print_histogram(pg, theseus_inputs, "Input histogram:")
-
-    pr = cProfile.Profile()
-
-    for epoch in range(num_epochs):
-        log.info(f" ******************* EPOCH {epoch} ******************* ")
-        start_time = time.time_ns()
-        pr.enable()
-        model_optimizer.zero_grad()
+    def run_batch(batch_idx: int):
+        pg_batch = pg.get_batch_dataset(batch_idx=batch_idx)
+        theseus_inputs = get_batch_data(pg_batch, pose_indices, gt_pose_indices)
         theseus_inputs["log_loss_radius"] = (
-            loss_radius_tensor.unsqueeze(1).clone().to(device=device)
+            log_loss_radius_tensor.clone()
         )
 
-        theseus_outputs, info = theseus_optim.forward(
+        with torch.no_grad():
+            pose_loss_ref = pose_loss(pg_batch.poses, pg_batch.gt_poses)
+
+        start_time = time.time_ns()
+        pr.enable()
+        theseus_outputs, _ = theseus_optim.forward(
             input_data=theseus_inputs,
             optimizer_kwargs={
                 "verbose": cfg.inner_optim.verbose,
@@ -241,34 +230,29 @@ def run(cfg: omegaconf.OmegaConf, results_path: pathlib.Path):
                 "__keep_final_step_size__": cfg.inner_optim.keep_step_size,
             },
         )
-
-        loss = (pose_loss(pose_vars, pg.gt_poses) - pose_loss_ref) / pose_loss_ref
-        loss.backward()
-        model_optimizer.step()
-        loss_value = torch.sum(loss.detach()).item()
         pr.disable()
         end_time = time.time_ns()
+        log.info(f"Forward pass took {(end_time - start_time) / 1e9: .3f} seconds")
 
-        print_histogram(pg, theseus_outputs, "Output histogram:")
-        log.info(
-            f"Epoch: {epoch} Loss: {loss_value} "
-            f"Kernel Radius: exp({loss_radius_tensor.data.item()})="
-            f"{torch.exp(loss_radius_tensor.data).item()}"
-        )
-        log.info(f"Epoch took {(end_time - start_time) / 1e9: .3f} seconds")
+        start_time = time.time_ns()
+        pr.enable()
+        model_optimizer.zero_grad()
+        loss = (pose_loss(pose_vars, pg_batch.gt_poses) - pose_loss_ref) / pose_loss_ref
+        loss.backward()
+        model_optimizer.step()
+        pr.disable()
+        log.info(f"Backward pass took {(end_time - start_time) / 1e9: .3f} seconds")
 
-        # with torch.no_grad():
-        #     print(log_loss_radius.data.grad.norm().item())
+        loss_value = torch.sum(loss.detach()).item()
+        log.info(f"Loss value: {loss_value}.")
 
-        save_epoch(
-            results_path,
-            epoch,
-            log_loss_radius,
-            theseus_outputs,
-            info,
-            loss_value,
-            end_time - start_time,
-        )
+        print_histogram(pg_batch, theseus_outputs, "Output histogram:")
+
+    for epoch in range(num_epochs):
+        log.info(f" ******************* EPOCH {epoch} ******************* ")
+
+        for batch_idx in range(pg.num_batches):
+            run_batch(batch_idx)
 
     s = io.StringIO()
     sortby = pstats.SortKey.CUMULATIVE
@@ -283,8 +267,24 @@ def main(cfg):
     np.random.seed(cfg.seed)
     random.seed(cfg.seed)
 
+    # create (or load) dataset
+    rng = torch.Generator()
+    rng.manual_seed(0)
+    dtype = torch.float64
+    pg, _ = theg.PoseGraphDataset.generate_synthetic_3D(
+        num_poses=cfg.num_poses,
+        rotation_noise=cfg.rotation_noise,
+        translation_noise=cfg.translation_noise,
+        loop_closure_ratio=cfg.loop_closure_ratio,
+        loop_closure_outlier_ratio=cfg.loop_closure_outlier_ratio,
+        batch_size=cfg.batch_size,
+        dataset_size=cfg.dataset_size,
+        generator=rng,
+        dtype=dtype,
+    )
+
     results_path = pathlib.Path(os.getcwd())
-    run(cfg, results_path)
+    run(cfg, pg, results_path)
 
 
 if __name__ == "__main__":

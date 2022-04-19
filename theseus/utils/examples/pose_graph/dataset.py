@@ -355,37 +355,18 @@ class PoseGraphDataset:
 
         return PoseGraphDataset(poses, edges, gt_poses, batch_size=batch_size), inliers
 
-    def get_batch_data(self, batch_idx: int):
-        assert batch_idx < self.num_batches
-        start = batch_idx * self.num_batches
-        end = min(start + self.batch_size, self.dataset_size)
-        batch = {pose.name + "__batch": pose.data[start:end] for pose in self.poses}
-        batch.update(
-            {
-                gt_pose.name + "__batch": gt_pose.data[start:end]
-                for gt_pose in self.gt_poses
-            }
-        )
-        batch.update(
-            {
-                edge.relative_pose.name + "__batch": edge.relative_pose[start:end]
-                for edge in self.edges
-            }
-        )
-        return batch
-
-    def get_batch(self, batch_idx: int) -> "PoseGraphDataset":
+    def get_batch_dataset(self, batch_idx: int = 0) -> "PoseGraphDataset":
         assert batch_idx < self.num_batches
         start = batch_idx * self.num_batches
         end = min(start + self.batch_size, self.dataset_size)
         group_cls = self.poses[0].__class__
 
         poses = [
-            group_cls(data=pose[start:end], name=pose.name + "__batch")
+            group_cls(data=pose[start:end].clone(), name=pose.name + "__batch")
             for pose in self.poses
         ]
         gt_poses = [
-            group_cls(data=gt_pose[start:end], name=gt_pose.name + "__batch")
+            group_cls(data=gt_pose[start:end].clone(), name=gt_pose.name + "__batch")
             for gt_pose in self.gt_poses
         ]
         edges = [
@@ -393,7 +374,7 @@ class PoseGraphDataset:
                 edge.i,
                 edge.j,
                 relative_pose=group_cls(
-                    data=edge.relative_pose[start:end],
+                    data=edge.relative_pose[start:end].clone(),
                     name=edge.relative_pose.name + "__batch",
                 ),
                 weight=edge.weight,

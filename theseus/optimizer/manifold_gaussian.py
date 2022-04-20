@@ -150,7 +150,7 @@ def local_gaussian(
 
 
 # Computes the ManifoldGaussian that corresponds to the gaussian in the tangent plane
-# at variable, parameterised by hte mean (mean_tp) and precision (precision_tp).
+# at variable, parameterised by the mean (mean_tp) and precision (precision_tp).
 # The mean is transformed to a LieGroup element by retraction.
 # The precision is transformed using the inverse of the exp_map jacobians.
 # See section H, eqn 55 in https://arxiv.org/pdf/1812.01537.pdf for a derivation

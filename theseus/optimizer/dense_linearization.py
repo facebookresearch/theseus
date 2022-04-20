@@ -59,6 +59,7 @@ class DenseLinearization(Linearization):
         for (
             batch_cost_function,
             cost_functions,
+            _,
         ) in self.objective.batched_cost_functions.values():
             batch_jacobians, batch_errors = batch_cost_function.jacobians()
             # TODO: Implement FuncTorch

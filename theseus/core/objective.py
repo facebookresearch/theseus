@@ -61,7 +61,7 @@ class Objective:
 
         # maps cost function batch names to the corresponding batched cost functions
         self.batched_cost_functions: OrderedDict[
-            str, Tuple[CostFunction, List[CostFunction]]
+            str, Tuple[CostFunction, List[CostFunction], bool]
         ] = OrderedDict()
 
         # maps cost function names to unbatched functions
@@ -216,7 +216,7 @@ class Objective:
     def _reset_batched_cost_function_variables(
         self, cost_function: CostFunction, batch_name: str
     ):
-        cost_function_batch, cost_functions = self.batched_cost_functions[batch_name]
+        cost_function_batch, cost_functions, _ = self.batched_cost_functions[batch_name]
         original_cost_function = cost_functions[0]
 
         if cost_function.__class__ != cost_function_batch.__class__:
@@ -268,11 +268,18 @@ class Objective:
                 variable_batch.data = None
 
     def _add_batched_cost_function(
-        self, cost_function: CostFunction, use_batches: bool = False
+        self,
+        cost_function: CostFunction,
+        use_batches: bool = False,
+        batch_name: Optional[str] = None,
+        shared_aux_vars: bool = False,
     ):
-        batch_name = (
-            self._get_cost_function_batch_name(cost_function) if use_batches else None
-        )
+        if batch_name is None:
+            batch_name = (
+                self._get_cost_function_batch_name(cost_function)
+                if use_batches
+                else None
+            )
         if batch_name is None:
             self.unbatched_cost_functions[cost_function.name] = cost_function
         else:
@@ -312,11 +319,34 @@ class Objective:
                 self.batched_cost_functions[batch_name] = (
                     cost_function_batch,
                     [cost_function],
+                    shared_aux_vars,
                 )
             else:
                 self._reset_batched_cost_function_variables(cost_function, batch_name)
-                self.batched_cost_functions[batch_name][1].append(cost_function)
+                batched_cost_function = self.batched_cost_functions[batch_name]
 
+                if batched_cost_function[2] is True:
+                    if shared_aux_vars is False:
+                        raise ValueError(
+                            f"Provided cost function does not share aux vars and can "
+                            f"not be batched with batched cost function {batch_name}."
+                        )
+
+                    original_cost_function = batched_cost_function[1][0]
+                    if list(original_cost_function.aux_vars) != list(
+                        cost_function.aux_vars
+                    ):
+                        raise ValueError(
+                            f"Provided cost function with shared aux vars can not "
+                            f"be batched with batched cost function {batch_name}."
+                        )
+                elif shared_aux_vars:
+                    raise ValueError(
+                        f"Provided cost function with shared aux vars can not "
+                        f"be batched with batched cost function {batch_name}."
+                    )
+
+                batched_cost_function[1].append(cost_function)
             self.batch_names_for_cost_functions[cost_function.name] = batch_name
 
     # Adds a cost function to the objective
@@ -331,7 +361,13 @@ class Objective:
     # Update method will check if any of these are not registered as
     # cost function variables, and throw a warning.
 
-    def add(self, cost_function: CostFunction, use_batches: bool = False):
+    def add(
+        self,
+        cost_function: CostFunction,
+        use_batches: bool = False,
+        batch_name: Optional[str] = None,
+        shared_aux_vars: bool = False,
+    ):
         # adds the cost function if not already present
         if cost_function.name in self.cost_functions:
             if cost_function is not self.cost_functions[cost_function.name]:
@@ -414,7 +450,9 @@ class Objective:
             cost_function
         )
 
-        self._add_batched_cost_function(cost_function, use_batches)
+        self._add_batched_cost_function(
+            cost_function, use_batches, batch_name, shared_aux_vars
+        )
 
         if self.optim_vars.keys() & self.aux_vars.keys():
             raise ValueError(
@@ -498,7 +536,7 @@ class Objective:
             del self.unbatched_cost_functions[cost_function.name]
         else:
             batch_name = self.batch_names_for_cost_functions[cost_function.name]
-            cost_function_batch, cost_functions = self.batched_cost_functions[
+            cost_function_batch, cost_functions, _ = self.batched_cost_functions[
                 batch_name
             ]
             cost_fn_idx = cost_functions.index(cost_function)
@@ -662,7 +700,11 @@ class Objective:
             device=self.device, dtype=self.dtype
         )
         pos = 0
-        for cost_function_batch, cost_functions in self.batched_cost_functions.values():
+        for (
+            cost_function_batch,
+            cost_functions,
+            _,
+        ) in self.batched_cost_functions.values():
             batch_errors = cost_function_batch.error()
             # TODO: Implement FuncTorch
             batch_pos = 0
@@ -707,7 +749,11 @@ class Objective:
             self.batch_size, len(self.cost_functions)
         ).to(device=self.device, dtype=self.dtype)
         pos = 0
-        for cost_function_batch, cost_functions in self.batched_cost_functions.values():
+        for (
+            cost_function_batch,
+            cost_functions,
+            _,
+        ) in self.batched_cost_functions.values():
             batch_errors = cost_function_batch.error()
             # TODO: Implement FuncTorch
             batch_pos = 0
@@ -865,34 +911,54 @@ class Objective:
         for batch_name, (
             cost_function_batch,
             cost_functions,
+            shared_aux,
         ) in self.batched_cost_functions.items():
             vars_attr_name_lists = [
                 cost_function_batch._optim_vars_attr_names,
                 cost_function_batch._aux_vars_attr_names,
             ]
-            for vars_attr_names in vars_attr_name_lists:
-                for var_attr_name in vars_attr_names:
-                    variable_batch = cast(
-                        Variable, getattr(cost_function_batch, var_attr_name)
-                    )
-                    original_variable = cast(
-                        Variable, getattr(cost_functions[0], var_attr_name)
-                    )
-                    batch_shape = [self.batch_size] + list(original_variable.shape[1:])
-
-                    variable_batch_data = [
-                        cast(
-                            Variable, getattr(cost_function, var_attr_name)
-                        ).data.expand(batch_shape)
-                        for cost_function in cost_functions
-                    ]
-                    variable_batch.data = torch.cat(variable_batch_data, dim=0)
-
-                    if variable_batch.shape[0] != len(cost_functions) * self.batch_size:
-                        raise ValueError(
-                            f"Provided data for {var_attr_name} in batched cost function "
-                            f"{batch_name} can not be batched."
+            for n, vars_attr_names in enumerate(vars_attr_name_lists):
+                if n == 0 or shared_aux is False:
+                    for var_attr_name in vars_attr_names:
+                        variable_batch = cast(
+                            Variable, getattr(cost_function_batch, var_attr_name)
                         )
+                        original_variable = cast(
+                            Variable, getattr(cost_functions[0], var_attr_name)
+                        )
+                        batch_shape = [self.batch_size] + list(
+                            original_variable.shape[1:]
+                        )
+
+                        variable_batch_data = [
+                            cast(
+                                Variable, getattr(cost_function, var_attr_name)
+                            ).data.expand(batch_shape)
+                            for cost_function in cost_functions
+                        ]
+                        variable_batch.data = torch.cat(variable_batch_data, dim=0)
+
+                        if (
+                            variable_batch.shape[0]
+                            != len(cost_functions) * self.batch_size
+                        ):
+                            raise ValueError(
+                                f"Provided data for {var_attr_name} in batched cost function "
+                                f"{batch_name} can not be batched."
+                            )
+                else:
+                    for var_attr_name in vars_attr_names:
+                        variable_batch = cast(
+                            Variable, getattr(cost_function_batch, var_attr_name)
+                        )
+                        original_variable = cast(
+                            Variable, getattr(cost_functions[0], var_attr_name)
+                        )
+
+                        batch_shape = [self.batch_size * len(cost_functions)] + list(
+                            original_variable.shape[1:]
+                        )
+                        variable_batch.data = original_variable.data.expand(batch_shape)
 
     def _update_batched_optim_variables(self):
         # Update batched optim variables for batch processing

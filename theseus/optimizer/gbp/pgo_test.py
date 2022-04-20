@@ -110,20 +110,12 @@ for i in range(size):
             objective.add(cf_meas)
             m += 1
 
-# # objective.update(init_dict)
+# objective.update(init_dict)
 # print("Initial cost:", objective.error_squared_norm())
-
-# fg.print(brief=True)
-
-# # for vis ---------------
 
 # joint = fg.get_joint()
 # marg_covs = np.diag(joint.cov())[::2]
 # map_soln = fg.MAP().reshape([size * size, 2])
-
-# Solve with Gauss Newton ---------------
-
-# print("inputs", inputs)
 
 max_iterations = 100
 optimizer = GaussianBeliefPropagation(
@@ -144,21 +136,5 @@ optim_arg = {
 }
 updated_inputs, info = theseus_optim.forward(inputs, optim_arg)
 
-print("updated_inputs", updated_inputs)
-print("info", info)
-
-
-# optimizer = th.GaussNewton(
-#     objective,
-#     max_iterations=15,
-#     step_size=0.5,
-# )
-# theseus_optim = th.TheseusLayer(optimizer)
-
-# with torch.no_grad():
-#     optim_args = {"track_best_solution": True, "verbose": True}
-#     updated_inputs, info = theseus_optim.forward(inputs, optim_args)
 # print("updated_inputs", updated_inputs)
 # print("info", info)
-
-# import ipdb; ipdb.set_trace()

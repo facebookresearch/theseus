@@ -25,7 +25,6 @@ from theseus.optimizer.nonlinear.nonlinear_optimizer import (
 
 """
 TODO
- - damping for lie algebra vars
  - solving inverse problem to compute message mean
  - handle batch dim
 """
@@ -318,10 +317,9 @@ class Factor:
             J_stk = torch.cat(J, dim=-1)
 
             lam = torch.bmm(J_stk.transpose(-2, -1), J_stk)
-
-            optim_vars_stk = torch.cat([v.data for v in self.cf.optim_vars], dim=-1)
             eta = -torch.matmul(J_stk.transpose(-2, -1), error.unsqueeze(-1))
             if lie is False:
+                optim_vars_stk = torch.cat([v.data for v in self.cf.optim_vars], dim=-1)
                 eta = eta + torch.matmul(lam, optim_vars_stk.unsqueeze(-1))
             eta = eta.squeeze(-1)
 

@@ -239,6 +239,7 @@ class PoseGraphDataset:
         translation_noise: float = 0.1,
         loop_closure_ratio: float = 0.2,
         loop_closure_outlier_ratio: float = 0.05,
+        max_num_loop_closures: int = 10,
         dataset_size: int = 1,
         batch_size: int = 1,
         generator: Optional[torch.Generator] = None,
@@ -303,43 +304,45 @@ class PoseGraphDataset:
             inliers.append(True)
 
             if np.random.rand(1) <= loop_closure_ratio and n - 1 > 0:
-                i = np.random.randint(n - 1)
+                num_loop_closures = np.random.randint(max_num_loop_closures) + 1
+                indices = set(np.random.randint(0, n - 1, num_loop_closures))
                 j = n
 
-                gt_relative_pose = cast(
-                    th.SE3, gt_poses[i].inverse().compose(gt_poses[j])
-                )
-                if np.random.rand(1) > loop_closure_outlier_ratio:
-                    noise_relative_pose = th.SE3.exp_map(
-                        torch.cat(
-                            [
-                                rotation_noise
-                                * (2 * torch.rand(1, 3, dtype=dtype) - 1),
-                                translation_noise
-                                * (2.0 * torch.rand(1, 3, dtype=dtype) - 1),
-                            ],
-                            dim=1,
+                for i in indices:
+                    gt_relative_pose = cast(
+                        th.SE3, gt_poses[i].inverse().compose(gt_poses[j])
+                    )
+                    if np.random.rand(1) > loop_closure_outlier_ratio:
+                        noise_relative_pose = th.SE3.exp_map(
+                            torch.cat(
+                                [
+                                    rotation_noise
+                                    * (2 * torch.rand(1, 3, dtype=dtype) - 1),
+                                    translation_noise
+                                    * (2.0 * torch.rand(1, 3, dtype=dtype) - 1),
+                                ],
+                                dim=1,
+                            )
                         )
-                    )
-                    inliers.append(True)
-                else:
-                    noise_relative_pose = th.SE3.rand(
-                        1, generator=generator, dtype=dtype
-                    )
-                    inliers.append(False)
+                        inliers.append(True)
+                    else:
+                        noise_relative_pose = th.SE3.rand(
+                            1, generator=generator, dtype=dtype
+                        )
+                        inliers.append(False)
 
-                relative_pose = cast(
-                    th.SE3, gt_relative_pose.compose(noise_relative_pose)
-                )
-                relative_pose.name = "EDGE_SE3__{}_{}".format(i, j)
+                    relative_pose = cast(
+                        th.SE3, gt_relative_pose.compose(noise_relative_pose)
+                    )
+                    relative_pose.name = "EDGE_SE3__{}_{}".format(i, j)
 
-                weight = th.DiagonalCostWeight(
-                    th.Variable(10 * torch.ones(1, 6, dtype=dtype)),
-                    name="EDGE_WEIGHT__{}_{}".format(i, j),
-                )
-                edges.append(
-                    PoseGraphEdge(i, j, relative_pose=relative_pose, weight=weight)
-                )
+                    weight = th.DiagonalCostWeight(
+                        th.Variable(10 * torch.ones(1, 6, dtype=dtype)),
+                        name="EDGE_WEIGHT__{}_{}".format(i, j),
+                    )
+                    edges.append(
+                        PoseGraphEdge(i, j, relative_pose=relative_pose, weight=weight)
+                    )
 
         for i in range(len(poses)):
             noise_pose = th.SE3.exp_map(

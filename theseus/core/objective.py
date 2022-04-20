@@ -324,7 +324,6 @@ class Objective:
             else:
                 self._reset_batched_cost_function_variables(cost_function, batch_name)
                 batched_cost_function = self.batched_cost_functions[batch_name]
-                batched_cost_function[1].append(cost_function)
 
                 if batched_cost_function[2] is True:
                     if shared_aux_vars is False:
@@ -334,7 +333,7 @@ class Objective:
                         )
 
                     original_cost_function = batched_cost_function[1][0]
-                    if list(original_cost_function.aux_vars) == list(
+                    if list(original_cost_function.aux_vars) != list(
                         cost_function.aux_vars
                     ):
                         raise ValueError(
@@ -347,6 +346,7 @@ class Objective:
                         f"be batched with batched cost function {batch_name}."
                     )
 
+            batched_cost_function[1].append(cost_function)
             self.batch_names_for_cost_functions[cost_function.name] = batch_name
 
     # Adds a cost function to the objective

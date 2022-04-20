@@ -168,6 +168,8 @@ class TactilePoseEstimator:
                     name=f"intersect_{i}",
                 ),
                 use_batches=use_batches,
+                batch_name="EffectorObjectContactPlanar",
+                shared_aux_vars=True,
             )
 
             objective.add(

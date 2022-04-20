@@ -24,6 +24,10 @@ class PoseGraphEdge:
         self.relative_pose = relative_pose
         self.weight = weight
 
+    def to(self, *args, **kwargs):
+        self.weight.to(*args, **kwargs)
+        self.relative_pose.to(*args, **kwargs)
+
 
 # This function reads a file in g2o formate and returns the number of of poses, initial
 # values and edges.
@@ -175,10 +179,26 @@ class PoseGraphDataset:
         poses: Union[List[th.SE2], List[th.SE3]],
         edges: List[PoseGraphEdge],
         gt_poses: Optional[Union[List[th.SE2], List[th.SE3]]] = None,
+        batch_size: int = 1,
+        device: Optional[torch.device] = None,
     ):
+        dataset_sizes: List[int] = [pose.shape[0] for pose in poses]
+        if gt_poses is not None:
+            dataset_sizes.extend([gt_pose.shape[0] for gt_pose in gt_poses])
+        dataset_sizes.extend([edge.relative_pose.shape[0] for edge in edges])
+        uniqe_batch_sizes = set(dataset_sizes)
+
+        if len(uniqe_batch_sizes) != 1:
+            raise ValueError("Provided data has muliple batches.")
+
         self.poses = poses
         self.edges = edges
         self.gt_poses = gt_poses
+        self.batch_size = batch_size
+        self.dataset_size = dataset_sizes[0]
+        self.num_batches = (self.dataset_size - 1) // self.batch_size + 1
+
+        self.to(device=device)
 
     def load_3D_g2o_file(
         self, path: str, dtype: Optional[torch.dtype] = None
@@ -198,9 +218,11 @@ class PoseGraphDataset:
             error = self.poses[edge.j].local(
                 self.poses[edge.i].compose(edge.relative_pose)
             )
-            error_norm = float(error.norm())
-            idx = min(int(10 * error_norm), len(buckets) - 1)
-            buckets[idx] += 1
+            error_norm = error.norm(dim=1)
+            idx = (10 * error_norm).to(dtype=int)
+            idx = torch.where(idx > len(buckets) - 1, len(buckets) - 1, idx)
+            for i in idx:
+                buckets[i] += 1
         max_buckets = max(buckets)
         hist_str = ""
         for i in range(len(buckets)):
@@ -217,6 +239,9 @@ class PoseGraphDataset:
         translation_noise: float = 0.1,
         loop_closure_ratio: float = 0.2,
         loop_closure_outlier_ratio: float = 0.05,
+        max_num_loop_closures: int = 10,
+        dataset_size: int = 1,
+        batch_size: int = 1,
         generator: Optional[torch.Generator] = None,
         dtype: Optional[torch.dtype] = None,
     ) -> Tuple["PoseGraphDataset", List[bool]]:
@@ -227,17 +252,23 @@ class PoseGraphDataset:
 
         poses.append(
             th.SE3(
-                data=torch.eye(3, 4, dtype=dtype).reshape(1, 3, 4), name="VERTEX_SE3__0"
+                data=torch.tile(torch.eye(3, 4, dtype=dtype), [dataset_size, 1, 1]),
+                name="VERTEX_SE3__0",
             )
         )
-        gt_poses.append(th.SE3(data=torch.eye(3, 4, dtype=dtype).reshape(1, 3, 4)))
+        gt_poses.append(
+            th.SE3(
+                data=torch.tile(torch.eye(3, 4, dtype=dtype), [dataset_size, 1, 1]),
+                name="VERTEX_SE3_GT__0",
+            )
+        )
 
         for n in range(1, num_poses):
             gt_relative_pose = th.SE3.exp_map(
                 torch.cat(
                     [
-                        torch.rand(1, 3, dtype=dtype) - 0.5,
-                        2.0 * torch.rand(1, 3, dtype=dtype) - 1,
+                        torch.rand(dataset_size, 3, dtype=dtype) - 0.5,
+                        2.0 * torch.rand(dataset_size, 3, dtype=dtype) - 1,
                     ],
                     dim=1,
                 )
@@ -245,8 +276,10 @@ class PoseGraphDataset:
             noise_relative_pose = th.SE3.exp_map(
                 torch.cat(
                     [
-                        rotation_noise * (2 * torch.rand(1, 3, dtype=dtype) - 1),
-                        translation_noise * (2.0 * torch.rand(1, 3, dtype=dtype) - 1),
+                        rotation_noise
+                        * (2 * torch.rand(dataset_size, 3, dtype=dtype) - 1),
+                        translation_noise
+                        * (2.0 * torch.rand(dataset_size, 3, dtype=dtype) - 1),
                     ],
                     dim=1,
                 )
@@ -271,43 +304,45 @@ class PoseGraphDataset:
             inliers.append(True)
 
             if np.random.rand(1) <= loop_closure_ratio and n - 1 > 0:
-                i = np.random.randint(n - 1)
+                num_loop_closures = np.random.randint(max_num_loop_closures) + 1
+                indices = set(np.random.randint(0, n - 1, num_loop_closures))
                 j = n
 
-                gt_relative_pose = cast(
-                    th.SE3, gt_poses[i].inverse().compose(gt_poses[j])
-                )
-                if np.random.rand(1) > loop_closure_outlier_ratio:
-                    noise_relative_pose = th.SE3.exp_map(
-                        torch.cat(
-                            [
-                                rotation_noise
-                                * (2 * torch.rand(1, 3, dtype=dtype) - 1),
-                                translation_noise
-                                * (2.0 * torch.rand(1, 3, dtype=dtype) - 1),
-                            ],
-                            dim=1,
+                for i in indices:
+                    gt_relative_pose = cast(
+                        th.SE3, gt_poses[i].inverse().compose(gt_poses[j])
+                    )
+                    if np.random.rand(1) > loop_closure_outlier_ratio:
+                        noise_relative_pose = th.SE3.exp_map(
+                            torch.cat(
+                                [
+                                    rotation_noise
+                                    * (2 * torch.rand(1, 3, dtype=dtype) - 1),
+                                    translation_noise
+                                    * (2.0 * torch.rand(1, 3, dtype=dtype) - 1),
+                                ],
+                                dim=1,
+                            )
                         )
-                    )
-                    inliers.append(True)
-                else:
-                    noise_relative_pose = th.SE3.rand(
-                        1, generator=generator, dtype=dtype
-                    )
-                    inliers.append(False)
+                        inliers.append(True)
+                    else:
+                        noise_relative_pose = th.SE3.rand(
+                            1, generator=generator, dtype=dtype
+                        )
+                        inliers.append(False)
 
-                relative_pose = cast(
-                    th.SE3, gt_relative_pose.compose(noise_relative_pose)
-                )
-                relative_pose.name = "EDGE_SE3__{}_{}".format(i, j)
+                    relative_pose = cast(
+                        th.SE3, gt_relative_pose.compose(noise_relative_pose)
+                    )
+                    relative_pose.name = "EDGE_SE3__{}_{}".format(i, j)
 
-                weight = th.DiagonalCostWeight(
-                    th.Variable(10 * torch.ones(1, 6, dtype=dtype)),
-                    name="EDGE_WEIGHT__{}_{}".format(i, j),
-                )
-                edges.append(
-                    PoseGraphEdge(i, j, relative_pose=relative_pose, weight=weight)
-                )
+                    weight = th.DiagonalCostWeight(
+                        th.Variable(10 * torch.ones(1, 6, dtype=dtype)),
+                        name="EDGE_WEIGHT__{}_{}".format(i, j),
+                    )
+                    edges.append(
+                        PoseGraphEdge(i, j, relative_pose=relative_pose, weight=weight)
+                    )
 
         for i in range(len(poses)):
             noise_pose = th.SE3.exp_map(
@@ -321,7 +356,57 @@ class PoseGraphDataset:
             )
             poses[i].data = gt_poses[i].compose(noise_pose).data
 
-        return PoseGraphDataset(poses, edges, gt_poses), inliers
+        return PoseGraphDataset(poses, edges, gt_poses, batch_size=batch_size), inliers
+
+    def get_batch_dataset(self, batch_idx: int = 0) -> "PoseGraphDataset":
+        assert batch_idx < self.num_batches
+        start = batch_idx * self.num_batches
+        end = min(start + self.batch_size, self.dataset_size)
+        group_cls = self.poses[0].__class__
+
+        poses = cast(
+            Union[List[th.SE2], List[th.SE3]],
+            [
+                group_cls(data=pose[start:end].clone(), name=pose.name + "__batch")
+                for pose in self.poses
+            ],
+        )
+        gt_poses = cast(
+            Union[List[th.SE2], List[th.SE3]],
+            [
+                group_cls(
+                    data=gt_pose[start:end].clone(), name=gt_pose.name + "__batch"
+                )
+                for gt_pose in self.gt_poses
+            ],
+        )
+        edges = [
+            PoseGraphEdge(
+                edge.i,
+                edge.j,
+                relative_pose=group_cls(
+                    data=edge.relative_pose[start:end].clone(),
+                    name=edge.relative_pose.name + "__batch",
+                ),
+                weight=edge.weight,
+            )
+            for edge in self.edges
+        ]
+
+        return PoseGraphDataset(poses, edges, gt_poses, batch_size=self.batch_size)
+
+    def to(self, *args, **kwargs):
+        if self.gt_poses is not None:
+            for gt_pose in self.gt_poses:
+                gt_pose.to(*args, **kwargs)
+
+        if self.poses is not None:
+            for pose in self.poses:
+                pose.to(*args, **kwargs)
+
+        if self.edges is not None:
+            for edge in self.edges:
+                edge.to(*args, **kwargs)
 
 
 def pg_histogram(

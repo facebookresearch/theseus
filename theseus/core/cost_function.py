@@ -235,3 +235,5 @@ class AutoDiffCostFunction(CostFunction):
         super().to(*args, **kwargs)
         for var in self._tmp_optim_vars:
             var.to(*args, **kwargs)
+        self.weight.to(*args, **kwargs)
+        self.loss_function.to(*args, **kwargs)

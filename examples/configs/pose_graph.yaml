@@ -1,13 +1,13 @@
 seed: 1
-device: "cuda"
+device: "cpu"
 
-num_poses: 100
+num_poses: 128
 rotation_noise: 0.05
 translation_noise: 0.02
 loop_closure_ratio: 0.2
 loop_closure_outlier_ratio: 0.25
-dataset_size: 1 
-batch_size: 1
+dataset_size: 64 
+batch_size: 32
 
 
 inner_optim:

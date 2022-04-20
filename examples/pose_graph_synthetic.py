@@ -10,7 +10,7 @@ import pathlib
 import pstats
 
 import random
-import time
+from turtle import forward
 from typing import Union, Dict, List, Type, cast
 
 import hydra
@@ -25,6 +25,8 @@ from theseus.optimizer.linear import LinearSolver
 
 import cProfile
 import io
+
+from scipy.io import savemat
 
 BACKWARD_MODE = {
     "implicit": th.BackwardMode.IMPLICIT,
@@ -83,28 +85,6 @@ def get_batch_data(
     return batch
 
 
-def save_epoch(
-    results_path: pathlib.Path,
-    epoch: int,
-    log_loss_radius: th.Vector,
-    theseus_outputs: Dict[str, torch.Tensor],
-    info: th.optimizer.OptimizerInfo,
-    loss_value: float,
-    total_time: float,
-):
-    def _clone(t_):
-        return t_.detach().cpu().clone()
-
-    results = {
-        "log_loss_radius": _clone(log_loss_radius.data),
-        "theseus_outputs": dict((s, _clone(t)) for s, t in theseus_outputs.items()),
-        "err_history": info.err_history,  # type: ignore
-        "loss": loss_value,
-        "total_time": total_time,
-    }
-    torch.save(results, results_path / f"results_epoch{epoch}.pt")
-
-
 def pose_loss(
     pose_vars: Union[List[th.SE2], List[th.SE3]],
     gt_pose_vars: Union[List[th.SE2], List[th.SE3]],
@@ -146,6 +126,9 @@ def run(
 
     pose_indices: List[int] = [index for index, _ in enumerate(pg_batch.poses)]
     gt_pose_indices: List[int] = []
+
+    forward_times = []
+    backward_times = []
 
     for edge in pg_batch.edges:
         relative_pose_cost = th.eb.Between(
@@ -213,6 +196,9 @@ def run(
     num_epochs = cfg.outer_optim.num_epochs
 
     def run_batch(batch_idx: int):
+        start_event = torch.cuda.Event(enable_timing=True)
+        end_event = torch.cuda.Event(enable_timing=True)
+
         pg_batch = pg.get_batch_dataset(batch_idx=batch_idx)
         theseus_inputs = get_batch_data(pg_batch, pose_indices, gt_pose_indices)
         theseus_inputs["log_loss_radius"] = log_loss_radius_tensor.clone()
@@ -220,7 +206,7 @@ def run(
         with torch.no_grad():
             pose_loss_ref = pose_loss(pg_batch.poses, pg_batch.gt_poses)
 
-        start_time = time.time_ns()
+        start_event.record()
         pr.enable()
         theseus_outputs, _ = theseus_optim.forward(
             input_data=theseus_inputs,
@@ -232,28 +218,54 @@ def run(
             },
         )
         pr.disable()
-        end_time = time.time_ns()
-        log.info(f"Forward pass took {(end_time - start_time) / 1e9: .3f} seconds")
+        end_event.record()
+        torch.cuda.synchronize()
 
-        start_time = time.time_ns()
+        forward_time = start_event.elapsed_time(end_event)
+        log.info(f"Forward pass took {forward_time} ms.")
+
+        start_event.record()
         pr.enable()
         model_optimizer.zero_grad()
         loss = (pose_loss(pose_vars, pg_batch.gt_poses) - pose_loss_ref) / pose_loss_ref
         loss.backward()
         model_optimizer.step()
         pr.disable()
-        log.info(f"Backward pass took {(end_time - start_time) / 1e9: .3f} seconds")
+        end_event.record()
+        torch.cuda.synchronize()
+
+        backward_time = start_event.elapsed_time(end_event)
+        log.info(f"Backward pass took {backward_time} ms.")
 
         loss_value = torch.sum(loss.detach()).item()
         log.info(f"Loss value: {loss_value}.")
 
         print_histogram(pg_batch, theseus_outputs, "Output histogram:")
 
+        return [forward_time, backward_time]
+
     for epoch in range(num_epochs):
         log.info(f" ******************* EPOCH {epoch} ******************* ")
 
+        forward_time_epoch = []
+        backward_time_epoch = []
+
         for batch_idx in range(pg.num_batches):
-            run_batch(batch_idx)
+            forward_time, backward_time = run_batch(batch_idx)
+            forward_time_epoch.append(forward_time)
+            backward_time_epoch.append(backward_time)
+
+        forward_times.append(forward_time_epoch)
+        backward_times.append(backward_time_epoch)
+
+    results = omegaconf.OmegaConf.to_container(cfg)
+    results["forward_time"] = forward_times
+    results["backward_time"] = backward_times
+    file = (
+        f"pgo_{cfg.device}_{cfg.inner_optim.solver}_{cfg.num_poses}_"
+        f"{cfg.dataset_size}_{cfg.batch_size}.mat"
+    )
+    savemat(file, results)
 
     s = io.StringIO()
     sortby = pstats.SortKey.CUMULATIVE

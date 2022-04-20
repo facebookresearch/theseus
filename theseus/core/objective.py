@@ -346,7 +346,7 @@ class Objective:
                         f"be batched with batched cost function {batch_name}."
                     )
 
-            batched_cost_function[1].append(cost_function)
+                batched_cost_function[1].append(cost_function)
             self.batch_names_for_cost_functions[cost_function.name] = batch_name
 
     # Adds a cost function to the objective

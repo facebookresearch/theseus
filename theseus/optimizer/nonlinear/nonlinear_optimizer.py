@@ -428,6 +428,7 @@ class NonlinearOptimizer(Optimizer, abc.ABC):
         for (
             batch_cost_function,
             cost_functions,
+            _,
         ) in objective.batched_cost_functions.values():
             vars_attr_names = batch_cost_function._optim_vars_attr_names
             for var_attr_name in vars_attr_names:

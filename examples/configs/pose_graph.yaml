@@ -1,17 +1,17 @@
 seed: 1
 device: "cuda"
 
-num_poses: 128
+num_poses: 1024
 rotation_noise: 0.05
 translation_noise: 0.02
 loop_closure_ratio: 0.2
 loop_closure_outlier_ratio: 0.25
-dataset_size: 64 
+dataset_size: 256 
 batch_size: 32
 
 
 inner_optim:
-  optimizer_cls: LevenbergMarquardt
+  optimizer_cls: GaussNewton
   solver: sparse
   max_iters: 10 
   step_size: 0.1

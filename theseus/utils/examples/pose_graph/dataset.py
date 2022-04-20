@@ -361,14 +361,22 @@ class PoseGraphDataset:
         end = min(start + self.batch_size, self.dataset_size)
         group_cls = self.poses[0].__class__
 
-        poses = [
-            group_cls(data=pose[start:end].clone(), name=pose.name + "__batch")
-            for pose in self.poses
-        ]
-        gt_poses = [
-            group_cls(data=gt_pose[start:end].clone(), name=gt_pose.name + "__batch")
-            for gt_pose in self.gt_poses
-        ]
+        poses = cast(
+            Union[List[th.SE2], List[th.SE3]],
+            [
+                group_cls(data=pose[start:end].clone(), name=pose.name + "__batch")
+                for pose in self.poses
+            ],
+        )
+        gt_poses = cast(
+            Union[List[th.SE2], List[th.SE3]],
+            [
+                group_cls(
+                    data=gt_pose[start:end].clone(), name=gt_pose.name + "__batch"
+                )
+                for gt_pose in self.gt_poses
+            ],
+        )
         edges = [
             PoseGraphEdge(
                 edge.i,

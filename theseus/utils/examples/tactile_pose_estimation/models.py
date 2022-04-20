@@ -248,15 +248,12 @@ def update_tactile_pushing_inputs(
     cfg: omegaconf.DictConfig,
     theseus_inputs: Dict[str, torch.Tensor],
 ):
-    batch_size = batch["img_feats"].shape[0]
     time_steps = dataset.time_steps
     theseus_inputs["sdf_data"] = (
-        (dataset.sdf_data_tensor.data).repeat(batch_size, 1, 1).to(device)
+        (dataset.sdf_data_tensor.data).repeat(1, 1, 1).to(device)
     )
-    theseus_inputs["sdf_cell_size"] = dataset.sdf_cell_size.repeat(batch_size, 1).to(
-        device
-    )
-    theseus_inputs["sdf_origin"] = dataset.sdf_origin.repeat(batch_size, 1).to(device)
+    theseus_inputs["sdf_cell_size"] = dataset.sdf_cell_size.repeat(1, 1).to(device)
+    theseus_inputs["sdf_origin"] = dataset.sdf_origin.repeat(1, 1).to(device)
 
     theseus_inputs.update(
         get_tactile_nn_measurements_inputs(

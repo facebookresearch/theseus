@@ -168,6 +168,8 @@ class TactilePoseEstimator:
                     name=f"intersect_{i}",
                 ),
                 use_batches=use_batches,
+                batch_name="EffectorObjectContactPlanar",
+                shared_aux_vars=True,
             )
 
             objective.add(
@@ -201,7 +203,7 @@ class TactilePoseEstimator:
         # coupled with a dense linear solver based on Cholesky decomposition.
         nl_optimizer = optimizer_cls(
             objective,
-            th.CholeskyDenseSolver,
+            linear_solver_cls=th.CholeskyDenseSolver,
             max_iterations=max_iterations,
             step_size=step_size,
             abs_err_tolerance=0 if force_max_iters else 1e-10,

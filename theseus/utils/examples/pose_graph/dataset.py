@@ -327,7 +327,7 @@ class PoseGraphDataset:
                         inliers.append(True)
                     else:
                         noise_relative_pose = th.SE3.rand(
-                            1, generator=generator, dtype=dtype
+                            dataset_size, generator=generator, dtype=dtype
                         )
                         inliers.append(False)
 

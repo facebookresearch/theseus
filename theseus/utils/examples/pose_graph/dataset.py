@@ -360,7 +360,7 @@ class PoseGraphDataset:
 
     def get_batch_dataset(self, batch_idx: int = 0) -> "PoseGraphDataset":
         assert batch_idx < self.num_batches
-        start = batch_idx * self.num_batches
+        start = batch_idx * self.batch_size
         end = min(start + self.batch_size, self.dataset_size)
         group_cls = self.poses[0].__class__
 

@@ -10,7 +10,7 @@ max_episodes: 100  # if split = true, actual number might be slightly larger
 split_episodes: true
 
 inner_optim:
-  max_iters: 1
+  max_iters: 10
   optimizer: GaussNewton
   reg_w: 0
   backward_mode: FULL
@@ -18,14 +18,15 @@ inner_optim:
   step_size: 1.0
   keep_step_size: true
   force_max_iters: false
-  val_iters: 20
+  val_iters: 50
+  use_batches: true
 
 train:
   # options: "weights_only" or "weights_and_measurement_nn"
   mode: "weights_and_measurement_nn"
-  batch_size: 28
-  num_epochs: 50
-  lr: 3e-4
+  batch_size: 8
+  num_epochs: 200
+  lr: 1e-4
 
 # 0: disc, 1: rect-edges, 2: rect-corners, 3: ellip
 class_label: 2

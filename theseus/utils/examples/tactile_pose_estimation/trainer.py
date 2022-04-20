@@ -95,6 +95,7 @@ class TactilePushingTrainer:
             step_size=cfg.inner_optim.step_size,
             regularization_w=cfg.inner_optim.reg_w,
             force_max_iters=cfg.inner_optim.force_max_iters,
+            use_batches=cfg.inner_optim.use_batches,
         )
 
         # -------------------------------------------------------------------- #

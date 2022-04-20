@@ -23,6 +23,7 @@ class TactilePoseEstimator:
         step_size: float = 1.0,
         regularization_w: float = 0.0,
         force_max_iters: bool = False,
+        use_batches: bool = True,
     ):
         time_steps = dataset.time_steps
 
@@ -108,7 +109,6 @@ class TactilePoseEstimator:
         # Loop over and add all cost functions,
         # cost weights, and their auxiliary variables
         objective = th.Objective()
-        use_batches = True
         nn_meas_idx = 0
         c_square = (np.sqrt(rectangle_shape[0] ** 2 + rectangle_shape[1] ** 2)) ** 2
         for i in range(time_steps):

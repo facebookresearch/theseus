@@ -14,7 +14,7 @@ inner_optim:
   optimizer_cls: GaussNewton
   solver: sparse
   max_iters: 10 
-  step_size: 0.1
+  step_size: 0.75
   backward_mode: implicit
   verbose: true
   track_err_history: true
@@ -29,4 +29,6 @@ outer_optim:
 
 hydra:
   run:
-    dir: examples/outputs
+    dir: /private/home/taoshaf/Documents/theseus/examples/outputs/pose_graph
+  sweep:
+    dir: /private/home/taoshaf/Documents/theseus/examples/outputs/pose_graph/${now:%Y.%m.%d}/${now:%H.%M.%S}

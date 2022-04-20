@@ -917,29 +917,48 @@ class Objective:
                 cost_function_batch._optim_vars_attr_names,
                 cost_function_batch._aux_vars_attr_names,
             ]
-            for vars_attr_names in vars_attr_name_lists:
-                for var_attr_name in vars_attr_names:
-                    variable_batch = cast(
-                        Variable, getattr(cost_function_batch, var_attr_name)
-                    )
-                    original_variable = cast(
-                        Variable, getattr(cost_functions[0], var_attr_name)
-                    )
-                    batch_shape = [self.batch_size] + list(original_variable.shape[1:])
-
-                    variable_batch_data = [
-                        cast(
-                            Variable, getattr(cost_function, var_attr_name)
-                        ).data.expand(batch_shape)
-                        for cost_function in cost_functions
-                    ]
-                    variable_batch.data = torch.cat(variable_batch_data, dim=0)
-
-                    if variable_batch.shape[0] != len(cost_functions) * self.batch_size:
-                        raise ValueError(
-                            f"Provided data for {var_attr_name} in batched cost function "
-                            f"{batch_name} can not be batched."
+            for n, vars_attr_names in enumerate(vars_attr_name_lists):
+                if n == 0 or shared_aux is False:
+                    for var_attr_name in vars_attr_names:
+                        variable_batch = cast(
+                            Variable, getattr(cost_function_batch, var_attr_name)
                         )
+                        original_variable = cast(
+                            Variable, getattr(cost_functions[0], var_attr_name)
+                        )
+                        batch_shape = [self.batch_size] + list(
+                            original_variable.shape[1:]
+                        )
+
+                        variable_batch_data = [
+                            cast(
+                                Variable, getattr(cost_function, var_attr_name)
+                            ).data.expand(batch_shape)
+                            for cost_function in cost_functions
+                        ]
+                        variable_batch.data = torch.cat(variable_batch_data, dim=0)
+
+                        if (
+                            variable_batch.shape[0]
+                            != len(cost_functions) * self.batch_size
+                        ):
+                            raise ValueError(
+                                f"Provided data for {var_attr_name} in batched cost function "
+                                f"{batch_name} can not be batched."
+                            )
+                else:
+                    for var_attr_name in vars_attr_names:
+                        variable_batch = cast(
+                            Variable, getattr(cost_function_batch, var_attr_name)
+                        )
+                        original_variable = cast(
+                            Variable, getattr(cost_functions[0], var_attr_name)
+                        )
+
+                        batch_shape = [self.batch_size * len(cost_functions)] + list(
+                            original_variable.shape[1:]
+                        )
+                        variable_batch.data = original_variable.data.expand(batch_shape)
 
     def _update_batched_optim_variables(self):
         # Update batched optim variables for batch processing

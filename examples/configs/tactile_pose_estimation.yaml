@@ -1,10 +1,31 @@
 seed: 0
+save_all: true
 
 dataset_name: "rectangle-pushing-corners-keypoints"
 sdf_name: "rect"
 
-episode: 0
+episode_length: 25
 max_steps: 100
+max_episodes: 100  # if split = true, actual number might be slightly larger
+split_episodes: true
+
+inner_optim:
+  max_iters: 5
+  optimizer: GaussNewton
+  reg_w: 0
+  backward_mode: FULL
+  force_implicit_by_epoch: 3
+  step_size: 1.0
+  keep_step_size: true
+  force_max_iters: false
+  val_iters: 20
+
+train:
+  # options: "weights_only" or "weights_and_measurement_nn"
+  mode: "weights_and_measurement_nn"
+  batch_size: 16
+  num_epochs: 50
+  lr: 3e-4
 
 # 0: disc, 1: rect-edges, 2: rect-corners, 3: ellip
 class_label: 2
@@ -19,18 +40,7 @@ tactile_cost:
     min_win_mf: 10
     max_win_mf: 40
     step_win_mf: 5
-
     init_pretrained_model: True
-
-train:
-  # options: "weights_only" or "weights_and_measurement_nn"
-  mode: "weights_only"
-
-  batch_size: 1
-  num_batches: 1
-
-  num_epochs: 100
-  eps_tracking_loss: 1e-5
 
 options:
   vis_traj: True

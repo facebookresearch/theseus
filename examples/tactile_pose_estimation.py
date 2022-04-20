@@ -2,7 +2,8 @@
 #
 # This source code is licensed under the MIT license found in the
 # LICENSE file in the root directory of this source tree.
-
+import logging
+import os
 import pathlib
 import random
 
@@ -10,11 +11,10 @@ import hydra
 import matplotlib.pyplot as plt
 import numpy as np
 import torch
-import torch.nn as nn
-import torch.nn.functional as F
-import torch.optim as optim
-
 import theseus.utils.examples as theg
+
+# Logger
+logger = logging.getLogger(__name__)
 
 # To run this example, you will need a tactile pushing dataset available at
 # https://dl.fbaipublicfiles.com/theseus/tactile_pushing_data.tar.gz
@@ -62,120 +62,46 @@ plt.ion()
 
 
 def run_learning_loop(cfg):
-    dataset_path = EXP_PATH / "datasets" / f"{cfg.dataset_name}.json"
-    sdf_path = EXP_PATH / "sdfs" / f"{cfg.sdf_name}.json"
-    dataset = theg.TactilePushingDataset(dataset_path, sdf_path, cfg.episode, device)
-
-    # -------------------------------------------------------------------- #
-    # Create pose estimator (which wraps a TheseusLayer)
-    # -------------------------------------------------------------------- #
-    pose_estimator = theg.TactilePoseEstimator(
-        dataset,
-        max_steps=cfg.max_steps,
-        min_window_moving_frame=cfg.tactile_cost.min_win_mf,
-        max_window_moving_frame=cfg.tactile_cost.max_win_mf,
-        step_window_moving_frame=cfg.tactile_cost.step_win_mf,
-        rectangle_shape=(cfg.shape.rect_len_x, cfg.shape.rect_len_y),
-        device=device,
-    )
-    time_steps = pose_estimator.time_steps
-
-    # -------------------------------------------------------------------- #
-    # Creating parameters to learn
-    # -------------------------------------------------------------------- #
-    if cfg.tactile_cost.init_pretrained_model:
-        measurements_model_path = (
-            EXP_PATH / "models" / "transform_prediction_keypoints.pt"
-        )
-    else:
-        measurements_model_path = None
-    (
-        measurements_model,
-        qsp_model,
-        mf_between_model,
-        learnable_params,
-        hyperparameters,
-    ) = theg.create_tactile_models(
-        cfg.train.mode, device, measurements_model_path=measurements_model_path
-    )
-    eps_tracking_loss = hyperparameters.get(
-        "eps_tracking_loss", cfg.train.eps_tracking_loss
-    )
-    outer_optim = optim.Adam(learnable_params, lr=hyperparameters["learning_rate"])
+    root_path = pathlib.Path(os.getcwd())
+    logger.info(f"LOGGING TO {str(root_path)}")
+    trainer = theg.TactilePushingTrainer(cfg, EXP_PATH, device)
 
     # -------------------------------------------------------------------- #
     # Main learning loop
     # -------------------------------------------------------------------- #
     # Use theseus_layer in an outer learning loop to learn different cost
     # function parameters:
-    measurements = dataset.get_measurements(
-        cfg.train.batch_size, cfg.train.num_batches, time_steps
-    )
-    obj_poses_gt = dataset.obj_poses[0:time_steps, :].clone().requires_grad_(True)
-    eff_poses_gt = dataset.eff_poses[0:time_steps, :].clone().requires_grad_(True)
-    theseus_inputs = {}
-    for _ in range(cfg.train.num_epochs):
-        losses = []
-        for batch_idx, batch in enumerate(measurements):
-            theg.update_tactile_pushing_inputs(
-                dataset=dataset,
-                batch=batch,
-                measurements_model=measurements_model,
-                qsp_model=qsp_model,
-                mf_between_model=mf_between_model,
-                device=device,
-                cfg=cfg,
-                time_steps=time_steps,
-                theseus_inputs=theseus_inputs,
+    results_train = {}
+    results_val = {}
+    for epoch in range(cfg.train.num_epochs):
+        logger.info(f" ********************* EPOCH {epoch} *********************")
+        logger.info(" -------------- TRAINING --------------")
+        train_losses, results_train[epoch], _ = trainer.compute_loss(epoch)
+        logger.info(f"AVG. TRAIN LOSS: {np.mean(train_losses)}")
+        torch.save(results_train, root_path / "results_train.pt")
+
+        logger.info(" -------------- VALIDATION --------------")
+        with torch.no_grad():
+            val_losses, results_val[epoch], image_data = trainer.compute_loss(
+                epoch, update=False
             )
-
-            theseus_inputs, _ = pose_estimator.forward(
-                theseus_inputs, optimizer_kwargs={"verbose": True}
-            )
-
-            obj_poses_opt, eff_poses_opt = theg.get_tactile_poses_from_values(
-                values=theseus_inputs, time_steps=time_steps
-            )
-
-            loss = F.mse_loss(obj_poses_opt[batch_idx, :], obj_poses_gt)
-            loss.backward()
-
-            nn.utils.clip_grad_norm_(qsp_model.parameters(), 100, norm_type=2)
-            nn.utils.clip_grad_norm_(mf_between_model.parameters(), 100, norm_type=2)
-
-            with torch.no_grad():
-                for name, param in qsp_model.named_parameters():
-                    print(name, param.data)
-                for name, param in mf_between_model.named_parameters():
-                    print(name, param.data)
-
-                print("    grad qsp", qsp_model.param.grad.norm().item())
-                print("    grad mfb", mf_between_model.param.grad.norm().item())
-
-            outer_optim.step()
-
-            with torch.no_grad():
-                for param in qsp_model.parameters():
-                    param.data.clamp_(0)
-                for param in mf_between_model.parameters():
-                    param.data.clamp_(0)
-
-            losses.append(loss.item())
+        logger.info(f"AVG. VAL LOSS: {np.mean(val_losses)}")
+        torch.save(results_val, root_path / "results_val.pt")
 
         if cfg.options.vis_traj:
-            theg.visualize_tactile_push2d(
-                obj_poses=obj_poses_opt[0, :],
-                eff_poses=eff_poses_opt[0, :],
-                obj_poses_gt=obj_poses_gt,
-                eff_poses_gt=eff_poses_gt,
-                rect_len_x=cfg.shape.rect_len_x,
-                rect_len_y=cfg.shape.rect_len_y,
-            )
-
-        print(f"AVG. LOSS: {np.mean(losses)}")
-
-        if np.mean(losses) < eps_tracking_loss:
-            break
+            for i in range(len(image_data["obj_opt"])):
+                save_dir = root_path / f"img_{i}"
+                save_dir.mkdir(parents=True, exist_ok=True)
+                save_fname = save_dir / f"epoch{epoch}.png"
+                theg.visualize_tactile_push2d(
+                    obj_poses=image_data["obj_opt"][i],
+                    eff_poses=image_data["eff_opt"][i],
+                    obj_poses_gt=image_data["obj_gt"][i],
+                    eff_poses_gt=image_data["eff_gt"][i],
+                    rect_len_x=cfg.shape.rect_len_x,
+                    rect_len_y=cfg.shape.rect_len_y,
+                    save_fname=save_fname,
+                )
 
 
 @hydra.main(config_path="./configs/", config_name="tactile_pose_estimation")
@@ -184,7 +110,6 @@ def main(cfg):
     torch.manual_seed(cfg.seed)
     random.seed(cfg.seed)
     np.random.seed(cfg.seed)
-
     run_learning_loop(cfg)
 
 

@@ -334,7 +334,9 @@ class Objective:
                         )
 
                     original_cost_function = batched_cost_function[1][0]
-                    if original_cost_function.aux_vars is not cost_function.aux_vars:
+                    if list(original_cost_function.aux_vars) == list(
+                        cost_function.aux_vars
+                    ):
                         raise ValueError(
                             f"Provided cost function with shared aux vars can not "
                             f"be batched with batched cost function {batch_name}."

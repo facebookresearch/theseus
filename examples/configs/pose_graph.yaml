@@ -1,5 +1,5 @@
 seed: 1
-device: "cpu"
+device: "cuda"
 
 num_poses: 128
 rotation_noise: 0.05

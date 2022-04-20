@@ -129,6 +129,8 @@ def run(
 
     forward_times = []
     backward_times = []
+    forward_mems = []
+    backward_mems = []
 
     for edge in pg_batch.edges:
         relative_pose_cost = th.eb.Between(
@@ -207,6 +209,7 @@ def run(
             pose_loss_ref = pose_loss(pg_batch.poses, pg_batch.gt_poses)
 
         start_event.record()
+        torch.cuda.reset_max_memory_allocated()
         pr.enable()
         theseus_outputs, _ = theseus_optim.forward(
             input_data=theseus_inputs,
@@ -219,48 +222,64 @@ def run(
         )
         pr.disable()
         end_event.record()
-        torch.cuda.synchronize()
 
+        torch.cuda.synchronize()
         forward_time = start_event.elapsed_time(end_event)
+        forward_mem = torch.cuda.max_memory_allocated() / 1048576
         log.info(f"Forward pass took {forward_time} ms.")
+        log.info(f"Forward pass used {forward_mem} MBs.")
 
         start_event.record()
+        torch.cuda.reset_max_memory_allocated()
         pr.enable()
         model_optimizer.zero_grad()
         loss = (pose_loss(pose_vars, pg_batch.gt_poses) - pose_loss_ref) / pose_loss_ref
         loss.backward()
         model_optimizer.step()
+        backward_mem = torch.cuda.max_memory_allocated() / 1048576
         pr.disable()
         end_event.record()
-        torch.cuda.synchronize()
 
+        torch.cuda.synchronize()
         backward_time = start_event.elapsed_time(end_event)
         log.info(f"Backward pass took {backward_time} ms.")
+        log.info(f"Backward pass used {backward_mem} MBs.")
 
         loss_value = torch.sum(loss.detach()).item()
         log.info(f"Loss value: {loss_value}.")
 
         print_histogram(pg_batch, theseus_outputs, "Output histogram:")
 
-        return [forward_time, backward_time]
+        return [forward_time, backward_time, forward_mem, backward_mem]
 
     for epoch in range(num_epochs):
         log.info(f" ******************* EPOCH {epoch} ******************* ")
 
         forward_time_epoch = []
         backward_time_epoch = []
+        forward_mem_epoch = []
+        backward_mem_epoch = []
 
         for batch_idx in range(pg.num_batches):
-            forward_time, backward_time = run_batch(batch_idx)
+            forward_time, backward_time, forward_mem, backward_mem = run_batch(
+                batch_idx
+            )
+
             forward_time_epoch.append(forward_time)
             backward_time_epoch.append(backward_time)
+            forward_mem_epoch.append(forward_mem)
+            backward_mem_epoch.append(backward_mem)
 
         forward_times.append(forward_time_epoch)
         backward_times.append(backward_time_epoch)
+        forward_mems.append(forward_mem_epoch)
+        backward_mems.append(backward_mem_epoch)
 
     results = omegaconf.OmegaConf.to_container(cfg)
     results["forward_time"] = forward_times
     results["backward_time"] = backward_times
+    results["forward_mem"] = forward_mems
+    results["backward_mem"] = backward_mems
     file = (
         f"pgo_{cfg.device}_{cfg.inner_optim.solver}_{cfg.num_poses}_"
         f"{cfg.dataset_size}_{cfg.batch_size}.mat"

@@ -197,6 +197,7 @@ def run(
     num_epochs = cfg.outer_optim.num_epochs
 
     def run_batch(batch_idx: int):
+        log.info(f" ------------------- Batch {batch_idx} ------------------- ")
         start_event = torch.cuda.Event(enable_timing=True)
         end_event = torch.cuda.Event(enable_timing=True)
 
@@ -208,7 +209,7 @@ def run(
             pose_loss_ref = pose_loss(pg_batch.poses, pg_batch.gt_poses)
 
         start_event.record()
-        torch.cuda.reset_max_memory_allocated()
+        torch.cuda.reset_peak_memory_stats()
         pr.enable()
         theseus_outputs, _ = theseus_optim.forward(
             input_data=theseus_inputs,
@@ -229,7 +230,7 @@ def run(
         log.info(f"Forward pass used {forward_mem} MBs.")
 
         start_event.record()
-        torch.cuda.reset_max_memory_allocated()
+        torch.cuda.reset_peak_memory_stats()
         pr.enable()
         model_optimizer.zero_grad()
         loss = (pose_loss(pose_vars, pg_batch.gt_poses) - pose_loss_ref) / pose_loss_ref
@@ -245,7 +246,11 @@ def run(
         log.info(f"Backward pass used {backward_mem} MBs.")
 
         loss_value = torch.sum(loss.detach()).item()
-        log.info(f"Loss value: {loss_value}.")
+        log.info(
+            f"Loss: {loss_value} "
+            f"Kernel Radius: exp({log_loss_radius_tensor.data.item()})="
+            f"{torch.exp(log_loss_radius_tensor.data).item()}"
+        )
 
         print_histogram(pg_batch, theseus_outputs, "Output histogram:")
 

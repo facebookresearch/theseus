@@ -38,6 +38,7 @@ class LUCudaSparseSolver(LinearSolver):
         self.linearization: SparseLinearization = self.linearization
 
         self._num_solver_contexts: int = num_solver_contexts
+        self._batch_size: int = -1
 
         if self.linearization.structure().num_rows:
             if batch_size is not None:
@@ -119,3 +120,7 @@ class LUCudaSparseSolver(LinearSolver):
             damping_alpha_beta,
             True,
         )
+
+    @property
+    def batch_size(self) -> int:
+        return self._solver_contexts[0].batch_size

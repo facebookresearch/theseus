@@ -16,8 +16,7 @@ import torch
 import theseus.constants
 from theseus.core import Objective, Variable
 from theseus.optimizer import Linearization, Optimizer, OptimizerInfo
-from theseus.optimizer.linear import LinearSolver
-from theseus.optimizer.linear.lu_cuda_sparse_solver import LUCudaSparseSolver
+from theseus.optimizer.linear import LinearSolver, LUCudaSparseSolver
 
 
 @dataclass

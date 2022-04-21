@@ -177,7 +177,8 @@ def test_eff_obj_variable_type():
         )
 
         assert isinstance(cost_function.eff_radius, Variable)
-        assert torch.allclose(cost_function.eff_radius.data, eff_radius_t)
+        assert np.allclose(cost_function.eff_radius.data, eff_radius_t)
+        assert len(cost_function.eff_radius.shape) == 2
 
         eff_radius_f = torch.rand(1)
 
@@ -186,3 +187,5 @@ def test_eff_obj_variable_type():
         )
 
         assert isinstance(cost_function.eff_radius, Variable)
+        assert np.allclose(cost_function.eff_radius.data.item(), eff_radius_f)
+        assert len(cost_function.eff_radius.shape) == 2

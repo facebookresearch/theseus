@@ -86,8 +86,8 @@ def test_gp_motion_model_variable_type():
             dt_f = torch.rand(1)
             cost_weight = th.eb.GPCostWeight(q_inv_v, dt_f)
             assert isinstance(cost_weight.dt, Variable)
-            assert isinstance(cost_weight.dt, Variable)
             assert np.allclose(cost_weight.dt.data.item(), dt_f)
+            assert len(cost_weight.dt.shape) == 2
 
 
 def test_gp_motion_model_cost_function_error_vector_vars():

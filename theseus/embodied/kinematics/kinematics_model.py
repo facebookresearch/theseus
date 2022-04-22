@@ -6,21 +6,21 @@
 import abc
 import os
 from dataclasses import dataclass
-from typing import Dict, Optional, Union
+from typing import Dict, List, Optional, Union
 
 import differentiable_robot_model as drm
 import torch
 from stl import mesh
 from urdf_parser_py.urdf import URDF, Mesh
 
-from theseus.geometry import SE3, LieGroup, Point2, Vector
+from theseus.geometry import SE3, LieGroup, Point2, Point3, Vector
 
 RobotModelInput = Union[torch.Tensor, Vector]
 
 
 @dataclass
 class Sphere:
-    position: torch.Tensor
+    position: Point3
     radius: float
 
 
@@ -69,8 +69,7 @@ class UrdfRobotModel(KinematicsModel):
                     mesh_obj
                 )
 
-    @staticmethod
-    def _generate_spheres_from_mesh(mesh):
+    def _generate_spheres_from_mesh(self, mesh):
         pass  # TODO
 
     def _postprocess_quaternion(self, quat):
@@ -133,3 +132,19 @@ class UrdfRobotModel(KinematicsModel):
                 jacobians[link_name] = torch.cat([jac_lin, jac_rot], dim=-2)
 
         return link_poses
+
+    def get_collision_spheres(
+        self, link_states: Dict[str, SE3]
+    ) -> Dict[str, List[Sphere]]:
+        link_spheres = {}
+        for link_name in link_states:
+            link_transform = link_states[link_name]
+            link_spheres[link_name] = [
+                Sphere(
+                    position=link_transform.transform_to(sphere.position),
+                    radius=sphere.radius,
+                )
+                for sphere in self.collision_spheres[link_name]
+            ]
+
+        return link_spheres

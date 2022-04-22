@@ -7,7 +7,7 @@ import abc
 import math
 from dataclasses import dataclass
 from itertools import count
-from typing import Dict, List, Optional, Sequence, Tuple
+from typing import Dict, List, Optional, Sequence
 
 import numpy as np
 import torch
@@ -61,151 +61,21 @@ def random_schedule(max_iters, n_edges) -> torch.Tensor:
     return schedule
 
 
-class ManifoldGaussian:
-    _ids = count(0)
-
+# Initialises message precision to zero
+class Message(th.ManifoldGaussian):
     def __init__(
         self,
         mean: Sequence[Manifold],
         precision: Optional[torch.Tensor] = None,
         name: Optional[str] = None,
     ):
-        self._id = next(ManifoldGaussian._ids)
-        if name:
-            self.name = name
-        else:
-            self.name = f"{self.__class__.__name__}__{self._id}"
-
-        dof = 0
-        for v in mean:
-            dof += v.dof()
-        self._dof = dof
-
-        self.mean = mean
-        self.precision = torch.zeros(mean[0].shape[0], self.dof, self.dof).to(
-            dtype=mean[0].dtype, device=mean[0].device
-        )
-
-    @property
-    def dof(self) -> int:
-        return self._dof
-
-    @property
-    def device(self) -> torch.device:
-        return self.precision[0].device
-
-    @property
-    def dtype(self) -> torch.dtype:
-        return self.precision[0].dtype
-
-    # calls to() on the internal tensors
-    def to(self, *args, **kwargs):
-        for var in self.mean:
-            var = var.to(*args, **kwargs)
-        self.precision = self.precision.to(*args, **kwargs)
-
-    def copy(self, new_name: Optional[str] = None) -> "ManifoldGaussian":
-        if not new_name:
-            new_name = f"{self.name}_copy"
-        mean_copy = [var.copy() for var in self.mean]
-        return ManifoldGaussian(mean_copy, name=new_name)
-
-    def __deepcopy__(self, memo):
-        if id(self) in memo:
-            return memo[id(self)]
-        the_copy = self.copy()
-        memo[id(self)] = the_copy
-        return the_copy
-
-    def update(
-        self,
-        mean: Optional[Sequence[Manifold]] = None,
-        precision: Optional[torch.Tensor] = None,
-    ):
-        if mean is not None:
-            if len(mean) != len(self.mean):
-                raise ValueError(
-                    f"Tried to update mean with sequence of different"
-                    f"lenght to original mean sequence. Given {len(mean)}. "
-                    f"Expected: {len(self.mean)}"
-                )
-            for i in range(len(self.mean)):
-                self.mean[i].update(mean[i])
-
-        if precision is not None:
-            if precision.shape != self.precision.shape:
-                raise ValueError(
-                    f"Tried to update precision with data "
-                    f"incompatible with original tensor shape. Given {precision.shape}. "
-                    f"Expected: {self.precision.shape}"
-                )
-            if precision.dtype != self.dtype:
-                raise ValueError(
-                    f"Tried to update using tensor of dtype {precision.dtype} but precision "
-                    f"has dtype {self.dtype}."
-                )
-
-            self.precision = precision
-
-
-class Marginal(ManifoldGaussian):
-    pass
-
-
-class Message(ManifoldGaussian):
-    pass
-
-
-"""
-Local and retract
-These could be implemented as methods in Manifold class
-"""
-
-
-# Transforms message gaussian to tangent plane at var
-# if return_mean is True, return the (mean, lam) else return (eta, lam).
-# Generalises the local function by transforming the covariance as well as mean.
-def local_gaussian(
-    mess: Message,
-    var: th.LieGroup,
-    return_mean: bool = True,
-) -> Tuple[torch.Tensor, torch.Tensor]:
-    # mean_tp is message mean in tangent space / plane at var
-    mean_tp = var.local(mess.mean[0])
-
-    jac: List[torch.Tensor] = []
-    th.exp_map(var, mean_tp, jacobians=jac)
-
-    # lam_tp is the precision matrix in the tangent plane
-    lam_tp = torch.bmm(torch.bmm(jac[0].transpose(-1, -2), mess.precision), jac[0])
-
-    if return_mean:
-        return mean_tp, lam_tp
-
-    else:
-        eta_tp = torch.matmul(lam_tp, mean_tp.unsqueeze(-1)).squeeze(-1)
-        return eta_tp, lam_tp
-
-
-# Transforms Gaussian in the tangent plane at var to Gaussian where the mean
-# is a group element and the precision matrix is defined in the tangent plane
-# at the mean.
-# Generalises the retract function by transforming the covariance as well as mean.
-# out_gauss is the transformed Gaussian that is updated in place.
-def retract_gaussian(
-    mean_tp: torch.Tensor,
-    precision_tp: torch.Tensor,
-    var: th.LieGroup,
-    out_gauss: ManifoldGaussian,
-):
-    mean = var.retract(mean_tp)
-
-    jac: List[torch.Tensor] = []
-    th.exp_map(var, mean_tp, jacobians=jac)
-    inv_jac = torch.inverse(jac[0])
-    precision = torch.bmm(torch.bmm(inv_jac.transpose(-1, -2), precision_tp), inv_jac)
-
-    out_gauss.update(mean=[mean], precision=precision)
+        if precision is None:
+            dof = sum([v.dof() for v in mean])
+            precision = torch.zeros(mean[0].shape[0], dof, dof).to(
+                dtype=mean[0].dtype, device=mean[0].device
+            )
+        super(Message, self).__init__(mean, precision=precision, name=name)
+        assert dof == self.dof
 
 
 class CostFunctionOrdering:
@@ -350,8 +220,8 @@ class Factor:
             for i in range(num_optim_vars):
                 var_dofs = self.cf.optim_var_at(i).dof()
                 if i != v:
-                    eta_mess, lam_mess = local_gaussian(
-                        vtof_msgs[i], self.lin_point[i], return_mean=False
+                    eta_mess, lam_mess = th.local_gaussian(
+                        self.lin_point[i], vtof_msgs[i], return_mean=False
                     )
                     eta_factor[start : start + var_dofs] += eta_mess[0]
                     lam_factor[
@@ -402,8 +272,8 @@ class Factor:
             # damping in tangent space at linearisation point as message
             # is already in this tangent space. Could equally do damping
             # in the tangent space of the new or old message mean.
-            prev_mess_mean, prev_mess_lam = local_gaussian(
-                ftov_msgs[v], self.lin_point[v], return_mean=True
+            prev_mess_mean, prev_mess_lam = th.local_gaussian(
+                self.lin_point[v], ftov_msgs[v], return_mean=True
             )
             # mean damping
             if new_mess_lam.count_nonzero() != 0:
@@ -414,16 +284,14 @@ class Factor:
                 new_mess_eta = torch.matmul(new_mess_lam, new_mess_mean)
 
             if new_mess_lam.count_nonzero() == 0:
-                new_mess = ManifoldGaussian([self.cf.optim_var_at(v).copy()])
+                new_mess = Message([self.cf.optim_var_at(v).copy()])
                 new_mess.mean[0].data[:] = 0.0
             else:
                 new_mess_mean = torch.matmul(torch.inverse(new_mess_lam), new_mess_eta)
                 new_mess_mean = new_mess_mean[None, ...]
                 new_mess_lam = new_mess_lam[None, ...]
-
-                new_mess = ManifoldGaussian([self.cf.optim_var_at(v).copy()])
-                retract_gaussian(
-                    new_mess_mean, new_mess_lam, self.lin_point[v], new_mess
+                new_mess = th.retract_gaussian(
+                    self.lin_point[v], new_mess_mean, new_mess_lam
                 )
             new_messages.append(new_mess)
 
@@ -616,7 +484,7 @@ class GaussianBeliefPropagation(Optimizer, abc.ABC):
             lams_tp = []  # message lams
             for j, msg in enumerate(ftov_msgs):
                 if self.var_ix_for_edges[j] == i:
-                    tau, lam_tp = local_gaussian(msg, var, return_mean=True)
+                    tau, lam_tp = th.local_gaussian(var, msg, return_mean=True)
                     taus.append(tau[None, ...])
                     lams_tp.append(lam_tp[None, ...])
 
@@ -642,7 +510,8 @@ class GaussianBeliefPropagation(Optimizer, abc.ABC):
                             dim=0
                         )
                         tau_a = torch.matmul(inv_lam_a, sum_taus).squeeze(-1)
-                        retract_gaussian(tau_a, lam_a, var, vtof_msgs[j])
+                        new_mess = th.retract_gaussian(var, tau_a, lam_a)
+                        vtof_msgs[j].update(new_mess.mean, new_mess.precision)
                     ix += 1
 
             # update belief mean and variance
@@ -652,7 +521,8 @@ class GaussianBeliefPropagation(Optimizer, abc.ABC):
                 sum_taus = torch.matmul(lams_tp, taus.unsqueeze(-1)).sum(dim=0)
                 tau = torch.matmul(inv_lam_tau, sum_taus).squeeze(-1)
 
-                retract_gaussian(tau, lam_tau, var, self.beliefs[i])
+                new_belief = th.retract_gaussian(var, tau, lam_tau)
+                self.beliefs[i].update(new_belief.mean, new_belief.precision)
 
     def _pass_fac_to_var_messages(
         self,
@@ -724,10 +594,10 @@ class GaussianBeliefPropagation(Optimizer, abc.ABC):
                 vtof_msgs.append(Message([vtof_msg_mu]))
                 ftov_msgs.append(Message([ftov_msg_mu]))
 
-        # initialise Marginal for belief
-        self.beliefs: List[Marginal] = []
+        # initialise ManifoldGaussian for belief
+        self.beliefs: List[th.ManifoldGaussian] = []
         for var in self.ordering:
-            self.beliefs.append(Marginal([var]))
+            self.beliefs.append(th.ManifoldGaussian([var]))
 
         # compute factor potentials for the first time
         self.factors: List[Factor] = []

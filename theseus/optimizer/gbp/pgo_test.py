@@ -130,7 +130,7 @@ optim_arg = {
     "track_err_history": True,
     "verbose": True,
     "backward_mode": th.BackwardMode.FULL,
-    "damping": 0.6,
+    "damping": 0.0,
     "dropout": 0.0,
     "schedule": synchronous_schedule(max_iterations, optimizer.n_edges),
 }

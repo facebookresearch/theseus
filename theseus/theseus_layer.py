@@ -3,7 +3,6 @@
 # This source code is licensed under the MIT license found in the
 # LICENSE file in the root directory of this source tree.
 
-from functools import partial
 from typing import Any, Dict, Optional, Tuple
 
 import torch
@@ -27,6 +26,9 @@ class TheseusLayer(nn.Module):
         self.optimizer = optimizer
         self._objectives_version = optimizer.objective.current_version
 
+        self._dlm_bwd_objective = None
+        self._dlm_bwd_optimizer = None
+
     def forward(
         self,
         input_data: Optional[Dict[str, torch.Tensor]] = None,
@@ -39,9 +41,15 @@ class TheseusLayer(nn.Module):
             )
         optimizer_kwargs = optimizer_kwargs or {}
         backward_mode = optimizer_kwargs.get("backward_mode", None)
-        dlm_epsilon = optimizer_kwargs.get("dlm_epsilon", 1e-2)
+        dlm_epsilon = optimizer_kwargs.get(TheseusLayerDLMForward._dlm_epsilon, 1e-2)
         if backward_mode == BackwardMode.DLM:
-            # TODO: instantiate self.bwd_objective here.
+
+            if self._dlm_bwd_objective is None:
+                (
+                    self._dlm_bwd_objective,
+                    self._dlm_bwd_optimizer,
+                ) = _instantiate_dlm_bwd_objective(self.objective)
+
             names = set(self.objective.aux_vars.keys()).intersection(input_data.keys())
             differentiable_tensors = [
                 input_data[n] for n in names if input_data[n].requires_grad
@@ -51,6 +59,8 @@ class TheseusLayer(nn.Module):
                 self.optimizer,
                 optimizer_kwargs,
                 input_data,
+                self._dlm_bwd_objective,
+                self._dlm_bwd_optimizer,
                 dlm_epsilon,
                 *differentiable_tensors,
             )
@@ -120,11 +130,40 @@ def _forward(objective, optimizer, optimizer_kwargs, input_data):
     return vars, info
 
 
+def _instantiate_dlm_bwd_objective(objective):
+    bwd_objective = objective.copy()
+    epsilon_var = Variable(torch.ones(1, 1), name=TheseusLayerDLMForward._dlm_epsilon)
+    for name, var in bwd_objective.optim_vars.items():
+        grad_var = Variable(
+            torch.zeros_like(var.data), name=name + TheseusLayerDLMForward._grad_suffix
+        )
+        bwd_objective.add(
+            AutoDiffCostFunction(
+                [var],
+                _dlm_perturbation,
+                1,
+                aux_vars=[grad_var, epsilon_var],
+                name="dlm_perturbation_" + name,
+            )
+        )
+
+    # Solve backward objective.
+    bwd_optimizer = GaussNewton(
+        bwd_objective,
+        max_iterations=1,
+        step_size=1.0,
+    )
+    return bwd_objective, bwd_optimizer
+
+
 class TheseusLayerDLMForward(torch.autograd.Function):
     """
     Functionally the same as the forward method in a TheseusLayer
     but computes the direct loss minimization in the backward pass.
     """
+
+    _dlm_epsilon = "dlm_epsilon"
+    _grad_suffix = "_grad"
 
     @staticmethod
     def forward(
@@ -133,6 +172,8 @@ class TheseusLayerDLMForward(torch.autograd.Function):
         optimizer,
         optimizer_kwargs,
         input_data,
+        bwd_objective,
+        bwd_optimizer,
         epsilon,
         *differentiable_tensors,
     ):
@@ -140,12 +181,16 @@ class TheseusLayerDLMForward(torch.autograd.Function):
             objective, optimizer, optimizer_kwargs, input_data
         )
 
-        ctx.input_data = input_data.copy()
-        ctx.objective = objective
+        # Update the optim vars to their solutions.
+        ctx.bwd_data = input_data.copy()
+        values = dict(zip(objective.optim_vars.keys(), optim_tensors))
+        ctx.bwd_data.update(values)
+
+        ctx.bwd_objective = bwd_objective
+        ctx.bwd_optimizer = bwd_optimizer
         ctx.epsilon = epsilon
 
-        # Ideally we compute this in the backward function, but if we try to do that,
-        # it ends up in an infinite loop because it depends on the outputs of this function.
+        # Precompute and cache this.
         with torch.enable_grad():
             grad_sol = torch.autograd.grad(
                 objective.error_squared_norm().sum(),
@@ -153,7 +198,7 @@ class TheseusLayerDLMForward(torch.autograd.Function):
                 retain_graph=True,
             )
 
-        ctx.save_for_backward(*differentiable_tensors, *grad_sol, *optim_tensors)
+        ctx.save_for_backward(*differentiable_tensors, *grad_sol)
         ctx.n = len(differentiable_tensors)
         return (*optim_tensors, info)
 
@@ -163,40 +208,25 @@ class TheseusLayerDLMForward(torch.autograd.Function):
         saved_tensors = ctx.saved_tensors
         differentiable_tensors = saved_tensors[: ctx.n]
         grad_sol = saved_tensors[ctx.n : 2 * ctx.n]
-        optim_tensors = saved_tensors[2 * ctx.n :]
         grad_outputs = grad_outputs[:-1]
 
-        objective = ctx.objective
+        bwd_objective = ctx.bwd_objective
+        bwd_optimizer = ctx.bwd_optimizer
         epsilon = ctx.epsilon
+        bwd_data = ctx.bwd_data
 
         # Update the optim vars to their solutions.
-        input_data = ctx.input_data
-        values = dict(zip(objective.optim_vars.keys(), optim_tensors))
-        input_data.update(values)
-
-        # Construct backward objective.
-        bwd_objective = objective.copy()
-
-        # Can we put all of this into a single cost function?
-        for i, (name, var) in enumerate(bwd_objective.optim_vars.items()):
-            grad_var = Variable(grad_outputs[i], name=name + "_grad")
-            bwd_objective.add(
-                AutoDiffCostFunction(
-                    [var],
-                    partial(_dlm_perturbation, epsilon=epsilon),
-                    1,
-                    aux_vars=[grad_var],
-                    name="DLM_perturbation_" + name,
-                )
-            )
+        grad_data = {
+            TheseusLayerDLMForward._dlm_epsilon: torch.tensor(epsilon)
+            .to(grad_outputs[0])
+            .reshape(1, 1)
+        }
+        for i, name in enumerate(bwd_objective.optim_vars.keys()):
+            grad_data[name + TheseusLayerDLMForward._grad_suffix] = grad_outputs[i]
+        bwd_data.update(grad_data)
 
         # Solve backward objective.
-        bwd_objective.update(input_data)
-        bwd_optimizer = GaussNewton(
-            bwd_objective,
-            max_iterations=1,
-            step_size=1.0,
-        )
+        bwd_objective.update(bwd_data)
         bwd_optimizer.optimize()
 
         # Compute gradients.
@@ -208,10 +238,11 @@ class TheseusLayerDLMForward(torch.autograd.Function):
             )
 
         grads = [(gs - gp) / epsilon for gs, gp in zip(grad_sol, grad_perturbed)]
-        return (None, None, None, None, None, *grads)
+        return (None, None, None, None, None, None, None, *grads)
 
 
-def _dlm_perturbation(optim_vars, aux_vars, epsilon):
+def _dlm_perturbation(optim_vars, aux_vars):
     v = optim_vars[0]
     g = aux_vars[0]
-    return epsilon * v.data - 0.5 * g.data
+    epsilon = aux_vars[1]
+    return epsilon.data * v.data - 0.5 * g.data

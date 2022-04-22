@@ -70,7 +70,26 @@ class UrdfRobotModel(KinematicsModel):
                 )
 
     def _generate_spheres_from_mesh(self, mesh):
-        pass  # TODO
+        """Approximates a mesh with a collection of spheres
+
+        Current placeholder primitive implementation: Generate a single sphere
+        located at the COM of the mesh, with r = distance to farthest triangle
+        """
+        # Find center of each triangle
+        mesh_coms = (
+            torch.Tensor(
+                mesh.points[:, 0:3] + mesh.points[:, 3:6] + mesh.points[:, 6:9]
+            )
+            / 3.0
+        )
+
+        # Sphere center as COM of all COMs
+        center = torch.mean(mesh_coms, dim=0)
+
+        # Sphere radius as farthest point from center
+        radius = torch.max(torch.linalg.norm(mesh_coms - center, dim=-1))
+
+        return [Sphere(position=Point3(center), radius=radius)]
 
     def _postprocess_quaternion(self, quat):
         # Convert quaternion convention (DRM uses xyzw, Theseus uses wxyz)

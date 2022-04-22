@@ -42,7 +42,7 @@ class TheseusLayer(nn.Module):
         self.objective.update(input_data)
         optimizer_kwargs = optimizer_kwargs or {}
         backward_mode = optimizer_kwargs.get("backward_mode", None)
-        DLM_epsilon = optimizer_kwargs.get("DLM_epsilon", 1e-2)
+        dlm_epsilon = optimizer_kwargs.get("dlm_epsilon", 1e-2)
         if backward_mode == BackwardMode.DLM:
             # TODO: instantiate self.bwd_objective here.
             names = set(self.objective.aux_vars.keys()).intersection(input_data.keys())
@@ -52,7 +52,7 @@ class TheseusLayer(nn.Module):
                 self.optimizer,
                 optimizer_kwargs,
                 input_data,
-                DLM_epsilon,
+                dlm_epsilon,
                 *tensors
             )
         else:

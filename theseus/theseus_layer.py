@@ -45,14 +45,16 @@ class TheseusLayer(nn.Module):
         if backward_mode == BackwardMode.DLM:
             # TODO: instantiate self.bwd_objective here.
             names = set(self.objective.aux_vars.keys()).intersection(input_data.keys())
-            tensors = [input_data[n] for n in names]
+            differentiable_tensors = [
+                input_data[n] for n in names if input_data[n].requires_grad
+            ]
             *vars, info = TheseusLayerDLMForward.apply(
                 self.objective,
                 self.optimizer,
                 optimizer_kwargs,
                 input_data,
                 dlm_epsilon,
-                *tensors,
+                *differentiable_tensors,
             )
         else:
             vars, info = _forward(

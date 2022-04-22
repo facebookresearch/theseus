@@ -3,9 +3,8 @@
 # This source code is licensed under the MIT license found in the
 # LICENSE file in the root directory of this source tree.
 
-from typing import Any, Dict, Optional, Tuple
-
 from functools import partial
+from typing import Any, Dict, Optional, Tuple
 
 import torch
 import torch.nn as nn
@@ -15,8 +14,7 @@ from theseus.core import Variable
 from theseus.core.cost_function import AutoDiffCostFunction
 from theseus.optimizer import Optimizer, OptimizerInfo
 from theseus.optimizer.linear import LinearSolver
-from theseus.optimizer.nonlinear import GaussNewton
-from theseus.optimizer.nonlinear import BackwardMode
+from theseus.optimizer.nonlinear import BackwardMode, GaussNewton
 
 
 class TheseusLayer(nn.Module):
@@ -54,7 +52,7 @@ class TheseusLayer(nn.Module):
                 optimizer_kwargs,
                 input_data,
                 dlm_epsilon,
-                *tensors
+                *tensors,
             )
         else:
             vars, info = _forward(
@@ -130,9 +128,17 @@ class TheseusLayerDLMForward(torch.autograd.Function):
 
     @staticmethod
     def forward(
-        ctx, objective, optimizer, optimizer_kwargs, input_data, epsilon, *params
+        ctx,
+        objective,
+        optimizer,
+        optimizer_kwargs,
+        input_data,
+        epsilon,
+        *differentiable_tensors,
     ):
-        optim_vars, info = _forward(objective, optimizer, optimizer_kwargs, input_data)
+        optim_tensors, info = _forward(
+            objective, optimizer, optimizer_kwargs, input_data
+        )
 
         ctx.input_data = input_data.copy()
         ctx.objective = objective
@@ -142,20 +148,22 @@ class TheseusLayerDLMForward(torch.autograd.Function):
         # it ends up in an infinite loop because it depends on the outputs of this function.
         with torch.enable_grad():
             grad_sol = torch.autograd.grad(
-                objective.error_squared_norm().sum(), params, retain_graph=True
+                objective.error_squared_norm().sum(),
+                differentiable_tensors,
+                retain_graph=True,
             )
 
-        ctx.save_for_backward(*params, *grad_sol, *optim_vars)
-        ctx.n_params = len(params)
-        return (*optim_vars, info)
+        ctx.save_for_backward(*differentiable_tensors, *grad_sol, *optim_tensors)
+        ctx.n = len(differentiable_tensors)
+        return (*optim_tensors, info)
 
     @staticmethod
     @once_differentiable
     def backward(ctx, *grad_outputs):
         saved_tensors = ctx.saved_tensors
-        params = saved_tensors[: ctx.n_params]
-        grad_sol = saved_tensors[ctx.n_params : 2 * ctx.n_params]
-        optim_vars = saved_tensors[2 * ctx.n_params :]
+        differentiable_tensors = saved_tensors[: ctx.n]
+        grad_sol = saved_tensors[ctx.n : 2 * ctx.n]
+        optim_tensors = saved_tensors[2 * ctx.n :]
         grad_outputs = grad_outputs[:-1]
 
         objective = ctx.objective
@@ -163,7 +171,7 @@ class TheseusLayerDLMForward(torch.autograd.Function):
 
         # Update the optim vars to their solutions.
         input_data = ctx.input_data
-        values = dict(zip(objective.optim_vars.keys(), optim_vars))
+        values = dict(zip(objective.optim_vars.keys(), optim_tensors))
         input_data.update(values)
 
         # Construct backward objective.
@@ -194,7 +202,9 @@ class TheseusLayerDLMForward(torch.autograd.Function):
         # Compute gradients.
         with torch.enable_grad():
             grad_perturbed = torch.autograd.grad(
-                bwd_objective.error_squared_norm().sum(), params, retain_graph=True
+                bwd_objective.error_squared_norm().sum(),
+                differentiable_tensors,
+                retain_graph=True,
             )
 
         grads = [(gs - gp) / epsilon for gs, gp in zip(grad_sol, grad_perturbed)]

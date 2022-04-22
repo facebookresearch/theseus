@@ -39,7 +39,7 @@ LINEARIZATION_MODE: Dict[str, Type[Linearization]] = {
 }
 
 LINEAR_SOLVER_MODE: Dict[str, Type[LinearSolver]] = {
-    "sparse": th.CholmodSparseSolver,
+    "sparse": th.LUCudaSparseSolver,
     "dense": th.CholeskyDenseSolver,
 }
 

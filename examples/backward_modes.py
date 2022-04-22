@@ -221,7 +221,7 @@ for trial in range(n_trials + 1):
             "track_best_solution": True,
             "verbose": False,
             "backward_mode": th.BackwardMode.DLM,
-            "DLM_epsilon": 1e-2,
+            "dlm_epsilon": 1e-2,
         },
     )
     start = time.time()

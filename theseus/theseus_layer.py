@@ -11,10 +11,11 @@ import torch
 import torch.nn as nn
 from torch.autograd.function import once_differentiable
 
-from theseus import Variable, GaussNewton
+from theseus.core import Variable
 from theseus.core.cost_function import AutoDiffCostFunction
 from theseus.optimizer import Optimizer, OptimizerInfo
 from theseus.optimizer.linear import LinearSolver
+from theseus.optimizer.nonlinear import GaussNewton
 from theseus.optimizer.nonlinear import BackwardMode
 
 

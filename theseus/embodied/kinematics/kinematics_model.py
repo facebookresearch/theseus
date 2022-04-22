@@ -4,14 +4,24 @@
 # LICENSE file in the root directory of this source tree.
 
 import abc
+import os
+from dataclasses import dataclass
 from typing import Dict, Optional, Union
 
 import differentiable_robot_model as drm
 import torch
+from stl import mesh
+from urdf_parser_py.urdf import URDF, Mesh
 
 from theseus.geometry import SE3, LieGroup, Point2, Vector
 
 RobotModelInput = Union[torch.Tensor, Vector]
+
+
+@dataclass
+class Sphere:
+    position: torch.Tensor
+    radius: float
 
 
 class KinematicsModel(abc.ABC):
@@ -37,8 +47,31 @@ class IdentityModel(KinematicsModel):
 
 
 class UrdfRobotModel(KinematicsModel):
-    def __init__(self, urdf_path: str):
+    def __init__(self, urdf_path: str, collision_params: Dict[str, float] = None):
+        # Initialize DRM
         self.drm_model = drm.DifferentiableRobotModel(urdf_path)
+
+        # Parse URDF for collision geometries
+        self.collision_params = collision_params or {}
+        self.collision_spheres = {}
+
+        robot = URDF.from_xml_file(urdf_path)
+        for link in robot.links:
+            if link.collision is not None and type(link.collision.geometry) is Mesh:
+                # Load mesh file
+                mesh_path = os.path.join(
+                    os.path.dirname(urdf_path), link.collision.geometry.filename
+                )
+                mesh_obj = mesh.Mesh.from_file(mesh_path)
+
+                # Process mesh
+                self.collision_spheres[link.name] = self._generate_spheres_from_mesh(
+                    mesh_obj
+                )
+
+    @staticmethod
+    def _generate_spheres_from_mesh(mesh):
+        pass  # TODO
 
     def _postprocess_quaternion(self, quat):
         # Convert quaternion convention (DRM uses xyzw, Theseus uses wxyz)

@@ -83,13 +83,16 @@ class RobustLoss(LossFunction):
         error_squared_norm = torch.sum(error**2, dim=1, keepdim=True)
         return self.evaluate(error_squared_norm)
 
+    def _rescale(self, s: torch.Tensor) -> torch.Tensor:
+        return (self.linearize(s) + 1e-20).sqrt()
+
     def rescale(
         self,
         jacobians: List[torch.Tensor],
         error: torch.Tensor,
     ) -> Tuple[List[torch.Tensor], torch.Tensor]:
         error_squared_norm = torch.sum(error**2, dim=1, keepdim=True)
-        rescale = self.linearize(error_squared_norm).sqrt()
+        rescale = self._rescale(error_squared_norm)
 
         return [
             (rescale * jacobian.view(jacobian.shape[0], -1)).view(jacobian.shape)
@@ -140,6 +143,10 @@ class WelschLoss(RobustLoss):
     def evaluate(self, s: torch.Tensor) -> torch.Tensor:
         radius = self.log_loss_radius.data.exp()
         return radius - radius * torch.exp(-s / radius)
+
+    def _rescale(self, s: torch.Tensor) -> torch.Tensor:
+        radius = self.log_loss_radius.data.exp()
+        return torch.exp(-0.5 * s / radius)
 
     def linearize(self, s: torch.Tensor) -> torch.Tensor:
         radius = self.log_loss_radius.data.exp()

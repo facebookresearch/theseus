@@ -130,32 +130,6 @@ def _forward(objective, optimizer, optimizer_kwargs, input_data):
     return vars, info
 
 
-def _instantiate_dlm_bwd_objective(objective):
-    bwd_objective = objective.copy()
-    epsilon_var = Variable(torch.ones(1, 1), name=TheseusLayerDLMForward._dlm_epsilon)
-    for name, var in bwd_objective.optim_vars.items():
-        grad_var = Variable(
-            torch.zeros_like(var.data), name=name + TheseusLayerDLMForward._grad_suffix
-        )
-        bwd_objective.add(
-            AutoDiffCostFunction(
-                [var],
-                _dlm_perturbation,
-                1,
-                aux_vars=[grad_var, epsilon_var],
-                name="dlm_perturbation_" + name,
-            )
-        )
-
-    # Solve backward objective.
-    bwd_optimizer = GaussNewton(
-        bwd_objective,
-        max_iterations=1,
-        step_size=1.0,
-    )
-    return bwd_objective, bwd_optimizer
-
-
 class TheseusLayerDLMForward(torch.autograd.Function):
     """
     Functionally the same as the forward method in a TheseusLayer
@@ -246,3 +220,28 @@ def _dlm_perturbation(optim_vars, aux_vars):
     g = aux_vars[0]
     epsilon = aux_vars[1]
     return epsilon.data * v.data - 0.5 * g.data
+
+
+def _instantiate_dlm_bwd_objective(objective):
+    bwd_objective = objective.copy()
+    epsilon_var = Variable(torch.ones(1, 1), name=TheseusLayerDLMForward._dlm_epsilon)
+    for name, var in bwd_objective.optim_vars.items():
+        grad_var = Variable(
+            torch.zeros_like(var.data), name=name + TheseusLayerDLMForward._grad_suffix
+        )
+        bwd_objective.add(
+            AutoDiffCostFunction(
+                [var],
+                _dlm_perturbation,
+                1,
+                aux_vars=[grad_var, epsilon_var],
+                name="dlm_perturbation_" + name,
+            )
+        )
+
+    bwd_optimizer = GaussNewton(
+        bwd_objective,
+        max_iterations=1,
+        step_size=1.0,
+    )
+    return bwd_objective, bwd_optimizer

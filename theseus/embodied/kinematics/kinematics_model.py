@@ -160,7 +160,7 @@ class UrdfRobotModel(KinematicsModel):
             link_transform = link_states[link_name]
             link_spheres[link_name] = [
                 Sphere(
-                    position=link_transform.transform_to(sphere.position),
+                    position=link_transform.transform_from(sphere.position),
                     radius=sphere.radius,
                 )
                 for sphere in self.collision_spheres[link_name]

@@ -132,6 +132,4 @@ def test_backwards():
     da_dx_truncated = torch.autograd.grad(
         updated_inputs["a"], data_x, retain_graph=True
     )[0].squeeze()
-    print(da_dx_numeric)
-    print(da_dx_truncated)
     assert torch.allclose(da_dx_numeric, da_dx_truncated, atol=1e-3)

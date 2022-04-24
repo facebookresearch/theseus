@@ -155,25 +155,28 @@ class TheseusLayerDLMForward(torch.autograd.Function):
             objective, optimizer, optimizer_kwargs, input_data
         )
 
-        # Update the optim vars to their solutions.
-        ctx.bwd_data = input_data.copy()
-        values = dict(zip(objective.optim_vars.keys(), optim_tensors))
-        ctx.bwd_data.update(values)
+        # Skip computation if there are no differentiable inputs.
+        if len(differentiable_tensors) > 0:
+            # Update the optim vars to their solutions.
+            ctx.bwd_data = input_data.copy()
+            values = dict(zip(objective.optim_vars.keys(), optim_tensors))
+            ctx.bwd_data.update(values)
 
-        ctx.bwd_objective = bwd_objective
-        ctx.bwd_optimizer = bwd_optimizer
-        ctx.epsilon = epsilon
+            ctx.bwd_objective = bwd_objective
+            ctx.bwd_optimizer = bwd_optimizer
+            ctx.epsilon = epsilon
+            ctx.device = objective.device
 
-        # Precompute and cache this.
-        with torch.enable_grad():
-            grad_sol = torch.autograd.grad(
-                objective.error_squared_norm().sum(),
-                differentiable_tensors,
-                retain_graph=True,
-            )
+            # Precompute and cache this.
+            with torch.enable_grad():
+                grad_sol = torch.autograd.grad(
+                    objective.error_squared_norm().sum(),
+                    differentiable_tensors,
+                    retain_graph=True,
+                )
 
-        ctx.save_for_backward(*differentiable_tensors, *grad_sol)
-        ctx.n = len(differentiable_tensors)
+            ctx.save_for_backward(*differentiable_tensors, *grad_sol)
+            ctx.n = len(differentiable_tensors)
         return (*optim_tensors, info)
 
     @staticmethod
@@ -201,6 +204,7 @@ class TheseusLayerDLMForward(torch.autograd.Function):
 
         # Solve backward objective.
         bwd_objective.update(bwd_data)
+        bwd_objective.to(ctx.device)
         bwd_optimizer.optimize()
 
         # Compute gradients.
@@ -233,7 +237,7 @@ def _instantiate_dlm_bwd_objective(objective):
             AutoDiffCostFunction(
                 [var],
                 _dlm_perturbation,
-                1,
+                var.shape[1],
                 aux_vars=[grad_var, epsilon_var],
                 name="dlm_perturbation_" + name,
             )

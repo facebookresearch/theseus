@@ -7,7 +7,7 @@
 import hydra
 from hydra.utils import get_original_cwd
 import kornia
-import torch.nn as nn
+from typing import List
 
 import theseus as th
 import torch
@@ -24,6 +24,10 @@ FONT_SZ = 0.5
 FONT_PT = (5, 15)
 
 
+# TODO
+# - batch the masked_select
+
+
 def warp_perspective_norm(H, img):
     height, width = img.shape[-2:]
     grid = kornia.utils.create_meshgrid(
@@ -36,18 +40,18 @@ def warp_perspective_norm(H, img):
     return img2
 
 
-class DensePhotometricHomography(nn.Module):
-    def __init__(self):
-        super(DensePhotometricHomography, self).__init__()
-        self.H_src_dst = nn.Parameter(torch.Tensor(1, 3, 3))
-        self.reset_parameters()
+def homography_error_fn(optim_vars: List[th.Manifold], aux_vars: List[th.Variable]):
+    H_src_dst = optim_vars[0]
+    img1, img2 = aux_vars
 
-    def reset_parameters(self):
-        torch.nn.init.eye_(self.H_src_dst[0, :, :])
-
-    def forward(self, img1_dst):
-        img1_src = warp_perspective_norm(self.H_src_dst, img1_dst)
-        return img1_src
+    img1_dst = warp_perspective_norm(H_src_dst.data.reshape(-1, 3, 3), img1.data)
+    loss = torch.nn.functional.mse_loss(img1_dst, img2.data, reduction="none")
+    ones = warp_perspective_norm(
+        H_src_dst.data.reshape(-1, 3, 3), torch.ones_like(img1.data)
+    )
+    loss = loss.masked_select((ones > 0.9)).mean()
+    loss = loss.reshape(1, 1)
+    return loss
 
 
 def put_text(img, text, top=True):
@@ -107,37 +111,56 @@ def run(cfg):
         img1, return_transform=True, normalize_returned_transform=True
     )
 
-    dph = DensePhotometricHomography()
-
     log_dir = "viz"
     os.makedirs(log_dir, exist_ok=True)
 
-    if torch.cuda.is_available() and cfg.use_gpu:
-        img1, img2, dph = img1.cuda(), img2.cuda(), dph.cuda()
+    device = "cuda" if torch.cuda.is_available() and cfg.use_gpu else "cpu"
 
-    # create optimizer
-    lr = 1e-3
-    num_iters = 1000
-    opt = torch.optim.Adam(dph.parameters(), lr=lr)
+    objective = th.Objective()
 
-    for i in range(num_iters):
-        img1_dst = dph.forward(img1)
-        loss = torch.nn.functional.mse_loss(img1_dst, img2, reduction="none")
-        ones = warp_perspective_norm(dph.H_src_dst, torch.ones_like(img1))
-        loss = loss.masked_select((ones > 0.9)).mean()
+    H_init = torch.eye(3).reshape(1, 9)
+    H_src_dst = th.Vector(data=H_init, name="H_src_dst")
 
-        # compute gradient and update optimizer parameters
-        opt.zero_grad()
-        loss.backward()
-        opt.step()
+    img1 = th.Variable(data=img1, name="img1")
+    img2 = th.Variable(data=img2, name="img2")
 
-        if i % 50 == 0:
-            viz_warp(log_dir, img1, img2, img1_dst, i, float(loss.data))
-            print("iteration %05d, loss: %.3f" % (i, float(loss.data)))
+    homography_cf = th.AutoDiffCostFunction(
+        optim_vars=[H_src_dst],
+        err_fn=homography_error_fn,
+        dim=1,
+        aux_vars=[img1, img2],
+    )
 
-    cmd = "convert -delay 10 -loop 0 %s/out*.png myimage.gif" % log_dir
-    print(cmd)
-    os.system(cmd)
+    homography_cf.to(device)
+
+    objective.add(homography_cf)
+
+    optimizer = th.LevenbergMarquardt(  # GaussNewton(
+        objective,
+        max_iterations=1000,
+        step_size=0.1,
+    )
+
+    theseus_layer = th.TheseusLayer(optimizer)
+    theseus_layer.to(device)
+
+    inputs = {
+        "H_src_dst": H_src_dst.data,
+        "img1": img1.data,
+        "img2": img2.data,
+    }
+    info = theseus_layer.forward(inputs, optimizer_kwargs={"verbose": True})
+
+    # save warped image
+    img1_dst = warp_perspective_norm(H_src_dst.data.reshape(-1, 3, 3), img1.data)
+    viz_warp(
+        log_dir,
+        img1.data,
+        img2.data,
+        img1_dst,
+        info[1].converged_iter.item(),
+        float(objective.error().item()),
+    )
 
 
 @hydra.main(config_path="./configs/", config_name="homography_estimation")

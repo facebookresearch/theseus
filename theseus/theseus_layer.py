@@ -45,24 +45,20 @@ class TheseusLayer(nn.Module):
         if backward_mode == BackwardMode.DLM:
 
             if self._dlm_bwd_objective is None:
-                (
-                    self._dlm_bwd_objective,
-                    self._dlm_bwd_optimizer,
-                ) = _instantiate_dlm_bwd_objective(self.objective)
+                _obj, _opt = _instantiate_dlm_bwd_objective(self.objective)
+                _obj.to(self.device)
+                self._dlm_bwd_objective = _obj
+                self._dlm_bwd_optimizer = _opt
 
-            names = set(self.objective.aux_vars.keys()).intersection(input_data.keys())
-            differentiable_tensors = [
-                input_data[n] for n in names if input_data[n].requires_grad
-            ]
             *vars, info = TheseusLayerDLMForward.apply(
                 self.objective,
                 self.optimizer,
                 optimizer_kwargs,
-                input_data,
                 self._dlm_bwd_objective,
                 self._dlm_bwd_optimizer,
                 dlm_epsilon,
-                *differentiable_tensors,
+                *input_data.keys(),
+                *input_data.values(),
             )
         else:
             vars, info = _forward(
@@ -145,54 +141,65 @@ class TheseusLayerDLMForward(torch.autograd.Function):
         objective,
         optimizer,
         optimizer_kwargs,
-        input_data,
         bwd_objective,
         bwd_optimizer,
         epsilon,
-        *differentiable_tensors,
+        *input_data,
     ):
+        n = len(input_data) // 2
+        input_keys = input_data[:n]
+        input_vals = input_data[n:]
+        ctx.n = n
+
+        input_data = dict(zip(input_keys, input_vals))
+        ctx.input_keys = input_keys
+
+        differentiable_keys = [k for k, v in input_data.items() if v.requires_grad]
+        differentiable_tensors = [v for v in input_vals if v.requires_grad]
+        ctx.differentiable_keys = differentiable_keys
+
         optim_tensors, info = _forward(
             objective, optimizer, optimizer_kwargs, input_data
         )
 
         # Skip computation if there are no differentiable inputs.
-        if len(differentiable_tensors) > 0:
-            # Update the optim vars to their solutions.
-            ctx.bwd_data = input_data.copy()
-            values = dict(zip(objective.optim_vars.keys(), optim_tensors))
-            ctx.bwd_data.update(values)
-
+        if len(differentiable_keys) > 0:
             ctx.bwd_objective = bwd_objective
             ctx.bwd_optimizer = bwd_optimizer
             ctx.epsilon = epsilon
-            ctx.device = objective.device
 
             # Precompute and cache this.
             with torch.enable_grad():
                 grad_sol = torch.autograd.grad(
                     objective.error_squared_norm().sum(),
                     differentiable_tensors,
-                    retain_graph=True,
+                    allow_unused=True,
                 )
-
-            ctx.save_for_backward(*differentiable_tensors, *grad_sol)
-            ctx.n = len(differentiable_tensors)
+            ctx.k = len(differentiable_keys)
+            ctx.save_for_backward(*input_vals, *grad_sol, *optim_tensors)
         return (*optim_tensors, info)
 
     @staticmethod
     @once_differentiable
     def backward(ctx, *grad_outputs):
         saved_tensors = ctx.saved_tensors
-        differentiable_tensors = saved_tensors[: ctx.n]
-        grad_sol = saved_tensors[ctx.n : 2 * ctx.n]
+        input_vals = saved_tensors[: ctx.n]
+        grad_sol = saved_tensors[ctx.n : ctx.n + ctx.k]
+        optim_tensors = saved_tensors[ctx.n + ctx.k :]
         grad_outputs = grad_outputs[:-1]
 
         bwd_objective = ctx.bwd_objective
         bwd_optimizer = ctx.bwd_optimizer
         epsilon = ctx.epsilon
-        bwd_data = ctx.bwd_data
+        input_keys = ctx.input_keys
+        differentiable_keys = ctx.differentiable_keys
 
         # Update the optim vars to their solutions.
+        bwd_data = dict(zip(input_keys, input_vals))
+        sol_values = dict(zip(bwd_objective.optim_vars.keys(), optim_tensors))
+        bwd_data.update(sol_values)
+
+        # Add in gradient values.
         grad_data = {
             TheseusLayerDLMForward._dlm_epsilon: torch.tensor(epsilon)
             .to(grad_outputs[0])
@@ -204,19 +211,31 @@ class TheseusLayerDLMForward(torch.autograd.Function):
 
         # Solve backward objective.
         bwd_objective.update(bwd_data)
-        bwd_objective.to(ctx.device)
         bwd_optimizer.optimize()
+
+        differentiable_tensors = [bwd_data[k] for k in differentiable_keys]
 
         # Compute gradients.
         with torch.enable_grad():
             grad_perturbed = torch.autograd.grad(
                 bwd_objective.error_squared_norm().sum(),
                 differentiable_tensors,
-                retain_graph=True,
+                allow_unused=True,
             )
 
-        grads = [(gs - gp) / epsilon for gs, gp in zip(grad_sol, grad_perturbed)]
-        return (None, None, None, None, None, None, None, *grads)
+        grads = []
+        i = 0
+        for k in input_keys:
+            if i < len(differentiable_keys) and k == differentiable_keys[i]:
+                if grad_sol[i] is not None:
+                    grads.append((grad_sol[i] - grad_perturbed[i]) / epsilon)
+                else:
+                    grads.append(None)
+                i += 1
+            else:
+                grads.append(None)
+        nones = [None] * len(grads)
+        return (None, None, None, None, None, None, *nones, *grads)
 
 
 def _dlm_perturbation(optim_vars, aux_vars):

@@ -50,6 +50,7 @@ class TheseusLayer(nn.Module):
                 self._dlm_bwd_objective = _obj
                 self._dlm_bwd_optimizer = _opt
 
+            input_keys, input_vals = zip(*input_data.items())
             *vars, info = TheseusLayerDLMForward.apply(
                 self.objective,
                 self.optimizer,
@@ -57,8 +58,8 @@ class TheseusLayer(nn.Module):
                 self._dlm_bwd_objective,
                 self._dlm_bwd_optimizer,
                 dlm_epsilon,
-                *input_data.keys(),
-                *input_data.values(),
+                *input_keys,
+                *input_vals,
             )
         else:
             vars, info = _forward(
@@ -154,7 +155,7 @@ class TheseusLayerDLMForward(torch.autograd.Function):
         input_data = dict(zip(input_keys, input_vals))
         ctx.input_keys = input_keys
 
-        differentiable_keys = [k for k, v in input_data.items() if v.requires_grad]
+        differentiable_keys = [k for k in input_keys if input_data[k].requires_grad]
         differentiable_tensors = [v for v in input_vals if v.requires_grad]
         ctx.differentiable_keys = differentiable_keys
 

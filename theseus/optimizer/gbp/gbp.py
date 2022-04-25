@@ -77,6 +77,18 @@ class Message(th.ManifoldGaussian):
         super(Message, self).__init__(mean, precision=precision, name=name)
         assert dof == self.dof
 
+    # sets mean to the group identity and zero precision matrix
+    def zero_message(self):
+        new_mean = []
+        for var in self.mean:
+            new_mean_i = var.__class__()
+            new_mean_i.to(dtype=self.dtype, device=self.device)
+            new_mean.append(new_mean_i)
+        new_precision = torch.zeros(self.mean[0].shape[0], self.dof, self.dof).to(
+            dtype=self.dtype, device=self.device
+        )
+        self.update(mean=new_mean, precision=new_precision)
+
 
 class CostFunctionOrdering:
     def __init__(self, objective: Objective, default_order: bool = True):
@@ -163,6 +175,7 @@ class Factor:
             var.copy(new_name=f"{cf.name}_{var.name}_lp") for var in cf.optim_vars
         ]
 
+        self.steps_since_lin = 0
         self.linearize()
 
     # Linearizes factors at current belief if beliefs have deviated
@@ -172,6 +185,7 @@ class Factor:
         relin_threshold: float = None,
         lie=True,
     ):
+        self.steps_since_lin += 1
         do_lin = False
         if relin_threshold is None:
             do_lin = True
@@ -199,6 +213,8 @@ class Factor:
             for j, var in enumerate(self.cf.optim_vars):
                 self.lin_point[j].update(var.data)
 
+            self.steps_since_lin = 0
+
     # Compute all outgoing messages from the factor.
     def comp_mess(
         self,
@@ -223,77 +239,103 @@ class Factor:
                     eta_mess, lam_mess = th.local_gaussian(
                         self.lin_point[i], vtof_msgs[i], return_mean=False
                     )
+
                     eta_factor[start : start + var_dofs] += eta_mess[0]
                     lam_factor[
                         start : start + var_dofs, start : start + var_dofs
                     ] += lam_mess[0]
+
+                    # if self.name == "Factor__0":
+                    #     print('from adj variable')
+                    #     print(eta_mess)
+                    #     print(lam_mess)
+
                 start += var_dofs
 
             # Divide up parameters of distribution
             dofs = self.cf.optim_var_at(v).dof()
             eo = eta_factor[sdim : sdim + dofs]
-            eno = np.concatenate((eta_factor[:sdim], eta_factor[sdim + dofs :]))
+            eno = torch.cat((eta_factor[:sdim], eta_factor[sdim + dofs :]))
 
             loo = lam_factor[sdim : sdim + dofs, sdim : sdim + dofs]
-            lono = np.concatenate(
+            lono = torch.cat(
                 (
                     lam_factor[sdim : sdim + dofs, :sdim],
                     lam_factor[sdim : sdim + dofs, sdim + dofs :],
                 ),
-                axis=1,
+                dim=1,
             )
-            lnoo = np.concatenate(
+            lnoo = torch.cat(
                 (
                     lam_factor[:sdim, sdim : sdim + dofs],
                     lam_factor[sdim + dofs :, sdim : sdim + dofs],
                 ),
-                axis=0,
+                dim=0,
             )
-            lnono = np.concatenate(
+            lnono = torch.cat(
                 (
-                    np.concatenate(
+                    torch.cat(
                         (lam_factor[:sdim, :sdim], lam_factor[:sdim, sdim + dofs :]),
-                        axis=1,
+                        dim=1,
                     ),
-                    np.concatenate(
+                    torch.cat(
                         (
                             lam_factor[sdim + dofs :, :sdim],
                             lam_factor[sdim + dofs :, sdim + dofs :],
                         ),
-                        axis=1,
+                        dim=1,
                     ),
                 ),
-                axis=0,
+                dim=0,
             )
 
-            new_mess_lam = loo - lono @ np.linalg.inv(lnono) @ lnoo
-            new_mess_eta = eo - lono @ np.linalg.inv(lnono) @ eno
+            # print('det', lnono.det())
+            new_mess_lam = loo - lono @ torch.linalg.inv(lnono) @ lnoo
+            new_mess_eta = eo - lono @ torch.linalg.inv(lnono) @ eno
 
             # damping in tangent space at linearisation point as message
             # is already in this tangent space. Could equally do damping
             # in the tangent space of the new or old message mean.
-            prev_mess_mean, prev_mess_lam = th.local_gaussian(
-                self.lin_point[v], ftov_msgs[v], return_mean=True
-            )
             # mean damping
-            if new_mess_lam.count_nonzero() != 0:
-                new_mess_mean = torch.matmul(torch.inverse(new_mess_lam), new_mess_eta)
-                new_mess_mean = (1 - damping[v]) * new_mess_mean + damping[
-                    v
-                ] * prev_mess_mean[0]
-                new_mess_eta = torch.matmul(new_mess_lam, new_mess_mean)
+            if damping[v] != 0:
+                if (
+                    new_mess_lam.count_nonzero() != 0
+                    and ftov_msgs[v].precision.count_nonzero() != 0
+                ):
+                    prev_mess_mean, prev_mess_lam = th.local_gaussian(
+                        self.lin_point[v], ftov_msgs[v], return_mean=True
+                    )
+
+                    new_mess_mean = torch.matmul(
+                        torch.inverse(new_mess_lam), new_mess_eta
+                    )
+                    new_mess_mean = (1 - damping[v]) * new_mess_mean + damping[
+                        v
+                    ] * prev_mess_mean[0]
+                    new_mess_eta = torch.matmul(new_mess_lam, new_mess_mean)
 
             if new_mess_lam.count_nonzero() == 0:
+                # print(self.cf.__class__, 'not updating new message as lam is all zeros')
                 new_mess = Message([self.cf.optim_var_at(v).copy()])
-                new_mess.mean[0].data[:] = 0.0
+                new_mess.zero_message()
+            elif not torch.allclose(new_mess_lam, new_mess_lam.transpose(0, 1)):
+                # print(self.cf.__class__, 'not updating new message as lam is not symmetric')
+                new_mess = Message([self.cf.optim_var_at(v).copy()])
+                new_mess.zero_message()
             else:
-                new_mess_mean = torch.matmul(torch.inverse(new_mess_lam), new_mess_eta)
+                # print(self.cf.__class__, 'sending message')
+                new_mess_mean = torch.matmul(
+                    torch.linalg.pinv(new_mess_lam), new_mess_eta
+                )
                 new_mess_mean = new_mess_mean[None, ...]
                 new_mess_lam = new_mess_lam[None, ...]
                 new_mess = th.retract_gaussian(
                     self.lin_point[v], new_mess_mean, new_mess_lam
                 )
             new_messages.append(new_mess)
+
+            # if self.name == "Factor__0":
+            #     import ipdb; ipdb.set_trace()
 
             sdim += dofs
 
@@ -502,10 +544,9 @@ class GaussianBeliefPropagation(Optimizer, abc.ABC):
 
                     lam_a = lams_inc.sum(dim=0)
                     if lam_a.count_nonzero() == 0:
-                        vtof_msgs[j].mean[0].data[:] = 0.0
-                        vtof_msgs[j].precision = lam_a
+                        vtof_msgs[j].zero_message()
                     else:
-                        inv_lam_a = torch.inverse(lam_a)
+                        inv_lam_a = torch.linalg.pinv(lam_a)
                         sum_taus = torch.matmul(lams_inc, taus_inc.unsqueeze(-1)).sum(
                             dim=0
                         )
@@ -530,12 +571,13 @@ class GaussianBeliefPropagation(Optimizer, abc.ABC):
         ftov_msgs,
         schedule: torch.Tensor,
         damping: torch.Tensor,
+        relin_threshold: float,
     ):
         start = 0
         for factor in self.factors:
             num_optim_vars = factor.cf.num_optim_vars()
 
-            factor.linearize(relin_threshold=None)
+            # factor.linearize(relin_threshold=relin_threshold)
 
             factor.comp_mess(
                 vtof_msgs[start : start + num_optim_vars],
@@ -557,10 +599,10 @@ class GaussianBeliefPropagation(Optimizer, abc.ABC):
         info: NonlinearOptimizerInfo,
         verbose: bool,
         truncated_grad_loop: bool,
-        relin_threshold: float = 0.1,
-        damping: float = 0.0,
-        dropout: float = 0.0,
-        schedule: torch.Tensor = None,
+        relin_threshold: float,
+        damping: float,
+        dropout: float,
+        schedule: torch.Tensor,
         **kwargs,
     ):
         if damping > 1.0 or damping < 0.0:
@@ -587,12 +629,14 @@ class GaussianBeliefPropagation(Optimizer, abc.ABC):
         ftov_msgs: List[Message] = []
         for cf in self.cf_ordering:
             for var in cf.optim_vars:
-                vtof_msg_mu = var.copy(new_name=f"msg_{var.name}_to_{cf.name}")
-                # mean of initial message doesn't matter as long as precision is zero
-                vtof_msg_mu.data[:] = 0
-                ftov_msg_mu = vtof_msg_mu.copy(new_name=f"msg_{cf.name}_to_{var.name}")
-                vtof_msgs.append(Message([vtof_msg_mu]))
-                ftov_msgs.append(Message([ftov_msg_mu]))
+                # Set mean of initial message to identity of the group
+                # doesn't matter what it is as long as precision is zero
+                vtof_msg = Message([var.copy()], name=f"msg_{var.name}_to_{cf.name}")
+                ftov_msg = Message([var.copy()], name=f"msg_{cf.name}_to_{var.name}")
+                vtof_msg.zero_message()
+                ftov_msg.zero_message()
+                vtof_msgs.append(vtof_msg)
+                ftov_msgs.append(ftov_msg)
 
         # initialise ManifoldGaussian for belief
         self.beliefs: List[th.ManifoldGaussian] = []
@@ -621,6 +665,7 @@ class GaussianBeliefPropagation(Optimizer, abc.ABC):
                 ftov_msgs,
                 schedule[it_],
                 damping_arr,
+                relin_threshold,
             )
 
             self._pass_var_to_fac_messages(
@@ -660,6 +705,7 @@ class GaussianBeliefPropagation(Optimizer, abc.ABC):
         track_err_history: bool = False,
         verbose: bool = False,
         backward_mode: BackwardMode = BackwardMode.FULL,
+        relin_threshold: float = 0.1,
         damping: float = 0.0,
         dropout: float = 0.0,
         schedule: torch.Tensor = None,
@@ -684,6 +730,7 @@ class GaussianBeliefPropagation(Optimizer, abc.ABC):
                 info=info,
                 verbose=verbose,
                 truncated_grad_loop=False,
+                relin_threshold=relin_threshold,
                 damping=damping,
                 dropout=dropout,
                 schedule=schedule,

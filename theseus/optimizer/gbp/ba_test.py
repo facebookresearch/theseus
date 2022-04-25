@@ -11,8 +11,7 @@ import torch
 
 import theseus as th
 import theseus.utils.examples as theg
-
-# from theseus.optimizer.gbp import GaussianBeliefPropagation, synchronous_schedule
+from theseus.optimizer.gbp import GaussianBeliefPropagation, synchronous_schedule
 
 # Smaller values} result in error
 th.SO3.SO3_EPS = 1e-6
@@ -121,15 +120,15 @@ def run(cfg: omegaconf.OmegaConf):
             )
 
     # Create optimizer and theseus layer
-    optimizer = th.GaussNewton(
-        objective,
-        max_iterations=cfg["inner_optim"]["max_iters"],
-        step_size=0.1,
-    )
-    # optimizer = GaussianBeliefPropagation(
+    # optimizer = th.GaussNewton(
     #     objective,
     #     max_iterations=cfg["inner_optim"]["max_iters"],
+    #     step_size=0.1,
     # )
+    optimizer = GaussianBeliefPropagation(
+        objective,
+        max_iterations=cfg["inner_optim"]["max_iters"],
+    )
     theseus_optim = th.TheseusLayer(optimizer)
 
     optim_arg = {
@@ -137,9 +136,12 @@ def run(cfg: omegaconf.OmegaConf):
         "track_err_history": True,
         "verbose": True,
         "backward_mode": th.BackwardMode.FULL,
-        # "damping": 0.6,
-        # "dropout": 0.0,
-        # "schedule": synchronous_schedule(cfg["inner_optim"]["max_iters"], optimizer.n_edges),
+        "relin_threshold": 0.1,
+        "damping": 0.9,
+        "dropout": 0.0,
+        "schedule": synchronous_schedule(
+            cfg["inner_optim"]["max_iters"], optimizer.n_edges
+        ),
     }
 
     theseus_inputs = {}
@@ -170,8 +172,8 @@ if __name__ == "__main__":
 
     cfg = {
         "seed": 1,
-        "num_cameras": 10,
-        "num_points": 200,
+        "num_cameras": 2,  # 10
+        "num_points": 20,  # 200
         "average_track_length": 8,
         "track_locality": 0.2,
         "inner_optim": {
@@ -181,7 +183,7 @@ if __name__ == "__main__":
             "keep_step_size": True,
             "regularize": True,
             "ratio_known_cameras": 0.1,
-            "reg_w": 1e-4,
+            "reg_w": 1e-3,
         },
     }
 

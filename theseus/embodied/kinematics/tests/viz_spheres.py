@@ -40,24 +40,23 @@ for i in range(7):
 
 # Query kinematics model
 link_poses = robot_model.forward_kinematics(joint_pos)
-spheres_data = robot_model.get_collision_spheres(link_poses)
+spheres = robot_model.get_collision_spheres(link_poses)
 
 # Update sim with spheres
-for link_name, spheres in spheres_data.items():
-    for sphere in spheres:
-        v_id = p.createVisualShape(
-            p.GEOM_SPHERE,
-            radius=sphere.radius,
-            rgbaColor=[1, 0, 0, 0.2],
-        )
+for sphere in spheres:
+    v_id = p.createVisualShape(
+        p.GEOM_SPHERE,
+        radius=sphere.radius,
+        rgbaColor=[1, 0, 0, 0.2],
+    )
 
-        p.createMultiBody(
-            baseMass=0.0,
-            baseVisualShapeIndex=v_id,
-            basePosition=sphere.position.data.squeeze(),
-            baseInertialFramePosition=[0, 0, 0],
-            useMaximalCoordinates=False,
-        )
+    p.createMultiBody(
+        baseMass=0.0,
+        baseVisualShapeIndex=v_id,
+        basePosition=sphere.position.data.squeeze(),
+        baseInertialFramePosition=[0, 0, 0],
+        useMaximalCoordinates=False,
+    )
 
 try:
     while True:

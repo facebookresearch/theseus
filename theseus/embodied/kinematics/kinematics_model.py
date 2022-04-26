@@ -152,10 +152,8 @@ class UrdfRobotModel(KinematicsModel):
 
         return link_poses
 
-    def get_collision_spheres(
-        self, link_states: Dict[str, LieGroup]
-    ) -> Dict[str, List[Sphere]]:
-        link_spheres = {}
+    def get_collision_spheres(self, link_states: Dict[str, LieGroup]) -> List[Sphere]:
+        spheres_ret = []
         for link_name in link_states:
             # Skip link if no collision spheres are associated
             if link_name not in self.collision_spheres:
@@ -163,12 +161,15 @@ class UrdfRobotModel(KinematicsModel):
 
             # Apply link pose to link spheres
             link_transform = link_states[link_name]
-            link_spheres[link_name] = [
-                Sphere(
-                    position=cast(SE3, link_transform).transform_from(sphere.position),
-                    radius=sphere.radius,
+            for sphere in self.collision_spheres[link_name]:
+                sphere_pos_transformed = cast(SE3, link_transform).transform_from(
+                    sphere.position
                 )
-                for sphere in self.collision_spheres[link_name]
-            ]
+                spheres_ret.append(
+                    Sphere(
+                        position=sphere_pos_transformed,
+                        radius=sphere.radius,
+                    )
+                )
 
-        return link_spheres
+        return spheres_ret

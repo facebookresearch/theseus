@@ -131,11 +131,13 @@ class UrdfRobotModel(KinematicsModel):
             )
 
         # Compute forward kinematics for all links
+        fk_output = self.drm_model.compute_forward_kinematics_all_links(
+            joint_states_input
+        )
+
         link_poses: Dict[str, LieGroup] = {}
         for link_name in self.drm_model.get_link_names():
-            pos, quat = self.drm_model.compute_forward_kinematics(
-                joint_states_input, link_name
-            )
+            pos, quat = fk_output[link_name]
             quat_processed = self._postprocess_quaternion(quat)
 
             link_poses[link_name] = SE3(

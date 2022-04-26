@@ -1,3 +1,8 @@
+# Copyright (c) Meta Platforms, Inc. and affiliates.
+#
+# This source code is licensed under the MIT license found in the
+# LICENSE file in the root directory of this source tree.
+
 import json
 import os
 from enum import Enum
@@ -59,7 +64,9 @@ def test_forward_kinematics_seq(robot_model, dataset):
         ee_se3_target = th.SE3(x_y_z_quaternion=ee_pose_target)
         ee_se3_computed = robot_model.forward_kinematics(joint_state)[ee_name]
 
-        assert torch.allclose(ee_se3_target.local(ee_se3_computed), torch.zeros(6))
+        assert torch.allclose(
+            ee_se3_target.local(ee_se3_computed), torch.zeros(6), atol=1e-5, rtol=1e-4
+        )
 
 
 def test_forward_kinematics_batched(robot_model, dataset):
@@ -71,6 +78,8 @@ def test_forward_kinematics_batched(robot_model, dataset):
     assert torch.allclose(
         ee_se3_target.local(ee_se3_computed),
         torch.zeros(dataset["num_data"], 6),
+        atol=1e-5,
+        rtol=1e-4,
     )
 
 

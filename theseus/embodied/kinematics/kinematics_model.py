@@ -6,7 +6,7 @@
 import abc
 import os
 from dataclasses import dataclass
-from typing import Dict, List, Optional, Union
+from typing import Dict, List, Optional, Union, cast
 
 import differentiable_robot_model as drm
 import torch
@@ -153,14 +153,19 @@ class UrdfRobotModel(KinematicsModel):
         return link_poses
 
     def get_collision_spheres(
-        self, link_states: Dict[str, SE3]
+        self, link_states: Dict[str, LieGroup]
     ) -> Dict[str, List[Sphere]]:
         link_spheres = {}
         for link_name in link_states:
+            # Skip link if no collision spheres are associated
+            if link_name not in self.collision_spheres:
+                continue
+
+            # Apply link pose to link spheres
             link_transform = link_states[link_name]
             link_spheres[link_name] = [
                 Sphere(
-                    position=link_transform.transform_from(sphere.position),
+                    position=cast(SE3, link_transform).transform_from(sphere.position),
                     radius=sphere.radius,
                 )
                 for sphere in self.collision_spheres[link_name]

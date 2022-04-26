@@ -54,7 +54,14 @@ from .geometry import (
     randn_se2,
     randn_se3,
 )
-from .optimizer import DenseLinearization, SparseLinearization, VariableOrdering
+from .optimizer import (
+    DenseLinearization,
+    SparseLinearization,
+    VariableOrdering,
+    ManifoldGaussian,
+    local_gaussian,
+    retract_gaussian,
+)
 from .optimizer.linear import (
     CholeskyDenseSolver,
     CholmodSparseSolver,

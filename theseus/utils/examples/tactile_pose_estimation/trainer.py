@@ -115,7 +115,16 @@ class TactilePushingTrainer:
         ) = create_tactile_models(
             cfg.train.mode, device, measurements_model_path=measurements_model_path
         )
-        self.outer_optim = optim.Adam(learnable_params, lr=cfg.train.lr)
+
+        assert cfg.train.optimizer in ["adam", "rmsprop"]
+        self.outer_optim: torch.optim.Optimizer
+        if cfg.train.optimizer == "adam":
+            self.outer_optim = optim.Adam(learnable_params, lr=cfg.train.lr)
+        else:
+            self.outer_optim = optim.RMSprop(learnable_params, lr=cfg.train.lr)
+        self.lr_scheduler = optim.lr_scheduler.ExponentialLR(
+            self.outer_optim, gamma=cfg.train.lr_decay
+        )
 
     def get_batch_data(
         self,
@@ -280,6 +289,7 @@ class TactilePushingTrainer:
             image_data["obj_gt"].extend([p for p in obj_poses_gt])
             image_data["eff_gt"].extend([p for p in eff_poses_gt])
 
+        self.lr_scheduler.step()
         return losses, results, image_data
 
     @staticmethod

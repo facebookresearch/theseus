@@ -29,6 +29,8 @@ train:
   batch_size: 8
   num_epochs: 200
   lr: 1e-4
+  optimizer: "adam" # "adam", "rmsprop"
+  lr_decay: 1.0
 
 # 0: disc, 1: rect-edges, 2: rect-corners, 3: ellip
 class_label: 2

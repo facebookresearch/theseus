@@ -6,14 +6,15 @@ sdf_name: "rect"
 
 episode_length: 25
 max_steps: 100
-max_episodes: 100
+max_episodes: 100  # if split = true, actual number might be slightly larger
 split_episodes: true
 
 inner_optim:
-  max_iters: 2
+  max_iters: 5
   optimizer: GaussNewton
   reg_w: 0
-  backward_mode: IMPLICIT
+  backward_mode: FULL
+  force_implicit_by_epoch: 3
   step_size: 1.0
   keep_step_size: true
   force_max_iters: false

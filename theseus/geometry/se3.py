@@ -285,14 +285,24 @@ class SE3(LieGroup):
 
             jac[:, 3:, 3:] = jac[:, :3, :3]
 
+            minus_one_by_twelve = torch.tensor(
+                -1 / 12.0,
+                dtype=sine_by_theta.dtype,
+                device=sine_by_theta.device,
+            )
             d_one_minus_cosine_by_theta2 = torch.where(
                 near_zero,
-                -1 / 12.0,
+                minus_one_by_twelve,
                 (sine_by_theta - 2 * one_minus_cosine_by_theta2) / theta2_nz,
+            )
+            minus_one_by_sixty = torch.tensor(
+                -1 / 60.0,
+                dtype=one_minus_cosine_by_theta2.dtype,
+                device=one_minus_cosine_by_theta2.device,
             )
             d_theta_minus_sine_by_theta3 = torch.where(
                 near_zero,
-                -1 / 60.0,
+                minus_one_by_sixty,
                 (one_minus_cosine_by_theta2 - 3 * theta_minus_sine_by_theta3_t)
                 / theta2_nz,
             )

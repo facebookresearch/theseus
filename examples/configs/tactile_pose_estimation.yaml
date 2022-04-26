@@ -15,6 +15,7 @@ inner_optim:
   reg_w: 0
   backward_mode: IMPLICIT
   backward_num_iterations: 2 # only needed by TRUNCATED backward mode
+  dlm_epsilon: None
   force_implicit_by_epoch: 10000
   step_size: 1.0
   keep_step_size: true

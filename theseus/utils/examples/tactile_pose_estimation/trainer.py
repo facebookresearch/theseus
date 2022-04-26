@@ -230,6 +230,7 @@ class TactilePushingTrainer:
                 optimizer_kwargs={
                     "verbose": True,
                     "track_err_history": True,
+                    "track_best_solution": not update,
                     "backward_mode": self._resolve_backward_mode(epoch),
                     "backward_num_iterations": self.cfg.inner_optim.backward_num_iterations,
                     "__keep_final_step_size__": self.cfg.inner_optim.keep_step_size,
@@ -243,8 +244,14 @@ class TactilePushingTrainer:
             logger.info(f"Forward pass used {forward_mem} MBs.")
 
             # ---------- Backward pass and update ----------- #
+            if update:
+                values_dict = theseus_outputs
+            else:
+                values_dict = dict(
+                    (k, v.to(self.device)) for k, v in info.best_solution.items()
+                )
             obj_poses_opt, eff_poses_opt = get_tactile_poses_from_values(
-                values=theseus_outputs, time_steps=dataset.time_steps
+                values=values_dict, time_steps=dataset.time_steps
             )
             se2_opt = th.SE2(x_y_theta=obj_poses_opt.view(-1, 3))
             se2_gt = th.SE2(x_y_theta=obj_poses_gt.view(-1, 3))

@@ -35,7 +35,7 @@ pip install pre-commit && pre-commit install && pre-commit run --all-files
 
 - We encourage more smaller and focused PRs rather than big PRs with many independent changes.
 - Use this [PR template](.github/PULL_REQUEST_TEMPLATE.md) to submit your code for review. Consider using the [draft PR](https://github.blog/2019-02-14-introducing-draft-pull-requests/) option to gather early feedback.
-- Add yourself to the `Assignees`, add at least one [core Theseus team](THANKS.md) member to `Reviewers`, link to any open issues that can be closed when the PR is merged, and add appropriate `Labels` and `Milestone`.
+- Add yourself to the `Assignees`, add [Mustafa Mukadam](https://github.com/mhmukadam) and [Luis Pineda](https://github.com/luisenp) as reviewers, link to any open issues that can be closed when the PR is merged, and add appropriate `Labels` and `Milestone`.
 - We expect the PR is ready for final review only if Continuous Integration tests are passing.
 - Keep your branch up-to-date with `main` by rebasing as necessary.
 - We employ `squash-and-merge` for incorporating PRs. Add a brief change summary to the commit message.

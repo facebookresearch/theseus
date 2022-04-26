@@ -82,7 +82,7 @@ setup_environment: &setup_environment
       name: Setup virtualenv and tools
       working_directory: ~/project
       command: |
-        virtualenv ~/theseus_venv -p /usr/bin/python3.7
+        virtualenv ~/theseus_venv -p /usr/bin/python3
         echo ". ~/theseus_venv/bin/activate" >> $BASH_ENV
         . ~/theseus_venv/bin/activate
         pip install --progress-bar off --upgrade pip

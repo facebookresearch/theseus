@@ -49,11 +49,16 @@ def build_mlp(
 #      matrix -> batch_size x num_rows x num_cols
 #      rows/cols -> batch_size x num_points
 #
+# If the matrix's batch size is 1, broadcasting is supported by expanding the matrix
+# so that it has the batch size of rows and cols.
+#
 # Returns:
 #      data -> batch_size x num_points
 # where
 #      data[i, j] = matrix[i, rows[i, j], cols[i, j]]
 def gather_from_rows_cols(matrix: torch.Tensor, rows: torch.Tensor, cols: torch.Tensor):
+    if matrix.shape[0] == 1:
+        matrix = matrix.expand(rows.shape[0], -1, -1)
     assert matrix.ndim == 3 and rows.ndim == 2 and rows.ndim == 2
     assert matrix.shape[0] == rows.shape[0] and matrix.shape[0] == cols.shape[0]
     assert rows.shape[1] == cols.shape[1]

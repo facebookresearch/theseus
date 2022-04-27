@@ -77,3 +77,8 @@ class Collision2D(CostFunction):
 
     def dim(self) -> int:
         return 1
+
+    # This is needed so that the SDF container also updates with the new aux var
+    def set_aux_var_at(self, index: int, variable: Variable):
+        super().set_aux_var_at(index, variable)
+        self.sdf.update_data(self.sdf_origin, self.sdf_data, self.sdf_cell_size)

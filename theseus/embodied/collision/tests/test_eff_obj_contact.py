@@ -8,7 +8,6 @@ import pytest  # noqa
 import torch
 
 import theseus as th
-from theseus.core import Variable
 from theseus.geometry.tests.test_se2 import create_random_se2
 from theseus.utils import numeric_jacobian
 
@@ -167,7 +166,7 @@ def test_eff_obj_variable_type():
             obj, eff, cost_weight, origin, sdf_data, cell_size, eff_radius
         )
 
-        assert isinstance(cost_function.eff_radius, Variable)
+        assert isinstance(cost_function.eff_radius, th.Variable)
         assert cost_function.eff_radius is eff_radius
 
         eff_radius_t = torch.rand(batch_size, 1).double()
@@ -176,7 +175,7 @@ def test_eff_obj_variable_type():
             obj, eff, cost_weight, origin, sdf_data, cell_size, eff_radius_t
         )
 
-        assert isinstance(cost_function.eff_radius, Variable)
+        assert isinstance(cost_function.eff_radius, th.Variable)
         assert np.allclose(cost_function.eff_radius.data, eff_radius_t)
         assert len(cost_function.eff_radius.shape) == 2
 
@@ -186,6 +185,6 @@ def test_eff_obj_variable_type():
             obj, eff, cost_weight, origin, sdf_data, cell_size, eff_radius_f
         )
 
-        assert isinstance(cost_function.eff_radius, Variable)
+        assert isinstance(cost_function.eff_radius, th.Variable)
         assert np.allclose(cost_function.eff_radius.data.item(), eff_radius_f)
         assert len(cost_function.eff_radius.shape) == 2

@@ -3,7 +3,7 @@
 # This source code is licensed under the MIT license found in the
 # LICENSE file in the root directory of this source tree.
 
-from typing import List, Optional, Tuple, cast
+from typing import List, Optional, Tuple, Union, cast
 
 import torch
 
@@ -22,7 +22,7 @@ class Collision2D(CostFunction):
         sdf_origin: Variable,
         sdf_data: Variable,
         sdf_cell_size: Variable,
-        cost_eps: Variable,
+        cost_eps: Union[float, Variable, torch.Tensor],
         name: Optional[str] = None,
     ):
         if not isinstance(pose, Point2):
@@ -32,7 +32,13 @@ class Collision2D(CostFunction):
         self.sdf_origin = sdf_origin
         self.sdf_data = sdf_data
         self.sdf_cell_size = sdf_cell_size
-        self.cost_eps = cost_eps
+        if not isinstance(cost_eps, Variable):
+            if not isinstance(cost_eps, torch.Tensor):
+                cost_eps = torch.tensor(cost_eps)
+            self.cost_eps = Variable(cost_eps)
+        else:
+            self.cost_eps = cost_eps
+        self.cost_eps.data = self.cost_eps.data.view(-1, 1)
         self.register_optim_vars(["pose"])
         self.register_aux_vars(["sdf_origin", "sdf_data", "sdf_cell_size", "cost_eps"])
         self.robot: KinematicsModel = IdentityModel()

@@ -18,7 +18,7 @@ class DoubleIntegrator(CostFunction):
         vel1: Vector,
         pose2: LieGroup,
         vel2: Vector,
-        dt: Variable,
+        dt: Union[float, torch.Tensor, Variable],
         cost_weight: CostWeight,
         name: Optional[str] = None,
     ):
@@ -28,16 +28,22 @@ class DoubleIntegrator(CostFunction):
             raise ValueError(
                 "All variables for a DoubleIntegrator must have the same dimension."
             )
+        if not isinstance(dt, Variable):
+            if not isinstance(dt, torch.Tensor):
+                dt = torch.tensor(dt)
+            self.dt = Variable(dt)
+        else:
+            self.dt = dt
         if dt.data.squeeze().ndim > 1:
             raise ValueError(
                 "dt data must be a 0-D or 1-D tensor with numel in {1, batch_size}."
             )
+        self.dt.data = self.dt.data.view(-1, 1)
         self.pose1 = pose1
         self.vel1 = vel1
         self.pose2 = pose2
         self.vel2 = vel2
         self.register_optim_vars(["pose1", "vel1", "pose2", "vel2"])
-        self.dt = dt
         self.register_aux_vars(["dt"])
         self.weight = cost_weight
 
@@ -96,11 +102,13 @@ class GPCostWeight(CostWeight):
     def __init__(
         self,
         Qc_inv: Union[Variable, torch.Tensor],
-        dt: Union[Variable, torch.Tensor],
+        dt: Union[float, Variable, torch.Tensor],
         name: Optional[str] = None,
     ):
         super().__init__(name=name)
         if not isinstance(dt, Variable):
+            if not isinstance(dt, torch.Tensor):
+                dt = torch.tensor(dt)
             dt = Variable(dt)
         if dt.data.squeeze().ndim > 1:
             raise ValueError("dt must be a 0-D or 1-D tensor.")
@@ -172,7 +180,7 @@ class GPMotionModel(DoubleIntegrator):
         vel1: Vector,
         pose2: LieGroup,
         vel2: Vector,
-        dt: Variable,
+        dt: Union[float, Variable, torch.Tensor],
         cost_weight: GPCostWeight,
         name: Optional[str] = None,
     ):
@@ -181,6 +189,15 @@ class GPMotionModel(DoubleIntegrator):
                 "GPMotionModel only accepts cost weights of type GPCostWeight. "
                 "For other weight types, consider using DoubleIntegrator instead."
             )
+        if not isinstance(dt, Variable):
+            if not isinstance(dt, torch.Tensor):
+                dt = torch.tensor(dt)
+            self.dt = Variable(dt)
+        else:
+            self.dt = dt
+        if dt.data.squeeze().ndim > 1:
+            raise ValueError("dt must be a 0-D or 1-D tensor.")
+        self.dt.data = self.dt.data.view(-1, 1)
         super().__init__(pose1, vel1, pose2, vel2, dt, cost_weight, name=name)
 
     def _copy_impl(self, new_name: Optional[str] = None) -> "GPMotionModel":

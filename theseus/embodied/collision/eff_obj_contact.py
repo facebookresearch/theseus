@@ -3,7 +3,7 @@
 # This source code is licensed under the MIT license found in the
 # LICENSE file in the root directory of this source tree.
 
-from typing import List, Optional, Tuple, cast
+from typing import List, Optional, Tuple, Union, cast
 
 import torch
 
@@ -23,7 +23,7 @@ class EffectorObjectContactPlanar(CostFunction):
         sdf_origin: Variable,
         sdf_data: Variable,
         sdf_cell_size: Variable,
-        eff_radius: Variable,
+        eff_radius: Union[float, Variable, torch.Tensor],
         name: Optional[str] = None,
         use_huber_loss: bool = False,
     ):
@@ -33,7 +33,15 @@ class EffectorObjectContactPlanar(CostFunction):
         self.sdf_origin = sdf_origin
         self.sdf_data = sdf_data
         self.sdf_cell_size = sdf_cell_size
-        self.eff_radius = eff_radius
+        if not isinstance(eff_radius, Variable):
+            if not isinstance(eff_radius, torch.Tensor):
+                eff_radius = torch.tensor(eff_radius)
+            self.eff_radius = Variable(eff_radius)
+        else:
+            self.eff_radius = eff_radius
+        if eff_radius.data.squeeze().ndim > 1:
+            raise ValueError("eff_radius must be a 0-D or 1-D tensor.")
+        self.eff_radius.data = self.eff_radius.data.view(-1, 1)
         self.register_optim_vars(["obj", "eff"])
         self.register_aux_vars(
             ["sdf_origin", "sdf_data", "sdf_cell_size", "eff_radius"]

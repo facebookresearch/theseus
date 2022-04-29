@@ -4,7 +4,7 @@
 # LICENSE file in the root directory of this source tree.
 
 from .collision import Collision2D, EffectorObjectContactPlanar, SignedDistanceField2D
-from .kinematics import IdentityModel, KinematicsModel, UrdfRobotModel
+from .kinematics import IdentityModel, KinematicsModel, Sphere, UrdfRobotModel
 from .measurements import Between, MovingFrameBetween
 from .misc import VariableDifference
 from .motionmodel import (

@@ -14,6 +14,7 @@ import theseus as th
 
 URDF_REL_PATH = "data/panda_no_gripper.urdf"
 DATA_REL_PATH = "data/panda_fk_dataset.json"
+SPHERE_DATA_FILENAME_BASE = "spheres_data"
 
 
 class VectorType(Enum):
@@ -83,6 +84,9 @@ def test_forward_kinematics_batched(robot_model, dataset):
     )
 
 
+# Test Jacobians
+
+
 @pytest.fixture
 def autograd_jacobians(robot_model, dataset):
     ee_name = dataset["ee_name"]
@@ -126,3 +130,53 @@ def test_jacobian(robot_model, dataset, autograd_jacobians, batch_size):
     assert torch.allclose(
         autograd_jacobians[0:batch_size, ...], jacobian_analytical, atol=1e-6, rtol=1e-3
     )
+
+
+# Test collision spheres
+
+
+def serialize_spheres(spheres):
+    return [
+        {"position": s.position.data.squeeze().tolist(), "radius": s.radius}
+        for s in spheres
+    ]
+
+
+def deserialize_spheres(spheres_data):
+    return [
+        th.eb.Sphere(
+            position=th.Point3(torch.Tensor(s["position"])), radius=s["radius"]
+        )
+        for s in spheres_data
+    ]
+
+
+@pytest.mark.parametrize("batch_size", [1, 3])
+def test_spheres(robot_model, dataset, batch_size):
+    joint_state = dataset["joint_states"][0:batch_size, ...]
+
+    # Get spheres from robot model
+    link_states = robot_model.forward_kinematics(joint_state)
+    spheres_computed = robot_model.get_collision_spheres(link_states)
+
+    # Check spheres against previously generated data or generate data
+    sphere_data_filename = SPHERE_DATA_FILENAME_BASE + f"_{batch_size}"
+    sphere_data_path = os.path.join(
+        os.path.dirname(__file__), "data", sphere_data_filename
+    )
+    if os.path.exists(sphere_data_path):
+        # Get spheres from file
+        with open(sphere_data_path, "r") as f:
+            spheres_data = json.load(f)
+
+        # Check output
+        spheres_gt = deserialize_spheres(spheres_data)
+        for sphere_gt, sphere_computed in zip(spheres_gt, spheres_computed):
+            assert torch.allclose(
+                sphere_gt.position.data, sphere_computed.position.data
+            )
+            assert sphere_gt.radius == sphere_computed.radius
+
+    else:
+        with open(sphere_data_path, "w") as f:
+            json.dump(serialize_spheres(spheres_computed), f)

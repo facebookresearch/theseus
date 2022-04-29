@@ -87,7 +87,7 @@ class UrdfRobotModel(KinematicsModel):
         center = torch.mean(mesh_coms, dim=0)
 
         # Sphere radius as farthest point from center
-        radius = torch.max(torch.linalg.norm(mesh_coms - center, dim=-1))
+        radius = float(torch.max(torch.linalg.norm(mesh_coms - center, dim=-1)))
 
         return [Sphere(position=Point3(center), radius=radius)]
 

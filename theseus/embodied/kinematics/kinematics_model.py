@@ -164,6 +164,10 @@ class UrdfRobotModel(KinematicsModel):
             # Apply link pose to link spheres
             link_transform = link_states[link_name]
             for sphere in self.collision_spheres[link_name]:
+                assert isinstance(
+                    link_transform, SE3
+                ), f'Input link states must be "th.SE3", instead got "{type(link_transform)}".'
+
                 sphere_pos_transformed = cast(SE3, link_transform).transform_from(
                     sphere.position
                 )

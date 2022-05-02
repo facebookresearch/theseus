@@ -55,6 +55,7 @@ def read_3D_g2o_file(
                     np.array([tokens[3:10]], dtype=np.float64)
                 ).to(dtype)
                 x_y_z_quat[:, 3:] /= torch.norm(x_y_z_quat[:, 3:], dim=1)
+                x_y_z_quat[:, 3:] = x_y_z_quat[:, [6, 3, 4, 5]]
                 relative_pose = th.SE3(
                     x_y_z_quaternion=x_y_z_quat, name="EDGE_SE3__{}".format(n)
                 )
@@ -85,7 +86,7 @@ def read_3D_g2o_file(
                     np.array([tokens[2:]], dtype=np.float64)
                 ).to(dtype)
                 x_y_z_quat[:, 3:] /= torch.norm(x_y_z_quat[:, 3:], dim=1)
-                x_y_z_quat[:, 3:] = x_y_z_quat[:, [4, 5, 6, 3]]
+                x_y_z_quat[:, 3:] = x_y_z_quat[:, [6, 3, 4, 5]]
                 verts[i] = x_y_z_quat
 
                 num_vertices = max(num_vertices, i)
@@ -400,7 +401,7 @@ class PoseGraphDataset:
                     pose_data = torch.cat([tran, quat], dim=1).view(-1).numpy()
                     line = (
                         f"VERTEX_SE3:QUAT {i} {pose_data[0]} {pose_data[1]} {pose_data[2]} "
-                        f"{pose_data[3]} {pose_data[4]} {pose_data[5]} {pose_data[6]}\n"
+                        f"{pose_data[4]} {pose_data[5]} {pose_data[6]} {pose_data[3]}\n"
                     )
                     file.write(line)
                 file.close()

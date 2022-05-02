@@ -385,8 +385,8 @@ class PoseGraphDataset:
                     line = (
                         f"EDGE_SE3:QUAT {edge.i} {edge.j} {measurement[0]} {measurement[1]} "
                         f"{measurement[2]} "
-                        f"{measurement[4]} {measurement[6]} "
-                        f"{measurement[6]} {measurement[0]} "
+                        f"{measurement[4]} {measurement[5]} "
+                        f"{measurement[6]} {measurement[3]} "
                         f"{weight[0,0]} 0 0 0 0 0 {weight[0,1]} 0 0 0 0 {weight[0,2]} 0 0 0 "
                         f"{weight[0,3]} 0 0 {weight[0,4]} 0 {weight[0,5]}\n"
                     )

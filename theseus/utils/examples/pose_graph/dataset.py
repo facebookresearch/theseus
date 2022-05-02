@@ -150,7 +150,7 @@ def read_2D_g2o_file(
 
                 num_vertices = max(num_vertices, i)
                 num_vertices = max(num_vertices, j)
-            elif tokens[0] == "VERTEX_SE2:QUAT":
+            elif tokens[0] == "VERTEX_SE2":
                 i = int(tokens[1])
 
                 x_y_theta = torch.from_numpy(
@@ -382,12 +382,23 @@ class PoseGraphDataset:
                     measurement = torch.cat([tran, quat], dim=1).view(-1).numpy()
                     weight = edge.weight.diagonal.data.sqrt()
                     line = (
-                        f"EDGE_SE3 {edge.i} {edge.j} {measurement[0]} {measurement[1]} "
+                        f"EDGE_SE3:QUAT {edge.i} {edge.j} {measurement[0]} {measurement[1]} "
                         f"{measurement[2]} "
                         f"{measurement[3]} {measurement[4]} "
                         f"{measurement[5]} {measurement[6]} "
                         f"{weight[0,0]} 0 0 0 0 0 {weight[0,1]} 0 0 0 0 {weight[0,2]} 0 0 0 "
                         f"{weight[0,3]} 0 0 {weight[0,4]} 0 {weight[0,5]}\n"
+                    )
+                    file.write(line)
+                for n, pose in enumerate(self.poses):
+                    quat = th.SO3(
+                        data=pose.data[:, :, :3], requires_check=False
+                    ).to_quaternion()
+                    tran = pose.data[:, :, 3]
+                    pose_data = torch.cat([tran, quat], dim=1).view(-1).numpy()
+                    line = (
+                        f"VERTEX_SE3:QUAT {n} {pose_data[0]} {pose_data[1]} {pose_data[2]} "
+                        f"{pose_data[3]} {pose_data[4]} {pose_data[5]} {pose_data[6]}\n"
                     )
                     file.write(line)
                 file.close()

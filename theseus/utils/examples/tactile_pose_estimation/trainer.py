@@ -243,6 +243,7 @@ class TactilePushingTrainer:
                     "backward_mode": self._resolve_backward_mode(epoch),
                     "backward_num_iterations": self.cfg.inner_optim.backward_num_iterations,
                     "__keep_final_step_size__": self.cfg.inner_optim.keep_step_size,
+                    "dlm_epsilon": self.cfg.inner_optim.dlm_epsilon,
                 },
             )
             end_event.record()

@@ -262,7 +262,10 @@ def _instantiate_dlm_bwd_objective(objective):
                 var.shape[1],
                 aux_vars=[grad_var, epsilon_var],
                 name="dlm_perturbation_" + name,
-            )
+                optim_var_names=["orig_var"],
+                aux_var_names=["grad_var", "epsilon_var"],
+            ),
+            use_batches=True,
         )
 
     bwd_optimizer = GaussNewton(

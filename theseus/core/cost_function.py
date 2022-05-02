@@ -138,6 +138,8 @@ class AutoDiffCostFunction(CostFunction):
         name: Optional[str] = None,
         autograd_strict: bool = False,
         autograd_vectorize: bool = False,
+        optim_var_names: Optional[List[str]] = None,
+        aux_var_names: Optional[List[str]] = None,
     ):
         if cost_weight is None:
             cost_weight = ScaleCostWeight(1.0)
@@ -145,22 +147,23 @@ class AutoDiffCostFunction(CostFunction):
         # this avoids doing aux_vars=[], which is a bad default since [] is mutable
         aux_vars = aux_vars or []
 
-        def _register_vars_in_list(var_list_, is_optim=False):
-            for var_ in var_list_:
-                if hasattr(self, var_.name):
+        def _register_vars_in_list(var_list_, is_optim=False, names=None):
+            for i, var_ in enumerate(var_list_):
+                var_name = var_.name if names is None else names[i]
+                if hasattr(self, var_name):
                     raise RuntimeError(f"Variable name {var_.name} is not allowed.")
-                setattr(self, var_.name, var_)
+                setattr(self, var_name, var_)
                 if is_optim:
-                    self.register_optim_var(var_.name)
+                    self.register_optim_var(var_name)
                 else:
-                    self.register_aux_var(var_.name)
+                    self.register_aux_var(var_name)
 
         if len(optim_vars) < 1:
             raise ValueError(
                 "AutodiffCostFunction must receive at least one optimization variable."
             )
-        _register_vars_in_list(optim_vars, is_optim=True)
-        _register_vars_in_list(aux_vars, is_optim=False)
+        _register_vars_in_list(optim_vars, is_optim=True, names=optim_var_names)
+        _register_vars_in_list(aux_vars, is_optim=False, names=aux_var_names)
 
         self._err_fn = err_fn
         self._dim = dim
@@ -170,6 +173,9 @@ class AutoDiffCostFunction(CostFunction):
         # The following are auxiliary Variable objects to hold tensor data
         # during jacobian computation without modifying the original Variable objects
         self._tmp_optim_vars = tuple(v.copy() for v in optim_vars)
+
+        self._optim_vars_names = optim_var_names
+        self._aux_vars_names = aux_var_names
 
     def _compute_error(
         self,
@@ -228,6 +234,8 @@ class AutoDiffCostFunction(CostFunction):
             cost_weight=self.weight.copy(),
             loss_function=self.loss_function.copy(),
             name=new_name,
+            optim_var_names=self._optim_vars_names,
+            aux_var_names=self._aux_vars_names,
         )
 
     def to(self, *args, **kwargs):

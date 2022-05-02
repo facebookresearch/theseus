@@ -285,7 +285,7 @@ class Objective:
         else:
             if batch_name not in self.batched_cost_functions:
                 cost_function_batch = cost_function.copy(
-                    batch_name + "__cost_function_batch"
+                    batch_name + "__cost_function_batch", keep_variable_names=True
                 )
                 cost_function_batch.weight = None
                 cost_function_batch.loss_function = None

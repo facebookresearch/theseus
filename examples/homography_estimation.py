@@ -8,13 +8,14 @@ import hydra
 from hydra.utils import get_original_cwd
 import kornia
 from typing import List
-
+import glob
 import theseus as th
 import torch
 from PIL import Image
 import cv2
 import numpy as np
 import os
+from torch.utils.data import DataLoader, Dataset
 
 
 from libs.easyaug import RandomGeoAug, GeoAugParam
@@ -26,6 +27,41 @@ FONT_PT = (5, 15)
 
 # TODO
 # - batch the masked_select
+
+class HomographyDataset(Dataset):
+    def __init__(self, img_dir, imgH, imgW):
+        self.img_dir = img_dir
+        self.imgH = imgH
+        self.imgW = imgW
+        self.img_paths = glob.glob(img_dir + '/**/*.jpg', recursive=True)
+        assert len(self.img_paths) > 0, "no images found"
+        sc = 0.3
+        self.rga = RandomGeoAug(
+            rotate_param=GeoAugParam(min=-30 * sc, max=30 * sc),
+            scale_param=GeoAugParam(min=0.8 * (1.0 + sc), max=1.2 * (1.0 + sc)),
+            translate_x_param=GeoAugParam(min=-0.2 * sc, max=0.2 * sc),
+            translate_y_param=GeoAugParam(min=-0.2 * sc, max=0.2 * sc),
+            shear_x_param=GeoAugParam(min=-10 * sc, max=10 * sc),
+            shear_y_param=GeoAugParam(min=-10 * sc, max=10 * sc),
+            perspective_param=GeoAugParam(min=-0.1 * sc, max=0.1 * sc),
+        )
+
+    def __len__(self):
+        return len(self.img_paths)
+
+    def __getitem__(self, idx):
+        img_path = self.img_paths[idx]
+
+        img1 = np.asarray(Image.open(img_path).resize(size=(self.imgW, self.imgH)))
+        img1 = torch.from_numpy(img1.astype(np.float32) / 255.0).permute(2, 0, 1)[None]
+        img2, H_1_2 = self.rga.forward(
+            img1, return_transform=True, normalize_returned_transform=True
+        )
+        data = {"img1": img1,
+                "img2": img2,
+                "H_1_2": H_1_2}
+
+        return data
 
 
 def warp_perspective_norm(H, img):
@@ -41,13 +77,13 @@ def warp_perspective_norm(H, img):
 
 
 def homography_error_fn(optim_vars: List[th.Manifold], aux_vars: List[th.Variable]):
-    H_src_dst = optim_vars[0]
+    H_1_2 = optim_vars[0]
     img1, img2 = aux_vars
 
-    img1_dst = warp_perspective_norm(H_src_dst.data.reshape(-1, 3, 3), img1.data)
+    img1_dst = warp_perspective_norm(H_1_2.data.reshape(-1, 3, 3), img1.data)
     loss = torch.nn.functional.mse_loss(img1_dst, img2.data, reduction="none")
     ones = warp_perspective_norm(
-        H_src_dst.data.reshape(-1, 3, 3), torch.ones_like(img1.data)
+        H_1_2.data.reshape(-1, 3, 3), torch.ones_like(img1.data)
     )
     loss = loss.masked_select((ones > 0.9)).mean()
     loss = loss.reshape(1, 1)
@@ -91,25 +127,32 @@ def viz_warp(log_dir, img1, img2, img1_w, iteration, err):
 
 
 def run(cfg):
-    sc = 0.3
-    rga = RandomGeoAug(
-        rotate_param=GeoAugParam(min=-30 * sc, max=30 * sc),
-        scale_param=GeoAugParam(min=0.8 * (1.0 + sc), max=1.2 * (1.0 + sc)),
-        translate_x_param=GeoAugParam(min=-0.2 * sc, max=0.2 * sc),
-        translate_y_param=GeoAugParam(min=-0.2 * sc, max=0.2 * sc),
-        shear_x_param=GeoAugParam(min=-10 * sc, max=10 * sc),
-        shear_y_param=GeoAugParam(min=-10 * sc, max=10 * sc),
-        perspective_param=GeoAugParam(min=-0.1 * sc, max=0.1 * sc),
-    )
+
+    dataset_root = os.path.join(get_original_cwd(), "data")
+    chunk = "revisitop1m.1"
+    dataset_path = os.path.join(dataset_root, chunk)
+    if not os.path.exists(dataset_path):
+        print("Downloading data")
+        url_root = "http://ptak.felk.cvut.cz/revisitop/revisitop1m/jpg/"
+        tar = "%s.tar.gz" % chunk
+        cmd = "wget %s/%s -O %s/%s" % (url_root, tar, dataset_root, tar)
+        print("Running command: ", cmd)
+        os.system(cmd)
+        os.makedirs(dataset_path)
+        cmd = "tar -xf %s/%s -C %s" % (dataset_root, tar, dataset_path)
+        print("Running command: ", cmd)
+        os.system(cmd)
 
     imgH, imgW = 160, 200
-    img_path = os.path.join(get_original_cwd(), "data/img1.ppm")
-    img1 = np.asarray(Image.open(img_path).resize(size=(imgW, imgH)))
+    dataset = HomographyDataset(dataset_path, imgH, imgW)
+    batch_size = 1
+    dataloader = DataLoader(dataset, batch_size=batch_size, shuffle=True)
+    data = next(iter(dataloader))
 
-    img1 = torch.from_numpy(img1.astype(np.float32) / 255.0).permute(2, 0, 1)[None]
-    img2, _ = rga.forward(
-        img1, return_transform=True, normalize_returned_transform=True
-    )
+    # TODO: support batch dims.
+    img1 = data["img1"][0]
+    img2 = data["img2"][0]
+    H_1_2 = data["H_1_2"][0]
 
     log_dir = "viz"
     os.makedirs(log_dir, exist_ok=True)
@@ -119,13 +162,13 @@ def run(cfg):
     objective = th.Objective()
 
     H_init = torch.eye(3).reshape(1, 9)
-    H_src_dst = th.Vector(data=H_init, name="H_src_dst")
+    H_1_2 = th.Vector(data=H_init, name="H_1_2")
 
     img1 = th.Variable(data=img1, name="img1")
     img2 = th.Variable(data=img2, name="img2")
 
     homography_cf = th.AutoDiffCostFunction(
-        optim_vars=[H_src_dst],
+        optim_vars=[H_1_2],
         err_fn=homography_error_fn,
         dim=1,
         aux_vars=[img1, img2],
@@ -145,14 +188,14 @@ def run(cfg):
     theseus_layer.to(device)
 
     inputs = {
-        "H_src_dst": H_src_dst.data,
+        "H_1_2": H_1_2.data,
         "img1": img1.data,
         "img2": img2.data,
     }
     info = theseus_layer.forward(inputs, optimizer_kwargs={"verbose": True})
 
     # save warped image
-    img1_dst = warp_perspective_norm(H_src_dst.data.reshape(-1, 3, 3), img1.data)
+    img1_dst = warp_perspective_norm(H_1_2.data.reshape(-1, 3, 3), img1.data)
     viz_warp(
         log_dir,
         img1.data,
@@ -163,7 +206,7 @@ def run(cfg):
     )
 
 
-@hydra.main(config_path="./configs/", config_name="homography_estimation")
+@ hydra.main(config_path="./configs/", config_name="homography_estimation")
 def main(cfg):
     torch.manual_seed(cfg.seed)
     run(cfg)

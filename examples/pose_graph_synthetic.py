@@ -27,6 +27,22 @@ import io
 
 from scipy.io import savemat
 
+BACKWARD_MODE = {
+    "implicit": th.BackwardMode.IMPLICIT,
+    "full": th.BackwardMode.FULL,
+    "truncated": th.BackwardMode.TRUNCATED,
+}
+
+LINEARIZATION_MODE: Dict[str, Type[Linearization]] = {
+    "sparse": th.SparseLinearization,
+    "dense": th.DenseLinearization,
+}
+
+LINEAR_SOLVER_MODE: Dict[str, Type[LinearSolver]] = {
+    "sparse": th.LUCudaSparseSolver,
+    "dense": th.CholeskyDenseSolver,
+}
+
 # Smaller values} result in error
 th.SO3.SO3_EPS = 1e-6
 

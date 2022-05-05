@@ -17,6 +17,8 @@ import numpy as np
 import os
 from torch.utils.data import DataLoader, Dataset
 
+# import torchvision.models as models
+
 from libs.easyaug import RandomGeoAug, GeoAugParam, RandomPhotoAug
 
 FONT = cv2.FONT_HERSHEY_DUPLEX
@@ -151,46 +153,50 @@ def run(cfg):
     dataloader = DataLoader(dataset, batch_size=batch_size, shuffle=True)
     data = next(iter(dataloader))
 
+    log_dir = "viz"
+    os.makedirs(log_dir, exist_ok=True)
+
+    device = "cuda" if torch.cuda.is_available() and cfg.use_gpu else "cpu"
+
+    # net = models.resnet18()
+    # net.to(device)
+
+    objective = th.Objective()
+
+    H_init = torch.eye(3).reshape(1, 9).repeat(batch_size, 1).to(device)
+    H_1_2 = th.Vector(data=H_init, name="H_1_2")
+
+    img_init = torch.zeros(batch_size, 3, imgH, imgW)
+    img1 = th.Variable(data=img_init, name="img1")
+    img2 = th.Variable(data=img_init, name="img2")
+
+    homography_cf = th.AutoDiffCostFunction(
+        optim_vars=[H_1_2],
+        err_fn=homography_error_fn,
+        dim=1,
+        aux_vars=[img1, img2],
+    )
+    objective.add(homography_cf)
+
+    optimizer = th.LevenbergMarquardt(  # GaussNewton(
+        objective,
+        max_iterations=100,
+        step_size=0.1,
+    )
+
+    theseus_layer = th.TheseusLayer(optimizer)
+    theseus_layer.to(device)
+
     for data in dataloader:
 
-        img1 = data["img1"]
-        img2 = data["img2"]
-        H_1_2 = data["H_1_2"]
-
-        log_dir = "viz"
-        os.makedirs(log_dir, exist_ok=True)
-
-        device = "cuda" if torch.cuda.is_available() and cfg.use_gpu else "cpu"
-
-        objective = th.Objective()
-
-        H_init = torch.eye(3).reshape(1, 9).repeat(batch_size, 1)
-        H_1_2 = th.Vector(data=H_init, name="H_1_2")
-
-        img1 = th.Variable(data=img1, name="img1")
-        img2 = th.Variable(data=img2, name="img2")
-
-        homography_cf = th.AutoDiffCostFunction(
-            optim_vars=[H_1_2],
-            err_fn=homography_error_fn,
-            dim=1,
-            aux_vars=[img1, img2],
-        )
-        objective.add(homography_cf)
-
-        optimizer = th.LevenbergMarquardt(  # GaussNewton(
-            objective,
-            max_iterations=100,
-            step_size=0.1,
-        )
-
-        theseus_layer = th.TheseusLayer(optimizer)
-        theseus_layer.to(device)
+        # H_1_2 = data["H_1_2"]
+        img1_init = data["img1"].to(device)
+        img2_init = data["img2"].to(device)
 
         inputs = {
-            "H_1_2": H_1_2.data,
-            "img1": img1.data,
-            "img2": img2.data,
+            "H_1_2": H_init,
+            "img1": img1_init,
+            "img2": img2_init,
         }
         info = theseus_layer.forward(inputs, optimizer_kwargs={"verbose": True})
 

@@ -20,7 +20,7 @@ from scipy.io import savemat
 log = logging.getLogger(__name__)
 
 use_batches = True
-device = "cuda"
+device = "cpu"
 dtype = torch.float64
 
 
@@ -126,7 +126,7 @@ def run(
         results["forward_mem"] = forward_mems
         file = (
             f"pgo_cube_{cfg.solver_device}_{cfg.inner_optim.solver}_{cfg.num_poses}_"
-            f"{cfg.dataset_size}_{batch_size}.mat"
+            f"{cfg.dataset_size}_{batch_size}_{device}.mat"
         )
         savemat(file, results)
 
@@ -162,7 +162,7 @@ def main(cfg):
     # create (or load) dataset
     results_path = pathlib.Path(os.getcwd())
 
-    for batch_size in [4, 8, 16]:
+    for batch_size in [8, 16]:
         pg = theg.PoseGraphDataset(poses=poses, edges=edges, batch_size=batch_size)
         pg.to(device)
         run(cfg, pg, results_path, batch_size)

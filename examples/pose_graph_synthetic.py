@@ -24,6 +24,7 @@ from theseus.optimizer.linear import LinearSolver
 
 import cProfile
 import io
+import subprocess
 
 from scipy.io import savemat
 
@@ -105,7 +106,7 @@ def pose_loss(
 def run(
     cfg: omegaconf.OmegaConf, pg: theg.PoseGraphDataset, results_path: pathlib.Path
 ):
-    device = torch.device(cfg.device)
+    device = torch.device("cuda")
     dtype = torch.float64
     pr = cProfile.Profile()
 
@@ -124,7 +125,7 @@ def run(
         "sparse": cast(
             Type[LinearSolver],
             th.LUCudaSparseSolver
-            if cast(str, cfg.device) == "cuda"
+            if cast(str, cfg.solver_device) == "cuda"
             else th.CholmodSparseSolver,
         ),
         "dense": th.CholeskyDenseSolver,
@@ -300,16 +301,16 @@ def run(
         forward_mems.append(forward_mem_epoch)
         backward_mems.append(backward_mem_epoch)
 
-    results = omegaconf.OmegaConf.to_container(cfg)
-    results["forward_time"] = forward_times
-    results["backward_time"] = backward_times
-    results["forward_mem"] = forward_mems
-    results["backward_mem"] = backward_mems
-    file = (
-        f"pgo_{cfg.device}_{cfg.inner_optim.solver}_{cfg.num_poses}_"
-        f"{cfg.dataset_size}_{cfg.batch_size}.mat"
-    )
-    savemat(file, results)
+        results = omegaconf.OmegaConf.to_container(cfg)
+        results["forward_time"] = forward_times
+        results["backward_time"] = backward_times
+        results["forward_mem"] = forward_mems
+        results["backward_mem"] = backward_mems
+        file = (
+            f"pgo_{cfg.solver_device}_{cfg.inner_optim.solver}_{cfg.num_poses}_"
+            f"{cfg.dataset_size}_{cfg.batch_size}.mat"
+        )
+        savemat(file, results)
 
     s = io.StringIO()
     sortby = pstats.SortKey.CUMULATIVE
@@ -320,6 +321,8 @@ def run(
 
 @hydra.main(config_path="./configs/", config_name="pose_graph")
 def main(cfg):
+    log.info((subprocess.check_output("lscpu", shell=True).strip()).decode())
+
     torch.manual_seed(cfg.seed)
     np.random.seed(cfg.seed)
     random.seed(cfg.seed)

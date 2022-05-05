@@ -55,6 +55,7 @@ def read_3D_g2o_file(
                     np.array([tokens[3:10]], dtype=np.float64)
                 ).to(dtype)
                 x_y_z_quat[:, 3:] /= torch.norm(x_y_z_quat[:, 3:], dim=1)
+                x_y_z_quat[:, 3:] = x_y_z_quat[:, [6, 3, 4, 5]]
                 relative_pose = th.SE3(
                     x_y_z_quaternion=x_y_z_quat, name="EDGE_SE3__{}".format(n)
                 )
@@ -85,6 +86,7 @@ def read_3D_g2o_file(
                     np.array([tokens[2:]], dtype=np.float64)
                 ).to(dtype)
                 x_y_z_quat[:, 3:] /= torch.norm(x_y_z_quat[:, 3:], dim=1)
+                x_y_z_quat[:, 3:] = x_y_z_quat[:, [6, 3, 4, 5]]
                 verts[i] = x_y_z_quat
 
                 num_vertices = max(num_vertices, i)
@@ -150,7 +152,7 @@ def read_2D_g2o_file(
 
                 num_vertices = max(num_vertices, i)
                 num_vertices = max(num_vertices, j)
-            elif tokens[0] == "VERTEX_SE2:QUAT":
+            elif tokens[0] == "VERTEX_SE2":
                 i = int(tokens[1])
 
                 x_y_theta = torch.from_numpy(
@@ -263,6 +265,18 @@ class PoseGraphDataset:
             )
         )
 
+        info = torch.tensor(
+            [
+                1 / translation_noise,
+                1 / translation_noise,
+                1 / translation_noise,
+                1 / rotation_noise,
+                1 / rotation_noise,
+                1 / rotation_noise,
+            ],
+            dtype=dtype,
+        )
+
         for n in range(1, num_poses):
             gt_relative_pose = th.SE3.exp_map(
                 torch.cat(
@@ -287,7 +301,7 @@ class PoseGraphDataset:
             relative_pose = cast(th.SE3, gt_relative_pose.compose(noise_relative_pose))
             relative_pose.name = "EDGE_SE3__{}_{}".format(n - 1, n)
             weight = th.DiagonalCostWeight(
-                th.Variable(torch.ones(1, 6, dtype=dtype)),
+                th.Variable(info),
                 name="EDGE_WEIGHT__{}_{}".format(n - 1, n),
             )
 
@@ -337,7 +351,7 @@ class PoseGraphDataset:
                     relative_pose.name = "EDGE_SE3__{}_{}".format(i, j)
 
                     weight = th.DiagonalCostWeight(
-                        th.Variable(10 * torch.ones(1, 6, dtype=dtype)),
+                        th.Variable(info),
                         name="EDGE_WEIGHT__{}_{}".format(i, j),
                     )
                     edges.append(
@@ -358,6 +372,40 @@ class PoseGraphDataset:
 
         return PoseGraphDataset(poses, edges, gt_poses, batch_size=batch_size), inliers
 
+    def write_3D_g2o(self, filename: str):
+        for n in range(self.dataset_size):
+            with open(filename + f"_{n}.g2o", "w") as file:
+                for edge in self.edges:
+                    measurement = edge.relative_pose.data[n : n + 1]
+                    quat = th.SO3(
+                        data=measurement[:, :, :3], requires_check=False
+                    ).to_quaternion()
+                    tran = measurement[:, :, 3]
+                    measurement = torch.cat([tran, quat], dim=1).view(-1).numpy()
+                    weight = edge.weight.diagonal.data**2
+                    line = (
+                        f"EDGE_SE3:QUAT {edge.i} {edge.j} {measurement[0]} {measurement[1]} "
+                        f"{measurement[2]} "
+                        f"{measurement[4]} {measurement[5]} "
+                        f"{measurement[6]} {measurement[3]} "
+                        f"{weight[0,0]} 0 0 0 0 0 {weight[0,1]} 0 0 0 0 {weight[0,2]} 0 0 0 "
+                        f"{weight[0,3]} 0 0 {weight[0,4]} 0 {weight[0,5]}\n"
+                    )
+                    file.write(line)
+                for i, pose in enumerate(self.poses):
+                    pose_n = pose[n : n + 1]
+                    quat = th.SO3(
+                        data=pose_n.data[:, :, :3], requires_check=False
+                    ).to_quaternion()
+                    tran = pose_n.data[:, :, 3]
+                    pose_data = torch.cat([tran, quat], dim=1).view(-1).numpy()
+                    line = (
+                        f"VERTEX_SE3:QUAT {i} {pose_data[0]} {pose_data[1]} {pose_data[2]} "
+                        f"{pose_data[4]} {pose_data[5]} {pose_data[6]} {pose_data[3]}\n"
+                    )
+                    file.write(line)
+                file.close()
+
     def get_batch_dataset(self, batch_idx: int = 0) -> "PoseGraphDataset":
         assert batch_idx < self.num_batches
         start = batch_idx * self.batch_size
@@ -371,15 +419,18 @@ class PoseGraphDataset:
                 for pose in self.poses
             ],
         )
-        gt_poses = cast(
-            Union[List[th.SE2], List[th.SE3]],
-            [
-                group_cls(
-                    data=gt_pose[start:end].clone(), name=gt_pose.name + "__batch"
-                )
-                for gt_pose in self.gt_poses
-            ],
-        )
+        if self.gt_poses is not None:
+            gt_poses = cast(
+                Union[List[th.SE2], List[th.SE3]],
+                [
+                    group_cls(
+                        data=gt_pose[start:end].clone(), name=gt_pose.name + "__batch"
+                    )
+                    for gt_pose in self.gt_poses
+                ],
+            )
+        else:
+            gt_poses = None
         edges = [
             PoseGraphEdge(
                 edge.i,

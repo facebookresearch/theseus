@@ -1,2 +1,3 @@
 seed: 0
 use_gpu: True
+vis_training: True

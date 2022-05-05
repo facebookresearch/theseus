@@ -25,15 +25,12 @@ FONT_SZ = 0.5
 FONT_PT = (5, 15)
 
 
-# TODO
-# - batch the masked_select
-
 class HomographyDataset(Dataset):
     def __init__(self, img_dir, imgH, imgW):
         self.img_dir = img_dir
         self.imgH = imgH
         self.imgW = imgW
-        self.img_paths = glob.glob(img_dir + '/**/*.jpg', recursive=True)
+        self.img_paths = glob.glob(img_dir + "/**/*.jpg", recursive=True)
         assert len(self.img_paths) > 0, "no images found"
         sc = 0.3
         self.rga = RandomGeoAug(
@@ -57,9 +54,7 @@ class HomographyDataset(Dataset):
         img2, H_1_2 = self.rga.forward(
             img1, return_transform=True, normalize_returned_transform=True
         )
-        data = {"img1": img1,
-                "img2": img2,
-                "H_1_2": H_1_2}
+        data = {"img1": img1[0], "img2": img2[0], "H_1_2": H_1_2[0]}
 
         return data
 
@@ -85,8 +80,10 @@ def homography_error_fn(optim_vars: List[th.Manifold], aux_vars: List[th.Variabl
     ones = warp_perspective_norm(
         H_1_2.data.reshape(-1, 3, 3), torch.ones_like(img1.data)
     )
-    loss = loss.masked_select((ones > 0.9)).mean()
-    loss = loss.reshape(1, 1)
+    mask = ones > 0.9
+    loss = loss.view(loss.shape[0], -1)
+    mask = mask.view(loss.shape[0], -1)
+    loss = (loss * mask).sum(dim=1, keepdim=True) / mask.sum(dim=1, keepdim=True)
     return loss
 
 
@@ -101,12 +98,7 @@ def put_text(img, text, top=True):
 
 
 def torch2cv2(img):
-    out = (
-        (img[0].permute(1, 2, 0) * 255.0)
-        .data.cpu()
-        .numpy()
-        .astype(np.uint8)[:, :, ::-1]
-    )
+    out = (img.permute(1, 2, 0) * 255.0).data.cpu().numpy().astype(np.uint8)[:, :, ::-1]
     out = np.ascontiguousarray(out)
     return out
 
@@ -124,6 +116,8 @@ def viz_warp(log_dir, img1, img2, img1_w, iteration, err):
     out = put_text(out, "iter: %05d, loss: %.3f" % (iteration, err), top=False)
     path = os.path.join(log_dir, "out_%05d.png" % iteration)
     cv2.imwrite(path, out)
+    # cv2.imshow("i", out)
+    # cv2.waitKey(0)
 
 
 def run(cfg):
@@ -145,68 +139,67 @@ def run(cfg):
 
     imgH, imgW = 160, 200
     dataset = HomographyDataset(dataset_path, imgH, imgW)
-    batch_size = 1
+    batch_size = 4
     dataloader = DataLoader(dataset, batch_size=batch_size, shuffle=True)
     data = next(iter(dataloader))
 
-    # TODO: support batch dims.
-    img1 = data["img1"][0]
-    img2 = data["img2"][0]
-    H_1_2 = data["H_1_2"][0]
+    for data in dataloader:
 
-    log_dir = "viz"
-    os.makedirs(log_dir, exist_ok=True)
+        img1 = data["img1"]
+        img2 = data["img2"]
+        H_1_2 = data["H_1_2"]
 
-    device = "cuda" if torch.cuda.is_available() and cfg.use_gpu else "cpu"
+        log_dir = "viz"
+        os.makedirs(log_dir, exist_ok=True)
 
-    objective = th.Objective()
+        device = "cuda" if torch.cuda.is_available() and cfg.use_gpu else "cpu"
 
-    H_init = torch.eye(3).reshape(1, 9)
-    H_1_2 = th.Vector(data=H_init, name="H_1_2")
+        objective = th.Objective()
 
-    img1 = th.Variable(data=img1, name="img1")
-    img2 = th.Variable(data=img2, name="img2")
+        H_init = torch.eye(3).reshape(1, 9).repeat(batch_size, 1)
+        H_1_2 = th.Vector(data=H_init, name="H_1_2")
 
-    homography_cf = th.AutoDiffCostFunction(
-        optim_vars=[H_1_2],
-        err_fn=homography_error_fn,
-        dim=1,
-        aux_vars=[img1, img2],
-    )
+        img1 = th.Variable(data=img1, name="img1")
+        img2 = th.Variable(data=img2, name="img2")
 
-    homography_cf.to(device)
+        homography_cf = th.AutoDiffCostFunction(
+            optim_vars=[H_1_2],
+            err_fn=homography_error_fn,
+            dim=1,
+            aux_vars=[img1, img2],
+        )
+        objective.add(homography_cf)
 
-    objective.add(homography_cf)
+        optimizer = th.LevenbergMarquardt(  # GaussNewton(
+            objective,
+            max_iterations=100,
+            step_size=0.1,
+        )
 
-    optimizer = th.LevenbergMarquardt(  # GaussNewton(
-        objective,
-        max_iterations=1000,
-        step_size=0.1,
-    )
+        theseus_layer = th.TheseusLayer(optimizer)
+        theseus_layer.to(device)
 
-    theseus_layer = th.TheseusLayer(optimizer)
-    theseus_layer.to(device)
+        inputs = {
+            "H_1_2": H_1_2.data,
+            "img1": img1.data,
+            "img2": img2.data,
+        }
+        info = theseus_layer.forward(inputs, optimizer_kwargs={"verbose": True})
 
-    inputs = {
-        "H_1_2": H_1_2.data,
-        "img1": img1.data,
-        "img2": img2.data,
-    }
-    info = theseus_layer.forward(inputs, optimizer_kwargs={"verbose": True})
-
-    # save warped image
-    img1_dst = warp_perspective_norm(H_1_2.data.reshape(-1, 3, 3), img1.data)
-    viz_warp(
-        log_dir,
-        img1.data,
-        img2.data,
-        img1_dst,
-        info[1].converged_iter.item(),
-        float(objective.error().item()),
-    )
+        if cfg.vis_training:
+            img1_dst = warp_perspective_norm(H_1_2.data.reshape(-1, 3, 3), img1.data)
+            for i in range(batch_size):
+                viz_warp(
+                    log_dir,
+                    img1.data[i],
+                    img2.data[i],
+                    img1_dst[i],
+                    info[1].converged_iter[i].item(),
+                    float(objective.error()[i].item()),
+                )
 
 
-@ hydra.main(config_path="./configs/", config_name="homography_estimation")
+@hydra.main(config_path="./configs/", config_name="homography_estimation")
 def main(cfg):
     torch.manual_seed(cfg.seed)
     run(cfg)

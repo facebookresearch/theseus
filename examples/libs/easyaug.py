@@ -2,7 +2,7 @@
 #
 # Author: Daniel DeTone (ddetone)
 
-# import math
+import math
 import warnings
 from typing import Optional, NamedTuple
 
@@ -443,351 +443,353 @@ class RandomGeoAug(object):
                 return inp2, denorm_transform
 
 
-# class PhotoAugParam(NamedTuple):
-#    prob: Optional[float] = 0.2
-#    mag: Optional[float] = 0.5
-#    fix_pos: Optional[bool] = False
-#
-#
-# class RandomPhotoAug(object):
-#    """
-#    Applies batch-wise photometric distortions to images.
-#    Requires that input/output tensors are sized BxCxHxW.
-#
-#    """
-#
-#    def __init__(
-#        self,
-#        contrast_param: Optional[PhotoAugParam] = None,
-#        sharpen_param: Optional[PhotoAugParam] = None,
-#        exposure_param: Optional[PhotoAugParam] = None,
-#        gamma_param: Optional[PhotoAugParam] = None,
-#        gaussian_smooth_param: Optional[PhotoAugParam] = None,
-#        motion_blur_param: Optional[PhotoAugParam] = None,
-#        shadow_highlight_param: Optional[PhotoAugParam] = None,
-#        gaussian_noise_param: Optional[PhotoAugParam] = None,
-#        salt_and_pepper_param: Optional[PhotoAugParam] = None,
-#    ):
-#
-#        self.contrast_param = (
-#            PhotoAugParam() if contrast_param is None else contrast_param
-#        )
-#        self.sharpen_param = PhotoAugParam() if sharpen_param is None else sharpen_param
-#        self.exposure_param = (
-#            PhotoAugParam() if exposure_param is None else exposure_param
-#        )
-#        self.gamma_param = PhotoAugParam() if gamma_param is None else gamma_param
-#        self.gaussian_smooth_param = (
-#            PhotoAugParam() if gaussian_smooth_param is None else gaussian_smooth_param
-#        )
-#        self.motion_blur_param = (
-#            PhotoAugParam() if motion_blur_param is None else motion_blur_param
-#        )
-#        self.shadow_highlight_param = (
-#            PhotoAugParam()
-#            if shadow_highlight_param is None
-#            else shadow_highlight_param
-#        )
-#        # Fix the order in which the last two are applied by default.
-#        self.gaussian_noise_param = (
-#            PhotoAugParam(fix_pos=True)
-#            if gaussian_noise_param is None
-#            else gaussian_noise_param
-#        )
-#        self.salt_and_pepper_param = (
-#            PhotoAugParam(fix_pos=True)
-#            if salt_and_pepper_param is None
-#            else salt_and_pepper_param
-#        )
-#
-#        # Sets the default order.
-#        self.fn_names = [
-#            "contrast",
-#            "sharpen",
-#            "exposure",
-#            "gamma",
-#            "gaussian_smooth",
-#            "motion_blur",
-#            "shadow_highlight",
-#            "gaussian_noise",
-#            "salt_and_pepper",
-#        ]
-#
-#        # Each fn_name must be a method.
-#        for name in self.fn_names:
-#            assert hasattr(self, name) and callable(getattr(self, name))
-#
-#        self.param_names = []
-#        for key in dir(self):
-#            if "_param" in key:
-#                self.param_names.append(key)
-#
-#    def __repr__(self):
-#        ret = self.__class__.__name__ + "(\n"
-#        for key in dir(self):
-#            if key.endswith("_param"):
-#                ret += ("  " + key + " = " + getattr(self, key).__repr__()) + ",\n"
-#        ret += ")"
-#        return ret
-#
-#    def set_all_probs(self, val: int):
-#        for name in self.param_names:
-#            param = getattr(self, name)
-#            setattr(self, name, param._replace(prob=val))
-#
-#    def set_all_mags(self, val: int):
-#        for name in self.param_names:
-#            param = getattr(self, name)
-#            setattr(self, name, param._replace(mag=val))
-#
-#    def set_all_fix_pos(self, val: bool):
-#        for name in self.param_names:
-#            param = getattr(self, name)
-#            setattr(self, name, param._replace(fix_pos=val))
-#
-#    def contrast(self, inp: torch.Tensor, mag: float = 0.5):
-#        B = inp.shape[0]
-#        # Kind of arbitrary, asymmetric normal distribution with
-#        # has median=1 and doesn't have clipping artifacts.
-#        scales = truncated_normal_(B, mean=1.0, std=(mag * 0.9 * 0.5 + 1e-9))
-#        scales = torch.where(scales > 1.0, scales + (scales - 1.0) * 3.0, scales)
-#        scales = scales.to(inp)
-#        out = inp - 0.5
-#        out = out * scales.reshape(-1, 1, 1, 1)
-#        out = out + 0.5
-#        out = torch.clamp(out, 0.0, 1.0)
-#        return out
-#
-#    def sharpen(self, inp: torch.Tensor, mag: float = 0.5):
-#        B, C, H, W = inp.shape
-#        scale = truncated_normal_(B, mean=0, std=mag).abs()
-#        val = (1.0 / 5.0) + scale
-#        kernel = torch.zeros(B, 3, 3).to(inp)
-#        kernel[:, 1, 1] = val * 5
-#        kernel[:, 0, 1] = -((5 * val - 1.0) / 4.0)
-#        kernel[:, 1, 0] = -((5 * val - 1.0) / 4.0)
-#        kernel[:, 1, 2] = -((5 * val - 1.0) / 4.0)
-#        kernel[:, 2, 1] = -((5 * val - 1.0) / 4.0)
-#        # Use grouped conv to apply different kernel to each batch element.
-#        kernel = kernel[:, None, ...]
-#        kernel = torch.repeat_interleave(kernel, C, dim=0)
-#        inp = inp.reshape(1, B * C, H, W)
-#        out = torch.nn.functional.conv2d(inp, kernel, padding=1, groups=B * C)
-#        out = out.reshape(B, C, H, W)
-#        out = torch.clamp(out, 0.0, 1.0)
-#        return out
-#
-#    def exposure(self, inp: torch.Tensor, mag: float = 0.5):
-#        B = inp.shape[0]
-#        max_delta = mag * 0.9  # Don't let max pixel value go below 0.1.
-#        new_maxs = truncated_normal_(B, mean=1.0, std=0.5 * max_delta).to(inp)
-#        out = inp * new_maxs.reshape(-1, 1, 1, 1)
-#        out = torch.clamp(out, 0.0, 1.0)
-#        return out
-#
-#    def gamma(self, inp: torch.Tensor, mag: float = 0.5):
-#        B = inp.shape[0]
-#        # Kind of arbitrary, asymmetric normal distribution with
-#        # has median=1 and doesn't have clipping artifacts.
-#        gam = truncated_normal_(B, mean=1.0, std=mag * 0.9 * 0.5).to(inp)
-#        gam = torch.where(gam > 1.0, gam + (gam - 1.0) * 3.0, gam)
-#        out = (inp ** gam.reshape(-1, 1, 1, 1)).clamp(0, 1)
-#        return out
-#
-#    def gaussian_smooth(
-#        self,
-#        inp: torch.Tensor,
-#        kmin: int = 1,
-#        kmax: int = 11,
-#        smin: float = 1.0,
-#        smax: float = 5.0,
-#        mag: float = 0.5,
-#    ):
-#        B, C, H, W = inp.shape
-#        # Maximum possible kernel size.
-#        kmax = int(kmax * mag) + 1
-#        if kmax == 1:  # 1x1 gaussian blur does nothing.
-#            return inp
-#        half_sizes = torch.randint(size=(B,), low=kmin, high=kmax)  # check kmax
-#        # To batch the operations, we use the largest kernel size.
-#        kernel_size = half_sizes.max() * 2 + 1
-#        sigma = mag * torch.FloatTensor(B).uniform_(smin, smax)
-#        x_cord = torch.arange(kernel_size)
-#        x_grid = x_cord.repeat(kernel_size).view(kernel_size, kernel_size)
-#        y_grid = x_grid.t()
-#        xy_grid = torch.stack([x_grid, y_grid], dim=-1)
-#        xy_grid = xy_grid.unsqueeze(0).repeat(B, 1, 1, 1)
-#        mean = (kernel_size - 1) / 2.0
-#        variance = sigma ** 2.0
-#        variance = variance.reshape(-1, 1, 1, 1)
-#        gaussian_kernel = (1.0 / (2.0 * math.pi * variance)) * torch.exp(
-#            -torch.sum((xy_grid - mean) ** 2.0, dim=-1, keepdim=True) / (2 * variance)
-#        )
-#        # Make sure sum of values in gaussian kernel equals 1.
-#        kernel = gaussian_kernel / torch.sum(
-#            gaussian_kernel, dim=[1, 2, 3], keepdim=True
-#        )
-#        kernel = kernel.to(inp)
-#        # Use grouped conv to apply different kernel to each batch element.
-#        kernel = kernel.reshape(B, 1, kernel_size, kernel_size)
-#        kernel = torch.repeat_interleave(kernel, C, dim=0)
-#        kernel = kernel.reshape(B * C, 1, kernel_size, kernel_size)
-#        inp = inp.reshape(1, B * C, H, W)
-#        out = torch.nn.functional.conv2d(
-#            inp, kernel, padding=int(half_sizes.max()), groups=B * C
-#        )
-#        out = out.reshape(B, C, H, W)
-#        out = torch.clamp(out, 0.0, 1.0)
-#        return out
-#
-#    def motion_blur(
-#        self, inp: torch.Tensor, mag: float = 0.5, kmin: int = 1, kmax: int = 11
-#    ):
-#        B, C, H, W = inp.shape
-#        # Maximum possible kernel size.
-#        kmax = int(kmax * mag) + 1
-#        if kmax == 1:  # 1x1 gaussian blur does nothing.
-#            return inp
-#        half_sizes = torch.randint(size=(B,), low=kmin, high=kmax)  # check kmax
-#        # To batch the operations, we use the largest kernel size.
-#        kernel_sizes = half_sizes * 2 + 1
-#        kernel_size = kernel_sizes.max()
-#        # Generate a different motion blur kernel for each batch.
-#        kernel = torch.zeros((B, kernel_size, kernel_size)).to(inp)
-#        # TODO(dd): figure out how to vectorize this.
-#        for i, ks in enumerate(kernel_sizes):
-#            off = torch.div((kernel_size - ks), 2, rounding_mode="floor")
-#            start = int(off)
-#            end = int(kernel_size - off)
-#            kh = torch.div(kernel_size, 2, rounding_mode="floor")
-#            kernel[i, kh, start:end] = torch.ones((1, ks)) / ks
-#        kernel = kernel[:, None, :, :]
-#        # Rotate the motion blur kernel.
-#        angle = torch.FloatTensor(B).uniform_(0, 360.0).unsqueeze(0).to(inp)
-#        rads = (angle * (math.pi / 180.0)).reshape(B, 1, 1)
-#        r00 = torch.cos(rads)
-#        r01 = -torch.sin(rads)
-#        r10 = torch.sin(rads)
-#        r11 = torch.cos(rads)
-#        top = torch.cat([r00, r01, 0 * r00], dim=2)
-#        bot = torch.cat([r10, r11, 0 * r00], dim=2)
-#        affine = torch.cat([top, bot], dim=1).to(inp)
-#        grid = torch.nn.functional.affine_grid(affine, kernel.shape, align_corners=True)
-#        kernel = torch.nn.functional.grid_sample(kernel, grid, align_corners=True)
-#        # Apply the rotated motion blur kernel to the images.
-#        kernel = torch.repeat_interleave(kernel, C, dim=0)
-#        kernel = kernel.reshape(B * C, 1, kernel_size, kernel_size)
-#        inp = inp.reshape(1, B * C, H, W)
-#        out = torch.nn.functional.conv2d(
-#            inp, kernel, padding=int(half_sizes.max()), groups=B * C
-#        )
-#        out = out.reshape(B, C, H, W)
-#        out = torch.clamp(out, 0.0, 1.0)
-#        return out
-#
-#    def shadow_highlight(
-#        self,
-#        inp: torch.Tensor,
-#        mag: float = 0.5,
-#        min_quads: int = 2,
-#        max_quads: int = 5,
-#    ):
-#        B, H, W = inp.shape[0], inp.shape[-2], inp.shape[-1]
-#        out = inp
-#        num_quads = torch.randint(low=min_quads, high=max_quads, size=(B,))
-#
-#        kwargs = {
-#            "scale_param": GeoAugParam(min=0.5, max=0.9),
-#            "translate_x_param": GeoAugParam(min=-0.8, max=0.8),
-#            "translate_y_param": GeoAugParam(min=-0.8, max=0.8),
-#            "rotate_param": GeoAugParam(min=-180, max=180),
-#            "perspective_param": GeoAugParam(min=0.0, max=0.8),
-#        }
-#        rga = RandomGeoAug(**kwargs)
-#        max_num_quads = num_quads.max()
-#        for i in range(max_num_quads):
-#            # Faster to apply conv to mini image then resize later.
-#            mask = torch.ones(B, 1, 50, 50).to(inp)
-#            # Randomly distort the quad.
-#            mask = rga.forward(mask)
-#            # Smooth the quad.
-#            mask = self.gaussian_smooth(mask, kmin=3, kmax=11, smin=3, smax=11, mag=1.0)
-#            mask = torch.nn.functional.interpolate(
-#                mask, size=[H, W], mode="bilinear", align_corners=True
-#            )
-#            val = truncated_normal_(B, mean=0.0, std=(mag * 0.6)).to(inp)
-#            quad = mask * val.reshape(B, 1, 1, 1)
-#            out2 = (1.0 - mask) * out + mask * (out + quad)
-#            apply_quad = torch.tensor(i).reshape(1, 1, 1, 1).repeat(
-#                B, 1, 1, 1
-#            ) < num_quads.reshape(B, 1, 1, 1)
-#            apply_quad = apply_quad.to(inp.device)
-#            out = torch.where(apply_quad, out2, out)
-#            out = torch.clamp(out, 0.0, 1.0)
-#        return out
-#
-#    def gaussian_noise(self, inp: torch.Tensor, mag: float = 0.5):
-#        B, C, H, W = inp.shape
-#        val = torch.FloatTensor(B).uniform_(0, mag * 0.1).abs().reshape(B, 1, 1)
-#        noise = val * torch.randn((B, H, W))
-#        noise = noise[:, None, :, :]
-#        noise = noise.repeat(1, C, 1, 1).to(inp.device)
-#        out = inp + noise
-#        out = torch.clamp(out, 0.0, 1.0)
-#        return out
-#
-#    def salt_and_pepper(self, inp: torch.Tensor, mag: float = 0.5):
-#        B, C, H, W = inp.shape
-#        noise_prob = mag * torch.FloatTensor(B).normal_(
-#            0.0, (mag * 0.05 + 1e-9)
-#        ).abs().to(inp)
-#        coins = torch.rand(size=(B, H, W)).to(inp).unsqueeze(1).repeat(1, C, 1, 1)
-#        heavy_noise = 0.5 * torch.randn(B, H, W).to(inp).unsqueeze(1).repeat(1, C, 1, 1)
-#        out = torch.where(
-#            coins > noise_prob.reshape(-1, 1, 1, 1), inp, inp + heavy_noise
-#        )
-#        out = torch.clamp(out, 0.0, 1.0)
-#        return out
-#
-#    def forward(self, inp: torch.Tensor, debug: bool = False):
-#        """
-#        Runs the Random Photometric Augmentation on a batch of images.
-#
-#        :param inp: BxCxHxW batch of input images
-#        :param debug: if True, print out some info about which transforms were used
-#
-#        """
-#        check_input(inp)  # Make sure input is well-formed.
-#        B, C, H, W = inp.shape
-#        result = inp.clone()  # Creates a copy of input (leaves input unchanged).
-#        # Randomly permute function ordering, except if "fix_pos" is True.
-#        permute_names = [
-#            name for name in self.fn_names if not getattr(self, name + "_param").fix_pos
-#        ]
-#        indices = torch.randperm(len(permute_names)).tolist()
-#        perm_fns = [permute_names[idx] for idx in indices]
-#        for i, name in enumerate(self.fn_names):
-#            if getattr(self, name + "_param").fix_pos:
-#                perm_fns.insert(i, name)
-#        # Iterate randomly permuted augmentation functions and maybe apply it.
-#        for fn_name in perm_fns:
-#            prob = getattr(self, fn_name + "_param").prob
-#            coins = torch.rand(B).reshape(-1, 1, 1, 1).to(inp)
-#            mask = coins < prob
-#            # Optional printing, helpful for debugging.
-#            if debug:
-#                print(fn_name, int(mask.sum()), "/", result.shape[0])
-#            # Skip operation if no elt in batch needs this augmentation.
-#            if torch.all(torch.eq(mask, False)):
-#                continue
-#            # Run the augmentation across all elts in batch.
-#            mag = getattr(self, fn_name + "_param").mag
-#            fn_method = getattr(self, fn_name)
-#            pre = result.clone()
-#            # Actual call to augmentation is here.
-#            result2 = fn_method(pre, mag=mag)
-#            mask = mask.repeat(1, C, H, W)
-#            # Apply the augmentation only where needed (from coins).
-#            final = torch.where(mask, result2, result)
-#            result = final.clone()
-#        return result
+class PhotoAugParam(NamedTuple):
+    prob: Optional[float] = 0.2
+    mag: Optional[float] = 0.5
+    fix_pos: Optional[bool] = False
+
+
+class RandomPhotoAug(object):
+    """
+    Applies batch-wise photometric distortions to images.
+    Requires that input/output tensors are sized BxCxHxW.
+
+    """
+
+    def __init__(
+        self,
+        contrast_param: Optional[PhotoAugParam] = None,
+        sharpen_param: Optional[PhotoAugParam] = None,
+        exposure_param: Optional[PhotoAugParam] = None,
+        gamma_param: Optional[PhotoAugParam] = None,
+        gaussian_smooth_param: Optional[PhotoAugParam] = None,
+        motion_blur_param: Optional[PhotoAugParam] = None,
+        shadow_highlight_param: Optional[PhotoAugParam] = None,
+        gaussian_noise_param: Optional[PhotoAugParam] = None,
+        salt_and_pepper_param: Optional[PhotoAugParam] = None,
+    ):
+
+        self.contrast_param = (
+            PhotoAugParam() if contrast_param is None else contrast_param
+        )
+        self.sharpen_param = PhotoAugParam() if sharpen_param is None else sharpen_param
+        self.exposure_param = (
+            PhotoAugParam() if exposure_param is None else exposure_param
+        )
+        self.gamma_param = PhotoAugParam() if gamma_param is None else gamma_param
+        self.gaussian_smooth_param = (
+            PhotoAugParam() if gaussian_smooth_param is None else gaussian_smooth_param
+        )
+        self.motion_blur_param = (
+            PhotoAugParam() if motion_blur_param is None else motion_blur_param
+        )
+        self.shadow_highlight_param = (
+            PhotoAugParam()
+            if shadow_highlight_param is None
+            else shadow_highlight_param
+        )
+        # Fix the order in which the last two are applied by default.
+        self.gaussian_noise_param = (
+            PhotoAugParam(fix_pos=True)
+            if gaussian_noise_param is None
+            else gaussian_noise_param
+        )
+        self.salt_and_pepper_param = (
+            PhotoAugParam(fix_pos=True)
+            if salt_and_pepper_param is None
+            else salt_and_pepper_param
+        )
+
+        # Sets the default order.
+        self.fn_names = [
+            "contrast",
+            "sharpen",
+            "exposure",
+            "gamma",
+            "gaussian_smooth",
+            "motion_blur",
+            "shadow_highlight",
+            "gaussian_noise",
+            "salt_and_pepper",
+        ]
+
+        # Each fn_name must be a method.
+        for name in self.fn_names:
+            assert hasattr(self, name) and callable(getattr(self, name))
+
+        self.param_names = []
+        for key in dir(self):
+            if "_param" in key:
+                self.param_names.append(key)
+
+    def __repr__(self):
+        ret = self.__class__.__name__ + "(\n"
+        for key in dir(self):
+            if key.endswith("_param"):
+                ret += ("  " + key + " = " + getattr(self, key).__repr__()) + ",\n"
+        ret += ")"
+        return ret
+
+    def set_all_probs(self, val: int):
+        for name in self.param_names:
+            param = getattr(self, name)
+            setattr(self, name, param._replace(prob=val))
+
+    def set_all_mags(self, val: int):
+        for name in self.param_names:
+            param = getattr(self, name)
+            setattr(self, name, param._replace(mag=val))
+
+    def set_all_fix_pos(self, val: bool):
+        for name in self.param_names:
+            param = getattr(self, name)
+            setattr(self, name, param._replace(fix_pos=val))
+
+    def contrast(self, inp: torch.Tensor, mag: float = 0.5):
+        B = inp.shape[0]
+        # Kind of arbitrary, asymmetric normal distribution with
+        # has median=1 and doesn't have clipping artifacts.
+        scales = truncated_normal_(B, mean=1.0, std=(mag * 0.9 * 0.5 + 1e-9))
+        scales = torch.where(scales > 1.0, scales + (scales - 1.0) * 3.0, scales)
+        scales = scales.to(inp)
+        out = inp - 0.5
+        out = out * scales.reshape(-1, 1, 1, 1)
+        out = out + 0.5
+        out = torch.clamp(out, 0.0, 1.0)
+        return out
+
+    def sharpen(self, inp: torch.Tensor, mag: float = 0.5):
+        B, C, H, W = inp.shape
+        scale = truncated_normal_(B, mean=0, std=mag).abs()
+        val = (1.0 / 5.0) + scale
+        kernel = torch.zeros(B, 3, 3).to(inp)
+        kernel[:, 1, 1] = val * 5
+        kernel[:, 0, 1] = -((5 * val - 1.0) / 4.0)
+        kernel[:, 1, 0] = -((5 * val - 1.0) / 4.0)
+        kernel[:, 1, 2] = -((5 * val - 1.0) / 4.0)
+        kernel[:, 2, 1] = -((5 * val - 1.0) / 4.0)
+        # Use grouped conv to apply different kernel to each batch element.
+        kernel = kernel[:, None, ...]
+        kernel = torch.repeat_interleave(kernel, C, dim=0)
+        inp = inp.reshape(1, B * C, H, W)
+        out = torch.nn.functional.conv2d(inp, kernel, padding=1, groups=B * C)
+        out = out.reshape(B, C, H, W)
+        out = torch.clamp(out, 0.0, 1.0)
+        return out
+
+    def exposure(self, inp: torch.Tensor, mag: float = 0.5):
+        B = inp.shape[0]
+        max_delta = mag * 0.9  # Don't let max pixel value go below 0.1.
+        new_maxs = truncated_normal_(B, mean=1.0, std=0.5 * max_delta).to(inp)
+        out = inp * new_maxs.reshape(-1, 1, 1, 1)
+        out = torch.clamp(out, 0.0, 1.0)
+        return out
+
+    def gamma(self, inp: torch.Tensor, mag: float = 0.5):
+        B = inp.shape[0]
+        # Kind of arbitrary, asymmetric normal distribution with
+        # has median=1 and doesn't have clipping artifacts.
+        gam = truncated_normal_(B, mean=1.0, std=mag * 0.9 * 0.5).to(inp)
+        gam = torch.where(gam > 1.0, gam + (gam - 1.0) * 3.0, gam)
+        out = (inp ** gam.reshape(-1, 1, 1, 1)).clamp(0, 1)
+        return out
+
+    def gaussian_smooth(
+        self,
+        inp: torch.Tensor,
+        kmin: int = 1,
+        kmax: int = 11,
+        smin: float = 1.0,
+        smax: float = 5.0,
+        mag: float = 0.5,
+    ):
+        B, C, H, W = inp.shape
+        # Maximum possible kernel size.
+        kmax = int(kmax * mag) + 1
+        if kmax == 1:  # 1x1 gaussian blur does nothing.
+            return inp
+        half_sizes = torch.randint(size=(B,), low=kmin, high=kmax)  # check kmax
+        # To batch the operations, we use the largest kernel size.
+        kernel_size = int(half_sizes.max().item() * 2 + 1)
+        sigma = mag * torch.FloatTensor(B).uniform_(smin, smax)
+        x_cord = torch.arange(kernel_size)
+        x_grid = x_cord.repeat(kernel_size).view(kernel_size, kernel_size)
+        y_grid = x_grid.t()
+        xy_grid = torch.stack([x_grid, y_grid], dim=-1)
+        xy_grid = xy_grid.unsqueeze(0).repeat(B, 1, 1, 1)
+        mean = (kernel_size - 1) / 2.0
+        variance = sigma**2.0
+        variance = variance.reshape(-1, 1, 1, 1)
+        gaussian_kernel = (1.0 / (2.0 * math.pi * variance)) * torch.exp(
+            -torch.sum((xy_grid - mean) ** 2.0, dim=-1, keepdim=True) / (2 * variance)
+        )
+        # Make sure sum of values in gaussian kernel equals 1.
+        kernel = gaussian_kernel / torch.sum(
+            gaussian_kernel, dim=[1, 2, 3], keepdim=True
+        )
+        kernel = kernel.to(inp)
+        # Use grouped conv to apply different kernel to each batch element.
+        kernel = kernel.reshape(B, 1, kernel_size, kernel_size)
+        kernel = torch.repeat_interleave(kernel, C, dim=0)
+        kernel = kernel.reshape(B * C, 1, kernel_size, kernel_size)
+        inp = inp.reshape(1, B * C, H, W)
+        out = torch.nn.functional.conv2d(
+            inp, kernel, padding=int(half_sizes.max()), groups=B * C
+        )
+        out = out.reshape(B, C, H, W)
+        out = torch.clamp(out, 0.0, 1.0)
+        return out
+
+    def motion_blur(
+        self, inp: torch.Tensor, mag: float = 0.5, kmin: int = 1, kmax: int = 11
+    ):
+        B, C, H, W = inp.shape
+        # Maximum possible kernel size.
+        kmax = int(kmax * mag) + 1
+        if kmax == 1:  # 1x1 gaussian blur does nothing.
+            return inp
+        half_sizes = torch.randint(size=(B,), low=kmin, high=kmax)  # check kmax
+        # To batch the operations, we use the largest kernel size.
+        kernel_sizes = half_sizes * 2 + 1
+        kernel_size = int(kernel_sizes.max().item())
+        # Generate a different motion blur kernel for each batch.
+        kernel = torch.zeros((B, kernel_size, kernel_size)).to(inp)
+        # TODO(dd): figure out how to vectorize this.
+        for i, ks in enumerate(kernel_sizes):
+            off = torch.div((kernel_size - ks), 2, rounding_mode="floor")
+            start = int(off)
+            end = int(kernel_size - off)
+            kh = torch.div(kernel_size, 2, rounding_mode="floor")
+            kernel[i, kh, start:end] = torch.ones((1, ks)) / ks
+        kernel = kernel[:, None, :, :]
+        # Rotate the motion blur kernel.
+        angle = torch.FloatTensor(B).uniform_(0, 360.0).unsqueeze(0).to(inp)
+        rads = (angle * (math.pi / 180.0)).reshape(B, 1, 1)
+        r00 = torch.cos(rads)
+        r01 = -torch.sin(rads)
+        r10 = torch.sin(rads)
+        r11 = torch.cos(rads)
+        top = torch.cat([r00, r01, 0 * r00], dim=2)
+        bot = torch.cat([r10, r11, 0 * r00], dim=2)
+        affine = torch.cat([top, bot], dim=1).to(inp)
+        grid = torch.nn.functional.affine_grid(
+            affine, list(kernel.shape), align_corners=True
+        )
+        kernel = torch.nn.functional.grid_sample(kernel, grid, align_corners=True)
+        # Apply the rotated motion blur kernel to the images.
+        kernel = torch.repeat_interleave(kernel, C, dim=0)
+        kernel = kernel.reshape(B * C, 1, kernel_size, kernel_size)
+        inp = inp.reshape(1, B * C, H, W)
+        out = torch.nn.functional.conv2d(
+            inp, kernel, padding=int(half_sizes.max()), groups=B * C
+        )
+        out = out.reshape(B, C, H, W)
+        out = torch.clamp(out, 0.0, 1.0)
+        return out
+
+    def shadow_highlight(
+        self,
+        inp: torch.Tensor,
+        mag: float = 0.5,
+        min_quads: int = 2,
+        max_quads: int = 5,
+    ):
+        B, H, W = inp.shape[0], inp.shape[-2], inp.shape[-1]
+        out = inp
+        num_quads = torch.randint(low=min_quads, high=max_quads, size=(B,))
+
+        kwargs = {
+            "scale_param": GeoAugParam(min=0.5, max=0.9),
+            "translate_x_param": GeoAugParam(min=-0.8, max=0.8),
+            "translate_y_param": GeoAugParam(min=-0.8, max=0.8),
+            "rotate_param": GeoAugParam(min=-180, max=180),
+            "perspective_param": GeoAugParam(min=0.0, max=0.8),
+        }
+        rga = RandomGeoAug(**kwargs)
+        max_num_quads = num_quads.max()
+        for i in range(max_num_quads):
+            # Faster to apply conv to mini image then resize later.
+            mask = torch.ones(B, 1, 50, 50).to(inp)
+            # Randomly distort the quad.
+            mask = rga.forward(mask)
+            # Smooth the quad.
+            mask = self.gaussian_smooth(mask, kmin=3, kmax=11, smin=3, smax=11, mag=1.0)
+            mask = torch.nn.functional.interpolate(
+                mask, size=[H, W], mode="bilinear", align_corners=True
+            )
+            val = truncated_normal_(B, mean=0.0, std=(mag * 0.6)).to(inp)
+            quad = mask * val.reshape(B, 1, 1, 1)
+            out2 = (1.0 - mask) * out + mask * (out + quad)
+            apply_quad = torch.tensor(i).reshape(1, 1, 1, 1).repeat(
+                B, 1, 1, 1
+            ) < num_quads.reshape(B, 1, 1, 1)
+            apply_quad = apply_quad.to(inp.device)
+            out = torch.where(apply_quad, out2, out)
+            out = torch.clamp(out, 0.0, 1.0)
+        return out
+
+    def gaussian_noise(self, inp: torch.Tensor, mag: float = 0.5):
+        B, C, H, W = inp.shape
+        val = torch.FloatTensor(B).uniform_(0, mag * 0.1).abs().reshape(B, 1, 1)
+        noise = val * torch.randn((B, H, W))
+        noise = noise[:, None, :, :]
+        noise = noise.repeat(1, C, 1, 1).to(inp.device)
+        out = inp + noise
+        out = torch.clamp(out, 0.0, 1.0)
+        return out
+
+    def salt_and_pepper(self, inp: torch.Tensor, mag: float = 0.5):
+        B, C, H, W = inp.shape
+        noise_prob = mag * torch.FloatTensor(B).normal_(
+            0.0, (mag * 0.05 + 1e-9)
+        ).abs().to(inp)
+        coins = torch.rand(size=(B, H, W)).to(inp).unsqueeze(1).repeat(1, C, 1, 1)
+        heavy_noise = 0.5 * torch.randn(B, H, W).to(inp).unsqueeze(1).repeat(1, C, 1, 1)
+        out = torch.where(
+            coins > noise_prob.reshape(-1, 1, 1, 1), inp, inp + heavy_noise
+        )
+        out = torch.clamp(out, 0.0, 1.0)
+        return out
+
+    def forward(self, inp: torch.Tensor, debug: bool = False):
+        """
+        Runs the Random Photometric Augmentation on a batch of images.
+
+        :param inp: BxCxHxW batch of input images
+        :param debug: if True, print out some info about which transforms were used
+
+        """
+        check_input(inp)  # Make sure input is well-formed.
+        B, C, H, W = inp.shape
+        result = inp.clone()  # Creates a copy of input (leaves input unchanged).
+        # Randomly permute function ordering, except if "fix_pos" is True.
+        permute_names = [
+            name for name in self.fn_names if not getattr(self, name + "_param").fix_pos
+        ]
+        indices = torch.randperm(len(permute_names)).tolist()
+        perm_fns = [permute_names[idx] for idx in indices]
+        for i, name in enumerate(self.fn_names):
+            if getattr(self, name + "_param").fix_pos:
+                perm_fns.insert(i, name)
+        # Iterate randomly permuted augmentation functions and maybe apply it.
+        for fn_name in perm_fns:
+            prob = getattr(self, fn_name + "_param").prob
+            coins = torch.rand(B).reshape(-1, 1, 1, 1).to(inp)
+            mask = coins < prob
+            # Optional printing, helpful for debugging.
+            if debug:
+                print(fn_name, int(mask.sum()), "/", result.shape[0])
+            # Skip operation if no elt in batch needs this augmentation.
+            if torch.all(torch.eq(mask, False)):
+                continue
+            # Run the augmentation across all elts in batch.
+            mag = getattr(self, fn_name + "_param").mag
+            fn_method = getattr(self, fn_name)
+            pre = result.clone()
+            # Actual call to augmentation is here.
+            result2 = fn_method(pre, mag=mag)
+            mask = mask.repeat(1, C, H, W)
+            # Apply the augmentation only where needed (from coins).
+            final = torch.where(mask, result2, result)
+            result = final.clone()
+        return result

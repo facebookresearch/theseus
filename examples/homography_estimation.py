@@ -17,8 +17,7 @@ import numpy as np
 import os
 from torch.utils.data import DataLoader, Dataset
 
-
-from libs.easyaug import RandomGeoAug, GeoAugParam
+from libs.easyaug import RandomGeoAug, GeoAugParam, RandomPhotoAug
 
 FONT = cv2.FONT_HERSHEY_DUPLEX
 FONT_SZ = 0.5
@@ -26,7 +25,7 @@ FONT_PT = (5, 15)
 
 
 class HomographyDataset(Dataset):
-    def __init__(self, img_dir, imgH, imgW):
+    def __init__(self, img_dir, imgH, imgW, photo_aug=True):
         self.img_dir = img_dir
         self.imgH = imgH
         self.imgW = imgW
@@ -42,6 +41,9 @@ class HomographyDataset(Dataset):
             shear_y_param=GeoAugParam(min=-10 * sc, max=10 * sc),
             perspective_param=GeoAugParam(min=-0.1 * sc, max=0.1 * sc),
         )
+        self.photo_aug = photo_aug
+        if self.photo_aug:
+            self.rpa = RandomPhotoAug()
 
     def __len__(self):
         return len(self.img_paths)
@@ -54,6 +56,12 @@ class HomographyDataset(Dataset):
         img2, H_1_2 = self.rga.forward(
             img1, return_transform=True, normalize_returned_transform=True
         )
+
+        # apply random photometric augmentations
+        if self.photo_aug:
+            img1 = self.rpa.forward(img1)
+            img2 = self.rpa.forward(img2)
+
         data = {"img1": img1[0], "img2": img2[0], "H_1_2": H_1_2[0]}
 
         return data
@@ -139,7 +147,7 @@ def run(cfg):
 
     imgH, imgW = 160, 200
     dataset = HomographyDataset(dataset_path, imgH, imgW)
-    batch_size = 4
+    batch_size = 5
     dataloader = DataLoader(dataset, batch_size=batch_size, shuffle=True)
     data = next(iter(dataloader))
 

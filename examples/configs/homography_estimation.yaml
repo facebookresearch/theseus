@@ -1,3 +1,4 @@
 seed: 0
 use_gpu: True
+photo_aug: True
 vis_training: True

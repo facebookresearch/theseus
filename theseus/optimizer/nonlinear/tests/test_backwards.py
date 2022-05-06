@@ -50,7 +50,7 @@ objective.add(cost_function)
 optimizer = th.GaussNewton(
     objective,
     max_iterations=15,
-    step_size=0.5,
+    step_size=1.0,
 )
 
 theseus_inputs = {
@@ -119,3 +119,17 @@ def test_backwards():
         updated_inputs["a"], data_x, retain_graph=True
     )[0].squeeze()
     assert torch.allclose(da_dx_numeric, da_dx_truncated, atol=1e-4)
+
+    updated_inputs, _ = theseus_optim.forward(
+        theseus_inputs,
+        optimizer_kwargs={
+            "track_best_solution": True,
+            "verbose": False,
+            "backward_mode": th.BackwardMode.DLM,
+            "dlm_epsilon": 0.001,
+        },
+    )
+    da_dx_truncated = torch.autograd.grad(
+        updated_inputs["a"], data_x, retain_graph=True
+    )[0].squeeze()
+    assert torch.allclose(da_dx_numeric, da_dx_truncated, atol=1e-3)

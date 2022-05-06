@@ -280,12 +280,18 @@ class Objective:
                 if use_batches
                 else None
             )
-        if batch_name is None:
+        if batch_name is None or not use_batches:
+            if batch_name is not None:
+                warnings.warn(
+                    "A batch name was given to the cost function, "
+                    "but use_batches=False, so no batching will be done."
+                )
+
             self.unbatched_cost_functions[cost_function.name] = cost_function
         else:
             if batch_name not in self.batched_cost_functions:
                 cost_function_batch = cost_function.copy(
-                    batch_name + "__cost_function_batch"
+                    batch_name + "__cost_function_batch", keep_variable_names=True
                 )
                 cost_function_batch.weight = None
                 cost_function_batch.loss_function = None

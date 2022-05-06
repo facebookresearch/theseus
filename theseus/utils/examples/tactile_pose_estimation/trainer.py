@@ -65,18 +65,23 @@ class TactilePushingTrainer:
             device,
             split_episodes=cfg.split_episodes,
             data_mode="train",
+            val_ratio=cfg.train.val_ratio,
         )
-        self.dataset_val = TactilePushingDataset(
-            str(dataset_path),
-            str(sdf_path),
-            cfg.episode_length,
-            cfg.train.batch_size,
-            cfg.max_episodes,
-            cfg.max_steps,
-            device,
-            split_episodes=cfg.split_episodes,
-            data_mode="val",
-        )
+        if cfg.train.val_ratio > 0:
+            self.dataset_val = TactilePushingDataset(
+                str(dataset_path),
+                str(sdf_path),
+                cfg.episode_length,
+                cfg.train.batch_size,
+                cfg.max_episodes,
+                cfg.max_steps,
+                device,
+                split_episodes=cfg.split_episodes,
+                data_mode="val",
+                val_ratio=cfg.train.val_ratio,
+            )
+        else:
+            self.dataset_val = None
 
         # -------------------------------------------------------------------- #
         # Create pose estimator (which wraps a TheseusLayer)
@@ -115,7 +120,16 @@ class TactilePushingTrainer:
         ) = create_tactile_models(
             cfg.train.mode, device, measurements_model_path=measurements_model_path
         )
-        self.outer_optim = optim.Adam(learnable_params, lr=cfg.train.lr)
+
+        assert cfg.train.optimizer in ["adam", "rmsprop"]
+        self.outer_optim: torch.optim.Optimizer
+        if cfg.train.optimizer == "adam":
+            self.outer_optim = optim.Adam(learnable_params, lr=cfg.train.lr)
+        else:
+            self.outer_optim = optim.RMSprop(learnable_params, lr=cfg.train.lr)
+        self.lr_scheduler = optim.lr_scheduler.ExponentialLR(
+            self.outer_optim, gamma=cfg.train.lr_decay
+        )
 
     def get_batch_data(
         self,
@@ -201,6 +215,9 @@ class TactilePushingTrainer:
         else:
             dataset = self.dataset_val
 
+        if dataset is None:
+            return [], {}, {}
+
         results = {}
         losses = []
         image_data: Dict[str, List[torch.Tensor]] = dict(
@@ -214,6 +231,8 @@ class TactilePushingTrainer:
             else self.cfg.inner_optim.val_iters
         )
         for batch_idx in range(dataset.num_batches):
+            if batch_idx == self.cfg.train.max_num_batches:
+                break
             # ---------- Read data from batch ----------- #
             batch = dataset.get_batch(batch_idx)
             theseus_inputs, obj_poses_gt, eff_poses_gt = self.get_batch_data(
@@ -225,14 +244,18 @@ class TactilePushingTrainer:
             end_event = torch.cuda.Event(enable_timing=True)
             start_event.record()
             torch.cuda.reset_max_memory_allocated()
+            print(obj_poses_gt.shape)
             theseus_outputs, info = self.pose_estimator.forward(
                 theseus_inputs,
                 optimizer_kwargs={
                     "verbose": True,
                     "track_err_history": True,
+                    "track_best_solution": not update,
                     "backward_mode": self._resolve_backward_mode(epoch),
                     "backward_num_iterations": self.cfg.inner_optim.backward_num_iterations,
                     "__keep_final_step_size__": self.cfg.inner_optim.keep_step_size,
+                    "dlm_epsilon": self.cfg.inner_optim.dlm_epsilon,
+                    "grouped_retract": self.cfg.inner_optim.use_batches,
                 },
             )
             end_event.record()
@@ -243,8 +266,14 @@ class TactilePushingTrainer:
             logger.info(f"Forward pass used {forward_mem} MBs.")
 
             # ---------- Backward pass and update ----------- #
+            if update:
+                values_dict = theseus_outputs
+            else:
+                values_dict = dict(
+                    (k, v.to(self.device)) for k, v in info.best_solution.items()
+                )
             obj_poses_opt, eff_poses_opt = get_tactile_poses_from_values(
-                values=theseus_outputs, time_steps=dataset.time_steps
+                values=values_dict, time_steps=dataset.time_steps
             )
             se2_opt = th.SE2(x_y_theta=obj_poses_opt.view(-1, 3))
             se2_gt = th.SE2(x_y_theta=obj_poses_gt.view(-1, 3))
@@ -273,6 +302,7 @@ class TactilePushingTrainer:
             image_data["obj_gt"].extend([p for p in obj_poses_gt])
             image_data["eff_gt"].extend([p for p in eff_poses_gt])
 
+        self.lr_scheduler.step()
         return losses, results, image_data
 
     @staticmethod

@@ -406,6 +406,7 @@ class NonlinearOptimizer(Optimizer, abc.ABC):
         delta = step_size * delta
 
         if not grouped_retract:
+            assert len(self.objective.batched_cost_functions) == 0
             for var in self.linear_solver.linearization.ordering:
                 new_var = var.retract(delta[:, var_idx : var_idx + var.dof()])
                 if force_update:

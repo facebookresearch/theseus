@@ -1,0 +1,6 @@
+dataset: rim
+hydra:
+  run:
+    dir: /private/home/taoshaf/Documents/theseus/examples/outputs/pose_graph_benchmark
+  sweep:
+    dir: /private/home/taoshaf/Documents/theseus/examples/outputs/pose_graph_benchmark/${now:%Y.%m.%d}/${now:%H.%M.%S}

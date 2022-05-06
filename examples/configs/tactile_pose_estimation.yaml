@@ -31,6 +31,8 @@ train:
   lr: 1e-4
   optimizer: "adam" # "adam", "rmsprop"
   lr_decay: 1.0
+  val_ratio: 0.1
+  max_num_batches: 100
 
 # 0: disc, 1: rect-edges, 2: rect-corners, 3: ellip
 class_label: 2

@@ -26,6 +26,7 @@ class TactilePushingDataset:
         seed: int = 1234567,
     ):
         assert data_mode in ["all", "train", "val"]
+        assert data_mode != "val" or val_ratio > 0
 
         batch_size = min(batch_size, max_episodes)
         data = TactilePushingDataset._load_dataset_from_file(
@@ -44,7 +45,7 @@ class TactilePushingDataset:
         else:
             rng = np.random.default_rng(seed)
             order = rng.permutation(num_episodes)
-            stop = max(int(np.ceil(num_episodes * val_ratio)), 2)
+            stop = int(np.ceil(num_episodes * val_ratio))
             idx = order[:stop] if data_mode == "val" else order[stop:]
 
         self.img_feats = data["img_feats"][idx]

@@ -16,14 +16,20 @@ import cv2
 import numpy as np
 import os
 from torch.utils.data import DataLoader, Dataset
-
-# import torchvision.models as models
+import torchvision.models as models
 
 from libs.easyaug import RandomGeoAug, GeoAugParam, RandomPhotoAug
 
 FONT = cv2.FONT_HERSHEY_DUPLEX
 FONT_SZ = 0.5
 FONT_PT = (5, 15)
+
+
+BACKWARD_MODE = {
+    "implicit": th.BackwardMode.IMPLICIT,
+    "full": th.BackwardMode.FULL,
+    "truncated": th.BackwardMode.TRUNCATED,
+}
 
 
 class HomographyDataset(Dataset):
@@ -61,12 +67,76 @@ class HomographyDataset(Dataset):
 
         # apply random photometric augmentations
         if self.photo_aug:
+            img1 = torch.clamp(img1, 0.0, 1.0)
+            img2 = torch.clamp(img2, 0.0, 1.0)
             img1 = self.rpa.forward(img1)
             img2 = self.rpa.forward(img2)
 
         data = {"img1": img1[0], "img2": img2[0], "H_1_2": H_1_2[0]}
 
         return data
+
+
+def grid_sample(image, optical):
+    N, C, IH, IW = image.shape
+    _, H, W, _ = optical.shape
+
+    ix = optical[..., 0]
+    iy = optical[..., 1]
+
+    ix = ((ix + 1) / 2) * (IW - 1)
+    iy = ((iy + 1) / 2) * (IH - 1)
+    with torch.no_grad():
+        ix_nw = torch.floor(ix)
+        iy_nw = torch.floor(iy)
+        ix_ne = ix_nw + 1
+        iy_ne = iy_nw
+        ix_sw = ix_nw
+        iy_sw = iy_nw + 1
+        ix_se = ix_nw + 1
+        iy_se = iy_nw + 1
+
+    nw = (ix_se - ix) * (iy_se - iy)
+    ne = (ix - ix_sw) * (iy_sw - iy)
+    sw = (ix_ne - ix) * (iy - iy_ne)
+    se = (ix - ix_nw) * (iy - iy_nw)
+
+    with torch.no_grad():
+        torch.clamp(ix_nw, 0, IW - 1, out=ix_nw)
+        torch.clamp(iy_nw, 0, IH - 1, out=iy_nw)
+
+        torch.clamp(ix_ne, 0, IW - 1, out=ix_ne)
+        torch.clamp(iy_ne, 0, IH - 1, out=iy_ne)
+
+        torch.clamp(ix_sw, 0, IW - 1, out=ix_sw)
+        torch.clamp(iy_sw, 0, IH - 1, out=iy_sw)
+
+        torch.clamp(ix_se, 0, IW - 1, out=ix_se)
+        torch.clamp(iy_se, 0, IH - 1, out=iy_se)
+
+    image = image.view(N, C, IH * IW)
+
+    nw_val = torch.gather(
+        image, 2, (iy_nw * IW + ix_nw).long().view(N, 1, H * W).repeat(1, C, 1)
+    )
+    ne_val = torch.gather(
+        image, 2, (iy_ne * IW + ix_ne).long().view(N, 1, H * W).repeat(1, C, 1)
+    )
+    sw_val = torch.gather(
+        image, 2, (iy_sw * IW + ix_sw).long().view(N, 1, H * W).repeat(1, C, 1)
+    )
+    se_val = torch.gather(
+        image, 2, (iy_se * IW + ix_se).long().view(N, 1, H * W).repeat(1, C, 1)
+    )
+
+    out_val = (
+        nw_val.view(N, C, H, W) * nw.view(N, 1, H, W)
+        + ne_val.view(N, C, H, W) * ne.view(N, 1, H, W)
+        + sw_val.view(N, C, H, W) * sw.view(N, 1, H, W)
+        + se_val.view(N, C, H, W) * se.view(N, 1, H, W)
+    )
+
+    return out_val
 
 
 def warp_perspective_norm(H, img):
@@ -76,8 +146,7 @@ def warp_perspective_norm(H, img):
     )
     Hinv = torch.inverse(H)
     warped_grid = kornia.geometry.transform.homography_warper.warp_grid(grid, Hinv)
-    grid_sample = torch.nn.functional.grid_sample
-    img2 = grid_sample(img, warped_grid, mode="bilinear", align_corners=True)
+    img2 = grid_sample(img, warped_grid)
     return img2
 
 
@@ -148,6 +217,7 @@ def run(cfg):
         os.system(cmd)
 
     imgH, imgW = 160, 200
+    channels = 3
     dataset = HomographyDataset(dataset_path, imgH, imgW)
     batch_size = 5
     dataloader = DataLoader(dataset, batch_size=batch_size, shuffle=True)
@@ -158,15 +228,25 @@ def run(cfg):
 
     device = "cuda" if torch.cuda.is_available() and cfg.use_gpu else "cpu"
 
-    # net = models.resnet18()
-    # net.to(device)
+    if cfg.use_feats:
+        resnet = models.resnet18(pretrained=True)
+        resnet.to(device)
+        resnet_feat = torch.nn.Sequential(*list(resnet.children())[:-4])
+        imgH, imgW = 20, 25
+        channels = 128
+
+        model_optimizer = torch.optim.Adam(
+            resnet_feat.parameters(), lr=cfg.outer_optim.lr
+        )
+
+        l1_loss = torch.nn.L1Loss()
 
     objective = th.Objective()
 
     H_init = torch.eye(3).reshape(1, 9).repeat(batch_size, 1).to(device)
     H_1_2 = th.Vector(data=H_init, name="H_1_2")
 
-    img_init = torch.zeros(batch_size, 3, imgH, imgW)
+    img_init = torch.zeros(batch_size, channels, imgH, imgW)
     img1 = th.Variable(data=img_init, name="img1")
     img2 = th.Variable(data=img_init, name="img2")
 
@@ -178,39 +258,68 @@ def run(cfg):
     )
     objective.add(homography_cf)
 
-    optimizer = th.LevenbergMarquardt(  # GaussNewton(
+    optimizer = th.LevenbergMarquardt(
         objective,
-        max_iterations=100,
-        step_size=0.1,
+        max_iterations=cfg.inner_optim.max_iters,
+        step_size=cfg.inner_optim.step_size,
     )
 
     theseus_layer = th.TheseusLayer(optimizer)
     theseus_layer.to(device)
 
-    for data in dataloader:
+    for epoch in range(cfg.outer_optim.num_epochs):
+        epoch_losses = []
+        for t, data in enumerate(dataloader):
 
-        # H_1_2 = data["H_1_2"]
-        img1_init = data["img1"].to(device)
-        img2_init = data["img2"].to(device)
+            H_1_2_gt = data["H_1_2"].to(device)
+            img1_init = data["img1"].to(device)
+            img2_init = data["img2"].to(device)
 
-        inputs = {
-            "H_1_2": H_init,
-            "img1": img1_init,
-            "img2": img2_init,
-        }
-        info = theseus_layer.forward(inputs, optimizer_kwargs={"verbose": True})
+            if cfg.use_feats:
+                img1_init = resnet_feat(img1_init)
+                img2_init = resnet_feat(img2_init)
 
-        if cfg.vis_training:
-            img1_dst = warp_perspective_norm(H_1_2.data.reshape(-1, 3, 3), img1.data)
-            for i in range(batch_size):
-                viz_warp(
-                    log_dir,
-                    img1.data[i],
-                    img2.data[i],
-                    img1_dst[i],
-                    info[1].converged_iter[i].item(),
-                    float(objective.error()[i].item()),
+            inputs = {
+                "H_1_2": H_init,
+                "img1": img1_init,
+                "img2": img2_init,
+            }
+
+            info = theseus_layer.forward(
+                inputs,
+                optimizer_kwargs={
+                    "verbose": False,
+                    "backward_mode": BACKWARD_MODE[cfg.inner_optim.backward_mode],
+                    "damping": 1e-2,
+                },
+            )
+
+            if cfg.use_feats:
+                # normalise last element to 1
+                H_1_2.update(data=H_1_2 / H_1_2[:, -1][:, None])
+                H_1_2_gt = H_1_2_gt.reshape(-1, 9)
+                loss = l1_loss(H_1_2.data, H_1_2_gt)
+                loss.backward()
+                model_optimizer.step()
+                epoch_losses.append(loss.item())
+
+                print(f"Step {t}. Loss {loss.item():.4f}")
+
+            if cfg.vis_training and cfg.use_feats is False:
+                img1_dst = warp_perspective_norm(
+                    H_1_2.data.reshape(-1, 3, 3), img1.data
                 )
+                for i in range(batch_size):
+                    viz_warp(
+                        log_dir,
+                        img1.data[i],
+                        img2.data[i],
+                        img1_dst[i],
+                        info[1].converged_iter[i].item(),
+                        float(objective.error()[i].item()),
+                    )
+
+        print(f"******* Epoch {epoch}. Loss: {np.mean(epoch_losses):.4f} *******")
 
 
 @hydra.main(config_path="./configs/", config_name="homography_estimation")

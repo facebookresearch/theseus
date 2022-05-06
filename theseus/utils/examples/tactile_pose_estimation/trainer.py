@@ -65,18 +65,23 @@ class TactilePushingTrainer:
             device,
             split_episodes=cfg.split_episodes,
             data_mode="train",
+            val_ratio=cfg.train.val_ratio,
         )
-        self.dataset_val = TactilePushingDataset(
-            str(dataset_path),
-            str(sdf_path),
-            cfg.episode_length,
-            cfg.train.batch_size,
-            cfg.max_episodes,
-            cfg.max_steps,
-            device,
-            split_episodes=cfg.split_episodes,
-            data_mode="val",
-        )
+        if cfg.train.val_ratio > 0:
+            self.dataset_val = TactilePushingDataset(
+                str(dataset_path),
+                str(sdf_path),
+                cfg.episode_length,
+                cfg.train.batch_size,
+                cfg.max_episodes,
+                cfg.max_steps,
+                device,
+                split_episodes=cfg.split_episodes,
+                data_mode="val",
+                val_ratio=cfg.train.val_ratio,
+            )
+        else:
+            self.dataset_val = None
 
         # -------------------------------------------------------------------- #
         # Create pose estimator (which wraps a TheseusLayer)
@@ -210,6 +215,9 @@ class TactilePushingTrainer:
         else:
             dataset = self.dataset_val
 
+        if dataset is None:
+            return [], {}, {}
+
         results = {}
         losses = []
         image_data: Dict[str, List[torch.Tensor]] = dict(
@@ -223,6 +231,8 @@ class TactilePushingTrainer:
             else self.cfg.inner_optim.val_iters
         )
         for batch_idx in range(dataset.num_batches):
+            if batch_idx == self.cfg.train.max_num_batches:
+                break
             # ---------- Read data from batch ----------- #
             batch = dataset.get_batch(batch_idx)
             theseus_inputs, obj_poses_gt, eff_poses_gt = self.get_batch_data(
@@ -234,6 +244,7 @@ class TactilePushingTrainer:
             end_event = torch.cuda.Event(enable_timing=True)
             start_event.record()
             torch.cuda.reset_max_memory_allocated()
+            print(obj_poses_gt.shape)
             theseus_outputs, info = self.pose_estimator.forward(
                 theseus_inputs,
                 optimizer_kwargs={
@@ -244,6 +255,7 @@ class TactilePushingTrainer:
                     "backward_num_iterations": self.cfg.inner_optim.backward_num_iterations,
                     "__keep_final_step_size__": self.cfg.inner_optim.keep_step_size,
                     "dlm_epsilon": self.cfg.inner_optim.dlm_epsilon,
+                    "grouped_retract": self.cfg.inner_optim.use_batches,
                 },
             )
             end_event.record()

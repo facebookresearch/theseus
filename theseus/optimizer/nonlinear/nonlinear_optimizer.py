@@ -217,6 +217,7 @@ class NonlinearOptimizer(Optimizer, abc.ABC):
         info: NonlinearOptimizerInfo,
         verbose: bool,
         truncated_grad_loop: bool,
+        grouped_retract: bool = True,
         **kwargs,
     ) -> NonlinearOptimizerInfo:
         converged_indices = torch.zeros_like(info.last_err).bool()
@@ -263,7 +264,11 @@ class NonlinearOptimizer(Optimizer, abc.ABC):
                 force_update = False
 
             self.retract_and_update_variables(
-                delta, converged_indices, step_size, force_update=force_update
+                delta,
+                converged_indices,
+                step_size,
+                force_update=force_update,
+                grouped_retract=grouped_retract,
             )
 
             # check for convergence
@@ -297,6 +302,7 @@ class NonlinearOptimizer(Optimizer, abc.ABC):
         track_err_history: bool = False,
         verbose: bool = False,
         backward_mode: BackwardMode = BackwardMode.FULL,
+        grouped_retract: bool = True,
         **kwargs,
     ) -> OptimizerInfo:
         with torch.no_grad():
@@ -321,6 +327,7 @@ class NonlinearOptimizer(Optimizer, abc.ABC):
                 info=info,
                 verbose=verbose,
                 truncated_grad_loop=False,
+                grouped_retract=grouped_retract,
                 **kwargs,
             )
             # If didn't coverge, remove misleading converged_iter value
@@ -355,6 +362,7 @@ class NonlinearOptimizer(Optimizer, abc.ABC):
                     info=info,
                     verbose=verbose,
                     truncated_grad_loop=False,
+                    grouped_retract=grouped_retract,
                     **kwargs,
                 )
 
@@ -367,6 +375,7 @@ class NonlinearOptimizer(Optimizer, abc.ABC):
                 info=grad_loop_info,
                 verbose=verbose,
                 truncated_grad_loop=True,
+                grouped_retract=grouped_retract,
                 **kwargs,
             )
 
@@ -391,12 +400,23 @@ class NonlinearOptimizer(Optimizer, abc.ABC):
         converged_indices: torch.Tensor,
         step_size: float,
         force_update: bool = False,
+        grouped_retract: bool = True,
     ):
-        objective = self.objective
-
         var_idx = 0
         delta = step_size * delta
 
+        if not grouped_retract:
+            assert len(self.objective.batched_cost_functions) == 0
+            for var in self.linear_solver.linearization.ordering:
+                new_var = var.retract(delta[:, var_idx : var_idx + var.dof()])
+                if force_update:
+                    var.update(new_var.data)
+                else:
+                    var.update(new_var.data, batch_ignore_mask=converged_indices)
+                var_idx += var.dof()
+            return
+
+        objective = self.objective
         # TODO: what does converged_indices do?
         for variable_batch, variables in self.objective.batched_optim_vars.values():
             cnts = variable_batch.dof() * len(variables)

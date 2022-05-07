@@ -154,12 +154,12 @@ def homography_error_fn(optim_vars: List[th.Manifold], aux_vars: List[th.Variabl
     H_1_2 = optim_vars[0]
     img1, img2 = aux_vars
 
-    img1_dst = warp_perspective_norm(H_1_2.data.reshape(-1, 3, 3), img1.data)
+    ones = torch.ones(H_1_2.shape[0], 1, device=H_1_2.device, dtype=H_1_2.dtype)
+    H_1_2_mat = torch.cat((H_1_2.data, ones), dim=1).reshape(-1, 3, 3)
+    img1_dst = warp_perspective_norm(H_1_2_mat, img1.data)
     loss = torch.nn.functional.mse_loss(img1_dst, img2.data, reduction="none")
-    ones = warp_perspective_norm(
-        H_1_2.data.reshape(-1, 3, 3), torch.ones_like(img1.data)
-    )
-    mask = ones > 0.9
+    mask = warp_perspective_norm(H_1_2_mat, torch.ones_like(img1.data))
+    mask = mask > 0.9
     loss = loss.view(loss.shape[0], -1)
     mask = mask.view(loss.shape[0], -1)
     loss = (loss * mask).sum(dim=1, keepdim=True) / mask.sum(dim=1, keepdim=True)
@@ -244,6 +244,7 @@ def run(cfg):
     objective = th.Objective()
 
     H_init = torch.eye(3).reshape(1, 9).repeat(batch_size, 1).to(device)
+    H_init = H_init[:, :-1]  # last element always one
     H_1_2 = th.Vector(data=H_init, name="H_1_2")
 
     img_init = torch.zeros(batch_size, channels, imgH, imgW)
@@ -295,9 +296,8 @@ def run(cfg):
             )
 
             if cfg.use_feats:
-                # normalise last element to 1
-                H_1_2.update(data=H_1_2 / H_1_2[:, -1][:, None])
-                H_1_2_gt = H_1_2_gt.reshape(-1, 9)
+                # no loss on last element as set to one
+                H_1_2_gt = H_1_2_gt.reshape(-1, 9)[:, :-1]
                 loss = l1_loss(H_1_2.data, H_1_2_gt)
                 loss.backward()
                 model_optimizer.step()
@@ -306,9 +306,11 @@ def run(cfg):
                 print(f"Step {t}. Loss {loss.item():.4f}")
 
             if cfg.vis_training and cfg.use_feats is False:
-                img1_dst = warp_perspective_norm(
-                    H_1_2.data.reshape(-1, 3, 3), img1.data
+                ones = torch.ones(
+                    H_1_2.shape[0], 1, device=H_1_2.device, dtype=H_1_2.dtype
                 )
+                H_1_2_mat = torch.cat((H_1_2.data, ones), dim=1).reshape(-1, 3, 3)
+                img1_dst = warp_perspective_norm(H_1_2_mat, img1.data)
                 for i in range(batch_size):
                     viz_warp(
                         log_dir,
@@ -319,7 +321,9 @@ def run(cfg):
                         float(objective.error()[i].item()),
                     )
 
-        print(f"******* Epoch {epoch}. Loss: {np.mean(epoch_losses):.4f} *******")
+        print(
+            f"******* Epoch {epoch}. Average loss: {np.mean(epoch_losses):.4f} *******"
+        )
 
 
 @hydra.main(config_path="./configs/", config_name="homography_estimation")

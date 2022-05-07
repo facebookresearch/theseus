@@ -15,6 +15,7 @@ from PIL import Image
 import cv2
 import numpy as np
 import os
+import time
 from torch.utils.data import DataLoader, Dataset
 import torchvision.models as models
 
@@ -160,9 +161,10 @@ def homography_error_fn(optim_vars: List[th.Manifold], aux_vars: List[th.Variabl
     loss = torch.nn.functional.mse_loss(img1_dst, img2.data, reduction="none")
     mask = warp_perspective_norm(H_1_2_mat, torch.ones_like(img1.data))
     mask = mask > 0.9
-    loss = loss.view(loss.shape[0], -1)
-    mask = mask.view(loss.shape[0], -1)
-    loss = (loss * mask).sum(dim=1, keepdim=True) / mask.sum(dim=1, keepdim=True)
+    loss = (loss * mask).mean(dim=1)
+    pool = torch.nn.AvgPool2d(6, stride=6)
+    loss = pool(loss)
+    loss = loss.reshape(loss.shape[0], -1)
     return loss
 
 
@@ -219,7 +221,7 @@ def run(cfg):
     imgH, imgW = 160, 200
     channels = 3
     dataset = HomographyDataset(dataset_path, imgH, imgW)
-    batch_size = 5
+    batch_size = 10
     dataloader = DataLoader(dataset, batch_size=batch_size, shuffle=True)
     data = next(iter(dataloader))
 
@@ -251,10 +253,12 @@ def run(cfg):
     img1 = th.Variable(data=img_init, name="img1")
     img2 = th.Variable(data=img_init, name="img2")
 
+    # loss is pooled so error dim is not too large
+    error_dim = 12
     homography_cf = th.AutoDiffCostFunction(
         optim_vars=[H_1_2],
         err_fn=homography_error_fn,
-        dim=1,
+        dim=error_dim,
         aux_vars=[img1, img2],
     )
     objective.add(homography_cf)
@@ -270,6 +274,7 @@ def run(cfg):
 
     for epoch in range(cfg.outer_optim.num_epochs):
         epoch_losses = []
+        start_time = time.time()
         for t, data in enumerate(dataloader):
 
             H_1_2_gt = data["H_1_2"].to(device)
@@ -291,7 +296,6 @@ def run(cfg):
                 optimizer_kwargs={
                     "verbose": False,
                     "backward_mode": BACKWARD_MODE[cfg.inner_optim.backward_mode],
-                    "damping": 1e-2,
                 },
             )
 
@@ -321,8 +325,10 @@ def run(cfg):
                         float(objective.error()[i].item()),
                     )
 
+        epoch_time = time.time() - start_time
         print(
-            f"******* Epoch {epoch}. Average loss: {np.mean(epoch_losses):.4f} *******"
+            f"******* Epoch {epoch}. Average loss: {np.mean(epoch_losses):.4f}. "
+            f"Epoch time {epoch_time}*******"
         )
 
 

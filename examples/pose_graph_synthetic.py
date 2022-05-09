@@ -50,8 +50,6 @@ th.SO3.SO3_EPS = 1e-6
 # Logger
 log = logging.getLogger(__name__)
 
-use_batches = True
-
 
 def print_histogram(
     pg: theg.PoseGraphDataset, var_dict: Dict[str, torch.Tensor], msg: str
@@ -161,7 +159,7 @@ def run(
             edge.relative_pose,
             loss_function=robust_loss,
         )
-        objective.add(relative_pose_cost, use_batches=use_batches)
+        objective.add(relative_pose_cost, use_batches=cfg.inner_optim.use_batches)
 
     if cfg.inner_optim.regularize:
         pose_prior_cost = th.eb.VariableDifference(
@@ -171,7 +169,7 @@ def run(
             ),
             target=pg_batch.poses[0].copy(new_name=pg_batch.poses[0].name + "__PRIOR"),
         )
-        objective.add(pose_prior_cost, use_batches=use_batches)
+        objective.add(pose_prior_cost, use_batches=cfg.inner_optim.use_batches)
 
     if cfg.inner_optim.ratio_known_poses > 0.0:
         pose_prior_weight = th.ScaleCostWeight(100 * torch.ones(1, dtype=dtype))
@@ -185,7 +183,7 @@ def run(
                     pg_batch.gt_poses[i],
                     name=f"pose_diff_{i}",
                 ),
-                use_batches=use_batches,
+                use_batches=cfg.inner_optim.use_batches,
             )
             gt_pose_indices.append(i)
 
@@ -287,6 +285,8 @@ def run(
         backward_mem_epoch = []
 
         for batch_idx in range(pg.num_batches):
+            if batch_idx == cfg.outer_optim.max_num_batches:
+                break
             forward_time, backward_time, forward_mem, backward_mem = run_batch(
                 batch_idx
             )

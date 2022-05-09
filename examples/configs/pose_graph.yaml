@@ -22,10 +22,12 @@ inner_optim:
   regularize: true
   ratio_known_poses: 0.1
   reg_w: 1e-3
+  use_batches: true
 
 outer_optim:
   lr: 0.1
   num_epochs: 20
+  max_num_batches: 1000
 
 hydra:
   run:

@@ -2,10 +2,9 @@ seed: 0
 use_gpu: True
 
 photo_aug: True
-use_feats: True
 
 inner_optim:
-  max_iters: 10
+  max_iters: 20
   step_size: 0.1
   backward_mode: "full"
 
@@ -13,5 +12,7 @@ outer_optim:
   lr: 0.01
   num_epochs: 5
 
-vis_training: True
+test_max_iters: 100
+
+vis_res: True
 

@@ -252,6 +252,90 @@ def setup_homgraphy_layer(cfg, device, batch_size, imgH, imgW, channels):
     return theseus_layer
 
 
+def run_eval(
+    cfg, device, test_dataset, batch_size, imgH, imgW, channels=3, feat_model=None
+):
+
+    test_loader = DataLoader(test_dataset, batch_size=batch_size, shuffle=False)
+
+    theseus_layer = setup_homgraphy_layer(
+        cfg,
+        device,
+        batch_size,
+        imgH,
+        imgW,
+        channels,
+    )
+    theseus_layer.optimizer.params.max_iterations = cfg.test_max_iters
+
+    with torch.no_grad():
+        losses = []
+        for t, data in enumerate(test_loader):
+
+            img1 = data["img1"].to(device)
+            img2 = data["img2"].to(device)
+            H_init = torch.eye(3).reshape(1, 9).repeat(img1.shape[0], 1).to(device)
+            H_init = H_init[:, :-1]
+
+            inputs = {
+                "H_1_2": H_init,
+                "img1": img1,
+                "img2": img2,
+            }
+
+            if feat_model is not None:
+                inputs["img1"] = feat_model(img1)
+                inputs["img2"] = feat_model(img2)
+
+            info = theseus_layer.forward(
+                inputs, {"verbose": False, "damping": cfg.inner_optim.lm_damping}
+            )
+            H_1_2 = info[0]["H_1_2"]
+
+            # Compute evalution metric, for now photometric loss
+            img1_var = th.Variable(data=img1, name="img1")
+            img2_var = th.Variable(data=img2, name="img2")
+
+            loss = homography_error_fn([H_1_2], [img1_var, img2_var], pool_size=1)
+            loss = loss.mean(dim=1)
+            losses.append(loss)
+
+            print(f"Test loss {loss.mean().item()}  ({t} / {len(test_loader)})")
+
+            # if cfg.vis_res:
+            #     Hs = [H_opt, H_fix, H_pho]
+            #     losses = [loss_opt, loss_fix, loss_pho]
+            #     infos = [info_opt, info_fix, info_pho]
+            #     labels = [
+            #         "Optimised feature-metric",
+            #         "Pretrained feature-metric",
+            #         "Photo-metric",
+            #     ]
+            #     img1_dsts = []
+            #     for H in Hs:
+            #         ones = torch.ones(H.shape[0], 1, device=H.device, dtype=H.dtype)
+            #         H_1_2_mat = torch.cat((H.data, ones), dim=1).reshape(-1, 3, 3)
+            #         img1_dsts.append(warp_perspective_norm(H_1_2_mat, img1))
+
+            #     for i in range(batch_size):
+            #         imgs = []
+            #         for j in range(3):
+            #             viz = make_viz(
+            #                 img1[i],
+            #                 img2[i],
+            #                 img1_dsts[j][i],
+            #                 infos[j][1].converged_iter[i],
+            #                 float(losses[j][i].item()),
+            #             )
+            #             viz = put_text(viz, labels[j], top=False)
+            #             imgs.append(viz)
+            #         imgs = np.vstack((imgs))
+            #         cv2.imshow("viz", imgs)
+            #         cv2.waitKey(0)
+
+        return torch.cat(losses).mean()
+
+
 def run(cfg):
 
     dataset_root = os.path.join(get_original_cwd(), "data")
@@ -270,11 +354,10 @@ def run(cfg):
         os.system(cmd)
 
     imgH, imgW = 160, 200
-    batch_size = 5
+    batch_size = 2
     train_dataset = HomographyDataset(dataset_path, imgH, imgW, train=True)
     test_dataset = HomographyDataset(dataset_path, imgH, imgW, train=False)
     train_loader = DataLoader(train_dataset, batch_size=batch_size, shuffle=True)
-    test_loader = DataLoader(test_dataset, batch_size=batch_size, shuffle=True)
 
     log_dir = "viz"
     os.makedirs(log_dir, exist_ok=True)
@@ -283,10 +366,14 @@ def run(cfg):
 
     resnet = models.resnet18(pretrained=True)
     resnet.to(device)
-    resnet_feat = torch.nn.Sequential(*list(resnet.children())[:-4])
-    fixed_feat = torch.nn.Sequential(*list(resnet.children())[:-4])
-    featH, featW = 20, 25
-    feat_channels = 128
+    upsample = torch.nn.UpsamplingBilinear2d(size=[imgH, imgW])
+    resnet_feat = torch.nn.Sequential(*list(resnet.children())[:-4] + [upsample])
+    fixed_feat = torch.nn.Sequential(*list(resnet.children())[:-4] + [upsample])
+
+    sample = next(iter(train_loader))
+    feat_channels = resnet_feat(sample["img1"].to(device)).shape[1]
+
+    # Training loop to refine pretrained features
 
     model_optimizer = torch.optim.Adam(resnet_feat.parameters(), lr=cfg.outer_optim.lr)
 
@@ -296,15 +383,14 @@ def run(cfg):
         cfg,
         device,
         batch_size,
-        featH,
-        featW,
+        imgH,
+        imgW,
         feat_channels,
     )
 
-    # Training loop to refine pretrained features
-
+    epoch_losses = []
     for epoch in range(cfg.outer_optim.num_epochs):
-        epoch_losses = []
+        running_losses = []
         start_time = time.time()
         for t, data in enumerate(train_loader):
 
@@ -322,132 +408,62 @@ def run(cfg):
                 "img2": feat2,
             }
 
-            info = layer_feat.forward(
+            layer_feat.forward(
                 inputs,
                 optimizer_kwargs={
                     "verbose": False,
                     "backward_mode": BACKWARD_MODE[cfg.inner_optim.backward_mode],
-                    # "damping": 1e-2,
+                    "damping": cfg.inner_optim.lm_damping,
                 },
             )
 
             # no loss on last element as set to one
             H_1_2_gt = H_1_2_gt.reshape(-1, 9)[:, :-1]
-            H_1_2 = info[0]["H_1_2"]
+            H_1_2 = layer_feat.objective.get_optim_var("H_1_2")
             loss = l1_loss(H_1_2.data, H_1_2_gt)
             loss.backward()
             model_optimizer.step()
-            epoch_losses.append(loss.item())
+            running_losses.append(loss.item())
 
             if t % 10 == 0:
                 print(f"Step {t}. Loss {loss.item():.4f}")
 
         epoch_time = time.time() - start_time
+        epoch_loss = np.mean(running_losses).item()
+        epoch_losses.append(epoch_loss)
         print(
-            f"******* Epoch {epoch}. Average loss: {np.mean(epoch_losses):.4f}. "
+            f"******* Epoch {epoch}. Average loss: {epoch_loss:.4f}. "
             f"Epoch time {epoch_time}*******"
         )
 
     # Test loop
 
-    print("\n**** Test dataset evaluation ****")
+    loss_pho = run_eval(cfg, device, test_dataset, 10, imgH, imgW)
+    print(f"Photo-metric loss {loss_pho.item():.3f}")  # 0.031
 
-    layer_pho = setup_homgraphy_layer(
+    loss_fix = run_eval(
         cfg,
         device,
-        batch_size,
+        test_dataset,
+        2,
         imgH,
         imgW,
-        3,
+        channels=feat_channels,
+        feat_model=fixed_feat,
     )
+    print(f"Feature-metric fixed loss {loss_fix.item():.3f}")  # 0.04
 
-    with torch.no_grad():
-        for t, data in enumerate(test_loader):
-
-            img1 = data["img1"].to(device)
-            img2 = data["img2"].to(device)
-            feat1 = resnet_feat(img1)
-            feat2 = resnet_feat(img2)
-            fixed_feat1 = fixed_feat(img1)
-            fixed_feat2 = fixed_feat(img2)
-
-            H_init = torch.eye(3).reshape(1, 9).repeat(batch_size, 1).to(device)
-            H_init = H_init[:, :-1]
-
-            inputs_img = {
-                "H_1_2": H_init,
-                "img1": img1,
-                "img2": img2,
-            }
-
-            inputs_feat = {
-                "H_1_2": H_init,
-                "img1": feat1,
-                "img2": feat2,
-            }
-
-            inputs_fixed_feat = {
-                "H_1_2": H_init,
-                "img1": fixed_feat1,
-                "img2": fixed_feat2,
-            }
-
-            layer_feat.optimizer.params.max_iterations = cfg.test_max_iters
-            layer_pho.optimizer.params.max_iterations = cfg.test_max_iters
-
-            info_opt = layer_feat.forward(inputs_feat)
-            H_opt = info_opt[0]["H_1_2"]
-            info_fix = layer_feat.forward(inputs_fixed_feat)
-            H_fix = info_fix[0]["H_1_2"]
-            info_pho = layer_pho.forward(inputs_img)
-            H_pho = info_pho[0]["H_1_2"]
-
-            # Compute evalution metric, for now photometric loss
-            img1_var = th.Variable(data=img1, name="img1")
-            img2_var = th.Variable(data=img2, name="img2")
-
-            loss_opt = homography_error_fn([H_opt], [img1_var, img2_var], pool_size=1)
-            loss_fix = homography_error_fn([H_fix], [img1_var, img2_var], pool_size=1)
-            loss_pho = homography_error_fn([H_pho], [img1_var, img2_var], pool_size=1)
-            loss_opt = loss_opt.mean(dim=1)
-            loss_fix = loss_fix.mean(dim=1)
-            loss_pho = loss_pho.mean(dim=1)
-
-            print(
-                f"Photometric errors: optimised feats {loss_opt.mean():.3f}, "
-                f"fixed feats {loss_fix.mean():.3f}, photometric {loss_pho.mean():.3f}"
-            )
-
-            if cfg.vis_res:
-                Hs = [H_opt, H_fix, H_pho]
-                losses = [loss_opt, loss_fix, loss_pho]
-                infos = [info_opt, info_fix, info_pho]
-                labels = [
-                    "Optimised featuremetric",
-                    "Pretrained featuremetric",
-                    "Photometric",
-                ]
-                img1_dsts = []
-                for H in Hs:
-                    ones = torch.ones(H.shape[0], 1, device=H.device, dtype=H.dtype)
-                    H_1_2_mat = torch.cat((H.data, ones), dim=1).reshape(-1, 3, 3)
-                    img1_dsts.append(warp_perspective_norm(H_1_2_mat, img1))
-
-                for i in range(batch_size):
-                    imgs = []
-                    for j in range(3):
-                        viz = make_viz(
-                            img1[i],
-                            img2[i],
-                            img1_dsts[j][i],
-                            infos[j][1].converged_iter[i],
-                            float(losses[j][i].item()),
-                        )
-                        viz = put_text(viz, labels[j], top=False)
-                        imgs.append(viz)
-                    imgs = np.vstack((imgs))
-                    cv2.imshow("viz", imgs)
-                    cv2.waitKey(0)
+    loss_opt = run_eval(
+        cfg,
+        device,
+        test_dataset,
+        2,
+        imgH,
+        imgW,
+        channels=feat_channels,
+        feat_model=resnet_feat,
+    )
+    print(f"Feature-metric optimised loss {loss_opt.item():.3f}")  # 0.04
 
 
 @hydra.main(config_path="./configs/", config_name="homography_estimation")

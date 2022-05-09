@@ -4,13 +4,14 @@ use_gpu: True
 photo_aug: True
 
 inner_optim:
-  max_iters: 20
+  max_iters: 100
   step_size: 0.1
-  backward_mode: "full"
+  backward_mode: "implicit"
+  lm_damping: 1e-2
 
 outer_optim:
   lr: 0.01
-  num_epochs: 5
+  num_epochs: 10
 
 test_max_iters: 100
 

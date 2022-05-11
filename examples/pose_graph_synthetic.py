@@ -238,6 +238,7 @@ def run(
                 "track_err_history": cfg.inner_optim.track_err_history,
                 "backward_mode": BACKWARD_MODE[cfg.inner_optim.backward_mode],
                 "__keep_final_step_size__": cfg.inner_optim.keep_step_size,
+                "grouped_retract": cfg.inner_optim.use_batches,
             },
         )
         pr.disable()

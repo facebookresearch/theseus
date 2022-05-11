@@ -18,6 +18,7 @@ import os
 import time
 from torch.utils.data import DataLoader, Dataset
 import torchvision.models as models
+import matplotlib.pyplot as plt
 
 from libs.easyaug import RandomGeoAug, GeoAugParam, RandomPhotoAug
 
@@ -388,6 +389,9 @@ def run(cfg):
         feat_channels,
     )
 
+    ax = plt.axes()
+
+    all_losses = []
     epoch_losses = []
     for epoch in range(cfg.outer_optim.num_epochs):
         running_losses = []
@@ -424,9 +428,16 @@ def run(cfg):
             loss.backward()
             model_optimizer.step()
             running_losses.append(loss.item())
+            all_losses.append(loss.item())
 
             if t % 10 == 0:
                 print(f"Step {t}. Loss {loss.item():.4f}")
+
+            ax.scatter(np.arange(len(all_losses)), all_losses, color="C1")
+            plt.xlim(0, len(all_losses) + 1)
+            plt.ylim(0, np.max(all_losses))
+            plt.draw()
+            plt.pause(0.01)
 
         epoch_time = time.time() - start_time
         epoch_loss = np.mean(running_losses).item()

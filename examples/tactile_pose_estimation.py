@@ -65,7 +65,8 @@ def run_learning_loop(cfg):
     root_path = pathlib.Path(os.getcwd())
     logger.info(f"LOGGING TO {str(root_path)}")
     trainer = theg.TactilePushingTrainer(cfg, EXP_PATH, device)
-
+    if trainer.dataset_train.batch_size > trainer.dataset_train.dataset_size:
+        return
     # -------------------------------------------------------------------- #
     # Main learning loop
     # -------------------------------------------------------------------- #
@@ -85,6 +86,8 @@ def run_learning_loop(cfg):
             val_losses, results_val[epoch], image_data = trainer.compute_loss(
                 epoch, update=False
             )
+        if len(val_losses) == 0:
+            continue
         logger.info(f"AVG. VAL LOSS: {np.mean(val_losses)}")
         torch.save(results_val, root_path / "results_val.pt")
 

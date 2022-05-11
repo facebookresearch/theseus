@@ -24,6 +24,7 @@ from theseus.optimizer.linear import LinearSolver
 
 import cProfile
 import io
+import subprocess
 
 from scipy.io import savemat
 
@@ -48,8 +49,6 @@ th.SO3.SO3_EPS = 1e-6
 
 # Logger
 log = logging.getLogger(__name__)
-
-use_batches = True
 
 
 def print_histogram(
@@ -105,9 +104,30 @@ def pose_loss(
 def run(
     cfg: omegaconf.OmegaConf, pg: theg.PoseGraphDataset, results_path: pathlib.Path
 ):
-    device = torch.device(cfg.device)
+    device = torch.device("cuda")
     dtype = torch.float64
     pr = cProfile.Profile()
+
+    BACKWARD_MODE = {
+        "implicit": th.BackwardMode.IMPLICIT,
+        "full": th.BackwardMode.FULL,
+        "truncated": th.BackwardMode.TRUNCATED,
+    }
+
+    LINEARIZATION_MODE: Dict[str, Type[Linearization]] = {
+        "sparse": th.SparseLinearization,
+        "dense": th.DenseLinearization,
+    }
+
+    LINEAR_SOLVER_MODE: Dict[str, Type[LinearSolver]] = {
+        "sparse": cast(
+            Type[LinearSolver],
+            th.LUCudaSparseSolver
+            if cast(str, cfg.solver_device) == "cuda"
+            else th.CholmodSparseSolver,
+        ),
+        "dense": th.CholeskyDenseSolver,
+    }
 
     pg.to(device=device)
 
@@ -139,7 +159,7 @@ def run(
             edge.relative_pose,
             loss_function=robust_loss,
         )
-        objective.add(relative_pose_cost, use_batches=use_batches)
+        objective.add(relative_pose_cost, use_batches=cfg.inner_optim.use_batches)
 
     if cfg.inner_optim.regularize:
         pose_prior_cost = th.eb.VariableDifference(
@@ -149,7 +169,7 @@ def run(
             ),
             target=pg_batch.poses[0].copy(new_name=pg_batch.poses[0].name + "__PRIOR"),
         )
-        objective.add(pose_prior_cost, use_batches=use_batches)
+        objective.add(pose_prior_cost, use_batches=cfg.inner_optim.use_batches)
 
     if cfg.inner_optim.ratio_known_poses > 0.0:
         pose_prior_weight = th.ScaleCostWeight(100 * torch.ones(1, dtype=dtype))
@@ -163,7 +183,7 @@ def run(
                     pg_batch.gt_poses[i],
                     name=f"pose_diff_{i}",
                 ),
-                use_batches=use_batches,
+                use_batches=cfg.inner_optim.use_batches,
             )
             gt_pose_indices.append(i)
 
@@ -218,6 +238,7 @@ def run(
                 "track_err_history": cfg.inner_optim.track_err_history,
                 "backward_mode": BACKWARD_MODE[cfg.inner_optim.backward_mode],
                 "__keep_final_step_size__": cfg.inner_optim.keep_step_size,
+                "grouped_retract": cfg.inner_optim.use_batches,
             },
         )
         pr.disable()
@@ -265,6 +286,8 @@ def run(
         backward_mem_epoch = []
 
         for batch_idx in range(pg.num_batches):
+            if batch_idx == cfg.outer_optim.max_num_batches:
+                break
             forward_time, backward_time, forward_mem, backward_mem = run_batch(
                 batch_idx
             )
@@ -279,16 +302,16 @@ def run(
         forward_mems.append(forward_mem_epoch)
         backward_mems.append(backward_mem_epoch)
 
-    results = omegaconf.OmegaConf.to_container(cfg)
-    results["forward_time"] = forward_times
-    results["backward_time"] = backward_times
-    results["forward_mem"] = forward_mems
-    results["backward_mem"] = backward_mems
-    file = (
-        f"pgo_{cfg.device}_{cfg.inner_optim.solver}_{cfg.num_poses}_"
-        f"{cfg.dataset_size}_{cfg.batch_size}.mat"
-    )
-    savemat(file, results)
+        results = omegaconf.OmegaConf.to_container(cfg)
+        results["forward_time"] = forward_times
+        results["backward_time"] = backward_times
+        results["forward_mem"] = forward_mems
+        results["backward_mem"] = backward_mems
+        file = (
+            f"pgo_{cfg.solver_device}_{cfg.inner_optim.solver}_{cfg.num_poses}_"
+            f"{cfg.dataset_size}_{cfg.batch_size}.mat"
+        )
+        savemat(file, results)
 
     s = io.StringIO()
     sortby = pstats.SortKey.CUMULATIVE
@@ -299,6 +322,8 @@ def run(
 
 @hydra.main(config_path="./configs/", config_name="pose_graph")
 def main(cfg):
+    log.info((subprocess.check_output("lscpu", shell=True).strip()).decode())
+
     torch.manual_seed(cfg.seed)
     np.random.seed(cfg.seed)
     random.seed(cfg.seed)

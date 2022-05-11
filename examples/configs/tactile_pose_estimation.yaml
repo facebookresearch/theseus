@@ -15,6 +15,7 @@ inner_optim:
   reg_w: 0
   backward_mode: IMPLICIT
   backward_num_iterations: 2 # only needed by TRUNCATED backward mode
+  dlm_epsilon: None
   force_implicit_by_epoch: 10000
   step_size: 1.0
   keep_step_size: true
@@ -28,6 +29,10 @@ train:
   batch_size: 8
   num_epochs: 200
   lr: 1e-4
+  optimizer: "adam" # "adam", "rmsprop"
+  lr_decay: 1.0
+  val_ratio: 0.1
+  max_num_batches: 100
 
 # 0: disc, 1: rect-edges, 2: rect-corners, 3: ellip
 class_label: 2

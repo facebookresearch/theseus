@@ -1,6 +1,7 @@
 seed: 0
 use_gpu: True
-
+imgH: 160
+imgW: 200
 photo_aug: True
 
 inner_optim:

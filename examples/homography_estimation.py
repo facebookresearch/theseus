@@ -19,6 +19,7 @@ import time
 from torch.utils.data import DataLoader, Dataset
 import torchvision.models as models
 import matplotlib.pyplot as plt
+import shutil
 
 from libs.easyaug import RandomGeoAug, GeoAugParam, RandomPhotoAug
 
@@ -193,7 +194,7 @@ def torch2cv2(img):
     return out
 
 
-def make_viz(img1, img2, img1_w, iteration, err):
+def viz_warp(path, img1, img2, img1_w, iteration, err):
     img_diff = torch2cv2(torch.abs(img1_w - img2))
     img1 = torch2cv2(img1)
     img2 = torch2cv2(img2)
@@ -201,31 +202,53 @@ def make_viz(img1, img2, img1_w, iteration, err):
     img1 = put_text(img1, "image I")
     img2 = put_text(img2, "image I'")
     img1_w = put_text(img1_w, "I warped to I'")
-    img1_w = put_text(img1_w, "iter: %05d, loss: %.3f" % (iteration, err), top=False)
     img_diff = put_text(img_diff, "L2 diff")
     out = np.concatenate([img1, img2, img1_w, img_diff], axis=1)
-    return out
-
-
-def viz_warp(log_dir, img1, img2, img1_w, iteration, err):
-    out = make_viz(img1, img2, img1_w, iteration, err)
-    path = os.path.join(log_dir, "out_%05d.png" % iteration)
+    out = put_text(out, "iter: %05d, loss: %.3f" % (iteration, err), top=False)
     cv2.imwrite(path, out)
 
 
-def setup_homgraphy_layer(cfg, device, batch_size, imgH, imgW, channels):
+def write_gif_batch(save_dir, state_history, img1, img2, loss, ix=0):
+    for it in state_history:
+        H = state_history[it]["H_1_2"].data
+        ones = torch.ones(H.shape[0], 1, device=H.device, dtype=H.dtype)
+        H_1_2_mat = torch.cat((H.data, ones), dim=1).reshape(-1, 3, 3)
+        img1_dsts = warp_perspective_norm(H_1_2_mat, img1)
+
+        for j, H in enumerate(H_1_2_mat):
+            if it == 0:
+                os.makedirs(f"{save_dir}/out{j:03d}")
+            path = os.path.join(save_dir, f"out{j:03d}/{it:05d}.png")
+            viz_warp(
+                path,
+                img1[j],
+                img2[j],
+                img1_dsts[j],
+                it,
+                loss[j].item(),
+            )
+
+    for j in range(len(H_1_2_mat)):
+        cmd = f"convert -delay 10 -loop 0 {save_dir}/out{j:03d}/*.png {save_dir}/img{ix}.gif"
+        print(cmd)
+        os.system(cmd)
+        shutil.rmtree(f"{save_dir}/out{j:03d}")
+        ix += 1
+
+
+def setup_homgraphy_layer(cfg, device, batch_size, channels):
 
     objective = th.Objective()
 
     H_init = torch.zeros(batch_size, 8)
     H_1_2 = th.Vector(data=H_init, name="H_1_2")
 
-    img_init = torch.zeros(batch_size, channels, imgH, imgW)
+    img_init = torch.zeros(batch_size, channels, cfg.imgH, cfg.imgW)
     img1 = th.Variable(data=img_init, name="img1")
     img2 = th.Variable(data=img_init, name="img2")
 
     # loss is pooled so error dim is not too large
-    pool_size = int(imgH // 4)
+    pool_size = int(cfg.imgH // 3)
     pooled = torch.nn.functional.avg_pool2d(img_init, pool_size, stride=pool_size)
     error_dim = pooled[0, 0].numel()
     print(f"Pool size {pool_size}, error dim {error_dim}")
@@ -254,8 +277,10 @@ def setup_homgraphy_layer(cfg, device, batch_size, imgH, imgW, channels):
 
 
 def run_eval(
-    cfg, device, test_dataset, batch_size, imgH, imgW, channels=3, feat_model=None
+    cfg, device, test_dataset, batch_size, save_dir=None, channels=3, feat_model=None
 ):
+    if save_dir is not None:
+        os.makedirs(save_dir, exist_ok=True)
 
     test_loader = DataLoader(test_dataset, batch_size=batch_size, shuffle=False)
 
@@ -263,12 +288,11 @@ def run_eval(
         cfg,
         device,
         batch_size,
-        imgH,
-        imgW,
         channels,
     )
     theseus_layer.optimizer.params.max_iterations = cfg.test_max_iters
 
+    ix = 0
     with torch.no_grad():
         losses = []
         for t, data in enumerate(test_loader):
@@ -301,38 +325,18 @@ def run_eval(
             loss = loss.mean(dim=1)
             losses.append(loss)
 
-            print(f"Test loss {loss.mean().item()}  ({t} / {len(test_loader)})")
+            print(f"Test loss ({t} / {len(test_loader)}): {loss.mean().item()}")
 
-            # if cfg.vis_res:
-            #     Hs = [H_opt, H_fix, H_pho]
-            #     losses = [loss_opt, loss_fix, loss_pho]
-            #     infos = [info_opt, info_fix, info_pho]
-            #     labels = [
-            #         "Optimised feature-metric",
-            #         "Pretrained feature-metric",
-            #         "Photo-metric",
-            #     ]
-            #     img1_dsts = []
-            #     for H in Hs:
-            #         ones = torch.ones(H.shape[0], 1, device=H.device, dtype=H.dtype)
-            #         H_1_2_mat = torch.cat((H.data, ones), dim=1).reshape(-1, 3, 3)
-            #         img1_dsts.append(warp_perspective_norm(H_1_2_mat, img1))
-
-            #     for i in range(batch_size):
-            #         imgs = []
-            #         for j in range(3):
-            #             viz = make_viz(
-            #                 img1[i],
-            #                 img2[i],
-            #                 img1_dsts[j][i],
-            #                 infos[j][1].converged_iter[i],
-            #                 float(losses[j][i].item()),
-            #             )
-            #             viz = put_text(viz, labels[j], top=False)
-            #             imgs.append(viz)
-            #         imgs = np.vstack((imgs))
-            #         cv2.imshow("viz", imgs)
-            #         cv2.waitKey(0)
+            if ix < 20:
+                write_gif_batch(
+                    save_dir,
+                    theseus_layer.optimizer.state_history,
+                    img1,
+                    img2,
+                    loss,
+                    ix,
+                )
+                ix += batch_size
 
         return torch.cat(losses).mean()
 
@@ -354,10 +358,9 @@ def run(cfg):
         print("Running command: ", cmd)
         os.system(cmd)
 
-    imgH, imgW = 160, 200
     batch_size = 2
-    train_dataset = HomographyDataset(dataset_path, imgH, imgW, train=True)
-    test_dataset = HomographyDataset(dataset_path, imgH, imgW, train=False)
+    train_dataset = HomographyDataset(dataset_path, cfg.imgH, cfg.imgW, train=True)
+    test_dataset = HomographyDataset(dataset_path, cfg.imgH, cfg.imgW, train=False)
     train_loader = DataLoader(train_dataset, batch_size=batch_size, shuffle=True)
 
     log_dir = "viz"
@@ -367,7 +370,7 @@ def run(cfg):
 
     resnet = models.resnet18(pretrained=True)
     resnet.to(device)
-    upsample = torch.nn.UpsamplingBilinear2d(size=[imgH, imgW])
+    upsample = torch.nn.UpsamplingBilinear2d(size=[cfg.imgH, cfg.imgW])
     resnet_feat = torch.nn.Sequential(*list(resnet.children())[:-4] + [upsample])
     fixed_feat = torch.nn.Sequential(*list(resnet.children())[:-4] + [upsample])
 
@@ -384,8 +387,6 @@ def run(cfg):
         cfg,
         device,
         batch_size,
-        imgH,
-        imgW,
         feat_channels,
     )
 
@@ -449,7 +450,7 @@ def run(cfg):
 
     # Test loop
 
-    loss_pho = run_eval(cfg, device, test_dataset, 10, imgH, imgW)
+    loss_pho = run_eval(cfg, device, test_dataset, 10, save_dir=log_dir + "/pho")
     print(f"Photo-metric loss {loss_pho.item():.3f}")  # 0.031
 
     loss_fix = run_eval(
@@ -457,8 +458,7 @@ def run(cfg):
         device,
         test_dataset,
         2,
-        imgH,
-        imgW,
+        save_dir=log_dir + "/feat_fix",
         channels=feat_channels,
         feat_model=fixed_feat,
     )
@@ -469,8 +469,7 @@ def run(cfg):
         device,
         test_dataset,
         2,
-        imgH,
-        imgW,
+        save_dir=log_dir + "/feat_opt",
         channels=feat_channels,
         feat_model=resnet_feat,
     )

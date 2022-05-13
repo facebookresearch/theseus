@@ -160,7 +160,7 @@ def test_spheres(robot_model, dataset, batch_size):
     spheres_computed = robot_model.get_collision_spheres(link_states)
 
     # Check spheres against previously generated data or generate data
-    sphere_data_filename = SPHERE_DATA_FILENAME_BASE + f"_{batch_size}"
+    sphere_data_filename = SPHERE_DATA_FILENAME_BASE + f"_{batch_size}.json"
     sphere_data_path = os.path.join(
         os.path.dirname(__file__), "data", sphere_data_filename
     )

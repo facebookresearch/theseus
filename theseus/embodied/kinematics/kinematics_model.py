@@ -68,8 +68,8 @@ class UrdfRobotModel(KinematicsModel):
             self.collision_spheres[link.name] = []
 
             for col in link.collisions:
-                # Get sphere from user defined spheres in URDF
-                if type(col.geometry) is urdf.Sphere:
+                # Get sphere from user defined spheres in xml
+                if not use_mesh and type(col.geometry) is urdf.Sphere:
                     pos = col.origin.xyz if col.origin.xyz is not None else [0, 0, 0]
                     rad = col.geometry.radius
                     sphere_obj = Sphere(

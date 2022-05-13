@@ -152,7 +152,8 @@ def deserialize_spheres(spheres_data):
 
 
 @pytest.mark.parametrize("batch_size", [1, 3])
-def test_spheres(robot_model, dataset, batch_size):
+@pytest.mark.parametrize("use_mesh", [True, False])
+def test_spheres(robot_model, dataset, batch_size, use_mesh):
     joint_state = dataset["joint_states"][0:batch_size, ...]
 
     # Get spheres from robot model
@@ -160,7 +161,10 @@ def test_spheres(robot_model, dataset, batch_size):
     spheres_computed = robot_model.get_collision_spheres(link_states)
 
     # Check spheres against previously generated data or generate data
-    sphere_data_filename = SPHERE_DATA_FILENAME_BASE + f"_{batch_size}.json"
+    mode = "mesh" if use_mesh else "xml"
+    sphere_data_filename = (
+        SPHERE_DATA_FILENAME_BASE + f"_{mode}" + f"_{batch_size}.json"
+    )
     sphere_data_path = os.path.join(
         os.path.dirname(__file__), "data", sphere_data_filename
     )

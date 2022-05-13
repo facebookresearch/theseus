@@ -149,3 +149,42 @@ def test_eff_obj_interesect_errors():
         actual = cost_fn.error()
         expected = outputs["error"][sdf_idx, :]
         assert torch.allclose(actual, expected)
+
+
+def test_eff_obj_variable_type():
+    rng = torch.Generator()
+    rng.manual_seed(0)
+    for batch_size in [1, 10, 100]:
+        obj = create_random_se2(batch_size, rng)
+        eff = create_random_se2(batch_size, rng)
+        origin = th.Variable(torch.randn(batch_size, 2).double())
+        sdf_data = th.Variable(torch.randn(batch_size, 10, 10).double())
+        cell_size = th.Variable(torch.rand(batch_size, 1).double())
+        eff_radius = th.Variable(torch.rand(batch_size, 1).double())
+        cost_weight = th.ScaleCostWeight(1.0)
+        cost_function = th.eb.EffectorObjectContactPlanar(
+            obj, eff, cost_weight, origin, sdf_data, cell_size, eff_radius
+        )
+
+        assert isinstance(cost_function.eff_radius, th.Variable)
+        assert cost_function.eff_radius is eff_radius
+
+        eff_radius_t = torch.rand(batch_size, 1).double()
+
+        cost_function = th.eb.EffectorObjectContactPlanar(
+            obj, eff, cost_weight, origin, sdf_data, cell_size, eff_radius_t
+        )
+
+        assert isinstance(cost_function.eff_radius, th.Variable)
+        assert np.allclose(cost_function.eff_radius.data, eff_radius_t)
+        assert len(cost_function.eff_radius.shape) == 2
+
+        eff_radius_f = torch.rand(1)
+
+        cost_function = th.eb.EffectorObjectContactPlanar(
+            obj, eff, cost_weight, origin, sdf_data, cell_size, eff_radius_f
+        )
+
+        assert isinstance(cost_function.eff_radius, th.Variable)
+        assert np.allclose(cost_function.eff_radius.data.item(), eff_radius_f)
+        assert len(cost_function.eff_radius.shape) == 2

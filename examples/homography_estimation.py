@@ -36,11 +36,12 @@ BACKWARD_MODE = {
 
 
 class HomographyDataset(Dataset):
-    def __init__(self, img_dir, imgH, imgW, photo_aug=True, train=True):
-        self.img_dir = img_dir
+    def __init__(self, img_dirs, imgH, imgW, photo_aug=True, train=True):
         self.imgH = imgH
         self.imgW = imgW
-        self.img_paths = glob.glob(img_dir + "/**/*.jpg", recursive=True)
+        self.img_paths = []
+        for direc in img_dirs:
+            self.img_paths.extend(glob.glob(direc + "/**/*.jpg", recursive=True))
         assert len(self.img_paths) > 0, "no images found"
         print("Found %d total images in dataset" % len(self.img_paths))
         sc = 0.3
@@ -59,10 +60,11 @@ class HomographyDataset(Dataset):
 
         # train test split
         self.img_paths.sort()
+        split_ix = int(0.9 * len(self.img_paths))
         if train:
-            self.img_paths = self.img_paths[:-100]
+            self.img_paths = self.img_paths[:split_ix]
         else:
-            self.img_paths = self.img_paths[-100:]
+            self.img_paths = self.img_paths[split_ix:]
         self.train = train
         if self.train:
             print("Using %d images for training" % len(self.img_paths))
@@ -358,8 +360,6 @@ def train_loop(cfg, device, train_dataset, feat_model):
             plt.ylim(0, np.max(all_losses))
             plt.savefig("loss_curve.png")
 
-            break
-
         epoch_time = time.time() - start_time
         epoch_loss = np.mean(running_losses).item()
         epoch_losses.append(epoch_loss)
@@ -447,18 +447,20 @@ def run(cfg):
 
     dataset_root = os.path.join(get_original_cwd(), "data")
     chunks = [
-            "revisitop1m.1",
-            "revisitop1m.2",
-            "revisitop1m.3",
-            "revisitop1m.4",
-            "revisitop1m.5",
-            "revisitop1m.6",
-            "revisitop1m.7",
-            "revisitop1m.8",
-            "revisitop1m.9",
-            ]
+        # "revisitop1m.1",
+        # "revisitop1m.2",
+        # "revisitop1m.3",
+        # "revisitop1m.4",
+        # "revisitop1m.5",
+        # "revisitop1m.6",
+        # "revisitop1m.7",
+        # "revisitop1m.8",
+        "revisitop1m.9",
+    ]
+    dataset_paths = []
     for chunk in chunks:
         dataset_path = os.path.join(dataset_root, chunk)
+        dataset_paths.append(dataset_path)
         if not os.path.exists(dataset_path):
             print("Downloading data")
             url_root = "http://ptak.felk.cvut.cz/revisitop/revisitop1m/jpg/"
@@ -471,8 +473,8 @@ def run(cfg):
             print("Running command: ", cmd)
             os.system(cmd)
 
-    train_dataset = HomographyDataset(dataset_path, cfg.imgH, cfg.imgW, train=True)
-    test_dataset = HomographyDataset(dataset_path, cfg.imgH, cfg.imgW, train=False)
+    train_dataset = HomographyDataset(dataset_paths, cfg.imgH, cfg.imgW, train=True)
+    test_dataset = HomographyDataset(dataset_paths, cfg.imgH, cfg.imgW, train=False)
 
     log_dir = "viz"
     os.makedirs(log_dir, exist_ok=True)

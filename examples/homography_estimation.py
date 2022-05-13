@@ -253,7 +253,7 @@ def setup_homgraphy_layer(cfg, device, batch_size, channels):
     img2 = th.Variable(data=img_init, name="img2")
 
     # loss is pooled so error dim is not too large
-    pool_size = int(cfg.imgH // 4)
+    pool_size = int(cfg.imgH // 3)
     pooled = torch.nn.functional.avg_pool2d(img_init, pool_size, stride=pool_size)
     error_dim = pooled[0, 0].numel()
     print(f"Pool size {pool_size}, error dim {error_dim}")
@@ -281,13 +281,105 @@ def setup_homgraphy_layer(cfg, device, batch_size, channels):
     return theseus_layer
 
 
-def run_eval(cfg, device, test_dataset, save_dir=None, channels=3, feat_model=None):
+def train_loop(cfg, device, train_dataset, feat_model):
+    if cfg.save_model:
+        os.makedirs("chkpts")
+
+    train_loader = DataLoader(
+        train_dataset, batch_size=cfg.train_batch_size, shuffle=True
+    )
+    sample = next(iter(train_loader))
+    feat_channels = feat_model(sample["img1"].to(device)).shape[1]
+
+    model_optimizer = torch.optim.Adam(feat_model.parameters(), lr=cfg.outer_optim.lr)
+
+    l1_loss = torch.nn.L1Loss()
+
+    layer_feat = setup_homgraphy_layer(
+        cfg,
+        device,
+        cfg.train_batch_size,
+        feat_channels,
+    )
+
+    ax = plt.axes()
+
+    all_losses = []
+    epoch_losses = []
+    for epoch in range(cfg.outer_optim.num_epochs):
+        running_losses = []
+        start_time = time.time()
+        for t, data in enumerate(train_loader):
+
+            H_1_2_gt = data["H_1_2"].to(device)
+            img1 = data["img1"].to(device)
+            img2 = data["img2"].to(device)
+            feat1 = feat_model(img1)
+            feat2 = feat_model(img2)
+
+            H_init = (
+                torch.eye(3).reshape(1, 9).repeat(cfg.train_batch_size, 1).to(device)
+            )
+            H_init = H_init[:, :-1]
+            inputs = {
+                "H_1_2": H_init,
+                "img1": feat1,
+                "img2": feat2,
+            }
+
+            layer_feat.forward(
+                inputs,
+                optimizer_kwargs={
+                    "verbose": True,
+                    "backward_mode": BACKWARD_MODE[cfg.inner_optim.backward_mode],
+                    "damping": cfg.inner_optim.lm_damping,
+                },
+            )
+
+            # no loss on last element as set to one
+            H_1_2_gt = H_1_2_gt.reshape(-1, 9)[:, :-1]
+            H_1_2 = layer_feat.objective.get_optim_var("H_1_2")
+            loss = l1_loss(H_1_2.data, H_1_2_gt)
+            loss.backward()
+            model_optimizer.step()
+            running_losses.append(loss.item())
+            all_losses.append(loss.item())
+
+            if t % 10 == 0:
+                print(f"Step {t}. Loss {loss.item():.4f}")
+
+            ax.scatter(np.arange(len(all_losses)), all_losses, color="C0")
+            plt.xlim(0, len(all_losses) + 1)
+            plt.ylim(0, np.max(all_losses))
+            plt.savefig("loss_curve.png")
+
+            break
+
+        epoch_time = time.time() - start_time
+        epoch_loss = np.mean(running_losses).item()
+        epoch_losses.append(epoch_loss)
+        print(
+            f"******* Epoch {epoch}. Average loss: {epoch_loss:.4f}. "
+            f"Epoch time {epoch_time}*******"
+        )
+
+        if cfg.save_model:
+            torch.save(feat_model.state_dict(), f"chkpts/epoch_{epoch:03d}.pt")
+
+    return feat_model
+
+
+def run_eval(cfg, device, test_dataset, save_dir=None, feat_model=None):
     if save_dir is not None:
         os.makedirs(save_dir, exist_ok=True)
 
     test_loader = DataLoader(
         test_dataset, batch_size=cfg.test_batch_size, shuffle=False
     )
+    channels = 3
+    if feat_model is not None:
+        sample = next(iter(test_loader))
+        channels = feat_model(sample["img1"].to(device)).shape[1]
 
     theseus_layer = setup_homgraphy_layer(
         cfg,
@@ -332,7 +424,7 @@ def run_eval(cfg, device, test_dataset, save_dir=None, channels=3, feat_model=No
 
             print(f"Test loss ({t} / {len(test_loader)}): {loss.mean().item()}")
 
-            if ix < 20:
+            if cfg.save_gifs and ix < 20:
                 write_gif_batch(
                     save_dir,
                     theseus_layer.optimizer.state_history,
@@ -363,10 +455,8 @@ def run(cfg):
         print("Running command: ", cmd)
         os.system(cmd)
 
-    batch_size = 2
     train_dataset = HomographyDataset(dataset_path, cfg.imgH, cfg.imgW, train=True)
     test_dataset = HomographyDataset(dataset_path, cfg.imgH, cfg.imgW, train=False)
-    train_loader = DataLoader(train_dataset, batch_size=batch_size, shuffle=True)
 
     log_dir = "viz"
     os.makedirs(log_dir, exist_ok=True)
@@ -379,78 +469,9 @@ def run(cfg):
     resnet_feat = torch.nn.Sequential(*list(resnet.children())[:-4] + [upsample])
     fixed_feat = torch.nn.Sequential(*list(resnet.children())[:-4] + [upsample])
 
-    sample = next(iter(train_loader))
-    feat_channels = resnet_feat(sample["img1"].to(device)).shape[1]
-
     # Training loop to refine pretrained features
 
-    model_optimizer = torch.optim.Adam(resnet_feat.parameters(), lr=cfg.outer_optim.lr)
-
-    l1_loss = torch.nn.L1Loss()
-
-    layer_feat = setup_homgraphy_layer(
-        cfg,
-        device,
-        batch_size,
-        feat_channels,
-    )
-
-    ax = plt.axes()
-
-    all_losses = []
-    epoch_losses = []
-    for epoch in range(cfg.outer_optim.num_epochs):
-        running_losses = []
-        start_time = time.time()
-        for t, data in enumerate(train_loader):
-
-            H_1_2_gt = data["H_1_2"].to(device)
-            img1 = data["img1"].to(device)
-            img2 = data["img2"].to(device)
-            feat1 = resnet_feat(img1)
-            feat2 = resnet_feat(img2)
-
-            H_init = torch.eye(3).reshape(1, 9).repeat(batch_size, 1).to(device)
-            H_init = H_init[:, :-1]
-            inputs = {
-                "H_1_2": H_init,
-                "img1": feat1,
-                "img2": feat2,
-            }
-
-            layer_feat.forward(
-                inputs,
-                optimizer_kwargs={
-                    "verbose": False,
-                    "backward_mode": BACKWARD_MODE[cfg.inner_optim.backward_mode],
-                    "damping": cfg.inner_optim.lm_damping,
-                },
-            )
-
-            # no loss on last element as set to one
-            H_1_2_gt = H_1_2_gt.reshape(-1, 9)[:, :-1]
-            H_1_2 = layer_feat.objective.get_optim_var("H_1_2")
-            loss = l1_loss(H_1_2.data, H_1_2_gt)
-            loss.backward()
-            model_optimizer.step()
-            running_losses.append(loss.item())
-            all_losses.append(loss.item())
-
-            if t % 10 == 0:
-                print(f"Step {t}. Loss {loss.item():.4f}")
-
-            ax.scatter(np.arange(len(all_losses)), all_losses, color="C0")
-            plt.xlim(0, len(all_losses) + 1)
-            plt.ylim(0, np.max(all_losses))
-            plt.savefig("loss_curve.png")
-
-        epoch_time = time.time() - start_time
-        epoch_loss = np.mean(running_losses).item()
-        epoch_losses.append(epoch_loss)
-        print(
-            f"******* Epoch {epoch}. Average loss: {epoch_loss:.4f}. "
-            f"Epoch time {epoch_time}*******"
-        )
+    resnet_feat = train_loop(cfg, device, train_dataset, resnet_feat)
 
     # Test loop
 
@@ -462,7 +483,6 @@ def run(cfg):
         device,
         test_dataset,
         save_dir=log_dir + "/feat_fix",
-        channels=feat_channels,
         feat_model=fixed_feat,
     )
     print(f"Feature-metric fixed loss {loss_fix.item():.3f}")  # 0.04
@@ -473,7 +493,6 @@ def run(cfg):
         test_dataset,
         cfg.test_batch_size,
         save_dir=log_dir + "/feat_opt",
-        channels=feat_channels,
         feat_model=resnet_feat,
     )
     print(f"Feature-metric optimised loss {loss_opt.item():.3f}")  # 0.04

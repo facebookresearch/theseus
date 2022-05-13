@@ -1,21 +1,23 @@
 seed: 0
 use_gpu: True
+
 imgH: 160
 imgW: 200
 photo_aug: True
 
 inner_optim:
-  max_iters: 50
+  max_iters: 20
   step_size: 0.1
   backward_mode: "implicit"
-  lm_damping: 1e-2
+  lm_damping: 1e-1
 
 outer_optim:
   lr: 0.01
   num_epochs: 10
 
+train_batch_size: 4
 test_max_iters: 50
 test_batch_size: 4
 
-vis_res: True
-
+save_gifs: True
+save_model: True

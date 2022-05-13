@@ -11,7 +11,7 @@ from typing import Dict, List, Optional, Union, cast
 import differentiable_robot_model as drm
 import torch
 from stl import mesh
-from urdf_parser_py.urdf import URDF, Mesh
+from urdf_parser_py import urdf
 
 from theseus.geometry import SE3, LieGroup, Point2, Point3, Vector
 
@@ -47,29 +47,51 @@ class IdentityModel(KinematicsModel):
 
 
 class UrdfRobotModel(KinematicsModel):
+    collision_spheres: Dict[str, List[Sphere]]
+
     def __init__(self, urdf_path: str, collision_params: Dict[str, float] = None):
         # Initialize DRM
         self.drm_model = drm.DifferentiableRobotModel(urdf_path)
 
+        # Parse collision params
+        collision_params = collision_params or {}
+        use_mesh = False
+        for key, value in collision_params.items():
+            if key == "use_mesh" and value:
+                use_mesh = True
+
         # Parse URDF for collision geometries
-        self.collision_params = collision_params or {}
         self.collision_spheres = {}
+        robot = urdf.URDF.from_xml_file(urdf_path)
 
-        robot = URDF.from_xml_file(urdf_path)
         for link in robot.links:
-            if link.collision is not None and type(link.collision.geometry) is Mesh:
-                # Load mesh file
-                mesh_path = os.path.join(
-                    os.path.dirname(urdf_path), link.collision.geometry.filename
-                )
-                mesh_obj = mesh.Mesh.from_file(mesh_path)
+            self.collision_spheres[link.name] = []
 
-                # Process mesh
-                self.collision_spheres[link.name] = self._generate_spheres_from_mesh(
-                    mesh_obj
-                )
+            for col in link.collisions:
+                # Get sphere from user defined spheres in URDF
+                if type(col.geometry) is urdf.Sphere:
+                    pos = col.origin.xyz if col.origin.xyz is not None else [0, 0, 0]
+                    rad = col.geometry.radius
+                    sphere_obj = Sphere(
+                        position=Point3(torch.Tensor(pos)),
+                        radius=float(rad),
+                    )
+                    self.collision_spheres[link.name].append(sphere_obj)
 
-    def _generate_spheres_from_mesh(self, mesh):
+                # Generate spheres from mesh
+                elif use_mesh and type(col.geometry) is urdf.Mesh:
+                    # Load mesh file
+                    mesh_path = os.path.join(
+                        os.path.dirname(urdf_path), col.geometry.filename
+                    )
+                    mesh_obj = mesh.Mesh.from_file(mesh_path)
+
+                    # Process mesh
+                    self.collision_spheres[
+                        link.name
+                    ] += self._generate_spheres_from_mesh(mesh_obj)
+
+    def _generate_spheres_from_mesh(self, mesh: mesh.Mesh) -> List[Sphere]:
         """Approximates a mesh with a collection of spheres
 
         Current placeholder primitive implementation: Generate a single sphere

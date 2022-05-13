@@ -42,6 +42,7 @@ class HomographyDataset(Dataset):
         self.imgW = imgW
         self.img_paths = glob.glob(img_dir + "/**/*.jpg", recursive=True)
         assert len(self.img_paths) > 0, "no images found"
+        print("Found %d total images in dataset" % len(self.img_paths))
         sc = 0.3
         self.rga = RandomGeoAug(
             rotate_param=GeoAugParam(min=-30 * sc, max=30 * sc),
@@ -63,6 +64,10 @@ class HomographyDataset(Dataset):
         else:
             self.img_paths = self.img_paths[-100:]
         self.train = train
+        if self.train:
+            print("Using %d images for training" % len(self.img_paths))
+        else:
+            print("Using %d images for testing" % len(self.img_paths))
 
     def __len__(self):
         return len(self.img_paths)
@@ -441,19 +446,30 @@ def run_eval(cfg, device, test_dataset, save_dir=None, feat_model=None):
 def run(cfg):
 
     dataset_root = os.path.join(get_original_cwd(), "data")
-    chunk = "revisitop1m.1"
-    dataset_path = os.path.join(dataset_root, chunk)
-    if not os.path.exists(dataset_path):
-        print("Downloading data")
-        url_root = "http://ptak.felk.cvut.cz/revisitop/revisitop1m/jpg/"
-        tar = "%s.tar.gz" % chunk
-        cmd = "wget %s/%s -O %s/%s" % (url_root, tar, dataset_root, tar)
-        print("Running command: ", cmd)
-        os.system(cmd)
-        os.makedirs(dataset_path)
-        cmd = "tar -xf %s/%s -C %s" % (dataset_root, tar, dataset_path)
-        print("Running command: ", cmd)
-        os.system(cmd)
+    chunks = [
+            "revisitop1m.1",
+            "revisitop1m.2",
+            "revisitop1m.3",
+            "revisitop1m.4",
+            "revisitop1m.5",
+            "revisitop1m.6",
+            "revisitop1m.7",
+            "revisitop1m.8",
+            "revisitop1m.9",
+            ]
+    for chunk in chunks:
+        dataset_path = os.path.join(dataset_root, chunk)
+        if not os.path.exists(dataset_path):
+            print("Downloading data")
+            url_root = "http://ptak.felk.cvut.cz/revisitop/revisitop1m/jpg/"
+            tar = "%s.tar.gz" % chunk
+            cmd = "wget %s/%s -O %s/%s" % (url_root, tar, dataset_root, tar)
+            print("Running command: ", cmd)
+            os.system(cmd)
+            os.makedirs(dataset_path)
+            cmd = "tar -xf %s/%s -C %s" % (dataset_root, tar, dataset_path)
+            print("Running command: ", cmd)
+            os.system(cmd)
 
     train_dataset = HomographyDataset(dataset_path, cfg.imgH, cfg.imgW, train=True)
     test_dataset = HomographyDataset(dataset_path, cfg.imgH, cfg.imgW, train=False)

@@ -62,6 +62,7 @@ class HomographyDataset(Dataset):
             self.img_paths = self.img_paths[:-100]
         else:
             self.img_paths = self.img_paths[-100:]
+        self.train = train
 
     def __len__(self):
         return len(self.img_paths)
@@ -77,10 +78,14 @@ class HomographyDataset(Dataset):
 
         # apply random photometric augmentations
         if self.photo_aug:
+            seed1, seed2 = None, None
+            if self.train is False:
+                seed1 = idx
+                seed2 = idx + 1
             img1 = torch.clamp(img1, 0.0, 1.0)
             img2 = torch.clamp(img2, 0.0, 1.0)
-            img1 = self.rpa.forward(img1)
-            img2 = self.rpa.forward(img2)
+            img1 = self.rpa.forward(img1, seed=seed1)
+            img2 = self.rpa.forward(img2, seed=seed2)
 
         data = {"img1": img1[0], "img2": img2[0], "H_1_2": H_1_2[0]}
 
@@ -248,7 +253,7 @@ def setup_homgraphy_layer(cfg, device, batch_size, channels):
     img2 = th.Variable(data=img_init, name="img2")
 
     # loss is pooled so error dim is not too large
-    pool_size = int(cfg.imgH // 3)
+    pool_size = int(cfg.imgH // 4)
     pooled = torch.nn.functional.avg_pool2d(img_init, pool_size, stride=pool_size)
     error_dim = pooled[0, 0].numel()
     print(f"Pool size {pool_size}, error dim {error_dim}")
@@ -276,18 +281,18 @@ def setup_homgraphy_layer(cfg, device, batch_size, channels):
     return theseus_layer
 
 
-def run_eval(
-    cfg, device, test_dataset, batch_size, save_dir=None, channels=3, feat_model=None
-):
+def run_eval(cfg, device, test_dataset, save_dir=None, channels=3, feat_model=None):
     if save_dir is not None:
         os.makedirs(save_dir, exist_ok=True)
 
-    test_loader = DataLoader(test_dataset, batch_size=batch_size, shuffle=False)
+    test_loader = DataLoader(
+        test_dataset, batch_size=cfg.test_batch_size, shuffle=False
+    )
 
     theseus_layer = setup_homgraphy_layer(
         cfg,
         device,
-        batch_size,
+        cfg.test_batch_size,
         channels,
     )
     theseus_layer.optimizer.params.max_iterations = cfg.test_max_iters
@@ -336,7 +341,7 @@ def run_eval(
                     loss,
                     ix,
                 )
-                ix += batch_size
+                ix += cfg.test_batch_size
 
         return torch.cat(losses).mean()
 
@@ -434,11 +439,10 @@ def run(cfg):
             if t % 10 == 0:
                 print(f"Step {t}. Loss {loss.item():.4f}")
 
-            ax.scatter(np.arange(len(all_losses)), all_losses, color="C1")
+            ax.scatter(np.arange(len(all_losses)), all_losses, color="C0")
             plt.xlim(0, len(all_losses) + 1)
             plt.ylim(0, np.max(all_losses))
-            plt.draw()
-            plt.pause(0.01)
+            plt.savefig("loss_curve.png")
 
         epoch_time = time.time() - start_time
         epoch_loss = np.mean(running_losses).item()
@@ -450,14 +454,13 @@ def run(cfg):
 
     # Test loop
 
-    loss_pho = run_eval(cfg, device, test_dataset, 10, save_dir=log_dir + "/pho")
+    loss_pho = run_eval(cfg, device, test_dataset, save_dir=log_dir + "/pho")
     print(f"Photo-metric loss {loss_pho.item():.3f}")  # 0.031
 
     loss_fix = run_eval(
         cfg,
         device,
         test_dataset,
-        2,
         save_dir=log_dir + "/feat_fix",
         channels=feat_channels,
         feat_model=fixed_feat,
@@ -468,7 +471,7 @@ def run(cfg):
         cfg,
         device,
         test_dataset,
-        2,
+        cfg.test_batch_size,
         save_dir=log_dir + "/feat_opt",
         channels=feat_channels,
         feat_model=resnet_feat,

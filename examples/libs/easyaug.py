@@ -751,7 +751,7 @@ class RandomPhotoAug(object):
         out = torch.clamp(out, 0.0, 1.0)
         return out
 
-    def forward(self, inp: torch.Tensor, debug: bool = False):
+    def forward(self, inp: torch.Tensor, debug: bool = False, seed: int = None):
         """
         Runs the Random Photometric Augmentation on a batch of images.
 
@@ -759,6 +759,8 @@ class RandomPhotoAug(object):
         :param debug: if True, print out some info about which transforms were used
 
         """
+        if seed is not None:
+            torch.manual_seed(seed)
         check_input(inp)  # Make sure input is well-formed.
         B, C, H, W = inp.shape
         result = inp.clone()  # Creates a copy of input (leaves input unchanged).

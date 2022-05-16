@@ -277,7 +277,17 @@ def setup_homgraphy_layer(cfg, device, batch_size, channels):
     )
     objective.add(homography_cf)
 
-    optimizer = th.LevenbergMarquardt(
+    reg_w = th.ScaleCostWeight(np.sqrt(cfg.inner_optim.reg_w))
+    reg_w.to(dtype=H_init.dtype)
+    H_identity = torch.tensor([[1.0, 0.0, 0.0, 0.0, 1.0, 0.0, 0.0, 0.0]])
+    identity_homography = th.Vector(data=H_identity, name="identity")
+    objective.add(
+        th.eb.VariableDifference(
+            H_1_2, reg_w, identity_homography, name="reg_homography"
+        )
+    )
+
+    optimizer = th.GaussNewton(
         objective,
         max_iterations=cfg.inner_optim.max_iters,
         step_size=cfg.inner_optim.step_size,
@@ -342,7 +352,6 @@ def train_loop(cfg, device, train_dataset, feat_model):
                     optimizer_kwargs={
                         "verbose": True,
                         "backward_mode": BACKWARD_MODE[cfg.inner_optim.backward_mode],
-                        "damping": cfg.inner_optim.lm_damping,
                         "__keep_final_step_size__": True,
                     },
                 )

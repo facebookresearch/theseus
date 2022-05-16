@@ -135,31 +135,30 @@ torch::Tensor mult_MtM(int batchSize,
 	return MtMs_val;
 }
 
-template<typename INT>
 __global__ void mat_vec_kernel(int batchSize,
-                               INT M_numRows,
-                               INT M_numCols,
-                               INT M_nnz,
-                               const INT* M_rowPtr,
-                               const INT* M_colInd,
+                               int M_numRows,
+                               int M_numCols,
+                               int M_nnz,
+                               const int* M_rowPtr,
+                               const int* M_colInd,
                                const double* Ms_val,
                                const double* vec,
                                double* retv) {
 
-	INT row = blockIdx.x * blockDim.x + threadIdx.x;
+	int row = blockIdx.x * blockDim.x + threadIdx.x;
 	int batchIndex = blockIdx.y * blockDim.y + threadIdx.y;
 	if(batchIndex >= batchSize || row >= M_numRows) {
 		return;
 	}
 	
-	INT srcRow_offset = M_rowPtr[row];
-	INT srcRow_len = M_rowPtr[row+1] - srcRow_offset;
-	const INT* srcRow_colInd = M_colInd + srcRow_offset;
+	int srcRow_offset = M_rowPtr[row];
+	int srcRow_len = M_rowPtr[row+1] - srcRow_offset;
+	const int* srcRow_colInd = M_colInd + srcRow_offset;
 	const double* srcRow_val = Ms_val + batchIndex * M_nnz + srcRow_offset;
 	const double* srcVec = vec + batchIndex * M_numCols;
 
 	double value = 0.0;
-	for(INT i = 0; i < srcRow_len; i++) {
+	for(int i = 0; i < srcRow_len; i++) {
 		value += srcRow_val[i] * srcVec[srcRow_colInd[i]];
 	}
 
@@ -167,7 +166,7 @@ __global__ void mat_vec_kernel(int batchSize,
 }
 
 torch::Tensor mat_vec(int batchSize,
-                      int64_t M_numCols,
+                      int M_numCols,
                       const torch::Tensor& M_rowPtr,
                       const torch::Tensor& M_colInd,
                       const torch::Tensor& Ms_val,
@@ -179,8 +178,8 @@ torch::Tensor mat_vec(int batchSize,
 	TORCH_CHECK(M_rowPtr.device().is_cuda());
 	TORCH_CHECK(M_colInd.device().is_cuda());
 	TORCH_CHECK(Ms_val.device().is_cuda());
-	TORCH_CHECK(M_rowPtr.dtype() == torch::kInt || M_rowPtr.dtype() == torch::kInt64);
-	TORCH_CHECK(M_colInd.dtype() == M_rowPtr.dtype());
+	TORCH_CHECK(M_rowPtr.dtype() == torch::kInt);
+	TORCH_CHECK(M_colInd.dtype() == torch::kInt);
 	TORCH_CHECK(Ms_val.dtype() == torch::kDouble); // TODO: add support for float
 	TORCH_CHECK(M_rowPtr.dim() == 1);
 	TORCH_CHECK(M_colInd.dim() == 1);
@@ -199,62 +198,50 @@ torch::Tensor mat_vec(int batchSize,
 	dim3 wgs(1, 16);
 	dim3 numBlocks((M_numRows + wgs.x - 1) / wgs.x, (batchSize + wgs.y - 1) / wgs.y);
 
-	if(M_rowPtr.dtype() == torch::kInt) {
-		mat_vec_kernel<int><<<numBlocks, wgs>>>(batchSize,
-										M_numRows,
-										M_numCols,
-										M_nnz,
-										M_rowPtr.data_ptr<int>(),
-										M_colInd.data_ptr<int>(),
-										Ms_val.data_ptr<double>(),
-										vec.data_ptr<double>(),
-										retv.data_ptr<double>());
-	} else {
-		mat_vec_kernel<int64_t><<<numBlocks, wgs>>>(batchSize,
-										M_numRows,
-										M_numCols,
-										M_nnz,
-										M_rowPtr.data_ptr<int64_t>(),
-										M_colInd.data_ptr<int64_t>(),
-										Ms_val.data_ptr<double>(),
-										vec.data_ptr<double>(),
-										retv.data_ptr<double>());
-	}
+	mat_vec_kernel<<<numBlocks, wgs>>>(batchSize,
+	                                   M_numRows,
+	                                   M_numCols,
+	                                   M_nnz,
+	                                   M_rowPtr.data_ptr<int>(),
+	                                   M_colInd.data_ptr<int>(),
+	                                   Ms_val.data_ptr<double>(),
+	                                   vec.data_ptr<double>(),
+	                                   retv.data_ptr<double>());
 	return retv;
 }
 
 
-template<typename INT>
+
 __global__ void tmat_vec_kernel(int batchSize,
-                                INT M_numRows,
-                                INT M_numCols,
-                                INT M_nnz,
-                                const INT* M_rowPtr,
-                                const INT* M_colInd,
+                                int M_numRows,
+                                int M_numCols,
+                                int M_nnz,
+                                const int* M_rowPtr,
+                                const int* M_colInd,
                                 const double* Ms_val,
                                 const double* vec,
                                 double* retv) {
 
-	INT row = blockIdx.x * blockDim.x + threadIdx.x;
+	int row = blockIdx.x * blockDim.x + threadIdx.x;
 	int batchIndex = blockIdx.y * blockDim.y + threadIdx.y;
 	if(batchIndex >= batchSize || row >= M_numRows) {
 		return;
 	}
 	
-	INT srcRow_offset = M_rowPtr[row];
-	INT srcRow_len = M_rowPtr[row+1] - srcRow_offset;
-	const INT* srcRow_colInd = M_colInd + srcRow_offset;
+	int srcRow_offset = M_rowPtr[row];
+	int srcRow_len = M_rowPtr[row+1] - srcRow_offset;
+	const int* srcRow_colInd = M_colInd + srcRow_offset;
 	const double* srcRow_val = Ms_val + batchIndex * M_nnz + srcRow_offset;
 	double vecVal = vec[batchIndex * M_numRows + row];
 	double* dstVec = retv + batchIndex * M_numCols;
 
-	for(INT i = 0; i < srcRow_len; i++) {
+	for(int i = 0; i < srcRow_len; i++) {
 		atomicAdd(dstVec + srcRow_colInd[i], vecVal * srcRow_val[i]);
 	}
 }
 
 torch::Tensor tmat_vec(int batchSize,
-                       int64_t M_numCols,
+                       int M_numCols,
                        const torch::Tensor& M_rowPtr,
                        const torch::Tensor& M_colInd,
                        const torch::Tensor& Ms_val,
@@ -266,8 +253,8 @@ torch::Tensor tmat_vec(int batchSize,
 	TORCH_CHECK(M_rowPtr.device().is_cuda());
 	TORCH_CHECK(M_colInd.device().is_cuda());
 	TORCH_CHECK(Ms_val.device().is_cuda());
-	TORCH_CHECK(M_rowPtr.dtype() == torch::kInt || M_rowPtr.dtype() == torch::kInt64);
-	TORCH_CHECK(M_colInd.dtype() == M_rowPtr.dtype());
+	TORCH_CHECK(M_rowPtr.dtype() == torch::kInt);
+	TORCH_CHECK(M_colInd.dtype() == torch::kInt);
 	TORCH_CHECK(Ms_val.dtype() == torch::kDouble); // TODO: add support for float
 	TORCH_CHECK(M_rowPtr.dim() == 1);
 	TORCH_CHECK(M_colInd.dim() == 1);
@@ -286,27 +273,15 @@ torch::Tensor tmat_vec(int batchSize,
 	dim3 wgs(1, 16);
 	dim3 numBlocks((M_numRows + wgs.x - 1) / wgs.x, (batchSize + wgs.y - 1) / wgs.y);
 
-	if(M_rowPtr.dtype() == torch::kInt) {
-		tmat_vec_kernel<int><<<numBlocks, wgs>>>(batchSize,
-											M_numRows,
-											M_numCols,
-											M_nnz,
-											M_rowPtr.data_ptr<int>(),
-											M_colInd.data_ptr<int>(),
-											Ms_val.data_ptr<double>(),
-											vec.data_ptr<double>(),
-											retv.data_ptr<double>());
-	} else {
-		tmat_vec_kernel<int64_t><<<numBlocks, wgs>>>(batchSize,
-											M_numRows,
-											M_numCols,
-											M_nnz,
-											M_rowPtr.data_ptr<int64_t>(),
-											M_colInd.data_ptr<int64_t>(),
-											Ms_val.data_ptr<double>(),
-											vec.data_ptr<double>(),
-											retv.data_ptr<double>());		
-	}
+	tmat_vec_kernel<<<numBlocks, wgs>>>(batchSize,
+	                                    M_numRows,
+	                                    M_numCols,
+	                                    M_nnz,
+	                                    M_rowPtr.data_ptr<int>(),
+	                                    M_colInd.data_ptr<int>(),
+	                                    Ms_val.data_ptr<double>(),
+	                                    vec.data_ptr<double>(),
+	                                    retv.data_ptr<double>());
 	return retv;
 }
 

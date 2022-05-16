@@ -65,6 +65,7 @@ from .optimizer import (
 from .optimizer.linear import (
     CholeskyDenseSolver,
     CholmodSparseSolver,
+    BaspachoSparseSolver,
     DenseSolver,
     LinearOptimizer,
     LUCudaSparseSolver,

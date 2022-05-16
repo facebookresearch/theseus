@@ -78,6 +78,7 @@ class HomographyDataset(Dataset):
         img_path = self.img_paths[idx]
 
         img1 = np.asarray(Image.open(img_path).resize(size=(self.imgW, self.imgH)))
+        assert img1.shape == (self.imgH, self.imgW, 3)
         img1 = torch.from_numpy(img1.astype(np.float32) / 255.0).permute(2, 0, 1)[None]
         img2, H_1_2 = self.rga.forward(
             img1, return_transform=True, normalize_returned_transform=True
@@ -337,7 +338,7 @@ def train_loop(cfg, device, train_dataset, feat_model):
             layer_feat.forward(
                 inputs,
                 optimizer_kwargs={
-                    "verbose": True,
+                    "verbose": False,
                     "backward_mode": BACKWARD_MODE[cfg.inner_optim.backward_mode],
                     "damping": cfg.inner_optim.lm_damping,
                 },
@@ -473,6 +474,22 @@ def run(cfg):
             print("Running command: ", cmd)
             os.system(cmd)
 
+    bad_files = [
+        "/revisitop1m.9/171/1712c98e7f971fb9a272ad61c604ee2.jpg",
+        "/revisitop1m.9/176/176185b2431ac72f6419ab30bd78705c.jpg",
+        "/revisitop1m.9/162/162b144da5bf789a5e23feb1dfa6a391.jpg",
+        "/revisitop1m.9/173/1733685218bf22d514b9c3b4bf2c2027.jpg",
+        "/revisitop1m.9/158/1580dc2f3479ae44531a477f892850.jpg",
+        "/revisitop1m.9/16f/16f9772f0da348ee99cdf8f0e975d3.jpg",
+        "/revisitop1m.9/152/152f374b398b3ba3a1c843df036df.jpg",
+        "/revisitop1m.9/165/165f26d34914dbbab7bbdd3eac694333.jpg",
+        "/revisitop1m.9/174/17442dbe499594c7a54cca7bd171b58.jpg",
+        "/revisitop1m.9/16a/16acaf59321debe9250c0f6bc75e56d.jpg",
+    ]
+    for f in bad_files:
+        if os.path.exists(dataset_root + f):
+            os.remove(dataset_root + f)
+
     train_dataset = HomographyDataset(dataset_paths, cfg.imgH, cfg.imgW, train=True)
     test_dataset = HomographyDataset(dataset_paths, cfg.imgH, cfg.imgW, train=False)
 
@@ -513,7 +530,7 @@ def run(cfg):
         save_dir=log_dir + "/feat_opt",
         feat_model=resnet_feat,
     )
-    print(f"Feature-metric optimised loss {loss_opt.item():.3f}")  # 0.04
+    print(f"Feature-metric optimised loss {loss_opt.item():.3f}")
 
 
 @hydra.main(config_path="./configs/", config_name="homography_estimation")

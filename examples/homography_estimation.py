@@ -335,26 +335,35 @@ def train_loop(cfg, device, train_dataset, feat_model):
                 "img2": feat2,
             }
 
-            layer_feat.forward(
-                inputs,
-                optimizer_kwargs={
-                    "verbose": False,
-                    "backward_mode": BACKWARD_MODE[cfg.inner_optim.backward_mode],
-                    "damping": cfg.inner_optim.lm_damping,
-                },
-            )
+            success = True
+            try:
+                layer_feat.forward(
+                    inputs,
+                    optimizer_kwargs={
+                        "verbose": True,
+                        "backward_mode": BACKWARD_MODE[cfg.inner_optim.backward_mode],
+                        "damping": cfg.inner_optim.lm_damping,
+                        "__keep_final_step_size__": True,
+                    },
+                )
+            except Exception as e:
+                print(e)
+                success = False
+                with torch.no_grad():
+                    torch.cuda.empty_cache()
 
             # no loss on last element as set to one
             H_1_2_gt = H_1_2_gt.reshape(-1, 9)[:, :-1]
             H_1_2 = layer_feat.objective.get_optim_var("H_1_2")
             loss = l1_loss(H_1_2.data, H_1_2_gt)
-            loss.backward()
+            model_optimizer.zero_grad()
+            if success:
+                loss.backward()
             model_optimizer.step()
             running_losses.append(loss.item())
             all_losses.append(loss.item())
 
-            if t % 10 == 0:
-                print(f"Step {t}. Loss {loss.item():.4f}")
+            print(f"Step {t} / {len(train_loader)}. Loss {loss.item():.4f}")
 
             ax.scatter(np.arange(len(all_losses)), all_losses, color="C0")
             plt.xlim(0, len(all_losses) + 1)

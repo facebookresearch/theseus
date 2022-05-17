@@ -497,9 +497,7 @@ def train_loop(cfg, device, train_dataset, feat_model, writer=None, train_chkpt=
             feat1 = feat_model(img1)
             feat2 = feat_model(img2)
 
-            H_init = (
-                torch.eye(3).reshape(1, 9).repeat(cfg.train_batch_size, 1).to(device)
-            )
+            H_init = torch.eye(3).reshape(1, 9).repeat(img1.shape[0], 1).to(device)
             H_init = H_init[:, :-1]
             inputs = {
                 "H_1_2": H_init,

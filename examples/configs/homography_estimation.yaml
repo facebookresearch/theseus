@@ -4,6 +4,7 @@ use_gpu: True
 imgH: 160
 imgW: 200
 photo_aug: True
+train_chkpt: "/home/joe/projects/mpSLAM/theseus/examples/outputs/chkpts/epoch_000_step_1600.pt"
 
 inner_optim:
   max_iters: 25
@@ -12,12 +13,12 @@ inner_optim:
   reg_w: 1e-2
 
 outer_optim:
-  lr: 0.01
+  lr: 5e-5
   num_epochs: 10
 
-train_batch_size: 4
+train_batch_size: 5
 test_max_iters: 50
-test_batch_size: 4
+test_batch_size: 5
 
 save_gifs: True
 save_model: True

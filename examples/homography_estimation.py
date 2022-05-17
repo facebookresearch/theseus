@@ -18,8 +18,8 @@ import os
 import time
 from torch.utils.data import DataLoader, Dataset
 import torchvision.models as models
-import matplotlib.pyplot as plt
 import shutil
+from torch.utils.tensorboard import SummaryWriter
 
 from libs.easyaug import RandomGeoAug, GeoAugParam, RandomPhotoAug
 
@@ -76,7 +76,6 @@ class HomographyDataset(Dataset):
 
     def __getitem__(self, idx):
         img_path = self.img_paths[idx]
-
         img1 = np.asarray(Image.open(img_path).resize(size=(self.imgW, self.imgH)))
         assert img1.shape == (self.imgH, self.imgW, 3)
         img1 = torch.from_numpy(img1.astype(np.float32) / 255.0).permute(2, 0, 1)[None]
@@ -191,6 +190,23 @@ def homography_error_fn(
     return loss
 
 
+def four_corner_dist(H_1_2, H_1_2_gt, height, width):
+    Hinv_gt = torch.inverse(H_1_2_gt)
+    Hinv = torch.inverse(H_1_2)
+    grid = kornia.utils.create_meshgrid(
+        2, 2, normalized_coordinates=False, device=Hinv.device
+    )
+    grid[..., 0] *= width
+    grid[..., 1] *= height
+    warped_grid = kornia.geometry.transform.homography_warper.warp_grid(grid, Hinv)
+    warped_grid_gt = kornia.geometry.transform.homography_warper.warp_grid(
+        grid, Hinv_gt
+    )
+    dist = torch.square(torch.norm(warped_grid - warped_grid_gt, dim=-1))
+    dist = dist.mean(dim=-1).mean(dim=-1)
+    return dist, warped_grid, warped_grid_gt
+
+
 def put_text(img, text, top=True):
     if top:
         pt = FONT_PT
@@ -299,7 +315,7 @@ def setup_homgraphy_layer(cfg, device, batch_size, channels):
     return theseus_layer
 
 
-def train_loop(cfg, device, train_dataset, feat_model):
+def train_loop(cfg, device, train_dataset, feat_model, writer=None):
     if cfg.save_model:
         os.makedirs("chkpts")
 
@@ -320,14 +336,16 @@ def train_loop(cfg, device, train_dataset, feat_model):
         feat_channels,
     )
 
-    ax = plt.axes()
+    feat_model.train()
 
     all_losses = []
     epoch_losses = []
+    print(f"\n Starting training for {cfg.outer_optim.num_epochs} epochs")
     for epoch in range(cfg.outer_optim.num_epochs):
         running_losses = []
         start_time = time.time()
         for t, data in enumerate(train_loader):
+            start = time.time()
 
             H_1_2_gt = data["H_1_2"].to(device)
             img1 = data["img1"].to(device)
@@ -345,39 +363,40 @@ def train_loop(cfg, device, train_dataset, feat_model):
                 "img2": feat2,
             }
 
-            success = True
-            try:
-                layer_feat.forward(
-                    inputs,
-                    optimizer_kwargs={
-                        "verbose": True,
-                        "backward_mode": BACKWARD_MODE[cfg.inner_optim.backward_mode],
-                        "__keep_final_step_size__": True,
-                    },
-                )
-            except Exception as e:
-                print(e)
-                success = False
-                with torch.no_grad():
-                    torch.cuda.empty_cache()
+            layer_feat.forward(
+                inputs,
+                optimizer_kwargs={
+                    "verbose": False,
+                    "backward_mode": BACKWARD_MODE[cfg.inner_optim.backward_mode],
+                    "__keep_final_step_size__": True,
+                },
+            )
 
             # no loss on last element as set to one
             H_1_2_gt = H_1_2_gt.reshape(-1, 9)[:, :-1]
             H_1_2 = layer_feat.objective.get_optim_var("H_1_2")
             loss = l1_loss(H_1_2.data, H_1_2_gt)
             model_optimizer.zero_grad()
-            if success:
-                loss.backward()
+            loss.backward()
             model_optimizer.step()
             running_losses.append(loss.item())
             all_losses.append(loss.item())
 
-            print(f"Step {t} / {len(train_loader)}. Loss {loss.item():.4f}")
+            elapsed = time.time() - start
+            print(
+                f"Step {t} / {len(train_loader)}. Loss {loss.item():.4f}. Time {elapsed}."
+            )
+            if writer is not None:
+                writer.add_scalar("Loss/train", loss.item(), t)
 
-            ax.scatter(np.arange(len(all_losses)), all_losses, color="C0")
-            plt.xlim(0, len(all_losses) + 1)
-            plt.ylim(0, np.max(all_losses))
-            plt.savefig("loss_curve.png")
+            if t % 200 == 0 and cfg.save_model:
+                torch.save(
+                    {
+                        "model_state_dict": feat_model.state_dict(),
+                        "optimizer_state_dict": model_optimizer.state_dict(),
+                    },
+                    f"chkpts/epoch_{epoch:03d}_step_{t:03d}.pt",
+                )
 
         epoch_time = time.time() - start_time
         epoch_loss = np.mean(running_losses).item()
@@ -386,9 +405,6 @@ def train_loop(cfg, device, train_dataset, feat_model):
             f"******* Epoch {epoch}. Average loss: {epoch_loss:.4f}. "
             f"Epoch time {epoch_time}*******"
         )
-
-        if cfg.save_model:
-            torch.save(feat_model.state_dict(), f"chkpts/epoch_{epoch:03d}.pt")
 
     return feat_model
 
@@ -413,11 +429,16 @@ def run_eval(cfg, device, test_dataset, save_dir=None, feat_model=None):
     )
     theseus_layer.optimizer.params.max_iterations = cfg.test_max_iters
 
+    if feat_model is not None:
+        feat_model.eval()
+
     ix = 0
     with torch.no_grad():
         losses = []
+        four_corner_dists = []
         for t, data in enumerate(test_loader):
 
+            H_1_2_gt = data["H_1_2"].to(device)
             img1 = data["img1"].to(device)
             img2 = data["img2"].to(device)
             H_init = torch.eye(3).reshape(1, 9).repeat(img1.shape[0], 1).to(device)
@@ -433,14 +454,19 @@ def run_eval(cfg, device, test_dataset, save_dir=None, feat_model=None):
                 inputs["img1"] = feat_model(img1)
                 inputs["img2"] = feat_model(img2)
 
-            info = theseus_layer.forward(
-                inputs, {"verbose": False, "damping": cfg.inner_optim.lm_damping}
-            )
+            info = theseus_layer.forward(inputs, {"verbose": False})
             H_1_2 = info[0]["H_1_2"]
 
             # Compute evalution metric, for now photometric loss
             img1_var = th.Variable(data=img1, name="img1")
             img2_var = th.Variable(data=img2, name="img2")
+
+            ones = torch.ones(H_1_2.shape[0], 1, device=H_1_2.device, dtype=H_1_2.dtype)
+            H_1_2_mat = torch.cat((H_1_2, ones), dim=1).reshape(-1, 3, 3)
+            dist, warped_grid, warped_grid_gt = four_corner_dist(
+                H_1_2_mat, H_1_2_gt, cfg.imgH, cfg.imgW
+            )
+            four_corner_dists.extend(dist.tolist())
 
             loss = homography_error_fn([H_1_2], [img1_var, img2_var], pool_size=1)
             loss = loss.mean(dim=1)
@@ -513,6 +539,8 @@ def run(cfg):
 
     log_dir = "viz"
     os.makedirs(log_dir, exist_ok=True)
+    print("Writing to tensorboard at", os.getcwd())
+    writer = SummaryWriter(os.getcwd())
 
     device = "cuda" if torch.cuda.is_available() and cfg.use_gpu else "cpu"
 
@@ -522,9 +550,14 @@ def run(cfg):
     resnet_feat = torch.nn.Sequential(*list(resnet.children())[:-4] + [upsample])
     fixed_feat = torch.nn.Sequential(*list(resnet.children())[:-4] + [upsample])
 
+    if os.path.exists(cfg.train_chkpt):
+        model_state_dict = torch.load(cfg.train_chkpt)
+        resnet_feat.load_state_dict(model_state_dict)
+        print("Loading from checkpoint ", cfg.train_chkpt)
+
     # Training loop to refine pretrained features
 
-    resnet_feat = train_loop(cfg, device, train_dataset, resnet_feat)
+    resnet_feat = train_loop(cfg, device, train_dataset, resnet_feat, writer=writer)
 
     # Test loop
 

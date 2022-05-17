@@ -18,6 +18,7 @@ import os
 import time
 from torch.utils.data import DataLoader, Dataset
 import torchvision.models as models
+import matplotlib.pyplot as plt
 import shutil
 from torch.utils.tensorboard import SummaryWriter
 
@@ -33,6 +34,54 @@ BACKWARD_MODE = {
     "full": th.BackwardMode.FULL,
     "truncated": th.BackwardMode.TRUNCATED,
 }
+
+
+def prepare_data():
+    dataset_root = os.path.join(get_original_cwd(), "data")
+    chunks = [
+        # "revisitop1m.1",
+        # "revisitop1m.2",
+        # "revisitop1m.3",
+        # "revisitop1m.4",
+        # "revisitop1m.5",
+        # "revisitop1m.6",
+        # "revisitop1m.7",
+        # "revisitop1m.8",
+        "revisitop1m.9",
+    ]
+    dataset_paths = []
+    for chunk in chunks:
+        dataset_path = os.path.join(dataset_root, chunk)
+        dataset_paths.append(dataset_path)
+        if not os.path.exists(dataset_path):
+            print("Downloading data")
+            url_root = "http://ptak.felk.cvut.cz/revisitop/revisitop1m/jpg/"
+            tar = "%s.tar.gz" % chunk
+            cmd = "wget %s/%s -O %s/%s" % (url_root, tar, dataset_root, tar)
+            print("Running command: ", cmd)
+            os.system(cmd)
+            os.makedirs(dataset_path)
+            cmd = "tar -xf %s/%s -C %s" % (dataset_root, tar, dataset_path)
+            print("Running command: ", cmd)
+            os.system(cmd)
+
+    bad_files = [
+        "/revisitop1m.9/171/1712c98e7f971fb9a272ad61c604ee2.jpg",
+        "/revisitop1m.9/176/176185b2431ac72f6419ab30bd78705c.jpg",
+        "/revisitop1m.9/162/162b144da5bf789a5e23feb1dfa6a391.jpg",
+        "/revisitop1m.9/173/1733685218bf22d514b9c3b4bf2c2027.jpg",
+        "/revisitop1m.9/158/1580dc2f3479ae44531a477f892850.jpg",
+        "/revisitop1m.9/16f/16f9772f0da348ee99cdf8f0e975d3.jpg",
+        "/revisitop1m.9/152/152f374b398b3ba3a1c843df036df.jpg",
+        "/revisitop1m.9/165/165f26d34914dbbab7bbdd3eac694333.jpg",
+        "/revisitop1m.9/174/17442dbe499594c7a54cca7bd171b58.jpg",
+        "/revisitop1m.9/16a/16acaf59321debe9250c0f6bc75e56d.jpg",
+    ]
+    for f in bad_files:
+        if os.path.exists(dataset_root + f):
+            os.remove(dataset_root + f)
+
+    return dataset_paths
 
 
 class HomographyDataset(Dataset):
@@ -60,6 +109,7 @@ class HomographyDataset(Dataset):
 
         # train test split
         self.img_paths.sort()
+        self.img_paths = self.img_paths[:500]
         split_ix = int(0.9 * len(self.img_paths))
         if train:
             self.img_paths = self.img_paths[:split_ix]
@@ -193,15 +243,18 @@ def homography_error_fn(
 def four_corner_dist(H_1_2, H_1_2_gt, height, width):
     Hinv_gt = torch.inverse(H_1_2_gt)
     Hinv = torch.inverse(H_1_2)
-    grid = kornia.utils.create_meshgrid(
-        2, 2, normalized_coordinates=False, device=Hinv.device
-    )
-    grid[..., 0] *= width
-    grid[..., 1] *= height
+    grid = kornia.utils.create_meshgrid(2, 2, device=Hinv.device)
     warped_grid = kornia.geometry.transform.homography_warper.warp_grid(grid, Hinv)
     warped_grid_gt = kornia.geometry.transform.homography_warper.warp_grid(
         grid, Hinv_gt
     )
+    warped_grid = (warped_grid + 1) / 2
+    warped_grid_gt = (warped_grid_gt + 1) / 2
+    warped_grid[..., 0] *= width
+    warped_grid[..., 1] *= height
+    warped_grid_gt[..., 0] *= width
+    warped_grid_gt[..., 1] *= height
+
     dist = torch.square(torch.norm(warped_grid - warped_grid_gt, dim=-1))
     dist = dist.mean(dim=-1).mean(dim=-1)
     return dist, warped_grid, warped_grid_gt
@@ -223,6 +276,15 @@ def torch2cv2(img):
     return out
 
 
+def torch2cv2_border(img):
+    out = (img.permute(1, 2, 0) * 255.0).data.cpu().numpy().astype(np.uint8)[:, :, ::-1]
+    out = np.ascontiguousarray(out)
+    h, w = out.shape[:2]
+    blank = np.full([h * 2, w * 2, 3], 255).astype(np.uint8)
+    blank[int(h / 2) : int(3 * h / 2), int(w / 2) : int(3 * w / 2)] = out
+    return blank
+
+
 def viz_warp(path, img1, img2, img1_w, iteration, err):
     img_diff = torch2cv2(torch.abs(img1_w - img2))
     img1 = torch2cv2(img1)
@@ -235,6 +297,79 @@ def viz_warp(path, img1, img2, img1_w, iteration, err):
     out = np.concatenate([img1, img2, img1_w, img_diff], axis=1)
     out = put_text(out, "iter: %05d, loss: %.3f" % (iteration, err), top=False)
     cv2.imwrite(path, out)
+
+
+def viz_four_corner(path, img1, img2, H_1_2_mat, warped_grid, warped_grid_gt):
+    h, w = img1.shape[1:]
+    img1_w = warp_perspective_norm(H_1_2_mat[None, ...], img1[None, ...])[0]
+    img_diff = torch2cv2_border(torch.abs(img1_w - img2))
+    img1 = torch2cv2_border(img1)
+    img2 = torch2cv2_border(img2)
+    img1_w = torch2cv2_border(img1_w)
+    img2 = put_text(img2, "image I'")
+    img1_w = put_text(img1_w, "I warped to I'")
+    img_diff = put_text(img_diff, "L2 diff")
+
+    src_grid = kornia.utils.create_meshgrid(2, 2, normalized_coordinates=False)[0]
+    src_grid[..., 0] *= w
+    src_grid[..., 1] *= h
+    offset = np.array([w / 2, h / 2]).astype(int)
+    for point in src_grid.reshape(-1, 2):
+        point = point.numpy().astype(int) + offset
+        cv2.circle(img1, point, 3, (0, 0, 255), thickness=-1)
+    for point in warped_grid.cpu().reshape(-1, 2):
+        point = point.numpy().astype(int) + offset
+        cv2.circle(img1, point, 3, (255, 0, 0), thickness=-1)
+    for point in warped_grid_gt.cpu().reshape(-1, 2):
+        point = point.numpy().astype(int) + offset
+        cv2.circle(img1, point, 3, (0, 255, 0), thickness=-1)
+    out = np.concatenate([img1, img2, img1_w, img_diff], axis=1)
+
+    dist = torch.norm(warped_grid - warped_grid_gt, dim=-1)
+    dist = dist.mean(dim=-1).mean(dim=-1)
+    out = put_text(out, "four corner dist: %.3f" % (dist.item()))
+    cv2.imwrite(path, out)
+
+
+def four_corner_dist_hist(path, fcd_pho, fcd_fix, fcd_opt):
+    plt.figure()
+    plt.hist(
+        fcd_pho[fcd_pho < 1000], bins=50, label="Photometric", color="C0", alpha=0.5
+    )
+    plt.hist(
+        fcd_fix[fcd_fix < 1000],
+        bins=50,
+        label="Feature-metric fixed",
+        color="C1",
+        alpha=0.5,
+    )
+    plt.hist(
+        fcd_opt[fcd_opt < 1000],
+        bins=50,
+        label="Feature-metric optimized",
+        color="C2",
+        alpha=0.5,
+    )
+    plt.xlabel("Four corner distance (pixels)")
+    plt.ylabel("Count")
+    plt.legend()
+    plt.savefig(path)
+
+
+def four_corner_thresh(path, fcd_pho, fcd_fix, fcd_opt):
+    thresholds = np.arange(1, 401)
+    count_pho = [len(fcd_pho[fcd_pho < thr]) / len(fcd_pho) for thr in thresholds]
+    count_fix = [len(fcd_fix[fcd_fix < thr]) / len(fcd_fix) for thr in thresholds]
+    count_opt = [len(fcd_opt[fcd_opt < thr]) / len(fcd_opt) for thr in thresholds]
+    plt.figure()
+    plt.plot(thresholds, count_pho, label="Photometric", color="C0")
+    plt.plot(thresholds, count_fix, label="Feature-metric fixed", color="C1")
+    plt.plot(thresholds, count_opt, label="Feature-metric optimized", color="C2")
+    plt.xlabel("Threshold four corner distance (pixels)")
+    plt.ylabel("Proportion below threshold")
+    # plt.xscale('log')
+    plt.legend()
+    plt.savefig(path)
 
 
 def write_gif_batch(save_dir, state_history, img1, img2, loss, ix=0):
@@ -258,7 +393,7 @@ def write_gif_batch(save_dir, state_history, img1, img2, loss, ix=0):
             )
 
     for j in range(len(H_1_2_mat)):
-        cmd = f"convert -delay 10 -loop 0 {save_dir}/out{j:03d}/*.png {save_dir}/img{ix}.gif"
+        cmd = f"convert -delay 10 -loop 0 {save_dir}/out{j:03d}/*.png {save_dir}/img{ix:03d}.gif"
         print(cmd)
         os.system(cmd)
         shutil.rmtree(f"{save_dir}/out{j:03d}")
@@ -315,7 +450,7 @@ def setup_homgraphy_layer(cfg, device, batch_size, channels):
     return theseus_layer
 
 
-def train_loop(cfg, device, train_dataset, feat_model, writer=None):
+def train_loop(cfg, device, train_dataset, feat_model, writer=None, train_chkpt=None):
     if cfg.save_model:
         os.makedirs("chkpts")
 
@@ -326,6 +461,15 @@ def train_loop(cfg, device, train_dataset, feat_model, writer=None):
     feat_channels = feat_model(sample["img1"].to(device)).shape[1]
 
     model_optimizer = torch.optim.Adam(feat_model.parameters(), lr=cfg.outer_optim.lr)
+
+    start_epoch = 0
+    if train_chkpt is not None:
+        if os.path.exists(train_chkpt):
+            state_dict = torch.load(train_chkpt)
+            feat_model.load_state_dict(state_dict["model_state_dict"])
+            model_optimizer.load_state_dict(state_dict["optimizer_state_dict"])
+            start_epoch = state_dict["epoch"]
+            print("Loading from checkpoint ", cfg.train_chkpt)
 
     l1_loss = torch.nn.L1Loss()
 
@@ -340,8 +484,8 @@ def train_loop(cfg, device, train_dataset, feat_model, writer=None):
 
     all_losses = []
     epoch_losses = []
-    print(f"\n Starting training for {cfg.outer_optim.num_epochs} epochs")
-    for epoch in range(cfg.outer_optim.num_epochs):
+    print(f"\n Starting training for {cfg.outer_optim.num_epochs - start_epoch} epochs")
+    for epoch in range(start_epoch, cfg.outer_optim.num_epochs):
         running_losses = []
         start_time = time.time()
         for t, data in enumerate(train_loader):
@@ -392,6 +536,7 @@ def train_loop(cfg, device, train_dataset, feat_model, writer=None):
             if t % 200 == 0 and cfg.save_model:
                 torch.save(
                     {
+                        "epoch": epoch,
                         "model_state_dict": feat_model.state_dict(),
                         "optimizer_state_dict": model_optimizer.state_dict(),
                     },
@@ -470,7 +615,7 @@ def run_eval(cfg, device, test_dataset, save_dir=None, feat_model=None):
 
             loss = homography_error_fn([H_1_2], [img1_var, img2_var], pool_size=1)
             loss = loss.mean(dim=1)
-            losses.append(loss)
+            losses.extend(loss.tolist())
 
             print(f"Test loss ({t} / {len(test_loader)}): {loss.mean().item()}")
 
@@ -483,56 +628,24 @@ def run_eval(cfg, device, test_dataset, save_dir=None, feat_model=None):
                     loss,
                     ix,
                 )
-                ix += cfg.test_batch_size
+                for i in range(cfg.test_batch_size):
+                    save_file = f"{save_dir}/loss{ix:03d}.png"
+                    viz_four_corner(
+                        save_file,
+                        img1[i],
+                        img2[i],
+                        H_1_2_mat[i],
+                        warped_grid[i],
+                        warped_grid_gt[i],
+                    )
+                    ix += 1
 
-        return torch.cat(losses).mean()
+        return np.array(losses), np.array(four_corner_dists)
 
 
 def run(cfg):
 
-    dataset_root = os.path.join(get_original_cwd(), "data")
-    chunks = [
-        # "revisitop1m.1",
-        # "revisitop1m.2",
-        # "revisitop1m.3",
-        # "revisitop1m.4",
-        # "revisitop1m.5",
-        # "revisitop1m.6",
-        # "revisitop1m.7",
-        # "revisitop1m.8",
-        "revisitop1m.9",
-    ]
-    dataset_paths = []
-    for chunk in chunks:
-        dataset_path = os.path.join(dataset_root, chunk)
-        dataset_paths.append(dataset_path)
-        if not os.path.exists(dataset_path):
-            print("Downloading data")
-            url_root = "http://ptak.felk.cvut.cz/revisitop/revisitop1m/jpg/"
-            tar = "%s.tar.gz" % chunk
-            cmd = "wget %s/%s -O %s/%s" % (url_root, tar, dataset_root, tar)
-            print("Running command: ", cmd)
-            os.system(cmd)
-            os.makedirs(dataset_path)
-            cmd = "tar -xf %s/%s -C %s" % (dataset_root, tar, dataset_path)
-            print("Running command: ", cmd)
-            os.system(cmd)
-
-    bad_files = [
-        "/revisitop1m.9/171/1712c98e7f971fb9a272ad61c604ee2.jpg",
-        "/revisitop1m.9/176/176185b2431ac72f6419ab30bd78705c.jpg",
-        "/revisitop1m.9/162/162b144da5bf789a5e23feb1dfa6a391.jpg",
-        "/revisitop1m.9/173/1733685218bf22d514b9c3b4bf2c2027.jpg",
-        "/revisitop1m.9/158/1580dc2f3479ae44531a477f892850.jpg",
-        "/revisitop1m.9/16f/16f9772f0da348ee99cdf8f0e975d3.jpg",
-        "/revisitop1m.9/152/152f374b398b3ba3a1c843df036df.jpg",
-        "/revisitop1m.9/165/165f26d34914dbbab7bbdd3eac694333.jpg",
-        "/revisitop1m.9/174/17442dbe499594c7a54cca7bd171b58.jpg",
-        "/revisitop1m.9/16a/16acaf59321debe9250c0f6bc75e56d.jpg",
-    ]
-    for f in bad_files:
-        if os.path.exists(dataset_root + f):
-            os.remove(dataset_root + f)
+    dataset_paths = prepare_data()
 
     train_dataset = HomographyDataset(dataset_paths, cfg.imgH, cfg.imgW, train=True)
     test_dataset = HomographyDataset(dataset_paths, cfg.imgH, cfg.imgW, train=False)
@@ -550,38 +663,68 @@ def run(cfg):
     resnet_feat = torch.nn.Sequential(*list(resnet.children())[:-4] + [upsample])
     fixed_feat = torch.nn.Sequential(*list(resnet.children())[:-4] + [upsample])
 
-    if os.path.exists(cfg.train_chkpt):
-        model_state_dict = torch.load(cfg.train_chkpt)
-        resnet_feat.load_state_dict(model_state_dict)
-        print("Loading from checkpoint ", cfg.train_chkpt)
-
     # Training loop to refine pretrained features
 
-    resnet_feat = train_loop(cfg, device, train_dataset, resnet_feat, writer=writer)
+    resnet_feat = train_loop(
+        cfg,
+        device,
+        train_dataset,
+        resnet_feat,
+        writer=writer,
+        train_chkpt=cfg.train_chkpt,
+    )
 
     # Test loop
+    res_dir = "res"
+    os.makedirs(res_dir)
 
-    loss_pho = run_eval(cfg, device, test_dataset, save_dir=log_dir + "/pho")
-    print(f"Photo-metric loss {loss_pho.item():.3f}")  # 0.031
+    loss_pho, fcd_pho = run_eval(cfg, device, test_dataset, save_dir=log_dir + "/pho")
+    np.savetxt(f"{res_dir}/loss_pho.txt", loss_pho)
+    np.savetxt(f"{res_dir}/fcd_pho.txt", fcd_pho)
+    # loss_pho = np.loadtxt(get_original_cwd() + "/outputs/homography_res/loss_pho.txt")
+    # fcd_pho = np.loadtxt(get_original_cwd() + "/outputs/homography_res/fcd_pho.txt")
 
-    loss_fix = run_eval(
+    loss_fix, fcd_fix = run_eval(
         cfg,
         device,
         test_dataset,
         save_dir=log_dir + "/feat_fix",
         feat_model=fixed_feat,
     )
-    print(f"Feature-metric fixed loss {loss_fix.item():.3f}")  # 0.04
+    np.savetxt(f"{res_dir}/loss_fix.txt", loss_fix)
+    np.savetxt(f"{res_dir}/fcd_fix.txt", fcd_fix)
+    # loss_fix = np.loadtxt(get_original_cwd() + "/outputs/homography_res/loss_fix.txt")
+    # fcd_fix = np.loadtxt(get_original_cwd() + "/outputs/homography_res/fcd_fix.txt")
 
-    loss_opt = run_eval(
+    # print("Loading eval model from checkpoint ", cfg.train_chkpt)
+    # resnet_feat.load_state_dict(torch.load(cfg.eval_chkpt)["model_state_dict"])
+    loss_opt, fcd_opt = run_eval(
         cfg,
         device,
         test_dataset,
-        cfg.test_batch_size,
         save_dir=log_dir + "/feat_opt",
         feat_model=resnet_feat,
     )
-    print(f"Feature-metric optimised loss {loss_opt.item():.3f}")
+    np.savetxt(f"{res_dir}/loss_opt.txt", loss_opt)
+    np.savetxt(f"{res_dir}/fcd_opt.txt", fcd_opt)
+    # loss_opt = np.loadtxt(get_original_cwd() + "/outputs/homography_res/loss_opt.txt")
+    # fcd_opt = np.loadtxt(get_original_cwd() + "/outputs/homography_res/fcd_opt.txt")
+
+    # print("\n\nResults ---------------------------------------")
+    # print("\nMean and median photometric loss over the test dataset:")
+    # print(f"Photometric: {np.mean(loss_pho):.3f}, {np.median(loss_pho):.3f}")
+    # print(f"Feature-metric fixed: {np.mean(loss_fix):.3f}, {np.median(loss_fix):.3f}")
+    # print(f"Feature-metric optimised: {np.mean(loss_opt):.3f}, {np.median(loss_opt):.3f}")
+
+    # print("\nMean and median four corner distance over the test dataset (pixels):")
+    # print(f"Photometric: {np.mean(fcd_pho):.3f}, {np.median(fcd_pho):.3f}")
+    # print(f"Feature-metric fixed: {np.mean(fcd_fix):.3f}, {np.median(fcd_fix):.3f}")
+    # print(f"Feature-metric optimised: {np.mean(fcd_opt):.3f}, {np.median(fcd_opt):.3f}")
+
+    # # four corner plots
+    # plot_path = get_original_cwd() + "/outputs/homography_res/"
+    # four_corner_dist_hist(plot_path + "fcd_hist.png", fcd_pho, fcd_fix, fcd_opt)
+    # four_corner_thresh(plot_path + "fcd_threshold.png", fcd_pho, fcd_fix, fcd_opt)
 
 
 @hydra.main(config_path="./configs/", config_name="homography_estimation")

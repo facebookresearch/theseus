@@ -17,6 +17,7 @@ import numpy as np
 import os
 import time
 from torch.utils.data import DataLoader, Dataset
+import torch.nn as nn
 import torchvision.models as models
 import matplotlib.pyplot as plt
 import shutil
@@ -96,7 +97,7 @@ class HomographyDataset(Dataset):
         sc = 0.3
         self.rga = RandomGeoAug(
             rotate_param=GeoAugParam(min=-30 * sc, max=30 * sc),
-            scale_param=GeoAugParam(min=0.8 * (1.0 + sc), max=1.2 * (1.0 + sc)),
+            scale_param=GeoAugParam(min=0.8 * (1.0 - sc), max=1.2 * (1.0 + sc)),
             translate_x_param=GeoAugParam(min=-0.2 * sc, max=0.2 * sc),
             translate_y_param=GeoAugParam(min=-0.2 * sc, max=0.2 * sc),
             shear_x_param=GeoAugParam(min=-10 * sc, max=10 * sc),
@@ -109,7 +110,9 @@ class HomographyDataset(Dataset):
 
         # train test split
         self.img_paths.sort()
-        self.img_paths = self.img_paths[:500]
+        max_images = 500
+        #max_images = 99999
+        self.img_paths = self.img_paths[:max_images]
         split_ix = int(0.9 * len(self.img_paths))
         if train:
             self.img_paths = self.img_paths[:split_ix]
@@ -640,6 +643,17 @@ def run_eval(cfg, device, test_dataset, save_dir=None, feat_model=None):
 
         return np.array(losses), np.array(four_corner_dists)
 
+class SimpleCNN(nn.Module):
+    def __init__(self, D=32):
+        super(SimpleCNN, self).__init__()
+        self.relu = nn.ReLU(inplace=True)
+        self.conv1 = nn.Conv2d(3, D, kernel_size=3, stride=1, padding=1)
+        self.conv2 = nn.Conv2d(D, 3, kernel_size=3, stride=1, padding=1)
+        self.bn1 = nn.BatchNorm2d(3)
+
+    def forward(self, img):
+        x = self.relu(self.bn1(self.conv1(img)))
+        return self.conv2(x)
 
 def run(cfg):
 
@@ -654,20 +668,25 @@ def run(cfg):
     writer = SummaryWriter(os.getcwd())
 
     device = "cuda" if torch.cuda.is_available() and cfg.use_gpu else "cpu"
+    print("Using device %s" % device)
 
-    resnet = models.resnet18(pretrained=True)
-    resnet.to(device)
+    net = models.resnet18(pretrained=True)
+    net.to(device)
     upsample = torch.nn.UpsamplingBilinear2d(size=[cfg.imgH, cfg.imgW])
-    resnet_feat = torch.nn.Sequential(*list(resnet.children())[:-4] + [upsample])
-    fixed_feat = torch.nn.Sequential(*list(resnet.children())[:-4] + [upsample])
+    net_feat = torch.nn.Sequential(*list(net.children())[:-4] + [upsample])
+    fixed_feat = torch.nn.Sequential(*list(net.children())[:-4] + [upsample])
+    # A simple 2-layer CNN network that maintains the original image size.
+    #net = SimpleCNN()
+    #net.to(device)
+    #net_feat = torch.nn.Sequential(*list(net.children()))
+    #fixed_feat = torch.nn.Sequential(*list(net.children()))
 
     # Training loop to refine pretrained features
-
-    resnet_feat = train_loop(
+    net_feat = train_loop(
         cfg,
         device,
         train_dataset,
-        resnet_feat,
+        net_feat,
         writer=writer,
         train_chkpt=cfg.train_chkpt,
     )
@@ -695,13 +714,13 @@ def run(cfg):
     # fcd_fix = np.loadtxt(get_original_cwd() + "/outputs/homography_res/fcd_fix.txt")
 
     # print("Loading eval model from checkpoint ", cfg.train_chkpt)
-    # resnet_feat.load_state_dict(torch.load(cfg.eval_chkpt)["model_state_dict"])
+    # net_feat.load_state_dict(torch.load(cfg.eval_chkpt)["model_state_dict"])
     loss_opt, fcd_opt = run_eval(
         cfg,
         device,
         test_dataset,
         save_dir=log_dir + "/feat_opt",
-        feat_model=resnet_feat,
+        feat_model=net_feat,
     )
     np.savetxt(f"{res_dir}/loss_opt.txt", loss_opt)
     np.savetxt(f"{res_dir}/fcd_opt.txt", fcd_opt)

@@ -40,15 +40,15 @@ BACKWARD_MODE = {
 def prepare_data():
     dataset_root = os.path.join(get_original_cwd(), "data")
     chunks = [
-        # "revisitop1m.1",
-        # "revisitop1m.2",
-        # "revisitop1m.3",
-        # "revisitop1m.4",
-        # "revisitop1m.5",
+        "revisitop1m.1",
+        "revisitop1m.2",
+        "revisitop1m.3",
+        "revisitop1m.4",
+        "revisitop1m.5",
         # "revisitop1m.6",
         # "revisitop1m.7",
         # "revisitop1m.8",
-        "revisitop1m.9",
+        #"revisitop1m.9",
     ]
     dataset_paths = []
     for chunk in chunks:
@@ -415,7 +415,8 @@ def setup_homgraphy_layer(cfg, device, batch_size, channels):
     img2 = th.Variable(data=img_init, name="img2")
 
     # loss is pooled so error dim is not too large
-    pool_size = int(cfg.imgH // 3)
+    #pool_size = int(cfg.imgH // 3)
+    pool_size = 1
     pooled = torch.nn.functional.avg_pool2d(img_init, pool_size, stride=pool_size)
     error_dim = pooled[0, 0].numel()
     print(f"Pool size {pool_size}, error dim {error_dim}")
@@ -453,9 +454,15 @@ def setup_homgraphy_layer(cfg, device, batch_size, channels):
     return theseus_layer
 
 
-def train_loop(cfg, device, train_dataset, feat_model, writer=None, train_chkpt=None):
+def train_loop(cfg, device, train_dataset, feat_model, writer=None, train_chkpt=None, save_dir=None):
     if cfg.save_model:
         os.makedirs("chkpts")
+
+    if save_dir is not None:
+        os.makedirs(save_dir, exist_ok=True)
+
+    if save_dir is not None:
+        os.makedirs(save_dir, exist_ok=True)
 
     train_loader = DataLoader(
         train_dataset, batch_size=cfg.train_batch_size, shuffle=True
@@ -492,6 +499,7 @@ def train_loop(cfg, device, train_dataset, feat_model, writer=None, train_chkpt=
         running_losses = []
         start_time = time.time()
         for t, data in enumerate(train_loader):
+            print("starting iteration %d" % t)
             start = time.time()
 
             H_1_2_gt = data["H_1_2"].to(device)
@@ -544,6 +552,17 @@ def train_loop(cfg, device, train_dataset, feat_model, writer=None, train_chkpt=
                     f"chkpts/epoch_{epoch:03d}_step_{t:03d}.pt",
                 )
 
+            B = img1.shape[0]
+            if cfg.save_gifs and t % 5 == 0:
+                write_gif_batch(
+                    save_dir,
+                    layer_feat.optimizer.state_history,
+                    img1,
+                    img2,
+                    loss.reshape(B),
+                    t,
+                )
+
         epoch_time = time.time() - start_time
         epoch_loss = np.mean(running_losses).item()
         epoch_losses.append(epoch_loss)
@@ -554,94 +573,6 @@ def train_loop(cfg, device, train_dataset, feat_model, writer=None, train_chkpt=
 
     return feat_model
 
-
-def run_eval(cfg, device, test_dataset, save_dir=None, feat_model=None):
-    if save_dir is not None:
-        os.makedirs(save_dir, exist_ok=True)
-
-    test_loader = DataLoader(
-        test_dataset, batch_size=cfg.test_batch_size, shuffle=False
-    )
-    channels = 3
-    if feat_model is not None:
-        sample = next(iter(test_loader))
-        channels = feat_model(sample["img1"].to(device)).shape[1]
-
-    theseus_layer = setup_homgraphy_layer(
-        cfg,
-        device,
-        cfg.test_batch_size,
-        channels,
-    )
-    theseus_layer.optimizer.params.max_iterations = cfg.test_max_iters
-
-    if feat_model is not None:
-        feat_model.eval()
-
-    ix = 0
-    with torch.no_grad():
-        losses = []
-        four_corner_dists = []
-        for t, data in enumerate(test_loader):
-
-            H_1_2_gt = data["H_1_2"].to(device)
-            img1 = data["img1"].to(device)
-            img2 = data["img2"].to(device)
-            H_init = torch.eye(3).reshape(1, 9).repeat(img1.shape[0], 1).to(device)
-            H_init = H_init[:, :-1]
-
-            inputs = {
-                "H_1_2": H_init,
-                "img1": img1,
-                "img2": img2,
-            }
-
-            if feat_model is not None:
-                inputs["img1"] = feat_model(img1)
-                inputs["img2"] = feat_model(img2)
-
-            info = theseus_layer.forward(inputs, {"verbose": False})
-            H_1_2 = info[0]["H_1_2"]
-
-            # Compute evalution metric, for now photometric loss
-            img1_var = th.Variable(data=img1, name="img1")
-            img2_var = th.Variable(data=img2, name="img2")
-
-            ones = torch.ones(H_1_2.shape[0], 1, device=H_1_2.device, dtype=H_1_2.dtype)
-            H_1_2_mat = torch.cat((H_1_2, ones), dim=1).reshape(-1, 3, 3)
-            dist, warped_grid, warped_grid_gt = four_corner_dist(
-                H_1_2_mat, H_1_2_gt, cfg.imgH, cfg.imgW
-            )
-            four_corner_dists.extend(dist.tolist())
-
-            loss = homography_error_fn([H_1_2], [img1_var, img2_var], pool_size=1)
-            loss = loss.mean(dim=1)
-            losses.extend(loss.tolist())
-
-            print(f"Test loss ({t} / {len(test_loader)}): {loss.mean().item()}")
-
-            if cfg.save_gifs and ix < 20:
-                write_gif_batch(
-                    save_dir,
-                    theseus_layer.optimizer.state_history,
-                    img1,
-                    img2,
-                    loss,
-                    ix,
-                )
-                for i in range(cfg.test_batch_size):
-                    save_file = f"{save_dir}/loss{ix:03d}.png"
-                    viz_four_corner(
-                        save_file,
-                        img1[i],
-                        img2[i],
-                        H_1_2_mat[i],
-                        warped_grid[i],
-                        warped_grid_gt[i],
-                    )
-                    ix += 1
-
-        return np.array(losses), np.array(four_corner_dists)
 
 class SimpleCNN(nn.Module):
     def __init__(self, D=32):
@@ -670,16 +601,17 @@ def run(cfg):
     device = "cuda" if torch.cuda.is_available() and cfg.use_gpu else "cpu"
     print("Using device %s" % device)
 
-    net = models.resnet18(pretrained=True)
-    net.to(device)
-    upsample = torch.nn.UpsamplingBilinear2d(size=[cfg.imgH, cfg.imgW])
-    net_feat = torch.nn.Sequential(*list(net.children())[:-4] + [upsample])
-    fixed_feat = torch.nn.Sequential(*list(net.children())[:-4] + [upsample])
-    # A simple 2-layer CNN network that maintains the original image size.
-    #net = SimpleCNN()
+    # Resnet18, chopping off the final layers, resulting in smaller output image size.
+    #net = models.resnet18(pretrained=True)
     #net.to(device)
-    #net_feat = torch.nn.Sequential(*list(net.children()))
-    #fixed_feat = torch.nn.Sequential(*list(net.children()))
+    #upsample = torch.nn.UpsamplingBilinear2d(size=[cfg.imgH, cfg.imgW])
+    #net_feat = torch.nn.Sequential(*list(net.children())[:-4] + [upsample])
+    #fixed_feat = torch.nn.Sequential(*list(net.children())[:-4] + [upsample])
+    # A simple 2-layer CNN network that maintains the original image size.
+    net = SimpleCNN()
+    net.to(device)
+    net_feat = torch.nn.Sequential(*list(net.children()))
+    fixed_feat = torch.nn.Sequential(*list(net.children()))
 
     # Training loop to refine pretrained features
     net_feat = train_loop(
@@ -689,41 +621,42 @@ def run(cfg):
         net_feat,
         writer=writer,
         train_chkpt=cfg.train_chkpt,
+        save_dir=log_dir + "/viz",
     )
 
-    # Test loop
-    res_dir = "res"
-    os.makedirs(res_dir)
+    ## Test loop
+    #res_dir = "res"
+    #os.makedirs(res_dir)
 
-    loss_pho, fcd_pho = run_eval(cfg, device, test_dataset, save_dir=log_dir + "/pho")
-    np.savetxt(f"{res_dir}/loss_pho.txt", loss_pho)
-    np.savetxt(f"{res_dir}/fcd_pho.txt", fcd_pho)
-    # loss_pho = np.loadtxt(get_original_cwd() + "/outputs/homography_res/loss_pho.txt")
-    # fcd_pho = np.loadtxt(get_original_cwd() + "/outputs/homography_res/fcd_pho.txt")
+    #loss_pho, fcd_pho = run_eval(cfg, device, test_dataset, save_dir=log_dir + "/pho")
+    #np.savetxt(f"{res_dir}/loss_pho.txt", loss_pho)
+    #np.savetxt(f"{res_dir}/fcd_pho.txt", fcd_pho)
+    ## loss_pho = np.loadtxt(get_original_cwd() + "/outputs/homography_res/loss_pho.txt")
+    ## fcd_pho = np.loadtxt(get_original_cwd() + "/outputs/homography_res/fcd_pho.txt")
 
-    loss_fix, fcd_fix = run_eval(
-        cfg,
-        device,
-        test_dataset,
-        save_dir=log_dir + "/feat_fix",
-        feat_model=fixed_feat,
-    )
-    np.savetxt(f"{res_dir}/loss_fix.txt", loss_fix)
-    np.savetxt(f"{res_dir}/fcd_fix.txt", fcd_fix)
-    # loss_fix = np.loadtxt(get_original_cwd() + "/outputs/homography_res/loss_fix.txt")
-    # fcd_fix = np.loadtxt(get_original_cwd() + "/outputs/homography_res/fcd_fix.txt")
+    #loss_fix, fcd_fix = run_eval(
+    #    cfg,
+    #    device,
+    #    test_dataset,
+    #    save_dir=log_dir + "/feat_fix",
+    #    feat_model=fixed_feat,
+    #)
+    #np.savetxt(f"{res_dir}/loss_fix.txt", loss_fix)
+    #np.savetxt(f"{res_dir}/fcd_fix.txt", fcd_fix)
+    ## loss_fix = np.loadtxt(get_original_cwd() + "/outputs/homography_res/loss_fix.txt")
+    ## fcd_fix = np.loadtxt(get_original_cwd() + "/outputs/homography_res/fcd_fix.txt")
 
-    # print("Loading eval model from checkpoint ", cfg.train_chkpt)
-    # net_feat.load_state_dict(torch.load(cfg.eval_chkpt)["model_state_dict"])
-    loss_opt, fcd_opt = run_eval(
-        cfg,
-        device,
-        test_dataset,
-        save_dir=log_dir + "/feat_opt",
-        feat_model=net_feat,
-    )
-    np.savetxt(f"{res_dir}/loss_opt.txt", loss_opt)
-    np.savetxt(f"{res_dir}/fcd_opt.txt", fcd_opt)
+    ## print("Loading eval model from checkpoint ", cfg.train_chkpt)
+    ## net_feat.load_state_dict(torch.load(cfg.eval_chkpt)["model_state_dict"])
+    #loss_opt, fcd_opt = run_eval(
+    #    cfg,
+    #    device,
+    #    test_dataset,
+    #    save_dir=log_dir + "/feat_opt",
+    #    feat_model=net_feat,
+    #)
+    #np.savetxt(f"{res_dir}/loss_opt.txt", loss_opt)
+    #np.savetxt(f"{res_dir}/fcd_opt.txt", fcd_opt)
     # loss_opt = np.loadtxt(get_original_cwd() + "/outputs/homography_res/loss_opt.txt")
     # fcd_opt = np.loadtxt(get_original_cwd() + "/outputs/homography_res/fcd_opt.txt")
 

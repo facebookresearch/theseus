@@ -3,6 +3,8 @@ use_gpu: True
 
 imgH: 160
 imgW: 200
+#imgH: 20
+#imgW: 25
 photo_aug: True
 
 train_chkpt: None
@@ -20,9 +22,12 @@ outer_optim:
   lr: 1e-5
   num_epochs: 10
 
-train_batch_size: 5
+#train_batch_size: 5
+#test_max_iters: 50
+#test_batch_size: 5
+train_batch_size: 1
 test_max_iters: 50
-test_batch_size: 5
+test_batch_size: 1
 
 save_gifs: True
 save_model: True

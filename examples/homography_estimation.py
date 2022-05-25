@@ -34,10 +34,10 @@ def prepare_data():
     dataset_root = os.path.join(os.getcwd(), "data")
     chunks = [
         "revisitop1m.1",
-        #"revisitop1m.2",
-        #"revisitop1m.3",
-        #"revisitop1m.4",
-        #"revisitop1m.5",
+        "revisitop1m.2",
+        "revisitop1m.3",
+        "revisitop1m.4",
+        "revisitop1m.5",
     ]
     dataset_paths = []
     for chunk in chunks:
@@ -68,7 +68,8 @@ class HomographyDataset(Dataset):
         assert len(self.img_paths) > 0, "no images found"
         print("Found %d total images in dataset" % len(self.img_paths))
         #sc = 0.3
-        sc = 0.05
+        #sc = 0.05
+        sc = 0.1
         self.rga = RandomGeoAug(
             rotate_param=GeoAugParam(min=-30 * sc, max=30 * sc),
             scale_param=GeoAugParam(min=(1.0 - 0.8*sc), max=(1.0 + 1.2*sc)),
@@ -105,7 +106,9 @@ class HomographyDataset(Dataset):
     def __getitem__(self, idx):
         img_path = self.img_paths[idx]
         img1 = np.asarray(Image.open(img_path).resize(size=(self.imgW, self.imgH)))
-        assert img1.shape == (self.imgH, self.imgW, 3)
+        # Convert file to rgb if it is grayscale.
+        if img1.shape != (self.imgH, self.imgW, 3):
+            img1 = cv2.cvtColor(img1,cv2.COLOR_GRAY2RGB)
         img1 = torch.from_numpy(img1.astype(np.float32) / 255.0).permute(2, 0, 1)[None]
         img2, H_1_2 = self.rga.forward(
             img1, return_transform=True, normalize_returned_transform=True
@@ -189,9 +192,11 @@ def warp_perspective_norm(H, img):
 
 
 def homography_error_fn(optim_vars: List[th.Manifold], aux_vars: List[th.Variable]):
-    H_1_2 = optim_vars[0]
+    H8_1_2 = optim_vars[0].data.reshape(-1,8)
+    # Force the last element H[2,2] to be 1.
+    H_1_2 = torch.cat([H8_1_2, H8_1_2.new_ones(H8_1_2.shape[0], 1)], dim=-1)
     img1, img2 = aux_vars
-    img1_dst = warp_perspective_norm(H_1_2.data.reshape(-1, 3, 3), img1.data)
+    img1_dst = warp_perspective_norm(H_1_2.reshape(-1, 3, 3), img1.data)
     loss = torch.nn.functional.mse_loss(img1_dst, img2.data, reduction="none")
     ones = warp_perspective_norm(
         H_1_2.data.reshape(-1, 3, 3), torch.ones_like(img1.data)
@@ -219,7 +224,7 @@ def torch2cv2(img):
     return out
 
 
-def viz_warp(path, img1, img2, img1_w, iteration, err=-1.):
+def viz_warp(path, img1, img2, img1_w, iteration, err=-1., fc_err=-1.):
     img_diff = torch2cv2(torch.abs(img1_w - img2))
     img1 = torch2cv2(img1)
     img2 = torch2cv2(img2)
@@ -235,10 +240,10 @@ def viz_warp(path, img1, img2, img1_w, iteration, err=-1.):
     img1_w = put_text(img1_w, "I warped to I'")
     img_diff = put_text(img_diff, "L2 diff")
     out = np.concatenate([img1, img2, img1_w, img_diff], axis=1)
-    out = put_text(out, "iter: %05d, loss: %.8f" % (iteration, err), top=False)
+    out = put_text(out, "iter: %05d, loss: %.8f, fc_err: %.3f px" % (iteration, err, fc_err), top=False)
     cv2.imwrite(path, out)
 
-def write_gif_batch(log_dir, img1, img2, H_hist, err_hist=None):
+def write_gif_batch(log_dir, img1, img2, H_hist, Hgt_1_2, err_hist=None):
     anim_dir = f"{log_dir}/animation"
     os.makedirs(anim_dir, exist_ok=True)
     subsample_anim = 1
@@ -246,7 +251,12 @@ def write_gif_batch(log_dir, img1, img2, H_hist, err_hist=None):
         if it % subsample_anim != 0:
             continue
         # Visualize only first element in batch.
-        H_1_2_mat = H_hist[it]["H_1_2"][0].reshape(1, 3, 3)
+        H8_1_2 = H_hist[it]["H8_1_2"].data
+        H_1_2 = torch.cat([H8_1_2, H8_1_2.new_ones(H8_1_2.shape[0], 1)], dim=-1)
+        H_1_2_mat = H_1_2[0].reshape(1, 3, 3)
+        Hgt_1_2_mat = Hgt_1_2[0].reshape(1, 3, 3)
+        imgH, imgW = img1.shape[-2], img1.shape[-1]
+        fc_err = four_corner_dist(H_1_2_mat, Hgt_1_2_mat, imgH, imgW)
         if err_hist is None:
             err = -1
         else:
@@ -255,7 +265,7 @@ def write_gif_batch(log_dir, img1, img2, H_hist, err_hist=None):
         img2 = img2[0][None,...]
         img1_dsts = warp_perspective_norm(H_1_2_mat, img1)
         path = os.path.join(log_dir, f"{anim_dir}/{it:05d}.png")
-        viz_warp(path, img1[0], img2[0], img1_dsts[0], it, err=err)
+        viz_warp(path, img1[0], img2[0], img1_dsts[0], it, err=err, fc_err=fc_err)
     anim_path = os.path.join(log_dir, "animation.gif")
     cmd = f"convert -delay 10 -loop 0 {anim_dir}/*.png {anim_path}"
     #print(cmd)
@@ -297,17 +307,23 @@ class SimpleCNN(nn.Module):
 
 def run():
 
-    batch_size = 16
+    batch_size = 32
     C = 3
-    max_iterations = 10
-    step_size = 1.0
-    #verbose = True
-    verbose = False
+    max_iterations = 50
+    step_size = 0.1
+    verbose = True
+    #verbose = False
     imgH, imgW = 60, 80
     use_gpu = True
     viz_every = 10
+    #viz_every = 1
     disp_every = 10
+    #disp_every = 1
+    save_every = 100
     num_epochs = 999
+    #outer_lr = 1e-3
+    outer_lr = 1e-4
+    #outer_lr = 1e-5
 
     log_dir = os.path.join(os.getcwd(), "viz")
     os.makedirs(log_dir, exist_ok=True)
@@ -325,11 +341,13 @@ def run():
     cnn_model.to(device)
 
     # Set up outer loop optimization.
-    outer_optim = torch.optim.Adam(cnn_model.parameters(), lr=1e-4)
+    outer_optim = torch.optim.Adam(cnn_model.parameters(), lr=outer_lr)
+
+    itr = 0
 
     for epoch in range(num_epochs):
 
-        for itr, data in enumerate(dataloader):
+        for _, data in enumerate(dataloader):
 
             outer_optim.zero_grad()
 
@@ -339,8 +357,8 @@ def run():
 
             objective = th.Objective()
 
-            H_init = torch.eye(3).reshape(1, 9).repeat(batch_size, 1)
-            H_1_2 = th.Vector(data=H_init, name="H_1_2")
+            H8_init = torch.eye(3).reshape(1, 9)[:,:-1].repeat(batch_size, 1)
+            H8_1_2 = th.Vector(data=H8_init, name="H8_1_2")
 
             # Use random features.
             feat1 = cnn_model.forward(img1)
@@ -355,13 +373,24 @@ def run():
 
             # Set up inner loop optimization.
             homography_cf = th.AutoDiffCostFunction(
-                optim_vars=[H_1_2],
+                optim_vars=[H8_1_2],
                 err_fn=homography_error_fn,
                 dim=1,
                 aux_vars=[feat1, feat2],
             )
             objective.add(homography_cf)
-            inner_optim = th.LevenbergMarquardt(  # GaussNewton(
+
+            reg_w = 1e-2
+            reg_w = th.ScaleCostWeight(np.sqrt(reg_w))
+            reg_w.to(dtype=H8_init.dtype)
+            vals = torch.tensor([[1.0, 0.0, 0.0, 0.0, 1.0, 0.0, 0.0, 0.0]])
+            H8_1_2_id = th.Vector(data=vals, name="identity")
+            reg_cf = th.eb.VariableDifference(
+                H8_1_2, reg_w, H8_1_2_id, name="reg_homography"
+            )
+            objective.add(reg_cf)
+
+            inner_optim = th.LevenbergMarquardt(
                 objective,
                 max_iterations=max_iterations,
                 step_size=step_size,
@@ -370,7 +399,7 @@ def run():
             theseus_layer.to(device)
 
             inputs = {
-                "H_1_2": H_1_2.data,
+                "H8_1_2": H8_1_2.data,
                 "feat1": feat1.data,
                 "feat2": feat2.data,
             }
@@ -381,32 +410,38 @@ def run():
             info = theseus_layer.forward(inputs,
                     optimizer_kwargs={"verbose": verbose2,
                                       "track_err_history": True,
-                                      "backward_mode": BACKWARD_MODE["full"]})
-                                      #"backward_mode": BACKWARD_MODE["implicit"]})
+                                      #"backward_mode": BACKWARD_MODE["full"]})
+                                      "backward_mode": BACKWARD_MODE["implicit"]})
             err_hist = info[1].err_history
             H_hist = theseus_layer.optimizer.state_history
             #print("Finished inner loop in %d iters" % len(H_hist))
 
             Hgt_1_2 = Hgt_1_2.reshape(-1, 9)
-            H_1_2 = theseus_layer.objective.get_optim_var("H_1_2")
+            H8_1_2 = theseus_layer.objective.get_optim_var("H8_1_2").data.reshape(-1,8)
+            H_1_2 = torch.cat([H8_1_2, H8_1_2.new_ones(H8_1_2.shape[0], 1)], dim=-1)
             # Loss is on four corner error.
-            fc_dist = four_corner_dist(H_1_2.data.reshape(-1,3,3), Hgt_1_2.reshape(-1,3,3), imgH, imgW)
+            fc_dist = four_corner_dist(H_1_2.reshape(-1,3,3), Hgt_1_2.reshape(-1,3,3), imgH, imgW)
             outer_loss = fc_dist.mean()
             outer_loss.backward()
             outer_optim.step()
             print("Epoch %d, iteration %d, outer_loss: %.3f" % (epoch, itr, outer_loss.item()))
             writer.add_scalar("Loss/train", outer_loss.item(), itr)
             if itr % disp_every == 0:
-                #print("Epoch %d, iteration %d, outer_loss: %.3f" % (epoch, itr, outer_loss.item()))
+                print("Epoch %d, iteration %d, outer_loss: %.3f" % (epoch, itr, outer_loss.item()))
                 torch.set_printoptions(precision=5, sci_mode=False)
-                print("four corner dists")
-                print(fc_dist)
-                print("final H elt")
-                print(H_1_2[:,-1])
-                import pdb
+                #print("four corner dists")
+                #print(fc_dist)
+                #print("conv1 bias values")
+                #print(cnn_model.state_dict()['conv1.bias'])
 
             if itr % viz_every == 0:
-                write_gif_batch(log_dir, feat1, feat2, H_hist, err_hist)
+                write_gif_batch(log_dir, feat1, feat2, H_hist, Hgt_1_2, err_hist)
+
+            if itr % save_every == 0:
+                save_path = os.path.join(log_dir, "last.ckpt")
+                torch.save({"itr": itr, "cnn_model": cnn_model}, save_path)
+
+            itr += 1
 
 
 def main():

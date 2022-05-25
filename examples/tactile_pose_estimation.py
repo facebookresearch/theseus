@@ -77,9 +77,24 @@ def run_learning_loop(cfg):
     for epoch in range(cfg.train.num_epochs):
         logger.info(f" ********************* EPOCH {epoch} *********************")
         logger.info(" -------------- TRAINING --------------")
-        train_losses, results_train[epoch], _ = trainer.compute_loss(epoch)
+        train_losses, results_train[epoch], image_data = trainer.compute_loss(epoch)
         logger.info(f"AVG. TRAIN LOSS: {np.mean(train_losses)}")
         torch.save(results_train, root_path / "results_train.pt")
+
+        if cfg.options.vis_traj and cfg.options.vis_train:
+            for i in range(len(image_data["obj_opt"])):
+                save_dir = root_path / f"img_{i}_train"
+                save_dir.mkdir(parents=True, exist_ok=True)
+                save_fname = save_dir / f"epoch{epoch}.png"
+                theg.visualize_tactile_push2d(
+                    obj_poses=image_data["obj_opt"][i],
+                    eff_poses=image_data["eff_opt"][i],
+                    obj_poses_gt=image_data["obj_gt"][i],
+                    eff_poses_gt=image_data["eff_gt"][i],
+                    rect_len_x=cfg.shape.rect_len_x,
+                    rect_len_y=cfg.shape.rect_len_y,
+                    save_fname=save_fname,
+                )
 
         logger.info(" -------------- VALIDATION --------------")
         with torch.no_grad():

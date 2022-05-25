@@ -118,6 +118,58 @@ class HomographyDataset(Dataset):
 
         return data
 
+def grid_sample(image, optical):
+    """ Custom implementation for grid_sample() to avoid this warning:
+    RuntimeError: derivative for aten::grid_sampler_2d_backward is not implemented
+    """
+    N, C, IH, IW = image.shape
+    _, H, W, _ = optical.shape
+    ix = optical[..., 0]
+    iy = optical[..., 1]
+    ix = ((ix + 1) / 2) * (IW - 1)
+    iy = ((iy + 1) / 2) * (IH - 1)
+    with torch.no_grad():
+        ix_nw = torch.floor(ix)
+        iy_nw = torch.floor(iy)
+        ix_ne = ix_nw + 1
+        iy_ne = iy_nw
+        ix_sw = ix_nw
+        iy_sw = iy_nw + 1
+        ix_se = ix_nw + 1
+        iy_se = iy_nw + 1
+    nw = (ix_se - ix) * (iy_se - iy)
+    ne = (ix - ix_sw) * (iy_sw - iy)
+    sw = (ix_ne - ix) * (iy - iy_ne)
+    se = (ix - ix_nw) * (iy - iy_nw)
+    with torch.no_grad():
+        torch.clamp(ix_nw, 0, IW - 1, out=ix_nw)
+        torch.clamp(iy_nw, 0, IH - 1, out=iy_nw)
+        torch.clamp(ix_ne, 0, IW - 1, out=ix_ne)
+        torch.clamp(iy_ne, 0, IH - 1, out=iy_ne)
+        torch.clamp(ix_sw, 0, IW - 1, out=ix_sw)
+        torch.clamp(iy_sw, 0, IH - 1, out=iy_sw)
+        torch.clamp(ix_se, 0, IW - 1, out=ix_se)
+        torch.clamp(iy_se, 0, IH - 1, out=iy_se)
+    image = image.view(N, C, IH * IW)
+    nw_val = torch.gather(
+        image, 2, (iy_nw * IW + ix_nw).long().view(N, 1, H * W).repeat(1, C, 1)
+    )
+    ne_val = torch.gather(
+        image, 2, (iy_ne * IW + ix_ne).long().view(N, 1, H * W).repeat(1, C, 1)
+    )
+    sw_val = torch.gather(
+        image, 2, (iy_sw * IW + ix_sw).long().view(N, 1, H * W).repeat(1, C, 1)
+    )
+    se_val = torch.gather(
+        image, 2, (iy_se * IW + ix_se).long().view(N, 1, H * W).repeat(1, C, 1)
+    )
+    out_val = (
+        nw_val.view(N, C, H, W) * nw.view(N, 1, H, W)
+        + ne_val.view(N, C, H, W) * ne.view(N, 1, H, W)
+        + sw_val.view(N, C, H, W) * sw.view(N, 1, H, W)
+        + se_val.view(N, C, H, W) * se.view(N, 1, H, W)
+    )
+    return out_val
 
 def warp_perspective_norm(H, img):
     height, width = img.shape[-2:]
@@ -126,8 +178,10 @@ def warp_perspective_norm(H, img):
     )
     Hinv = torch.inverse(H)
     warped_grid = kornia.geometry.transform.homography_warper.warp_grid(grid, Hinv)
-    grid_sample = torch.nn.functional.grid_sample
-    img2 = grid_sample(img, warped_grid, mode="bilinear", align_corners=True)
+    #grid_sample = torch.nn.functional.grid_sample
+    #img2 = grid_sample(img, warped_grid, mode="bilinear", align_corners=True)
+    # Using custom implementation to get second derivative, above will throw error.
+    img2 = grid_sample(img, warped_grid)
     return img2
 
 
@@ -170,7 +224,6 @@ def viz_warp(path, img1, img2, img1_w, iteration, err=-1.):
     img1_w = torch2cv2(img1_w)
     factor = 2
     new_sz = int(factor*img1.shape[1]), int(factor*img1.shape[0])
-    #new_sz = (160, 120)
     img1 = cv2.resize(img1, new_sz, interpolation=cv2.INTER_NEAREST)
     img2 = cv2.resize(img2, new_sz, interpolation=cv2.INTER_NEAREST)
     img1_w = cv2.resize(img1_w, new_sz, interpolation=cv2.INTER_NEAREST)
@@ -180,10 +233,10 @@ def viz_warp(path, img1, img2, img1_w, iteration, err=-1.):
     img1_w = put_text(img1_w, "I warped to I'")
     img_diff = put_text(img_diff, "L2 diff")
     out = np.concatenate([img1, img2, img1_w, img_diff], axis=1)
-    out = put_text(out, "iter: %05d, loss: %.3f" % (iteration, err), top=False)
+    out = put_text(out, "iter: %05d, loss: %.8f" % (iteration, err), top=False)
     cv2.imwrite(path, out)
 
-def write_gif_batch(log_dir, H_hist, img1, img2):
+def write_gif_batch(log_dir, img1, img2, H_hist, err_hist=None):
     anim_dir = f"{log_dir}/animation"
     os.makedirs(anim_dir, exist_ok=True)
     subsample_anim = 2
@@ -192,11 +245,15 @@ def write_gif_batch(log_dir, H_hist, img1, img2):
             continue
         # Visualize only first element in batch.
         H_1_2_mat = H_hist[it]["H_1_2"][0].reshape(1, 3, 3)
+        if err_hist is None:
+            err = -1
+        else:
+            err = float(err_hist[0][it])
         img1 = img1[0][None,...]
         img2 = img2[0][None,...]
         img1_dsts = warp_perspective_norm(H_1_2_mat, img1)
         path = os.path.join(log_dir, f"{anim_dir}/{it:05d}.png")
-        viz_warp(path, img1[0], img2[0], img1_dsts[0], it)
+        viz_warp(path, img1[0], img2[0], img1_dsts[0], it, err=err)
     cmd = f"convert -delay 10 -loop 0 {anim_dir}/*.png {log_dir}/animation.gif"
     print(cmd)
     os.system(cmd)
@@ -239,11 +296,16 @@ def run():
     cnn_model = SimpleCNN()
     cnn_model.to(device)
 
+    # Set up outer loop optimization.
+    outer_optim = torch.optim.Adam(cnn_model.parameters(), lr=1e-5)
+
     for itr, data in enumerate(dataloader):
+
+        #outer_optim.zero_grad()
 
         img1 = data["img1"].to(device)
         img2 = data["img2"].to(device)
-        H_1_2 = data["H_1_2"].to(device)
+        Hgt_1_2 = data["H_1_2"].to(device)
 
         objective = th.Objective()
 
@@ -261,6 +323,7 @@ def run():
         feat1 = th.Variable(data=feat1, name="feat1")
         feat2 = th.Variable(data=feat2, name="feat2")
 
+        # Set up inner loop optimization.
         homography_cf = th.AutoDiffCostFunction(
             optim_vars=[H_1_2],
             err_fn=homography_error_fn,
@@ -268,14 +331,12 @@ def run():
             aux_vars=[feat1, feat2],
         )
         objective.add(homography_cf)
-
-        optimizer = th.LevenbergMarquardt(  # GaussNewton(
+        inner_optim = th.LevenbergMarquardt(  # GaussNewton(
             objective,
             max_iterations=max_iterations,
             step_size=step_size,
         )
-
-        theseus_layer = th.TheseusLayer(optimizer)
+        theseus_layer = th.TheseusLayer(inner_optim)
         theseus_layer.to(device)
 
         inputs = {
@@ -286,14 +347,23 @@ def run():
         try:
             info = theseus_layer.forward(inputs,
                     optimizer_kwargs={"verbose": verbose,
-                                      "backward_mode": BACKWARD_MODE["full"]})
+                                      "track_err_history": True,
+                                      "backward_mode": BACKWARD_MODE["implicit"]})
+            err_hist = info[1].err_history
         except RuntimeError:
-            pass
+            err_hist = None
         H_hist = theseus_layer.optimizer.state_history
         print("Finished inner loop in %d iters" % len(H_hist))
 
+        # no loss on last element as set to one
+        Hgt_1_2 = Hgt_1_2.reshape(-1, 9)
+        H_1_2 = theseus_layer.objective.get_optim_var("H_1_2")
+        outer_loss = torch.nn.L1Loss()(H_1_2.data, Hgt_1_2)
+        outer_loss.backward()
+        outer_optim.step()
+
         if itr % viz_every == 0:
-            write_gif_batch(log_dir, H_hist, feat1, feat2)
+            write_gif_batch(log_dir, feat1, feat2, H_hist, err_hist)
 
 
 def main():

@@ -200,7 +200,6 @@ class InitialTrajectoryModel(nn.Module):
                 "cell_size": batch["cell_size"].to(device),
                 "sdf_data": batch["sdf_data"].to(device),
             }
-            self.aux_motion_planner.objective.update(planner_inputs)
 
             motion_optimizer = cast(
                 th.NonlinearLeastSquares, self.aux_motion_planner.layer.optimizer
@@ -217,8 +216,9 @@ class InitialTrajectoryModel(nn.Module):
                     traj_idx = int(time_idx) * 4
                 if var_type == "vel":
                     traj_idx = int(time_idx) * 4 + 2
-                var.update(trajectory[:, traj_idx : traj_idx + 2])
+                planner_inputs[var.name] = trajectory[:, traj_idx : traj_idx + 2]
 
+            self.aux_motion_planner.objective.setup(planner_inputs)
             linearization.linearize()
             cov_matrix = torch.inverse(linearization.AtA)
             lower_cov = torch.linalg.cholesky(cov_matrix)

@@ -1,9 +1,3 @@
-#!/usr/bin/env python3
-# Copyright (c) Meta Platforms, Inc. and affiliates.
-#
-# This source code is licensed under the MIT license found in the
-# LICENSE file in the root directory of this source tree.
-#
 # This example will use torch to solve min_x1 || x1^-1 - x2 ||^2,
 # where x1 and x2 are SE2 objects
 

@@ -1,12 +1,3 @@
-#!/usr/bin/env python3
-# Copyright (c) Meta Platforms, Inc. and affiliates.
-#
-# This source code is licensed under the MIT license found in the
-# LICENSE file in the root directory of this source tree.
-#
-# This example illustrates the three backward modes (FULL, IMPLICIT, and TRUNCATED)
-# on a problem fitting a quadratic to data.
-
 import torch
 import theseus as th
 

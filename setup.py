@@ -41,7 +41,7 @@ else:
 setuptools.setup(
     name="theseus",
     version=version,
-    author="Meta Research",
+    author="Author",
     description="A library for differentiable nonlinear optimization.",
     long_description=long_description,
     long_description_content_type="text/markdown",

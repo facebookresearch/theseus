@@ -33,10 +33,10 @@ def prepare_data():
     dataset_root = os.path.join(os.getcwd(), "data")
     chunks = [
         "revisitop1m.1",
-        "revisitop1m.2",
-        "revisitop1m.3",
-        "revisitop1m.4",
-        "revisitop1m.5",
+        #"revisitop1m.2",
+        #"revisitop1m.3",
+        #"revisitop1m.4",
+        #"revisitop1m.5",
     ]
     dataset_paths = []
     for chunk in chunks:
@@ -120,8 +120,9 @@ class HomographyDataset(Dataset):
         return data
 
 def grid_sample(image, optical):
-    """ Custom implementation for grid_sample() to avoid this warning:
-    RuntimeError: derivative for aten::grid_sampler_2d_backward is not implemented
+    """
+    Custom implementation for torch.nn.functional.grid_sample() to avoid this warning:
+    > "RuntimeError: derivative for aten::grid_sampler_2d_backward is not implemented"
     """
     N, C, IH, IW = image.shape
     _, H, W, _ = optical.shape
@@ -293,9 +294,9 @@ def run():
     dataset = HomographyDataset(dataset_paths, imgH, imgW)
     dataloader = DataLoader(dataset, batch_size=batch_size, shuffle=True)
 
-    # A simple 2-layer CNN network that maintains the original image size.
-    cnn_model = SimpleCNN()
-    cnn_model.to(device)
+    ## A simple 2-layer CNN network that maintains the original image size.
+    #cnn_model = SimpleCNN()
+    #cnn_model.to(device)
 
     ## Set up outer loop optimization.
     #outer_optim = torch.optim.Adam(cnn_model.parameters(), lr=1e-5)

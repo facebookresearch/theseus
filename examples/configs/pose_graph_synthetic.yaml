@@ -31,6 +31,6 @@ outer_optim:
 
 hydra:
   run:
-    dir: examples/outputs/pgo/
+    dir: examples/outputs/pose_graph_synthetic
   sweep:
-    dir: examples/outputs/pgo/
+    dir: examples/outputs/pose_graph_synthetic

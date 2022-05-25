@@ -142,10 +142,7 @@ def main(cfg):
 
     for n in range(cfg.dataset_size):
         num_poses, poses_n, edges_n = theg.pose_graph.read_3D_g2o_file(
-            (
-                f"/private/home/taoshaf/Documents/theseus/debug/datasets/"
-                f"{num_poses}_poses_0.2_cube_{n}.g2o"
-            ),
+            (f"datasets/pose_graph/cube/{num_poses}_poses_0.2_cube_{n}.g2o"),
         )
         if len(poses) == 0:
             poses = poses_n

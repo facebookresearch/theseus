@@ -67,8 +67,6 @@ class HomographyDataset(Dataset):
             self.img_paths.extend(glob.glob(direc + "/**/*.jpg", recursive=True))
         assert len(self.img_paths) > 0, "no images found"
         print("Found %d total images in dataset" % len(self.img_paths))
-        #sc = 0.3
-        #sc = 0.05
         sc = 0.1
         self.rga = RandomGeoAug(
             rotate_param=GeoAugParam(min=-30 * sc, max=30 * sc),
@@ -82,8 +80,10 @@ class HomographyDataset(Dataset):
         self.photo_aug = photo_aug
         if self.photo_aug:
             self.rpa = RandomPhotoAug()
-            self.rpa.set_all_probs(0.2)
-            self.rpa.set_all_mags(0.5)
+            prob = 0.2 # Probability of augmentation applied.
+            mag = 0.2 # Magnitude of augmentation [0: none, 1: max]
+            self.rpa.set_all_probs(prob)
+            self.rpa.set_all_mags(mag)
 
         # train test split
         self.img_paths.sort()
@@ -114,10 +114,12 @@ class HomographyDataset(Dataset):
             img1, return_transform=True, normalize_returned_transform=True
         )
 
-        ## apply random photometric augmentations
-        #if self.photo_aug:
-        #    img1 = self.rpa.forward(img1)
-        #    img2 = self.rpa.forward(img2)
+        # apply random photometric augmentations
+        if self.photo_aug:
+            img1 = torch.clamp(img1, 0.0, 1.0)
+            img2 = torch.clamp(img2, 0.0, 1.0)
+            img1 = self.rpa.forward(img1)
+            img2 = self.rpa.forward(img2)
 
         data = {"img1": img1[0], "img2": img2[0], "H_1_2": H_1_2[0]}
 
@@ -232,6 +234,7 @@ def viz_warp(path, img1, img2, img1_w, iteration, err=-1., fc_err=-1.):
     factor = 2
     new_sz = int(factor*img1.shape[1]), int(factor*img1.shape[0])
     img1 = cv2.resize(img1, new_sz, interpolation=cv2.INTER_NEAREST)
+    img1 = cv2.resize(img1, new_sz)
     img2 = cv2.resize(img2, new_sz, interpolation=cv2.INTER_NEAREST)
     img1_w = cv2.resize(img1_w, new_sz, interpolation=cv2.INTER_NEAREST)
     img_diff = cv2.resize(img_diff, new_sz, interpolation=cv2.INTER_NEAREST)
@@ -268,7 +271,6 @@ def write_gif_batch(log_dir, img1, img2, H_hist, Hgt_1_2, err_hist=None):
         viz_warp(path, img1[0], img2[0], img1_dsts[0], it, err=err, fc_err=fc_err)
     anim_path = os.path.join(log_dir, "animation.gif")
     cmd = f"convert -delay 10 -loop 0 {anim_dir}/*.png {anim_path}"
-    #print(cmd)
     print("Generating gif here: %s" % anim_path)
     os.system(cmd)
     shutil.rmtree(anim_dir)
@@ -288,8 +290,7 @@ def four_corner_dist(H_1_2, H_1_2_gt, height, width):
     warped_grid[..., 1] *= height
     warped_grid_gt[..., 0] *= width
     warped_grid_gt[..., 1] *= height
-    #dist = torch.square(torch.norm(warped_grid - warped_grid_gt, dim=-1))
-    dist = torch.norm(warped_grid - warped_grid_gt, p=1, dim=-1)
+    dist = torch.norm(warped_grid - warped_grid_gt, p=2, dim=-1)
     dist = dist.mean(dim=-1).mean(dim=-1)
     return dist
 
@@ -307,23 +308,19 @@ class SimpleCNN(nn.Module):
 
 def run():
 
-    batch_size = 32
+    batch_size = 64
     C = 3
     max_iterations = 50
     step_size = 0.1
     verbose = True
-    #verbose = False
     imgH, imgW = 60, 80
     use_gpu = True
     viz_every = 10
-    #viz_every = 1
     disp_every = 10
-    #disp_every = 1
     save_every = 100
     num_epochs = 999
-    #outer_lr = 1e-3
     outer_lr = 1e-4
-    #outer_lr = 1e-5
+    use_cnn = True
 
     log_dir = os.path.join(os.getcwd(), "viz")
     os.makedirs(log_dir, exist_ok=True)
@@ -360,13 +357,12 @@ def run():
             H8_init = torch.eye(3).reshape(1, 9)[:,:-1].repeat(batch_size, 1)
             H8_1_2 = th.Vector(data=H8_init, name="H8_1_2")
 
-            # Use random features.
-            feat1 = cnn_model.forward(img1)
-            feat2 = cnn_model.forward(img2)
-
-            ## Use image pixels.
-            #feat1 = img1
-            #feat2 = img2
+            if use_cnn: # Use cnn features.
+                feat1 = cnn_model.forward(img1)
+                feat2 = cnn_model.forward(img2)
+            else: # Use image pixels.
+                feat1 = img1
+                feat2 = img2
 
             feat1 = th.Variable(data=feat1, name="feat1")
             feat2 = th.Variable(data=feat2, name="feat2")
@@ -380,6 +376,7 @@ def run():
             )
             objective.add(homography_cf)
 
+            # Regularization helps avoid crash with using implicit mode.
             reg_w = 1e-2
             reg_w = th.ScaleCostWeight(np.sqrt(reg_w))
             reg_w.to(dtype=H8_init.dtype)
@@ -426,13 +423,6 @@ def run():
             outer_optim.step()
             print("Epoch %d, iteration %d, outer_loss: %.3f" % (epoch, itr, outer_loss.item()))
             writer.add_scalar("Loss/train", outer_loss.item(), itr)
-            if itr % disp_every == 0:
-                print("Epoch %d, iteration %d, outer_loss: %.3f" % (epoch, itr, outer_loss.item()))
-                torch.set_printoptions(precision=5, sci_mode=False)
-                #print("four corner dists")
-                #print(fc_dist)
-                #print("conv1 bias values")
-                #print(cnn_model.state_dict()['conv1.bias'])
 
             if itr % viz_every == 0:
                 write_gif_batch(log_dir, feat1, feat2, H_hist, Hgt_1_2, err_hist)
@@ -449,4 +439,5 @@ def main():
 
 
 if __name__ == "__main__":
+    torch.manual_seed(0)
     main()

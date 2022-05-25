@@ -123,7 +123,7 @@ def run_learning_loop(cfg):
                 "cell_size": batch["cell_size"].to(cfg.device),
                 "sdf_data": batch["sdf_data"].to(cfg.device),
             }
-            motion_planner.objective.update(planner_inputs)
+            motion_planner.objective.setup(planner_inputs)
 
             if not cfg.do_learning or cfg.model_type != "initial_trajectory_model":
                 # This method updates the dictionary so that optimization variables

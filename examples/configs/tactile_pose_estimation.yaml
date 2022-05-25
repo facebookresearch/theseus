@@ -4,20 +4,20 @@ save_all: true
 dataset_name: "rectangle-pushing-corners-keypoints"
 sdf_name: "rect"
 
-episode_length: 25
+episode_length: 100
 max_steps: 100
-max_episodes: 100  # if split = true, actual number might be slightly larger
+max_episodes: 1  # if split = true, actual number might be slightly larger
 split_episodes: true
 
 inner_optim:
-  max_iters: 10
+  max_iters: 50
   optimizer: GaussNewton
   reg_w: 0
   backward_mode: IMPLICIT
   backward_num_iterations: 2 # only needed by TRUNCATED backward mode
   dlm_epsilon: None
   force_implicit_by_epoch: 10000
-  step_size: 1.0
+  step_size: 0.3
   keep_step_size: true
   force_max_iters: false
   val_iters: 50
@@ -28,10 +28,10 @@ train:
   mode: "weights_and_measurement_nn"
   batch_size: 8
   num_epochs: 200
-  lr: 1e-4
+  lr: 3e-4
   optimizer: "adam" # "adam", "rmsprop"
-  lr_decay: 1.0
-  val_ratio: 0.1
+  lr_decay: 0.98
+  val_ratio: 0
   max_num_batches: 100
 
 # 0: disc, 1: rect-edges, 2: rect-corners, 3: ellip
@@ -51,6 +51,7 @@ tactile_cost:
 
 options:
   vis_traj: True
+  vis_train: True
 
 hydra:
   run: 

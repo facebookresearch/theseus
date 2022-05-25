@@ -14,6 +14,6 @@ inner_optim:
 
 hydra:
   run:
-    dir: /private/home/taoshaf/Documents/theseus/examples/outputs/pose_graph_cube
+    dir: examples/outputs/pgo/pose_graph_cube
   sweep:
-    dir: /private/home/taoshaf/Documents/theseus/examples/outputs/pose_graph_cube/${now:%Y.%m.%d}/${now:%H.%M.%S}
+    dir: examples/outputs/pgo/pose_graph_cube

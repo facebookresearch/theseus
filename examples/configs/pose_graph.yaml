@@ -31,6 +31,6 @@ outer_optim:
 
 hydra:
   run:
-    dir: /private/home/taoshaf/Documents/theseus/examples/outputs/pose_graph
+    dir: examples/outputs/pgo/
   sweep:
-    dir: /private/home/taoshaf/Documents/theseus/examples/outputs/pose_graph/${now:%Y.%m.%d}/${now:%H.%M.%S}
+    dir: examples/outputs/pgo/

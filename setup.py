@@ -1,9 +1,3 @@
-#!/usr/bin/env python
-# Copyright (c) Meta Platforms, Inc. and affiliates.
-#
-# This source code is licensed under the MIT license found in the
-# LICENSE file in the root directory of this source tree.
-
 from pathlib import Path
 import setuptools
 import os
@@ -51,7 +45,7 @@ setuptools.setup(
     description="A library for differentiable nonlinear optimization.",
     long_description=long_description,
     long_description_content_type="text/markdown",
-    url="https://github.com/facebookresearch/theseus",
+    url="anonymous url",
     keywords="differentiable optimization, nonlinear least squares, factor graphs",
     packages=setuptools.find_packages(),
     classifiers=[

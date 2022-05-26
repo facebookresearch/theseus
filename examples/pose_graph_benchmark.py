@@ -8,22 +8,13 @@ from scipy.io import savemat
 @hydra.main(config_path="./configs/", config_name="pose_graph_benchmark")
 def main(cfg):
     dataset_name = cfg.dataset
-    file_path = (
-        f"/private/home/taoshaf/Documents/theseus/datasets/{dataset_name}_init.g2o"
-    )
+    file_path = f"datasets/pose_graph/{dataset_name}_init.g2o"
     dtype = torch.float64
 
     th.SO3.SO3_EPS = 1e-6
 
     num_verts, verts, edges = theg.pose_graph.read_3D_g2o_file(file_path, dtype=dtype)
     d = 3
-    # initial_guess = loadmat(init_path)
-    # init_R = torch.from_numpy(initial_guess['R'])
-    # init_t = torch.from_numpy(initial_guess['t'])
-
-    # for n in range(num_verts):
-    #     verts[n].data[:, :, :d] = init_R[:, n * d:n * d + d]
-    #     verts[n].data[:, :, d] = init_t[:, n] - init_t[:, 0]
 
     objective = th.Objective(dtype)
 

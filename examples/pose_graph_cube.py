@@ -23,6 +23,7 @@ use_batches = True
 device = "cpu"
 dtype = torch.float64
 
+DATASET_DIR = pathlib.Path.cwd() / "data" / "pose_graph"
 
 def get_batch_data(pg_batch: theg.PoseGraphDataset, pose_indices: List[int]):
     batch = {
@@ -142,7 +143,7 @@ def main(cfg):
 
     for n in range(cfg.dataset_size):
         num_poses, poses_n, edges_n = theg.pose_graph.read_3D_g2o_file(
-            (f"datasets/pose_graph/cube/{num_poses}_poses_0.2_cube_{n}.g2o"),
+            (f"{DATASET_DIR}/cube/{num_poses}_poses_0.2_cube_{n}.g2o"),
         )
         if len(poses) == 0:
             poses = poses_n
@@ -158,11 +159,11 @@ def main(cfg):
 
     # create (or load) dataset
     results_path = pathlib.Path(os.getcwd())
+    batch_size = cfg.batch_size
 
-    for batch_size in [8, 16]:
-        pg = theg.PoseGraphDataset(poses=poses, edges=edges, batch_size=batch_size)
-        pg.to(device)
-        run(cfg, pg, results_path, batch_size)
+    pg = theg.PoseGraphDataset(poses=poses, edges=edges, batch_size=batch_size)
+    pg.to(device)
+    run(cfg, pg, results_path, batch_size)
 
 
 if __name__ == "__main__":

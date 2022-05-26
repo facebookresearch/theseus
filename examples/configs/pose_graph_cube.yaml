@@ -1,8 +1,9 @@
 seed: 1
 solver_device: "cpu"
 
-num_poses: 1024
+num_poses: 256
 dataset_size: 256 
+batch_size: 32
 
 inner_optim:
   optimizer_cls: GaussNewton

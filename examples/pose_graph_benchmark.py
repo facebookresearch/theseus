@@ -2,13 +2,28 @@ import torch
 import theseus as th
 import theseus.utils.examples as theg
 import hydra
+import pathlib
 from scipy.io import savemat
 
+
+# To run this example, you will need the cube datasets available at
+# https://drive.google.com/file/d/1rDWMh9PP94D1aYy0ueahBQE_JVD_e88c/view?usp=sharing
+#
+# The steps below should let you run the example.
+# From the root project folder do:
+#   mkdir data
+#   cd data
+#   cp your/path/pose_graph_data.tar.gz .
+#   tar -xzvf pose_graph_data.tar.gz
+#   cd ..
+#   python examples/pose_graph_benchmark.py
+
+DATASET_DIR = pathlib.Path.cwd() / "data" / "pose_graph"
 
 @hydra.main(config_path="./configs/", config_name="pose_graph_benchmark")
 def main(cfg):
     dataset_name = cfg.dataset
-    file_path = f"datasets/pose_graph/{dataset_name}_init.g2o"
+    file_path = f"{DATASET_DIR}/{dataset_name}_init.g2o"
     dtype = torch.float64
 
     th.SO3.SO3_EPS = 1e-6

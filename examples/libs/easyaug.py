@@ -1,7 +1,3 @@
-# Copyright 2004-present Facebook. All Rights Reserved.
-#
-# Author: Daniel DeTone (ddetone)
-
 import math
 import warnings
 from typing import Optional, NamedTuple
@@ -81,7 +77,7 @@ def check_input(inp: torch.Tensor):
     return
 
 
-# Note(dd): It was a pain to update kornia, so I took this from the kornia directly.
+# Note: It was a pain to update kornia, so I took this from the kornia directly.
 def get_perspective_transform(src, dst):
     r"""Calculates a perspective transform from four pairs of the corresponding
     points.
@@ -654,7 +650,7 @@ class RandomPhotoAug(object):
         kernel_size = int(kernel_sizes.max().item())
         # Generate a different motion blur kernel for each batch.
         kernel = torch.zeros((B, kernel_size, kernel_size)).to(inp)
-        # TODO(dd): figure out how to vectorize this.
+        # TODO: figure out how to vectorize this.
         for i, ks in enumerate(kernel_sizes):
             off = torch.div((kernel_size - ks), 2, rounding_mode="floor")
             start = int(off)

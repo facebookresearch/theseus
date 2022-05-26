@@ -4,6 +4,7 @@
 # LICENSE file in the root directory of this source tree.
 
 import abc
+from typing import Type
 
 import numpy as np
 from scipy.sparse import csc_matrix, csr_matrix
@@ -16,7 +17,7 @@ class SparseStructure(abc.ABC):
         row_ptr: np.ndarray,
         num_rows: int,
         num_cols: int,
-        dtype: np.dtype = np.float_,
+        dtype: Type = np.float_,
     ):
         self.col_ind = col_ind
         self.row_ptr = row_ptr

@@ -240,7 +240,6 @@ class TactilePushingTrainer:
             end_event = torch.cuda.Event(enable_timing=True)
             start_event.record()
             torch.cuda.reset_max_memory_allocated()
-            print(obj_poses_gt.shape)
             theseus_outputs, info = self.pose_estimator.forward(
                 theseus_inputs,
                 optimizer_kwargs={

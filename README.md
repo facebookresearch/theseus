@@ -26,4 +26,18 @@ The current focus is on nonlinear least squares with support for sparsity, batch
 
 ## NeurIPS'22 Experiments
 See the `neurips22_scripts` folder for scripts that run the experiments described in the paper.
-The python scripts with the learning loops can be found under the `examples` folder. 
+Some other relevant files to look at:
+
+* Pose Graph Optimization:
+    - `examples/pose_graph_{cube/synthetic}.py`: Puts together optimization layer and implements outer loop. 
+
+* Tactile State Estimation:
+    - `utils/examples/tactile_pose_estimation/trainer.py`: Main outer learning loop.
+    - `utils/examples/tactile_pose_estimation/pose_estimator.py`: Puts together the optimization layer.
+
+* Bundle Adjustment:
+    - `examples/bundle_adjustment.py`: Puts together optimization layer and implements outer loop. 
+
+* Motion Planning:
+    - `utils/examples/motion_planning/motion_planner.py`: Puts together optimization layer.
+    - `examples/motion_planning_2d.py`: Implements outer loop.

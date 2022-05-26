@@ -136,7 +136,6 @@ def run_learning_loop(cfg):
 
             # Get the initial trajectory (to use for logging)
             motion_planner.objective.setup(planner_inputs)
-            # motion_planner.objective.update(planner_inputs)
             initial_trajectory = motion_planner.get_trajectory()
             with torch.no_grad():
                 batch_error = motion_planner.objective.error_squared_norm().mean() / 2

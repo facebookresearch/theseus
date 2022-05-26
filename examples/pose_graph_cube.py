@@ -16,6 +16,18 @@ from theseus.utils.examples.pose_graph.dataset import PoseGraphEdge
 from typing import List, cast, Type
 from scipy.io import savemat
 
+# To run this example, you will need the cube datasets available at
+# https://drive.google.com/file/d/1rDWMh9PP94D1aYy0ueahBQE_JVD_e88c/view?usp=sharing
+#
+# The steps below should let you run the example.
+# From the root project folder do:
+#   mkdir data
+#   cd data
+#   cp your/path/pose_graph_data.tar.gz .
+#   tar -xzvf pose_graph_data.tar.gz
+#   cd ..
+#   python examples/pose_graph_cube.py
+
 # Logger
 log = logging.getLogger(__name__)
 

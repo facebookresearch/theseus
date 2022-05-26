@@ -14,17 +14,17 @@ import theseus.utils.examples as theg
 
 
 # To run this example, you will need a motion planning dataset available at
-# https://dl.fbaipublicfiles.com/theseus/motion_planning_dataset.tar.gz
+# https://drive.google.com/file/d/1JaYXQESjlYasCy4I0NKPtKV1N3H0GebY/view?usp=sharing
 #
 # The steps below should let you run the example.
 # From the root project folder do:
-#   mkdir expts
-#   cd expts
-#   wget https://dl.fbaipublicfiles.com/theseus/motion_planning_data.tar.gz
+#   mkdir data
+#   cd data
+#   cp your/path/tactile_pushing_data.tar.gz .
 #   tar -xzvf motion_planning_data.tar.gz
 #   cd ..
 #   python examples/motion_planning_2d.py
-DATASET_DIR = pathlib.Path.cwd() / "expts" / "motion-planning-2d" / "dataset"
+DATASET_DIR = pathlib.Path.cwd() / "data" / "motion-planning-2d" / "dataset"
 
 
 def plot_and_save_trajectories(

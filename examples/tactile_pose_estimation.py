@@ -13,17 +13,17 @@ import theseus.utils.examples as theg
 logger = logging.getLogger(__name__)
 
 # To run this example, you will need a tactile pushing dataset available at
-# https://dl.fbaipublicfiles.com/theseus/tactile_pushing_data.tar.gz
+# https://drive.google.com/file/d/1Wc9SkCmZQ3gL0UWHSOkqfq8SclPwoSW2/view?usp=sharing
 #
 # The steps below should let you run the example.
 # From the root project folder do:
-#   mkdir expts
-#   cd expts
-#   wget https://dl.fbaipublicfiles.com/theseus/tactile_pushing_data.tar.gz
+#   mkdir data
+#   cd data
+#   cp your/path/tactile_pushing_data.tar.gz .
 #   tar -xzvf tactile_pushing_data.tar.gz
 #   cd ..
 #   python examples/tactile_pose_estimation.py
-EXP_PATH = pathlib.Path.cwd() / "expts" / "tactile-pushing"
+EXP_PATH = pathlib.Path.cwd() / "data" / "tactile-pushing"
 torch.set_default_dtype(torch.double)
 
 device = torch.device("cuda" if torch.cuda.is_available() else "cpu")

@@ -2,13 +2,16 @@ import torch
 import theseus as th
 import theseus.utils.examples as theg
 import hydra
+import pathlib
 from scipy.io import savemat
 
+
+DATASET_DIR = pathlib.Path.cwd() / "data" / "pose_graph"
 
 @hydra.main(config_path="./configs/", config_name="pose_graph_benchmark")
 def main(cfg):
     dataset_name = cfg.dataset
-    file_path = f"datasets/pose_graph/{dataset_name}_init.g2o"
+    file_path = f"{DATASET_DIR}/{dataset_name}_init.g2o"
     dtype = torch.float64
 
     th.SO3.SO3_EPS = 1e-6

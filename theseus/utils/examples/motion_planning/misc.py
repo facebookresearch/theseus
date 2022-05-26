@@ -180,10 +180,10 @@ def generate_trajectory_figs(
                 patch_coll = _add_robot_to_trajectory(col, row, radius)
                 axs.add_collection(patch_coll)
             patches.append(mpl.patches.Patch(color=colors[t_idx], label=labels[t_idx]))
-        patches.append(
-            mpl.patches.Patch(color="magenta", label=f"radius = {robot_radius}")
-        )
-        axs.legend(handles=patches, fontsize=10)
+        patches.append(mpl.patches.Patch(color="magenta"))
+        axs.legend(handles=patches[:-1], fontsize=16)
+        axs.set_yticks([])
+        axs.set_xticks([])
         fig.tight_layout()
         figures.append(fig)
     return figures

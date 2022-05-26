@@ -81,7 +81,7 @@ def run_learning_loop(cfg):
             for i in range(len(image_data["obj_opt"])):
                 save_dir = root_path / f"img_{i}_train"
                 save_dir.mkdir(parents=True, exist_ok=True)
-                save_fname = save_dir / f"epoch{epoch}.png"
+                save_fname = save_dir / f"epoch{epoch}.pdf"
                 theg.visualize_tactile_push2d(
                     obj_poses=image_data["obj_opt"][i],
                     eff_poses=image_data["eff_opt"][i],
@@ -106,7 +106,7 @@ def run_learning_loop(cfg):
             for i in range(len(image_data["obj_opt"])):
                 save_dir = root_path / f"img_{i}"
                 save_dir.mkdir(parents=True, exist_ok=True)
-                save_fname = save_dir / f"epoch{epoch}.png"
+                save_fname = save_dir / f"epoch{epoch}.pdf"
                 theg.visualize_tactile_push2d(
                     obj_poses=image_data["obj_opt"][i],
                     eff_poses=image_data["eff_opt"][i],

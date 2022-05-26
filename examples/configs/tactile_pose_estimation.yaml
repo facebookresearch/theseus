@@ -26,7 +26,7 @@ inner_optim:
 train:
   # options: "weights_only" or "weights_and_measurement_nn"
   mode: "weights_and_measurement_nn"
-  batch_size: 8
+  batch_size: 1
   num_epochs: 200
   lr: 3e-4
   optimizer: "adam" # "adam", "rmsprop"
@@ -51,8 +51,8 @@ tactile_cost:
 
 options:
   vis_traj: True
-  vis_train: True
+  vis_train: true
 
 hydra:
   run: 
-    dir: examples/outputs
+    dir: examples/outputs/tactile

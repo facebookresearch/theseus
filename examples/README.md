@@ -9,6 +9,7 @@ problem, inspired by [Bhardwaj et al. 2020](https://arxiv.org/pdf/1907.09591.pdf
 tactile pose estimation, as described in [Sodhi et al. 2021](https://arxiv.org/abs/1705.10664)
 - backward_modes.py: Shows how to compute derivatives through Theseus solves and switch between backward modes.
 - se2_inverse.py: Is an example of numerically computing the inverse of SE2. 
+- homography_estimation.py: Is an example of learning features for dense feature-metric alignment of two images. Homography estimation happends in the inner loop with LM, and outer loop uses Adam with a four corner error to drive the feature optmization.
 
 These can be run from your root `theseus` directory by doing
 
@@ -17,6 +18,7 @@ These can be run from your root `theseus` directory by doing
     python examples/tactile_pose_estimation.py
     python examples/backward_modes.py
     python examples/se2_inverse.py
+    python examples/homography_estimation.py
 
 The motion planning and tactile estimation examples require `hydra` installation which you can obtain
 by running.

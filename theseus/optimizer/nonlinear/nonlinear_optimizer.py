@@ -216,7 +216,13 @@ class NonlinearOptimizer(Optimizer, abc.ABC):
         **kwargs,
     ) -> NonlinearOptimizerInfo:
         converged_indices = torch.zeros_like(info.last_err).bool()
+        self.state_history = {}
         for it_ in range(start_iter, start_iter + num_iter):
+            states = {}
+            for v in self.objective.optim_vars:
+                states[v] = self.objective.get_optim_var(v).copy()
+            self.state_history[it_] = states
+
             # do optimizer step
             self.linear_solver.linearization.linearize()
             try:

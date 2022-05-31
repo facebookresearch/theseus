@@ -44,6 +44,8 @@ class MockCostWeight(th.CostWeight):
         self, the_data, name=None, add_dummy_var_with_name=None, add_optim_var=None
     ):
         super().__init__(name=name)
+        if isinstance(the_data, torch.Tensor):
+            the_data = th.Variable(the_data)
         self.the_data = the_data
         self.register_aux_var("the_data")
         if add_dummy_var_with_name:
@@ -55,7 +57,7 @@ class MockCostWeight(th.CostWeight):
             self.register_optim_var(add_optim_var.name)
 
     def weight_error(self, error):
-        return self.the_data * error
+        return self.the_data.data * error
 
     def weight_jacobians_and_error(self, jacobians, error):
         raise NotImplementedError(

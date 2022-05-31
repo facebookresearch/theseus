@@ -113,7 +113,7 @@ class TactilePoseEstimator:
         for i in range(time_steps):
             if i == 0:
                 objective.add(
-                    th.eb.VariableDifference(
+                    th.Difference(
                         obj_poses[i],
                         motion_capture_weight,
                         obj_start_pose,
@@ -166,7 +166,7 @@ class TactilePoseEstimator:
             )
 
             objective.add(
-                th.eb.VariableDifference(
+                th.Difference(
                     eff_poses[i],
                     motion_capture_weight,
                     motion_captures[i],
@@ -181,7 +181,7 @@ class TactilePoseEstimator:
             for pose_list in [obj_poses, eff_poses]:
                 for pose in pose_list:
                     objective.add(
-                        th.eb.VariableDifference(
+                        th.Difference(
                             pose, reg_w, identity_se2, name=f"reg_{pose.name}"
                         )
                     )

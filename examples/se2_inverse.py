@@ -33,7 +33,7 @@ def run(x1: LieGroup, x2: LieGroup, num_iters=10, use_lie_tangent=True):
     )
     for i in range(num_iters):
         optim.zero_grad()
-        cf = th.eb.VariableDifference(x1.inverse(), th.ScaleCostWeight(1.0), x2)
+        cf = th.Difference(x1.inverse(), th.ScaleCostWeight(1.0), x2)
         loss = cf.error().norm()
         if i % 100 == 0:
             print(
@@ -49,7 +49,7 @@ def run(x1: LieGroup, x2: LieGroup, num_iters=10, use_lie_tangent=True):
 
         scheduler.step()
 
-    cf = th.eb.VariableDifference(x1.inverse(), th.ScaleCostWeight(1.0), x2)
+    cf = th.Difference(x1.inverse(), th.ScaleCostWeight(1.0), x2)
     loss = cf.error().norm()
     print(
         "iter {}: loss is {:.10f}, cos(theta)^2 + sin(theta)^2 is {:.10f}".format(

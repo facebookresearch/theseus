@@ -145,9 +145,7 @@ def run(cfg: omegaconf.OmegaConf, results_path: pathlib.Path):
             else:
                 assert False
             objective.add(
-                th.eb.VariableDifference(
-                    var, damping_weight, target, name=f"reg_{name}"
-                )
+                th.Difference(var, damping_weight, target, name=f"reg_{name}")
             )
 
     camera_pose_vars: List[th.LieGroup] = [
@@ -160,7 +158,7 @@ def run(cfg: omegaconf.OmegaConf, results_path: pathlib.Path):
             if np.random.rand() > cfg.inner_optim.ratio_known_cameras:
                 continue
             objective.add(
-                th.eb.VariableDifference(
+                th.Difference(
                     camera_pose_vars[i],
                     camera_weight,
                     ba.gt_cameras[i].pose,

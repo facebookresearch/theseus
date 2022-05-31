@@ -21,10 +21,10 @@ def evaluate_numerical_jacobian_variable_difference(Group, tol):
     for batch_size in [1, 10, 100]:
         v0 = Group.rand(batch_size, dtype=torch.float64, generator=rng)
         target = Group.rand(batch_size, dtype=torch.float64, generator=rng)
-        cost_function = th.eb.VariableDifference(v0, cost_weight, target)
+        cost_function = th.Difference(v0, cost_weight, target)
 
         def new_error_fn(groups):
-            new_cost_function = th.eb.VariableDifference(groups[0], cost_weight, target)
+            new_cost_function = th.Difference(groups[0], cost_weight, target)
             return th.Vector(data=new_cost_function.error())
 
         expected_jacs = numeric_jacobian(new_error_fn, [v0])
@@ -37,9 +37,7 @@ def evaluate_numerical_jacobian_variable_difference(Group, tol):
 def test_copy_variable_difference():
     v0 = th.Vector(data=torch.zeros(1, 1))
     target = th.Vector(data=torch.ones(1, 1))
-    cost_function = th.eb.VariableDifference(
-        v0, th.ScaleCostWeight(1.0), target, name="name"
-    )
+    cost_function = th.Difference(v0, th.ScaleCostWeight(1.0), target, name="name")
     cost_function2 = cost_function.copy(new_name="new_name")
     check_another_theseus_function_is_copy(
         cost_function, cost_function2, new_name="new_name"
@@ -68,7 +66,7 @@ def test_error_variable_difference_point2():
     for batch_size in [1, 10, 100]:
         p0 = th.Point2(torch.randn(batch_size, 2, generator=rng))
         target = th.Point2(torch.randn(batch_size, 2, generator=rng))
-        cost_function = th.eb.VariableDifference(p0, cost_weight, target)
+        cost_function = th.Difference(p0, cost_weight, target)
         expected_error = p0 - target
         error = cost_function.error()
         assert torch.allclose(expected_error.data, error.data)
@@ -87,9 +85,7 @@ def test_error_variable_difference_so2():
         for j in range(num_val):
             meas = th.SO2(theta=so2_data[i, :1])
             so2 = th.SO2(theta=so2_data[j, :1])
-            dist_cf = th.eb.VariableDifference(
-                so2, th.ScaleCostWeight(1.0), target=meas
-            )
+            dist_cf = th.Difference(so2, th.ScaleCostWeight(1.0), target=meas)
             assert np.allclose(dist_cf.error().squeeze().item(), sq_dist_errors[k])
             k += 1
 
@@ -112,9 +108,7 @@ def test_error_variable_difference_se2():
         for j in range(num_val):
             meas = th.SE2(x_y_theta=se2_data[i, :].unsqueeze(0))
             se2 = th.SE2(x_y_theta=se2_data[j, :].unsqueeze(0))
-            dist_cf = th.eb.VariableDifference(
-                se2, th.ScaleCostWeight(1.0), target=meas
-            )
+            dist_cf = th.Difference(se2, th.ScaleCostWeight(1.0), target=meas)
             error = dist_cf.error()
             assert np.allclose(error.squeeze().numpy(), sq_dist_errors[k])
             k += 1

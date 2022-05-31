@@ -20,12 +20,12 @@ num_verts, verts, edges = theg.pose_graph.read_3D_g2o_file(file_path, dtype=dtyp
 objective = th.Objective(dtype)
 
 for edge in edges:
-    cost_func = th.eb.Between(
+    cost_func = th.Between(
         verts[edge.i], verts[edge.j], edge.weight, edge.relative_pose
     )
     objective.add(cost_func)
 
-pose_prior = th.eb.VariableDifference(
+pose_prior = th.Difference(
     var=verts[0],
     cost_weight=th.ScaleCostWeight(torch.tensor(1e-6, dtype=dtype)),
     target=verts[0].copy(new_name=verts[0].name + "PRIOR"),

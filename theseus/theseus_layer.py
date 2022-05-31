@@ -217,7 +217,12 @@ class TheseusLayerDLMForward(torch.autograd.Function):
 
         # Solve backward objective.
         bwd_objective.update(bwd_data)
-        bwd_optimizer.optimize()
+        with torch.no_grad():
+            bwd_optimizer.linear_solver.linearization.linearize()
+            delta = bwd_optimizer.linear_solver.solve()
+            bwd_optimizer.retract_and_update_variables(
+                delta, None, 1.0, force_update=True
+            )
 
         # Compute gradients.
         with torch.enable_grad():

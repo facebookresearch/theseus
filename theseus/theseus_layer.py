@@ -50,7 +50,10 @@ class TheseusLayer(nn.Module):
                 self._dlm_bwd_objective = _obj
                 self._dlm_bwd_optimizer = _opt
 
+            # Tensors cannot be passed inside containers, else we run into memory leaks.
             input_keys, input_vals = zip(*input_data.items())
+            differentiable_tensors = [t for t in input_vals if t.requires_grad]
+
             *vars, info = TheseusLayerDLMForward.apply(
                 self.objective,
                 self.optimizer,
@@ -58,8 +61,10 @@ class TheseusLayer(nn.Module):
                 self._dlm_bwd_objective,
                 self._dlm_bwd_optimizer,
                 dlm_epsilon,
+                len(input_keys),
                 *input_keys,
                 *input_vals,
+                *differentiable_tensors,
             )
         else:
             vars, info = _forward(
@@ -145,26 +150,24 @@ class TheseusLayerDLMForward(torch.autograd.Function):
         bwd_objective,
         bwd_optimizer,
         epsilon,
+        n,
         *input_data,
     ):
-        n = len(input_data) // 2
         input_keys = input_data[:n]
-        input_vals = input_data[n:]
+        input_vals = input_data[n : 2 * n]
+        differentiable_tensors = input_data[2 * n :]
         ctx.n = n
+        ctx.k = len(differentiable_tensors)
 
         input_data = dict(zip(input_keys, input_vals))
         ctx.input_keys = input_keys
-
-        differentiable_keys = [k for k in input_keys if input_data[k].requires_grad]
-        differentiable_tensors = [v for v in input_vals if v.requires_grad]
-        ctx.differentiable_keys = differentiable_keys
 
         optim_tensors, info = _forward(
             objective, optimizer, optimizer_kwargs, input_data
         )
 
         # Skip computation if there are no differentiable inputs.
-        if len(differentiable_keys) > 0:
+        if ctx.k > 0:
             ctx.bwd_objective = bwd_objective
             ctx.bwd_optimizer = bwd_optimizer
             ctx.epsilon = epsilon
@@ -176,29 +179,31 @@ class TheseusLayerDLMForward(torch.autograd.Function):
                     differentiable_tensors,
                     allow_unused=True,
                 )
-            ctx.k = len(differentiable_keys)
-            ctx.save_for_backward(*input_vals, *grad_sol, *optim_tensors)
+            ctx.save_for_backward(
+                *input_vals, *grad_sol, *differentiable_tensors, *optim_tensors
+            )
         return (*optim_tensors, info)
 
     @staticmethod
     @once_differentiable
     def backward(ctx, *grad_outputs):
+        n, k = ctx.n, ctx.k
         saved_tensors = ctx.saved_tensors
-        input_vals = saved_tensors[: ctx.n]
-        grad_sol = saved_tensors[ctx.n : ctx.n + ctx.k]
-        optim_tensors = saved_tensors[ctx.n + ctx.k :]
+        input_vals = saved_tensors[:n]
+        grad_sol = saved_tensors[n : n + k]
+        differentiable_tensors = saved_tensors[n + k : n + k + k]
+        optim_tensors = saved_tensors[n + k + k :]
         grad_outputs = grad_outputs[:-1]
 
         bwd_objective = ctx.bwd_objective
         bwd_optimizer = ctx.bwd_optimizer
         epsilon = ctx.epsilon
         input_keys = ctx.input_keys
-        differentiable_keys = ctx.differentiable_keys
 
         # Update the optim vars to their solutions.
         bwd_data = dict(zip(input_keys, input_vals))
-        sol_values = dict(zip(bwd_objective.optim_vars.keys(), optim_tensors))
-        bwd_data.update(sol_values)
+        for k, v in zip(bwd_objective.optim_vars.keys(), optim_tensors):
+            bwd_data[k] = v.detach()
 
         # Add in gradient values.
         grad_data = {
@@ -214,8 +219,6 @@ class TheseusLayerDLMForward(torch.autograd.Function):
         bwd_objective.update(bwd_data)
         bwd_optimizer.optimize()
 
-        differentiable_tensors = [bwd_data[k] for k in differentiable_keys]
-
         # Compute gradients.
         with torch.enable_grad():
             grad_perturbed = torch.autograd.grad(
@@ -224,19 +227,12 @@ class TheseusLayerDLMForward(torch.autograd.Function):
                 allow_unused=True,
             )
 
-        grads = []
-        i = 0
-        for k in input_keys:
-            if i < len(differentiable_keys) and k == differentiable_keys[i]:
-                if grad_sol[i] is not None:
-                    grads.append((grad_sol[i] - grad_perturbed[i]) / epsilon)
-                else:
-                    grads.append(None)
-                i += 1
-            else:
-                grads.append(None)
-        nones = [None] * len(grads)
-        return (None, None, None, None, None, None, *nones, *grads)
+        nones = [None] * (ctx.n * 2)
+        grads = [
+            (gs - gp) / epsilon if gs is not None else None
+            for gs, gp in zip(grad_sol, grad_perturbed)
+        ]
+        return (None, None, None, None, None, None, None, *nones, *grads)
 
 
 def _dlm_perturbation(optim_vars, aux_vars):

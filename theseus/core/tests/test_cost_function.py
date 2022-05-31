@@ -181,7 +181,7 @@ def test_autodiff_cost_function_cost_weight():
             cost_weight=cost_weight,
             aux_vars=aux_vars,
         )
-        assert torch.allclose(cost_function.weight.the_data, cost_weight_value)
+        assert torch.allclose(cost_function.weight.the_data.data, cost_weight_value)
         weighted_error = cost_function.weighted_error()
         direct_error_computation = cost_weight_value * torch.ones(batch_size, 1)
         assert torch.allclose(weighted_error, direct_error_computation)

@@ -85,7 +85,7 @@ def test_add():
         _create_cost_function_with_n_vars_and_m_aux(
             "yet_another_2",
             ["yet_var_2"],
-            "yet_aux_2",
+            ["yet_aux_2"],
             cost_weight_with_conflict_in_aux_var,
         )
     )
@@ -100,7 +100,7 @@ def test_add():
         _create_cost_function_with_n_vars_and_m_aux(
             "yet_another_3",
             ["yet_var_3"],
-            "yet_aux_3",
+            ["yet_aux_3"],
             cost_weight_with_conflict_in_var,
         )
     )

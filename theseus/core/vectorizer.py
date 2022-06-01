@@ -30,9 +30,16 @@ class _CostFunctionWrapper(CostFunction):
         return self.cost_fn.copy(new_name=new_name)
 
 
-class Vectorizer:
+# This class replaces the Objective's iterator for one that takes advantage of
+# cost function vectorization
+# TODO:
+#   - Actually add vectorization logic
+#   - Add some hook to call after Objective.update()
+class Vectorize:
     def __init__(self, objective: Objective):
         self._cost_function_wrappers: List[_CostFunctionWrapper] = []
 
         for cost_function in objective.cost_functions.values():
             self._cost_function_wrappers.append(_CostFunctionWrapper(cost_function))
+
+        objective._cost_functions_iterable = self._cost_function_wrappers

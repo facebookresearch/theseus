@@ -11,7 +11,7 @@ from .core import (
     Objective,
     ScaleCostWeight,
     Variable,
-    Vectorizer,
+    Vectorize,
 )
 from .geometry import (
     SE2,

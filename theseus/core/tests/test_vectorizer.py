@@ -1,6 +1,7 @@
 import torch
 
 import theseus as th
+from theseus.core.vectorizer import _CostFunctionWrapper
 
 
 def test_cost_function_wrappers_vars_and_err():
@@ -25,8 +26,7 @@ def test_cost_function_wrappers_vars_and_err():
         # Chech that vectorizer's has the correct number of wrappers
         objective.add(cf1)
         objective.add(cf2)
-        vectorizer = th.Vectorizer(objective)
-        assert len(vectorizer._cost_function_wrappers) == 2
+        th.Vectorize(objective)
 
         # Update weights after creating vectorizer to see if data is picked up correctly
         w1 = torch.randn(1, 1)  # also check that broadcasting works
@@ -37,7 +37,10 @@ def test_cost_function_wrappers_vars_and_err():
             return hasattr(cf, var.name) and getattr(cf, var.name) is var
 
         # Check that the vectorizer's cost functions have the right variables and error
-        for cf in vectorizer._cost_function_wrappers:
+        saw_cf1 = False
+        saw_cf2 = False
+        for cf in objective:
+            assert isinstance(cf, _CostFunctionWrapper)
             optim_vars = [v for v in cf.optim_vars]
             aux_vars = [v for v in cf.aux_vars]
             assert t1 in aux_vars
@@ -47,9 +50,14 @@ def test_cost_function_wrappers_vars_and_err():
                 assert v1 in optim_vars and cw1.scale in aux_vars
                 assert w_err.allclose((v1.data - t1.data) * w1)
                 assert _check_attr(cf, v1) and _check_attr(cf, cw1.scale)
-            else:
+                saw_cf1 = True
+            elif cf.cost_fn is cf2:
                 assert v2 in optim_vars and odummy in optim_vars
                 assert cw2.scale in aux_vars and adummy in aux_vars
                 assert _check_attr(cf, v2) and _check_attr(cf, odummy)
                 assert _check_attr(cf, cw2.scale) and _check_attr(cf, adummy)
                 assert w_err.allclose((v2.data - t1.data) * w2)
+                saw_cf2 = True
+            else:
+                assert False
+        assert saw_cf1 and saw_cf2

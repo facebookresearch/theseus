@@ -5,7 +5,7 @@
 
 import warnings
 from collections import OrderedDict
-from typing import Dict, List, Optional, Sequence, Union
+from typing import Dict, Iterable, List, Optional, Sequence, Union
 
 import torch
 
@@ -60,6 +60,9 @@ class Objective:
         # an optimizer to run on a stale version of the objective (since changing the
         # objective structure might break optimizer initialization).
         self.current_version = 0
+
+        # This gets replaced when cost function vectorization is used
+        self._cost_functions_iterable: Optional[Iterable[CostFunction]] = None
 
     def _add_function_variables(
         self,
@@ -472,7 +475,9 @@ class Objective:
 
     # iterates over cost functions
     def __iter__(self):
-        return iter([f for f in self.cost_functions.values()])
+        if self._cost_functions_iterable is None:
+            return iter([cf for cf in self.cost_functions.values()])
+        return iter([cf for cf in self._cost_functions_iterable])
 
     # Applies to() with given args to all tensors in the objective
     def to(self, *args, **kwargs):

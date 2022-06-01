@@ -7,4 +7,4 @@ from .cost_function import AutoDiffCostFunction, CostFunction, ErrFnType
 from .cost_weight import CostWeight, DiagonalCostWeight, ScaleCostWeight
 from .objective import Objective
 from .variable import Variable
-from .vectorizer import Vectorizer
+from .vectorizer import Vectorize

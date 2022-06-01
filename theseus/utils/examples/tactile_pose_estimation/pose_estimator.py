@@ -93,7 +93,7 @@ class TactilePoseEstimator:
         # -------------------------------------------------------------------- #
         # Creating cost functions
         # -------------------------------------------------------------------- #
-        #  - VariableDifference: Penalizes deviation between first object pose from
+        #  - Difference: Penalizes deviation between first object pose from
         #    a global pose prior.
         #  - QuasiStaticPushingPlanar: Penalizes deviation from velocity-only
         #    quasi-static dynamics model QuasiStaticPushingPlanar
@@ -102,7 +102,7 @@ class TactilePoseEstimator:
         #    `nn_measurements` is obtained from a network prediction.
         #  - EffectorObjectContactPlanar: Penalizes intersections between object and end
         #    effector based on the object sdf.
-        #  - VariableDifference: Penalizes deviations of end-effector poses from motion
+        #  - Difference: Penalizes deviations of end-effector poses from motion
         #    capture readings
 
         # Loop over and add all cost functions,

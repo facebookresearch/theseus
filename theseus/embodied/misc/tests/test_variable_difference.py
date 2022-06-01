@@ -14,7 +14,7 @@ from theseus.core.tests.common import (
 from theseus.utils import numeric_jacobian
 
 
-def evaluate_numerical_jacobian_variable_difference(Group, tol):
+def evaluate_numerical_jacobian_local_cost_fn(Group, tol):
     rng = torch.Generator()
     rng.manual_seed(1)
     cost_weight = th.ScaleCostWeight(1)
@@ -34,7 +34,7 @@ def evaluate_numerical_jacobian_variable_difference(Group, tol):
         assert torch.allclose(jacobians[0], expected_jacs[0], atol=tol)
 
 
-def test_copy_variable_difference():
+def test_copy_local_cost_fn():
     v0 = th.Vector(data=torch.zeros(1, 1))
     target = th.Vector(data=torch.ones(1, 1))
     cost_function = th.Difference(v0, th.ScaleCostWeight(1.0), target, name="name")
@@ -52,14 +52,14 @@ def test_copy_variable_difference():
     assert cost_function2.name == "new_name"
 
 
-def test_jacobian_variable_difference():
-    evaluate_numerical_jacobian_variable_difference(th.SO2, 1e-6)
-    evaluate_numerical_jacobian_variable_difference(th.SE2, 1e-8)
-    evaluate_numerical_jacobian_variable_difference(th.SO3, 1e-6)
-    evaluate_numerical_jacobian_variable_difference(th.SE3, 1e-6)
+def test_jacobian_local_cost_fn():
+    evaluate_numerical_jacobian_local_cost_fn(th.SO2, 1e-6)
+    evaluate_numerical_jacobian_local_cost_fn(th.SE2, 1e-8)
+    evaluate_numerical_jacobian_local_cost_fn(th.SO3, 1e-6)
+    evaluate_numerical_jacobian_local_cost_fn(th.SE3, 1e-6)
 
 
-def test_error_variable_difference_point2():
+def test_error_local_cost_fn_point2():
     rng = torch.Generator()
     rng.manual_seed(0)
     cost_weight = th.ScaleCostWeight(1)
@@ -72,7 +72,7 @@ def test_error_variable_difference_point2():
         assert torch.allclose(expected_error.data, error.data)
 
 
-def test_error_variable_difference_so2():
+def test_error_local_cost_fn_so2():
     so2_data = torch.DoubleTensor(
         [-np.pi, -np.pi / 2, 0.0, np.pi / 2, np.pi]
     ).unsqueeze(1)
@@ -90,7 +90,7 @@ def test_error_variable_difference_so2():
             k += 1
 
 
-def test_error_variable_difference_se2():
+def test_error_local_cost_fn_se2():
     se2_data = torch.DoubleTensor(
         [
             [-1.1, 0.0, -np.pi],

@@ -112,7 +112,7 @@ class MotionPlanner:
         objective = th.Objective(dtype=torch.double)
 
         # First create the cost functions for the end point positions and velocities
-        # which are hard constraints, and can be implemented via VariableDifference cost
+        # which are hard constraints, and can be implemented via Difference cost
         # functions.
         objective.add(
             th.Difference(poses[0], boundary_cost_weight, start_point, name="pose_0")

@@ -76,3 +76,7 @@ from .optimizer.nonlinear import (
 from .theseus_layer import TheseusLayer
 
 import theseus.embodied as eb
+
+# Aliases for some standard cost functions
+Difference = eb.Local
+Between = eb.Between

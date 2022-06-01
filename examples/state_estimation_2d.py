@@ -237,7 +237,7 @@ def run_learning(mode_, path_data_, gps_targets_, measurements_):
     # ### GPS and between cost functions
     for i in range(path_length):
         cost_functions.append(
-            th.eb.VariableDifference(
+            th.Difference(
                 poses[i],
                 gps_cost_weights[i],
                 th.Point2(data=gps_targets_[i]),
@@ -247,7 +247,7 @@ def run_learning(mode_, path_data_, gps_targets_, measurements_):
         if i < path_length - 1:
             cost_functions.append(
                 (
-                    th.eb.Between(
+                    th.Between(
                         poses[i],
                         poses[i + 1],
                         between_cost_weights[i],

@@ -11,7 +11,7 @@ from theseus import CostFunction, CostWeight
 from theseus.geometry import LieGroup
 
 
-class VariableDifference(CostFunction):
+class Local(CostFunction):
     def __init__(
         self,
         var: LieGroup,
@@ -22,11 +22,11 @@ class VariableDifference(CostFunction):
         super().__init__(cost_weight, name=name)
         if not isinstance(var, target.__class__):
             raise ValueError(
-                "Variable for the VariableDifference inconsistent with the given target."
+                "Variable for the Local inconsistent with the given target."
             )
         if not var.dof() == target.dof():
             raise ValueError(
-                "Variable and target in the VariableDifference must have identical dof."
+                "Variable and target in the Local must have identical dof."
             )
         self.var = var
         self.target = target
@@ -44,7 +44,7 @@ class VariableDifference(CostFunction):
     def dim(self) -> int:
         return self.var.dof()
 
-    def _copy_impl(self, new_name: Optional[str] = None) -> "VariableDifference":
-        return VariableDifference(  # type: ignore
+    def _copy_impl(self, new_name: Optional[str] = None) -> "Local":
+        return Local(  # type: ignore
             self.var.copy(), self.weight.copy(), self.target.copy(), name=new_name
         )

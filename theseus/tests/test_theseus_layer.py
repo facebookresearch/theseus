@@ -13,7 +13,6 @@ import torch.nn.functional as F
 
 import theseus as th
 import theseus.utils as thutils
-from theseus.core.objective import _CFWrapper
 from theseus.core.tests.common import (
     MockCostFunction,
     MockCostWeight,
@@ -212,9 +211,6 @@ def _run_optimizer_test(
         linear_solver_cls=linear_solver_cls,
         use_learnable_error=use_learnable_error,
     )
-    # Check that once the layer is created, the iterator loops over CFWrappers
-    for cf in layer_ref.objective:
-        assert isinstance(cf, _CFWrapper)
     layer_ref.to(device)
     with torch.no_grad():
         input_values = {"coefficients": torch.ones(batch_size, 2, device=device) * 0.75}

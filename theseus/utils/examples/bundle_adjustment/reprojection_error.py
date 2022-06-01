@@ -9,7 +9,7 @@ import torch
 
 import theseus as th
 
-from .util import soft_loss_huber_like
+from .util import soft_loss_huber_like_reprojection
 
 
 class Reprojection(th.CostFunction):
@@ -66,10 +66,9 @@ class Reprojection(th.CostFunction):
 
         err = point_projection - self.image_feature_point.data
 
-        err_norm = torch.norm(err, dim=1).unsqueeze(1)
         loss_radius = torch.exp(self.log_loss_radius.data)
 
-        val, _ = soft_loss_huber_like(err_norm, loss_radius)
+        val, _ = soft_loss_huber_like_reprojection(err, loss_radius)
         return val
 
     def jacobians(self) -> Tuple[List[torch.Tensor], torch.Tensor]:
@@ -100,13 +99,10 @@ class Reprojection(th.CostFunction):
         ) + proj_sqn_jac * d_proj_factor.unsqueeze(2)
 
         err = point_projection - self.image_feature_point.data
-        err_norm = torch.norm(err, dim=1).unsqueeze(1)
-        err_dir = err / err_norm
-        norm_jac = torch.bmm(err_dir.unsqueeze(1), point_projection_jac)
         loss_radius = torch.exp(self.log_loss_radius.data)
+        val, der = soft_loss_huber_like_reprojection(err, loss_radius)
 
-        val, der = soft_loss_huber_like(err_norm, loss_radius)
-        soft_jac = norm_jac * der.unsqueeze(1)
+        soft_jac = torch.bmm(der, point_projection_jac)
 
         return [soft_jac[:, :, :6], soft_jac[:, :, 6:]], val
 

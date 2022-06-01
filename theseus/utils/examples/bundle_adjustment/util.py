@@ -31,6 +31,29 @@ def soft_loss_huber_like(
     return val, der
 
 
+# For reprojection cost functions where the loss is 2 dimensional,
+# x and y pixel loss, but the robust loss region is determined
+# by the norm of the (x, y) pixel loss.
+def soft_loss_huber_like_reprojection(
+    x: torch.Tensor, radius: torch.Tensor
+) -> Tuple[torch.Tensor, torch.Tensor]:
+    x_norm = torch.norm(x, dim=1).unsqueeze(1)
+    val, der = soft_loss_huber_like(x_norm, radius)
+    scaling = val / x_norm
+    x_loss = x * scaling
+
+    term1 = scaling[..., None] * torch.eye(2, dtype=x.dtype, device=x.device).reshape(
+        1, 2, 2
+    ).repeat(x.shape[0], 1, 1)
+    term2 = (
+        torch.bmm(x.unsqueeze(2), x.unsqueeze(1))
+        * ((der - scaling) / (x_norm**2))[..., None]
+    )
+    der = term1 + term2
+
+    return x_loss, der
+
+
 # ------------------------------------------------------------ #
 # ----------------------------- RNG -------------------------- #
 # ------------------------------------------------------------ #

@@ -1,5 +1,6 @@
 import threading
 
+import numpy as np
 import pyglet
 import torch
 import trimesh
@@ -21,9 +22,14 @@ def draw_camera(
 
 
 class BAViewer(trimesh.viewer.SceneViewer):
-    def __init__(self, belief_history):
+    def __init__(
+        self, belief_history, msg_history=None, cam_to_world=False, flip_z=True
+    ):
         self._it = 0
         self.belief_history = belief_history
+        self.msg_history = msg_history
+        self.cam_to_world = cam_to_world
+        self.flip_z = flip_z
         self.lock = threading.Lock()
 
         scene = trimesh.Scene()
@@ -94,6 +100,10 @@ class BAViewer(trimesh.viewer.SceneViewer):
                             ),
                         )
                     )
+                    if not self.cam_to_world:
+                        T = np.linalg.inv(T)
+                    if self.flip_z:
+                        T[:3, 2] *= -1.0
                     camera = draw_camera(
                         T, self.scene.camera.fov, self.scene.camera.resolution
                     )
@@ -106,6 +116,8 @@ class BAViewer(trimesh.viewer.SceneViewer):
 
                     cov = torch.linalg.inv(belief.precision[0])
                     ellipse = make_ellipse(point[0], cov)
+                    ellipse.visual.vertex_colors[:] = [255, 0, 0, 100]
+
                     self.scene.delete_geometry(f"ellipse_{n_pts}")
                     self.scene.add_geometry(ellipse, geom_name=f"ellipse_{n_pts}")
 
@@ -113,25 +125,52 @@ class BAViewer(trimesh.viewer.SceneViewer):
             points_tm = trimesh.PointCloud(points)
             self.scene.delete_geometry("points")
             self.scene.add_geometry(points_tm, geom_name="points")
+
+            if self.msg_history:
+                for msg in self.msg_history[self._it]:
+                    if msg.precision.count_nonzero() != 0:
+                        if msg.mean[0].dof() == 3 and "Reprojection" in msg.name:
+                            ellipse = make_ellipse(
+                                msg.mean[0][0], torch.linalg.inv(msg.precision[0])
+                            )
+                            if f"ellipse_{msg.name}" in self.scene.geometry:
+                                self.scene.delete_geometry(f"ellipse_{msg.name}")
+                            self.scene.add_geometry(
+                                ellipse, geom_name=f"ellipse_{msg.name}"
+                            )
+
             if self._it != 0:
                 self._update_vertex_list()
 
 
-def make_ellipse(mean, cov):
-    eigvals, eigvecs = torch.linalg.eigh(cov)
-
-    # rescale eigvals into range that fits in scene
-    print(eigvals)
+def make_ellipse(mean, cov, do_lines=False):
+    # eigvals_torch, eigvecs_torch = torch.linalg.eigh(cov)
+    eigvals, eigvecs = np.linalg.eigh(cov)  # eigenvecs are columns
+    # print("eigvals", eigvals)  # , eigvals_torch.numpy())
     eigvals = eigvals / 10
-    eigvals = torch.maximum(torch.tensor(0.7), eigvals)
-    eigvals = torch.minimum(torch.tensor(60.0), eigvals)
+    signs = np.sign(eigvals)
+    eigvals = np.clip(np.abs(eigvals), 1.0, 100, eigvals) * signs
 
-    rotation = torch.eye(4)
-    rotation[:3, :3] = eigvecs
+    if do_lines:
+        points = []
+        for i, eigvalue in enumerate(eigvals):
+            disp = eigvalue * eigvecs[:, i]
+            points.extend([mean + disp, mean - disp])
 
-    ellipse = trimesh.creation.icosphere()
-    ellipse.apply_scale(eigvals.numpy())
-    ellipse.apply_transform(rotation)
-    ellipse.apply_translation(mean)
+        paths = torch.cat(points).reshape(3, 2, 3)
+        lines = trimesh.load_path(paths)
 
-    return ellipse
+        return lines
+
+    else:
+        rotation = np.eye(4)
+        rotation[:3, :3] = eigvecs
+
+        ellipse = trimesh.creation.icosphere()
+        ellipse.apply_scale(eigvals)
+        ellipse.apply_transform(rotation)
+        ellipse.apply_translation(mean)
+        ellipse.visual.vertex_colors = trimesh.visual.random_color()
+        ellipse.visual.vertex_colors[:, 3] = 100
+
+        return ellipse

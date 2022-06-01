@@ -186,15 +186,14 @@ class Objective:
             self.cost_functions_for_weights[cost_function.weight] = []
 
             if cost_function.weight.num_optim_vars() > 0:
-                warnings.warn(
+                raise RuntimeError(
                     f"The cost weight associated to {cost_function.name} receives one "
                     "or more optimization variables. Differentiating cost "
                     "weights with respect to optimization variables is not currently "
                     "supported, thus jacobians computed by our optimizers will be "
                     "incorrect. You may want to consider moving the weight computation "
                     "inside the cost function, so that the cost weight only receives "
-                    "auxiliary variables.",
-                    RuntimeWarning,
+                    "auxiliary variables."
                 )
 
         self.cost_functions_for_weights[cost_function.weight].append(cost_function)

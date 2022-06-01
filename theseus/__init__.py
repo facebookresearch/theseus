@@ -80,3 +80,4 @@ import theseus.embodied as eb
 # Aliases for some standard cost functions
 Difference = eb.Local
 Between = eb.Between
+Local = eb.Local

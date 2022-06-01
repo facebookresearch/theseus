@@ -4,7 +4,7 @@
 # LICENSE file in the root directory of this source tree.
 
 import abc
-from typing import Any, List, Optional, Tuple, cast
+from typing import Any, Iterable, List, Optional, Tuple, cast
 
 import torch
 import torch.autograd.functional as autogradF
@@ -15,6 +15,19 @@ from theseus.geometry import Manifold
 from .cost_weight import CostWeight, ScaleCostWeight
 from .theseus_function import TheseusFunction
 from .variable import Variable
+
+
+def _register_vars_in_list(
+    cost_fn: TheseusFunction, var_list_: Iterable[Variable], is_optim: bool = False
+):
+    for var_ in var_list_:
+        if hasattr(cost_fn, var_.name):
+            raise RuntimeError(f"Variable name {var_.name} is not allowed.")
+        setattr(cost_fn, var_.name, var_)
+        if is_optim:
+            cost_fn.register_optim_var(var_.name)
+        else:
+            cost_fn.register_aux_var(var_.name)
 
 
 # A cost function is defined by the variables interacting in it,
@@ -111,22 +124,12 @@ class AutoDiffCostFunction(CostFunction):
         # this avoids doing aux_vars=[], which is a bad default since [] is mutable
         aux_vars = aux_vars or []
 
-        def _register_vars_in_list(var_list_, is_optim=False):
-            for var_ in var_list_:
-                if hasattr(self, var_.name):
-                    raise RuntimeError(f"Variable name {var_.name} is not allowed.")
-                setattr(self, var_.name, var_)
-                if is_optim:
-                    self.register_optim_var(var_.name)
-                else:
-                    self.register_aux_var(var_.name)
-
         if len(optim_vars) < 1:
             raise ValueError(
                 "AutodiffCostFunction must receive at least one optimization variable."
             )
-        _register_vars_in_list(optim_vars, is_optim=True)
-        _register_vars_in_list(aux_vars, is_optim=False)
+        _register_vars_in_list(self, optim_vars, is_optim=True)
+        _register_vars_in_list(self, aux_vars, is_optim=False)
 
         self._err_fn = err_fn
         self._dim = dim

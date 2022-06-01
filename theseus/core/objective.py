@@ -5,16 +5,40 @@
 
 import warnings
 from collections import OrderedDict
-from typing import Dict, List, Optional, Sequence, Union
+from typing import Dict, List, Optional, Sequence, Tuple, Union
 
 import torch
 
 from theseus.core.theseus_function import TheseusFunction
 from theseus.geometry.manifold import Manifold
 
-from .cost_function import CostFunction
+from .cost_function import CostFunction, _register_vars_in_list
 from .cost_weight import CostWeight
 from .variable import Variable
+
+
+# This wrapper takes a weighted cost function and makes a new one whose auxiliary
+# variables are the union of the cost function and the cost weight.
+class _CFWrapper(CostFunction):
+    def __init__(self, cost_fn: CostFunction):
+        super().__init__(cost_fn.weight, name=cost_fn.name)
+        self.cost_fn = cost_fn
+        _register_vars_in_list(self, cost_fn.optim_vars, is_optim=True)
+        aux_vars = [v for v in cost_fn.aux_vars]
+        aux_vars.extend([v for v in cost_fn.weight.aux_vars if v not in aux_vars])
+        _register_vars_in_list(self, aux_vars, is_optim=False)
+
+    def error(self) -> torch.Tensor:
+        return self.cost_fn.error()
+
+    def jacobians(self) -> Tuple[List[torch.Tensor], torch.Tensor]:
+        return self.cost_fn.jacobians()
+
+    def dim(self) -> int:
+        return self.cost_fn.dim()
+
+    def _copy_impl(self, new_name: Optional[str] = None) -> "CostFunction":
+        return self.cost_fn.copy(new_name=new_name)
 
 
 # If dtype is None, uses torch.get_default_dtype()
@@ -55,6 +79,8 @@ class Objective:
         self.device: torch.device = torch.device("cpu")
 
         self.dtype: Optional[torch.dtype] = dtype or torch.get_default_dtype()
+
+        self._cost_function_wrappers: List[_CFWrapper] = []
 
         # this increases after every add/erase operation, and it's used to avoid
         # an optimizer to run on a stale version of the objective (since changing the
@@ -482,3 +508,7 @@ class Objective:
         device, dtype, *_ = torch._C._nn._parse_to(*args, **kwargs)
         self.device = device or self.device
         self.dtype = dtype or self.dtype
+
+    def _create_cost_function_wrappers(self):
+        for cost_function in self.cost_functions.values():
+            self._cost_function_wrappers.append(_CFWrapper(cost_function))

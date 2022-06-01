@@ -498,6 +498,8 @@ class Objective:
 
     # iterates over cost functions
     def __iter__(self):
+        if len(self._cost_function_wrappers) > 0:
+            return iter([f for f in self._cost_function_wrappers])
         return iter([f for f in self.cost_functions.values()])
 
     # Applies to() with given args to all tensors in the objective

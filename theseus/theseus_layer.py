@@ -25,6 +25,7 @@ class TheseusLayer(nn.Module):
         self.objective = optimizer.objective
         self.optimizer = optimizer
         self._objectives_version = optimizer.objective.current_version
+        self.objective._create_cost_function_wrappers()
 
         self._dlm_bwd_objective = None
         self._dlm_bwd_optimizer = None

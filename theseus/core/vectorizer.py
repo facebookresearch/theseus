@@ -1,5 +1,5 @@
 from collections import defaultdict
-from typing import Dict, List, Optional, Tuple
+from typing import Dict, List, Optional, Set, Tuple
 
 import torch
 
@@ -77,6 +77,9 @@ class _CostFunctionWrapper(CostFunction):
 #   - Actually add vectorization logic
 #   - Add some hook to call after Objective.update()
 #   - Need to add code to clear error cache right at the beginning of every forward call
+#   - Tests to add:
+#         + Test for shared_aux_var computation
+#         + Test for schema computation
 class Vectorize:
     def __init__(self, objective: Objective):
         self._cost_fn_wrappers: List[_CostFunctionWrapper] = []
@@ -96,4 +99,32 @@ class Vectorize:
             for schema, cost_fns in self._schema_dict.items()
         )
 
+        self._shared_vars_info = self._get_shared_vars_info()
+
+        # `vectorize()` will compute an error vector for each schema, then populate
+        # the wrappers with their appropriate weighted error slice.
+        # Replacing `obj._cost_functions_iterable` allows to recover these when
+        # iterating the Objective.
         objective._cost_functions_iterable = self._cost_fn_wrappers
+
+    def _get_shared_vars_info(self) -> Dict[_CostFunctionSchema, List[bool]]:
+        info = {}
+        for schema, cost_fns in self._schema_dict.items():
+            # schema is (_, N optim_vars, M aux_vars, _, P aux_vars)
+            # so the total number of vars is len(schema) - 2
+            # This list holds all variable names associated to each position in the
+            # schema. Shared variables are those positions with only one name
+            var_names_per_position: List[Set[str]] = [
+                set() for _ in range(len(schema) - 2)
+            ]
+            for cf in cost_fns:
+                var_idx = 0
+                for var_iterators in [cf.optim_vars, cf.aux_vars, cf.weight.aux_vars]:
+                    for v in var_iterators:
+                        var_names_per_position[var_idx].add(v.name)
+                        var_idx += 1
+                assert var_idx == len(schema) - 2
+
+            info[schema] = [len(name_set) == 1 for name_set in var_names_per_position]
+        return info
+

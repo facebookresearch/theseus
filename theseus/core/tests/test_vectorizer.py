@@ -4,7 +4,7 @@ import theseus as th
 from theseus.core.vectorizer import _CostFunctionWrapper
 
 
-def test_cost_function_wrappers_vars_and_err():
+def test_costs_vars_and_err_before_vectorization():
     for _ in range(20):
         objective = th.Objective()
         batch_size = torch.randint(low=1, high=10, size=(1,)).item()
@@ -47,15 +47,14 @@ def test_cost_function_wrappers_vars_and_err():
             assert _check_attr(cf, t1)
             w_err = cf.weighted_error()
             if cf.cost_fn is cf1:
-                assert v1 in optim_vars and cw1.scale in aux_vars
+                assert v1 in optim_vars
                 assert w_err.allclose((v1.data - t1.data) * w1)
-                assert _check_attr(cf, v1) and _check_attr(cf, cw1.scale)
+                assert _check_attr(cf, v1)
                 saw_cf1 = True
             elif cf.cost_fn is cf2:
                 assert v2 in optim_vars and odummy in optim_vars
-                assert cw2.scale in aux_vars and adummy in aux_vars
+                assert adummy in aux_vars
                 assert _check_attr(cf, v2) and _check_attr(cf, odummy)
-                assert _check_attr(cf, cw2.scale) and _check_attr(cf, adummy)
                 assert w_err.allclose((v2.data - t1.data) * w2)
                 saw_cf2 = True
             else:

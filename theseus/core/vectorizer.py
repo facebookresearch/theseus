@@ -94,10 +94,14 @@ class Vectorize:
             self._schema_dict[_get_cost_function_schema(cost_function)].append(wrapper)
 
         # Now create a vectorized cost function for each unique schema
-        self._vectorized_cost_functions: Dict[_CostFunctionSchema, CostFunction] = dict(
-            (schema, cost_fns[0].copy(keep_variable_names=True))
-            for schema, cost_fns in self._schema_dict.items()
-        )
+        self._vectorized_cost_fns: Dict[_CostFunctionSchema, CostFunction] = {}
+        for schema in self._schema_dict:
+            base_cost_fn = self._schema_dict[schema][0]
+            vectorized_cost_fn = base_cost_fn.copy(keep_variable_names=False)
+            vectorized_cost_fn.weight = base_cost_fn.weight.copy(
+                keep_variable_names=False
+            )
+            self._vectorized_cost_fns[schema] = vectorized_cost_fn
 
         self._shared_vars_info = self._get_shared_vars_info()
 

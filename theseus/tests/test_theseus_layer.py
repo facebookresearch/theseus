@@ -71,8 +71,8 @@ class QuadraticFitCostFunction(th.CostFunction):
         self.xs = self.xs.to(*args, **kwargs)
         self.ys = self.ys.to(*args, **kwargs)
 
-    def _copy_impl(self):
-        raise NotImplementedError
+    def _copy_impl(self, new_name=None):
+        return self
 
 
 def create_qf_theseus_layer(
@@ -265,6 +265,9 @@ def _run_optimizer_test(
         linear_solver_cls=linear_solver_cls,
         use_learnable_error=use_learnable_error,
     )
+    # Check that vectorizer is being used
+    for cf in layer_to_learn.objective:
+        assert isinstance(cf, _CostFunctionWrapper)
     layer_to_learn.to(device)
 
     # Check the initial solution quality to check how much has loss improved later

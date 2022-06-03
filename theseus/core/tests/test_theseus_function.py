@@ -2,7 +2,6 @@
 #
 # This source code is licensed under the MIT license found in the
 # LICENSE file in the root directory of this source tree.
-
 import numpy as np
 import pytest  # noqa: F401
 import torch
@@ -29,3 +28,14 @@ def test_theseus_function_init():
             assert name == cost_function.name
 
     assert len(set(all_ids)) == len(all_ids)
+
+
+def test_no_copy_vars_check():
+    variables = [theseus.core.Variable(torch.ones(1, 1), name="var_1")]
+    aux_vars = [theseus.core.Variable(torch.ones(1, 1), name="aux_1")]
+    cost_weight = MockCostWeight(torch.ones(1, 1), name="cost_weight")
+    cost_function = MockCostFunction(
+        variables, aux_vars, cost_weight, no_copy_vars=True
+    )
+    with pytest.raises(RuntimeError):
+        cost_function.copy()

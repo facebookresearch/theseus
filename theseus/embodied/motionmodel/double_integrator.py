@@ -201,4 +201,4 @@ class GPMotionModel(DoubleIntegrator):
         super().__init__(pose1, vel1, pose2, vel2, dt, cost_weight, name=name)
 
     def _copy_impl(self, new_name: Optional[str] = None) -> "GPMotionModel":
-        return cast(GPMotionModel, super().copy(new_name=new_name))
+        return cast(GPMotionModel, super()._copy_impl(new_name=new_name))

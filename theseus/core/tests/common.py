@@ -86,7 +86,9 @@ class NullCostWeight(th.CostWeight):
 
 
 class MockCostFunction(th.CostFunction):
-    def __init__(self, optim_vars, aux_vars, cost_weight, name=None):
+    def __init__(
+        self, optim_vars, aux_vars, cost_weight, name=None, no_copy_vars=False
+    ):
         super().__init__(cost_weight, name=name)
         for i, var in enumerate(optim_vars):
             attr_name = f"optim_var_{i}"
@@ -97,6 +99,7 @@ class MockCostFunction(th.CostFunction):
             setattr(self, attr_name, aux)
             self.register_aux_var(attr_name)
         self._dim = 2
+        self._no_copy_vars = no_copy_vars
 
     def error(self):
         mu = torch.stack([v.data for v in self.optim_vars]).sum()
@@ -109,9 +112,15 @@ class MockCostFunction(th.CostFunction):
         return self._dim
 
     def _copy_impl(self, new_name=None):
+        def _copy_fn(var):
+            if self._no_copy_vars:
+                return var
+            else:
+                return var.copy()
+
         return MockCostFunction(
-            [v.copy() for v in self.optim_vars],
-            [aux.copy() for aux in self.aux_vars],
+            [_copy_fn(v) for v in self.optim_vars],
+            [_copy_fn(aux) for aux in self.aux_vars],
             self.weight.copy(),
             name=new_name,
         )

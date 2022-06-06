@@ -4,6 +4,7 @@
 # LICENSE file in the root directory of this source tree.
 
 import abc
+import warnings
 from typing import List, Optional, Sequence, Tuple, Union, cast
 
 import torch
@@ -64,9 +65,9 @@ class ScaleCostWeight(CostWeight):
             self.scale = Variable(scale)
         else:
             self.scale = scale
-        if not self.scale.data.squeeze().ndim == 0:
-            raise ValueError("ScaleCostWeight only accepts 0-dim data.")
-        self.scale.data = self.scale.data.view(1, 1)
+        if not self.scale.data.squeeze().ndim in [0, 1]:
+            raise ValueError("ScaleCostWeight only accepts 0- or 1-dim (batched) data.")
+        self.scale.data = self.scale.data.view(-1, 1)
         self.register_aux_vars(["scale"])
 
     def weight_error(self, error: torch.Tensor) -> torch.Tensor:
@@ -92,17 +93,26 @@ class ScaleCostWeight(CostWeight):
 class DiagonalCostWeight(CostWeight):
     def __init__(
         self,
-        diagonal: Union[Sequence[float], Variable],
+        diagonal: Union[Sequence[float], torch.Tensor, Variable],
         name: Optional[str] = None,
     ):
         super().__init__(name=name)
         if not isinstance(diagonal, Variable):
-            self.diagonal = Variable(torch.tensor(diagonal))
+            if not isinstance(diagonal, torch.Tensor):
+                diagonal = torch.tensor(diagonal)
+            self.diagonal = Variable(diagonal)
         else:
             self.diagonal = diagonal
-        if not self.diagonal.data.squeeze().ndim < 2:
-            raise ValueError("DiagonalCostWeight only accepts 1-D data.")
-        self.diagonal.data = self.diagonal.data.view(1, -1)
+        if not self.diagonal.data.squeeze().ndim < 3:
+            raise ValueError("DiagonalCostWeight only accepts data with ndim < 3.")
+        if self.diagonal.data.ndim == 0:
+            self.diagonal.data = self.diagonal.data.view(1, 1)
+        if self.diagonal.data.ndim == 1:
+            warnings.warn(
+                "1-D diagonal input is ambiguous. Dimension will be "
+                "interpreted as data dimension and not batch dimension."
+            )
+            self.diagonal.data = self.diagonal.data.view(1, -1)
         self.register_aux_vars(["diagonal"])
 
     def weight_error(self, error: torch.Tensor) -> torch.Tensor:
@@ -113,12 +123,12 @@ class DiagonalCostWeight(CostWeight):
         jacobians: List[torch.Tensor],
         error: torch.Tensor,
     ) -> Tuple[List[torch.Tensor], torch.Tensor]:
-        error = error * self.diagonal.data.view(1, -1)
+        error = error * self.diagonal.data
         new_jacobians = []
         for jac in jacobians:
             # Jacobian is batch_size x cost_fuction_dim x var_dim
-            # This left multiplies the weights (inv cov.) to jacobian
-            new_jacobians.append(jac * self.diagonal.data.view(1, -1, 1))
+            # This left multiplies the weights to jacobian
+            new_jacobians.append(jac * self.diagonal.data.unsqueeze(2))
         return new_jacobians, error
 
     def _copy_impl(self, new_name: Optional[str] = None) -> "DiagonalCostWeight":

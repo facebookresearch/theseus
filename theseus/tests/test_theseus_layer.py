@@ -132,7 +132,7 @@ def create_qf_theseus_layer(
         max_iterations=max_iterations,
     )
     assert isinstance(optimizer.linear_solver, linear_solver_cls)
-    theseus_layer = th.TheseusLayer(optimizer)
+    theseus_layer = th.TheseusLayer(optimizer, vectorize_cost_fns=False)
     return theseus_layer
 
 

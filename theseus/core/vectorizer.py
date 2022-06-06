@@ -5,6 +5,7 @@ import torch
 
 from .cost_function import CostFunction, _register_vars_in_list
 from .objective import Objective
+from .variable import Variable
 
 _CostFunctionSchema = Tuple[str, ...]
 
@@ -74,50 +75,72 @@ class _CostFunctionWrapper(CostFunction):
 # This class replaces the Objective's iterator for one that takes advantage of
 # cost function vectorization
 # TODO:
-#   - Actually add vectorization logic
-#   - Add some hook to call after Objective.update()
-#   - Need to add code to clear error cache right at the beginning of every forward call
 #   - Tests to add:
 #         + Test for shared_aux_var computation
-#         + Test for schema computation
+#         + Test that schemas are generated correctly
+#         + Test that vectorization results in correct cots
 class Vectorize:
+    _SHARED_TOKEN = "__shared__"
+
     def __init__(self, objective: Objective):
+        # Each cost function is assigned a wrapper. The wrapper will hold the error
+        # and jacobian after vectorization.
         self._cost_fn_wrappers: List[_CostFunctionWrapper] = []
+
+        # This dict groups cost functions that can be vectorized together.
         self._schema_dict: Dict[
             _CostFunctionSchema, List[_CostFunctionWrapper]
         ] = defaultdict(list)
 
-        # Create wrappers for all cost functions and also get their schema
-        for cost_function in objective.cost_functions.values():
-            wrapper = _CostFunctionWrapper(cost_function)
+        # Used as examples from which the vectorized cost functions are copied.
+        self._cost_fn_templates: Dict[_CostFunctionSchema, CostFunction] = {}
+
+        # Create wrappers for all cost functions and also get their schemas
+        for cost_fn in objective.cost_functions.values():
+            wrapper = _CostFunctionWrapper(cost_fn)
             self._cost_fn_wrappers.append(wrapper)
-            self._schema_dict[_get_cost_function_schema(cost_function)].append(wrapper)
+            schema = _get_cost_function_schema(cost_fn)
+            self._schema_dict[schema].append(wrapper)
+            if schema not in self._cost_fn_templates:
+                self._cost_fn_templates[schema] = cost_fn
 
         # Now create a vectorized cost function for each unique schema
         self._vectorized_cost_fns: Dict[_CostFunctionSchema, CostFunction] = {}
         for schema in self._schema_dict:
-            base_cost_fn = self._schema_dict[schema][0]
+            base_cost_fn = self._cost_fn_templates[schema]
             vectorized_cost_fn = base_cost_fn.copy(keep_variable_names=False)
             vectorized_cost_fn.weight = base_cost_fn.weight.copy(
                 keep_variable_names=False
             )
             self._vectorized_cost_fns[schema] = vectorized_cost_fn
 
-        self._shared_vars_info = self._get_shared_vars_info()
+        # Dict[_CostFunctionSchema, List[str]]
+        self._var_names = self._get_var_names()
 
         # `vectorize()` will compute an error vector for each schema, then populate
         # the wrappers with their appropriate weighted error slice.
         # Replacing `obj._cost_functions_iterable` allows to recover these when
         # iterating the Objective.
         objective._cost_functions_iterable = self._cost_fn_wrappers
+        objective._vectorization_init_callback = self._clear_wrapper_caches
+        objective._vectorization_final_callback = self._vectorize
 
-    def _get_shared_vars_info(self) -> Dict[_CostFunctionSchema, List[bool]]:
+        self._objective = objective
+
+    # Returns a dictionary which maps every schema to information about its shared
+    # variables.
+    # The information is in the form of a list of strings for all variables in the
+    # schema, such that if the variable is shared the string has the name of the
+    # variable and the prefix __SHARED__. Otherwise it returns "var_{idx}",
+    # where idx is the index of the var in the schema order.
+    def _get_var_names(self) -> Dict[_CostFunctionSchema, List[Optional[str]]]:
         info = {}
         for schema, cost_fns in self._schema_dict.items():
             # schema is (_, N optim_vars, M aux_vars, _, P aux_vars)
             # so the total number of vars is len(schema) - 2
-            # This list holds all variable names associated to each position in the
-            # schema. Shared variables are those positions with only one name
+            # var_names_per_position holds all variable names associated to each
+            # position in schema. Shared variables are those positions with only one
+            # name
             var_names_per_position: List[Set[str]] = [
                 set() for _ in range(len(schema) - 2)
             ]
@@ -129,6 +152,136 @@ class Vectorize:
                         var_idx += 1
                 assert var_idx == len(schema) - 2
 
-            info[schema] = [len(name_set) == 1 for name_set in var_names_per_position]
+            def _get_name(var_idx, name_set_):
+                if len(name_set_) == 1:
+                    return f"{Vectorize._SHARED_TOKEN}{next(iter(name_set_))}"
+                return f"var_{var_idx}"
+
+            info[schema] = [
+                _get_name(i, s) for i, s in enumerate(var_names_per_position)
+            ]
         return info
 
+    @staticmethod
+    def _get_all_vars(cf) -> List[Variable]:
+        return list(cf.optim_vars) + list(cf.aux_vars) + list(cf.weight.aux_vars)
+
+    @staticmethod
+    def _expand(tensor: torch.Tensor, size: int) -> torch.Tensor:
+        return tensor.expand((size,) + ((-1,) * (len(tensor.shape) - 1)))
+
+    # Populates names_to_data with a list for each variable that has the concatenated
+    # data of all cost functions. All functions must have the same schema.
+    # Inputs:
+    #   - vars_names; The names for all variables in the cost_fns' schema. Shared
+    #       variables must be prefixed with `_SHARED_TOKEN`.`
+    #   - batch_size: the Objectve's batch size. Whenever a cost function's var data
+    #       is batch_size 1, it expands it to this value, unless the variable is
+    #       shared by all cost functions.
+    #   - names_to_data: A dictionary mapping variable names to the list of tensors.
+    #       will be modified in place.
+    @staticmethod
+    def _update_all_cost_fns_var_data(
+        cost_fns: List[CostFunction],
+        var_names: List[str],
+        batch_size: int,
+        names_to_data: Dict[str, List[torch.Tensor]],
+    ):
+        # Get all the data from individual variables
+        for cost_fn in cost_fns:
+            cost_fn_vars = Vectorize._get_all_vars(cost_fn)
+            # some shared vars may appear in more than one position in the list
+            # For example GPMotionModel and GPCostWeight both have dt in their
+            # list of vars. With this set we can skip repetitions
+            seen_vars = set()
+            for var_idx, var in enumerate(cost_fn_vars):
+                name = var_names[var_idx]
+                if name in seen_vars:
+                    continue
+                # If not shared variable, always append the data
+                # If the variable is shared only need data for one of the cost
+                # functions and we can just extend later to complete the vectorized
+                # batch
+                if Vectorize._SHARED_TOKEN not in name or name not in names_to_data:
+                    # if not a shared variable, expand to batch size if needed
+                    data = (
+                        var.data
+                        if (var.data.shape[0] > 1 or Vectorize._SHARED_TOKEN in name)
+                        else Vectorize._expand(var.data, batch_size)
+                    )
+                    names_to_data[name].append(data)
+                seen_vars.add(name)
+
+    # Goes through the list of vectorized variables and updates their data with the
+    # concatenation of all data tensors in their corresponding entry in `names_to_data`.
+    # Shared variables are expanded to shape batch_size * num_cost_fns
+    @staticmethod
+    def _update_vectorized_vars(
+        all_vectorized_vars: List[Variable],
+        names_to_data: Dict[str, List[torch.Tensor]],
+        var_names: List[str],
+        batch_size: int,
+        num_cost_fns: int,
+    ):
+        for var_idx, var in enumerate(all_vectorized_vars):
+            name = var_names[var_idx]
+
+            if num_cost_fns == 1:
+                var.update(names_to_data[name][0])
+                continue
+
+            if Vectorize._SHARED_TOKEN in name:
+                data = names_to_data[name][0]
+                if data.shape[0] > 1:
+                    original_name = name[len(Vectorize._SHARED_TOKEN) :]
+                    raise RuntimeError(
+                        f"Cannot vectorize shared variables with "
+                        f"batch size > 1, but variable named {original_name} has "
+                        f"batch size = {data.shape[0]}. If this is unavoidable for a "
+                        f"batch, consider setting the batch size of your problem to 1, "
+                        f"or turning cost function vectorization off."
+                    )
+                var.update(Vectorize._expand(data, batch_size * num_cost_fns))
+            else:
+                var.update(torch.cat(names_to_data[name], dim=0))
+
+    @staticmethod
+    def _compute_error_and_replace_wrapper_caches(
+        vectorized_cost_fn: CostFunction,
+        cost_fns: List[_CostFunctionWrapper],
+        batch_size: int,
+    ):
+        v_jac, v_err = vectorized_cost_fn.weighted_jacobians_error()
+        start_idx = 0
+        for cost_fn in cost_fns:
+            assert cost_fn._cached_error is None
+            assert cost_fn._cached_jacobians is None
+            v_slice = slice(start_idx, start_idx + batch_size)
+            cost_fn._cached_error = v_err[v_slice]
+            cost_fn._cached_jacobians = [jac[v_slice] for jac in v_jac]
+            start_idx += batch_size
+
+    def _clear_wrapper_caches(self):
+        for cost_fns in self._schema_dict.values():
+            for cf in cost_fns:
+                cf._cached_error = None
+                cf._cached_jacobians = None
+
+    def _vectorize(self):
+        for schema, cost_fns in self._schema_dict.items():
+            var_names = self._var_names[schema]
+            vectorized_cost_fn = self._vectorized_cost_fns[schema]
+            all_vectorized_vars = Vectorize._get_all_vars(vectorized_cost_fn)
+            assert len(all_vectorized_vars) == len(var_names)
+            names_to_data: Dict[str, List[torch.Tensor]] = defaultdict(list)
+            batch_size = self._objective.batch_size
+
+            Vectorize._update_all_cost_fns_var_data(
+                cost_fns, var_names, batch_size, names_to_data
+            )
+            Vectorize._update_vectorized_vars(
+                all_vectorized_vars, names_to_data, var_names, batch_size, len(cost_fns)
+            )
+            Vectorize._compute_error_and_replace_wrapper_caches(
+                vectorized_cost_fn, cost_fns, batch_size
+            )

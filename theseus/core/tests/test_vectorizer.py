@@ -11,7 +11,7 @@ def test_costs_vars_and_err_before_vectorization():
         v1 = th.Vector(data=torch.randn(batch_size, 1), name="v1")
         v2 = th.Vector(data=torch.randn(batch_size, 1), name="v2")
         odummy = th.Vector(1, name="odummy")
-        t1 = th.Vector(data=torch.zeros(batch_size, 1), name="t1")
+        t1 = th.Vector(data=torch.zeros(1, 1), name="t1")
         adummy = th.Variable(data=torch.zeros(1, 1), name="adummy")
         cw1 = th.ScaleCostWeight(th.Variable(torch.zeros(1, 1), name="w1"))
         cw2 = th.ScaleCostWeight(th.Variable(torch.zeros(1, 1), name="w2"))
@@ -31,6 +31,9 @@ def test_costs_vars_and_err_before_vectorization():
         # Update weights after creating vectorizer to see if data is picked up correctly
         w1 = torch.randn(1, 1)  # also check that broadcasting works
         w2 = torch.randn(batch_size, 1)
+
+        # disable for this test since we are not checking the result
+        objective._vectorization_final_callback = None
         objective.update({"w1": w1, "w2": w2})
 
         def _check_attr(cf, var):

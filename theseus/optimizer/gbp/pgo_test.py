@@ -21,7 +21,7 @@ torch.manual_seed(0)
 size = 3
 dim = 2
 
-noise_cov = np.array([0.01, 0.01])
+noise_cov = np.array([0.05, 0.05])
 
 prior_noise_std = 0.2
 prior_sigma = np.array([1.3**2, 1.3**2])
@@ -47,10 +47,13 @@ anchor_std = 0.01
 prior_w = th.ScaleCostWeight(1 / prior_std, name="prior_weight")
 anchor_w = th.ScaleCostWeight(1 / anchor_std, name="anchor_weight")
 
+gt_poses = []
+
 p = 0
 for i in range(size):
     for j in range(size):
         init = torch.Tensor([j, i])
+        gt_poses.append(init[None, :])
         if i == 0 and j == 0:
             w = anchor_w
         else:
@@ -72,8 +75,8 @@ for i in range(size):
 
 # Measurement cost functions
 
-meas_std = 0.1
-meas_w = th.ScaleCostWeight(1 / meas_std, name="prior_weight")
+meas_std_tensor = torch.nn.Parameter(torch.tensor([0.1]))
+meas_w = th.ScaleCostWeight(1 / meas_std_tensor, name="prior_weight")
 
 m = 0
 for i in range(size):
@@ -110,12 +113,26 @@ for i in range(size):
             objective.add(cf_meas)
             m += 1
 
-# objective.update(init_dict)
-# print("Initial cost:", objective.error_squared_norm())
 
-# joint = fg.get_joint()
-# marg_covs = np.diag(joint.cov())[::2]
-# map_soln = fg.MAP().reshape([size * size, 2])
+# outer optimizer
+lr = 1e-3
+model_optimizer = torch.optim.Adam([meas_std_tensor], lr=lr)
+
+
+linear_optimizer = th.LinearOptimizer(objective, th.CholeskyDenseSolver)
+th_layer = th.TheseusLayer(linear_optimizer)
+outputs, _ = th_layer.forward(inputs)
+
+
+gt_poses_tensor = torch.cat(gt_poses)
+output_poses = torch.cat([x.data for x in poses])
+
+loss = torch.norm(gt_poses_tensor - output_poses)
+loss.backward()
+
+# da_dx = torch.autograd.grad(loss, data_x, retain_graph=True)[0].squeeze()
+# print("\n--- backward_mode=IMPLICIT")
+# print(da_dx.numpy())
 
 max_iterations = 100
 optimizer = GaussianBeliefPropagation(
@@ -134,7 +151,8 @@ optim_arg = {
     "dropout": 0.0,
     "schedule": synchronous_schedule(max_iterations, optimizer.n_edges),
 }
+
 updated_inputs, info = theseus_optim.forward(inputs, optim_arg)
 
-# print("updated_inputs", updated_inputs)
-# print("info", info)
+print("gbp outputs\n", updated_inputs)
+print("linear solver\n", updated_inputs)

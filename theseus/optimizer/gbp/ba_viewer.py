@@ -23,7 +23,13 @@ def draw_camera(
 
 class BAViewer(trimesh.viewer.SceneViewer):
     def __init__(
-        self, belief_history, msg_history=None, cam_to_world=False, flip_z=True
+        self,
+        belief_history,
+        msg_history=None,
+        cam_to_world=False,
+        flip_z=True,
+        gt_cameras=None,
+        gt_points=None,
     ):
         self._it = 0
         self.belief_history = belief_history
@@ -34,6 +40,17 @@ class BAViewer(trimesh.viewer.SceneViewer):
 
         scene = trimesh.Scene()
         self.scene = scene
+
+        if gt_cameras is not None:
+            for i, cam in enumerate(gt_cameras):
+                camera = self.make_cam(cam.pose.data[0])
+                self.scene.add_geometry(camera[1], geom_name=f"gt_cam_{i}")
+
+        if gt_points is not None:
+            pts = torch.cat([pt.data for pt in gt_points])
+            pc = trimesh.PointCloud(pts, [0, 255, 0, 200])
+            self.scene.add_geometry(pc, geom_name="gt_points")
+
         self.next_iteration()
         scene.set_camera()
         super(BAViewer, self).__init__(scene=scene, resolution=(1080, 720))
@@ -86,26 +103,33 @@ class BAViewer(trimesh.viewer.SceneViewer):
                 self.view["ball"].drag([0, magnitude])
             self.scene.camera_transform[...] = self.view["ball"].pose
 
+    def make_cam(self, pose, color=(0.0, 1.0, 0.0, 0.8)):
+        T = torch.vstack(
+            (
+                pose,
+                torch.tensor([[0.0, 0.0, 0.0, 1.0]], dtype=pose.dtype),
+            )
+        )
+        if not self.cam_to_world:
+            T = np.linalg.inv(T)
+        if self.flip_z:
+            T[:3, 2] *= -1.0
+        camera = draw_camera(
+            T,
+            self.scene.camera.fov,
+            self.scene.camera.resolution,
+            color=color,
+        )
+        return camera
+
     def next_iteration(self):
         with self.lock:
             points = []
             n_cams, n_pts = 0, 0
             for belief in self.belief_history[self._it]:
                 if isinstance(belief.mean[0], th.SE3):
-                    T = torch.vstack(
-                        (
-                            belief.mean[0].data[0],
-                            torch.tensor(
-                                [[0.0, 0.0, 0.0, 1.0]], dtype=belief.mean[0].dtype
-                            ),
-                        )
-                    )
-                    if not self.cam_to_world:
-                        T = np.linalg.inv(T)
-                    if self.flip_z:
-                        T[:3, 2] *= -1.0
-                    camera = draw_camera(
-                        T, self.scene.camera.fov, self.scene.camera.resolution
+                    camera = self.make_cam(
+                        belief.mean[0].data[0], color=(0.0, 0.0, 1.0, 0.8)
                     )
                     self.scene.delete_geometry(f"cam_{n_cams}")
                     self.scene.add_geometry(camera[1], geom_name=f"cam_{n_cams}")

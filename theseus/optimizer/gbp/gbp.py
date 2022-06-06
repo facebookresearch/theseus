@@ -81,7 +81,10 @@ class Message(th.ManifoldGaussian):
     def zero_message(self):
         new_mean = []
         for var in self.mean:
-            new_mean_i = var.__class__()
+            if var.__class__ == th.Vector:
+                new_mean_i = var.__class__(var.dof())
+            else:
+                new_mean_i = var.__class__()
             new_mean_i.to(dtype=self.dtype, device=self.device)
             new_mean.append(new_mean_i)
         new_precision = torch.zeros(self.mean[0].shape[0], self.dof, self.dof).to(
@@ -303,7 +306,7 @@ class Factor:
                 # is already in this tangent space. Could equally do damping
                 # in the tangent space of the new or old message mean.
                 # mean damping
-                if damping[v] != 0:  # and steps_since_lin > 0:
+                if damping[v] != 0 and self.steps_since_lin > 0:
                     if (
                         new_mess_lam.count_nonzero() != 0
                         and ftov_msgs[v].precision.count_nonzero() != 0
@@ -590,7 +593,7 @@ class GaussianBeliefPropagation(Optimizer, abc.ABC):
             start += num_optim_vars
 
         # print(f"Factor relinearisations: {relins} / {len(self.factors)}")
-        # print(did_relin)
+        return relins
 
     """
     Optimization loop functions
@@ -663,7 +666,6 @@ class GaussianBeliefPropagation(Optimizer, abc.ABC):
             self.belief_history[it_] = [belief.copy() for belief in self.beliefs]
 
             # damping
-            # damping = self.gbp_settings.get_damping(iters_since_relin)
             damping_arr = torch.full([self.n_edges], damping)
 
             # dropout can be implemented through damping
@@ -671,7 +673,7 @@ class GaussianBeliefPropagation(Optimizer, abc.ABC):
                 dropout_ixs = torch.rand(self.n_edges) < dropout
                 damping_arr[dropout_ixs] = 1.0
 
-            self._pass_fac_to_var_messages(
+            relins = self._pass_fac_to_var_messages(
                 vtof_msgs,
                 ftov_msgs,
                 schedule[it_],
@@ -692,7 +694,8 @@ class GaussianBeliefPropagation(Optimizer, abc.ABC):
                     self._update_info(info, it_, err, converged_indices)
                     if verbose:
                         print(
-                            f"GBP. Iteration: {it_+1}. " f"Error: {err.mean().item()}"
+                            f"GBP. Iteration: {it_+1}. Error: {err.mean().item():.4f}. "
+                            f"Relins: {relins} / {len(self.factors)}"
                         )
                     converged_indices = self._check_convergence(err, info.last_err)
                     info.status[

@@ -54,8 +54,13 @@ def camera_loss(
 
 def average_repojection_error(objective) -> float:
 
-    are = 0.0
+    reproj_norms = []
+    for k in objective.cost_functions.keys():
+        if "Reprojection" in k:
+            err = objective.cost_functions[k].error().norm(dim=1)
+            reproj_norms.append(err)
 
+    are = torch.tensor(reproj_norms).mean().item()
     return are
 
 
@@ -72,10 +77,8 @@ def run(cfg: omegaconf.OmegaConf):
     )
 
     # cams, points, obs = theg.BundleAdjustmentDataset.load_bal_dataset(
-    #     "/home/joe/Downloads/riku/fr3stf.txt")
+    #     "/media/joe/3.0TB Hard Disk/bal_data/problem-21-11315-pre.txt")
     # ba = theg.BundleAdjustmentDataset(cams, points, obs)
-    # import ipdb; ipdb.set_trace()
-
     # ba.save_to_file(results_path / "ba.txt", gt_path=results_path / "ba_gt.txt")
 
     # param that control transition from squared loss to huber
@@ -83,9 +86,12 @@ def run(cfg: omegaconf.OmegaConf):
     log_loss_radius = th.Vector(data=radius_tensor, name="log_loss_radius")
 
     # Set up objective
+    print("Setting up objective")
     objective = th.Objective(dtype=torch.float64)
 
-    for obs in ba.observations:
+    print("obs")
+    for i, obs in enumerate(ba.observations):
+        # print(i, len(ba.observations))
         cam = ba.cameras[obs.camera_index]
         cost_function = theg.Reprojection(
             camera_pose=cam.pose,
@@ -100,6 +106,7 @@ def run(cfg: omegaconf.OmegaConf):
     dtype = objective.dtype
 
     # Add regularization
+    print("reg")
     if cfg["inner_optim"]["regularize"]:
         zero_point3 = th.Point3(dtype=dtype, name="zero_point")
         # identity_se3 = th.SE3(dtype=dtype, name="zero_se3")
@@ -130,6 +137,7 @@ def run(cfg: omegaconf.OmegaConf):
         for i in range(len(ba.cameras)):
             if np.random.rand() > cfg["inner_optim"]["ratio_known_cameras"]:
                 continue
+            print("fixing cam", i)
             objective.add(
                 th.eb.VariableDifference(
                     camera_pose_vars[i],
@@ -139,7 +147,7 @@ def run(cfg: omegaconf.OmegaConf):
                 )
             )
 
-    print("Factors:\n", objective.cost_functions.keys(), "\n")
+    # print("Factors:\n", objective.cost_functions.keys(), "\n")
 
     # Create optimizer and theseus layer
     # optimizer = th.GaussNewton(
@@ -158,7 +166,7 @@ def run(cfg: omegaconf.OmegaConf):
         "track_err_history": True,
         "verbose": True,
         "backward_mode": th.BackwardMode.FULL,
-        "relin_threshold": 0.0001,
+        "relin_threshold": 0.001,
         "damping": 0.0,
         "dropout": 0.0,
         "schedule": synchronous_schedule(
@@ -176,7 +184,7 @@ def run(cfg: omegaconf.OmegaConf):
     with torch.no_grad():
         camera_loss_ref = camera_loss(ba, camera_pose_vars).item()
     print(f"CAMERA LOSS:  {camera_loss_ref: .3f}")
-    # print_histogram(ba, theseus_inputs, "Input histogram:")
+    print_histogram(ba, theseus_inputs, "Input histogram:")
 
     objective.update(theseus_inputs)
     print("squred err:", objective.error_squared_norm().item())
@@ -189,15 +197,22 @@ def run(cfg: omegaconf.OmegaConf):
     loss = camera_loss(ba, camera_pose_vars).item()
     print(f"CAMERA LOSS: (loss, ref loss) {loss:.3f} {camera_loss_ref: .3f}")
 
-    BAViewer(optimizer.belief_history, msg_history=optimizer.ftov_msgs_history)
+    are = average_repojection_error(objective)
+    print("Average reprojection error (pixels): ", are)
+
+    print_histogram(ba, theseus_inputs, "Final histogram:")
+
+    BAViewer(
+        optimizer.belief_history, gt_cameras=ba.gt_cameras, gt_points=ba.gt_points
+    )  # , msg_history=optimizer.ftov_msgs_history)
 
 
 if __name__ == "__main__":
 
     cfg = {
         "seed": 1,
-        "num_cameras": 4,
-        "num_points": 10,
+        "num_cameras": 10,
+        "num_points": 50,
         "average_track_length": 8,
         "track_locality": 0.2,
         "inner_optim": {

@@ -4,6 +4,7 @@
 # LICENSE file in the root directory of this source tree.
 
 import abc
+import warnings
 from typing import List, Optional, Sequence, Tuple, Union, cast
 
 import torch
@@ -92,18 +93,26 @@ class ScaleCostWeight(CostWeight):
 class DiagonalCostWeight(CostWeight):
     def __init__(
         self,
-        diagonal: Union[Sequence[float], Variable],
+        diagonal: Union[Sequence[float], torch.Tensor, Variable],
         name: Optional[str] = None,
     ):
         super().__init__(name=name)
         if not isinstance(diagonal, Variable):
-            self.diagonal = Variable(torch.tensor(diagonal))
+            if not isinstance(diagonal, torch.Tensor):
+                diagonal = torch.tensor(diagonal)
+            self.diagonal = Variable(diagonal)
         else:
             self.diagonal = diagonal
-        if not self.diagonal.data.squeeze().ndim in [1, 2]:
-            raise ValueError("DiagonalCostWeight only accepts 1-D variables.")
+        if not self.diagonal.data.squeeze().ndim < 3:
+            raise ValueError("DiagonalCostWeight only accepts data with ndim < 3.")
+        if self.diagonal.data.ndim == 0:
+            self.diagonal.data = self.diagonal.data.view(1, 1)
         if self.diagonal.data.ndim == 1:
-            self.diagonal.data = self.diagonal.data.unsqueeze(0)
+            warnings.warn(
+                "1-D diagonal input is ambiguous. Dimension will be "
+                "interpreted as data dimension and not batch dimension."
+            )
+            self.diagonal.data = self.diagonal.data.view(1, -1)
         self.register_aux_vars(["diagonal"])
 
     def weight_error(self, error: torch.Tensor) -> torch.Tensor:

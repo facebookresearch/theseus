@@ -66,3 +66,43 @@ def test_scale_cost_weight():
             jacobians, error = cf1.weighted_jacobians_error()
             assert error.allclose(expected_err)
             assert jacobians[0].allclose(expected_jac)
+
+
+def test_diagonal_cost_weight():
+    for dim in [1, 2, 10]:
+        for batch_size in [1, 2, 10]:
+            v1 = th.Vector(data=torch.ones(batch_size, dim))
+            z = th.Vector(data=torch.zeros(batch_size, dim))
+            diagonal = torch.randn(dim)
+            d_matrix = diagonal.diag().unsqueeze(0)
+            expected_err = (d_matrix @ torch.ones(batch_size, dim, 1)).view(
+                batch_size, dim
+            )
+            expected_jac = d_matrix @ (torch.eye(dim).unsqueeze(0)).expand(
+                batch_size, dim, dim
+            )
+
+            def _check(cw):
+                cf1 = th.Difference(v1, cw, z)
+                jacobians, error = cf1.weighted_jacobians_error()
+                assert error.allclose(expected_err)
+                assert jacobians[0].allclose(expected_jac)
+
+            _check(th.DiagonalCostWeight(diagonal.tolist()))
+            _check(th.DiagonalCostWeight(diagonal))
+            _check(th.DiagonalCostWeight(diagonal.view(1, dim)))
+            _check(th.DiagonalCostWeight(th.Variable(diagonal)))
+
+            batched_diagonal = torch.randn(batch_size, dim)
+            d_matrix = batched_diagonal.diag_embed()
+            expected_err = (d_matrix @ torch.ones(batch_size, dim, 1)).view(
+                batch_size, dim
+            )
+            expected_jac = d_matrix @ (torch.eye(dim).unsqueeze(0)).expand(
+                batch_size, dim, dim
+            )
+
+            cf1 = th.Difference(v1, th.DiagonalCostWeight(batched_diagonal), z)
+            jacobians, error = cf1.weighted_jacobians_error()
+            assert error.allclose(expected_err)
+            assert jacobians[0].allclose(expected_jac)

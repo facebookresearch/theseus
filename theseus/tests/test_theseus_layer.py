@@ -19,7 +19,6 @@ from theseus.core.tests.common import (
     MockVar,
     create_objective_with_mock_cost_functions,
 )
-from theseus.core.vectorizer import _CostFunctionWrapper
 from theseus.theseus_layer import TheseusLayer
 
 device = "cuda:0" if torch.cuda.is_available() else "cpu"
@@ -212,9 +211,6 @@ def _run_optimizer_test(
         linear_solver_cls=linear_solver_cls,
         use_learnable_error=use_learnable_error,
     )
-    # Check that vectorizer is being used
-    for cf in layer_ref.objective:
-        assert isinstance(cf, _CostFunctionWrapper)
     layer_ref.to(device)
     with torch.no_grad():
         input_values = {"coefficients": torch.ones(batch_size, 2, device=device) * 0.75}
@@ -265,9 +261,6 @@ def _run_optimizer_test(
         linear_solver_cls=linear_solver_cls,
         use_learnable_error=use_learnable_error,
     )
-    # Check that vectorizer is being used
-    for cf in layer_to_learn.objective:
-        assert isinstance(cf, _CostFunctionWrapper)
     layer_to_learn.to(device)
 
     # Check the initial solution quality to check how much has loss improved later

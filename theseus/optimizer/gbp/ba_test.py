@@ -11,9 +11,13 @@ import torch
 
 import theseus as th
 import theseus.utils.examples as theg
-from theseus.optimizer.gbp import GaussianBeliefPropagation, synchronous_schedule
+from theseus.optimizer.gbp import (
+    BAViewer,
+    GaussianBeliefPropagation,
+    synchronous_schedule,
+)
 
-# Smaller values} result in error
+# Smaller values result in error
 th.SO3.SO3_EPS = 1e-6
 
 
@@ -48,6 +52,13 @@ def camera_loss(
     return loss
 
 
+def average_repojection_error(objective) -> float:
+
+    are = 0.0
+
+    return are
+
+
 def run(cfg: omegaconf.OmegaConf):
     # create (or load) dataset
     ba = theg.BundleAdjustmentDataset.generate_synthetic(
@@ -55,9 +66,16 @@ def run(cfg: omegaconf.OmegaConf):
         num_points=cfg["num_points"],
         average_track_length=cfg["average_track_length"],
         track_locality=cfg["track_locality"],
-        feat_random=1.5,
+        feat_random=0.0,
+        prob_feat_is_outlier=0.0,
         outlier_feat_random=70,
     )
+
+    # cams, points, obs = theg.BundleAdjustmentDataset.load_bal_dataset(
+    #     "/home/joe/Downloads/riku/fr3stf.txt")
+    # ba = theg.BundleAdjustmentDataset(cams, points, obs)
+    # import ipdb; ipdb.set_trace()
+
     # ba.save_to_file(results_path / "ba.txt", gt_path=results_path / "ba_gt.txt")
 
     # param that control transition from squared loss to huber
@@ -84,14 +102,16 @@ def run(cfg: omegaconf.OmegaConf):
     # Add regularization
     if cfg["inner_optim"]["regularize"]:
         zero_point3 = th.Point3(dtype=dtype, name="zero_point")
-        identity_se3 = th.SE3(dtype=dtype, name="zero_se3")
+        # identity_se3 = th.SE3(dtype=dtype, name="zero_se3")
         w = np.sqrt(cfg["inner_optim"]["reg_w"])
         damping_weight = th.ScaleCostWeight(w * torch.ones(1, dtype=dtype))
         for name, var in objective.optim_vars.items():
             target: th.Manifold
             if isinstance(var, th.SE3):
-                target = identity_se3
+                target = var.copy(new_name="target_" + var.name)
+                # target = identity_se3
             elif isinstance(var, th.Point3):
+                # target = var.copy(new_name="target_" + var.name)
                 target = zero_point3
             else:
                 assert False
@@ -105,8 +125,8 @@ def run(cfg: omegaconf.OmegaConf):
         objective.optim_vars[c.pose.name] for c in ba.cameras  # type: ignore
     ]
     if cfg["inner_optim"]["ratio_known_cameras"] > 0.0:
-        w = 100.0
-        camera_weight = th.ScaleCostWeight(100 * torch.ones(1, dtype=dtype))
+        w = 1000.0
+        camera_weight = th.ScaleCostWeight(w * torch.ones(1, dtype=dtype))
         for i in range(len(ba.cameras)):
             if np.random.rand() > cfg["inner_optim"]["ratio_known_cameras"]:
                 continue
@@ -118,6 +138,8 @@ def run(cfg: omegaconf.OmegaConf):
                     name=f"camera_diff_{i}",
                 )
             )
+
+    print("Factors:\n", objective.cost_functions.keys(), "\n")
 
     # Create optimizer and theseus layer
     # optimizer = th.GaussNewton(
@@ -136,8 +158,8 @@ def run(cfg: omegaconf.OmegaConf):
         "track_err_history": True,
         "verbose": True,
         "backward_mode": th.BackwardMode.FULL,
-        "relin_threshold": 0.1,
-        "damping": 0.9,
+        "relin_threshold": 0.0001,
+        "damping": 0.0,
         "dropout": 0.0,
         "schedule": synchronous_schedule(
             cfg["inner_optim"]["max_iters"], optimizer.n_edges
@@ -167,23 +189,25 @@ def run(cfg: omegaconf.OmegaConf):
     loss = camera_loss(ba, camera_pose_vars).item()
     print(f"CAMERA LOSS: (loss, ref loss) {loss:.3f} {camera_loss_ref: .3f}")
 
+    BAViewer(optimizer.belief_history, msg_history=optimizer.ftov_msgs_history)
+
 
 if __name__ == "__main__":
 
     cfg = {
         "seed": 1,
-        "num_cameras": 2,  # 10
-        "num_points": 20,  # 200
+        "num_cameras": 4,
+        "num_points": 10,
         "average_track_length": 8,
         "track_locality": 0.2,
         "inner_optim": {
-            "max_iters": 10,
+            "max_iters": 50,
             "verbose": True,
             "track_err_history": True,
             "keep_step_size": True,
             "regularize": True,
-            "ratio_known_cameras": 0.1,
-            "reg_w": 1e-3,
+            "ratio_known_cameras": 1.0,
+            "reg_w": 1e-4,
         },
     }
 

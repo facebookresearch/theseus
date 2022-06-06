@@ -108,18 +108,19 @@ class BAViewer(trimesh.viewer.SceneViewer):
                         T, self.scene.camera.fov, self.scene.camera.resolution
                     )
                     self.scene.delete_geometry(f"cam_{n_cams}")
-                    self.scene.add_geometry(camera, geom_name=f"cam_{n_cams}")
+                    self.scene.add_geometry(camera[1], geom_name=f"cam_{n_cams}")
                     n_cams += 1
                 elif isinstance(belief.mean[0], th.Point3):
                     point = belief.mean[0].data
                     points.append(point)
 
-                    cov = torch.linalg.inv(belief.precision[0])
-                    ellipse = make_ellipse(point[0], cov)
-                    ellipse.visual.vertex_colors[:] = [255, 0, 0, 100]
+                    # cov = torch.linalg.inv(belief.precision[0])
+                    # ellipse = make_ellipse(point[0], cov)
+                    # ellipse.visual.vertex_colors[:] = [255, 0, 0, 100]
 
-                    self.scene.delete_geometry(f"ellipse_{n_pts}")
-                    self.scene.add_geometry(ellipse, geom_name=f"ellipse_{n_pts}")
+                    # self.scene.delete_geometry(f"ellipse_{n_pts}")
+                    # self.scene.add_geometry(ellipse, geom_name=f"ellipse_{n_pts}")
+                    n_pts += 1
 
             points = torch.cat(points)
             points_tm = trimesh.PointCloud(points)
@@ -143,7 +144,7 @@ class BAViewer(trimesh.viewer.SceneViewer):
                 self._update_vertex_list()
 
 
-def make_ellipse(mean, cov, do_lines=False):
+def make_ellipse(mean, cov, do_lines=False, color=None):
     # eigvals_torch, eigvecs_torch = torch.linalg.eigh(cov)
     eigvals, eigvecs = np.linalg.eigh(cov)  # eigenvecs are columns
     # print("eigvals", eigvals)  # , eigvals_torch.numpy())
@@ -170,7 +171,9 @@ def make_ellipse(mean, cov, do_lines=False):
         ellipse.apply_scale(eigvals)
         ellipse.apply_transform(rotation)
         ellipse.apply_translation(mean)
-        ellipse.visual.vertex_colors = trimesh.visual.random_color()
+        if color is None:
+            color = trimesh.visual.random_color()
+        ellipse.visual.vertex_colors = color
         ellipse.visual.vertex_colors[:, 3] = 100
 
         return ellipse

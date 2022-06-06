@@ -198,6 +198,7 @@ class Factor:
 
         if do_lin:
             J, error = self.cf.weighted_jacobians_error()
+
             J_stk = torch.cat(J, dim=-1)
 
             lam = torch.bmm(J_stk.transpose(-2, -1), J_stk)
@@ -229,6 +230,7 @@ class Factor:
         for v in range(num_optim_vars):
             eta_factor = self.potential_eta.clone()[0]
             lam_factor = self.potential_lam.clone()[0]
+            lam_factor_copy = lam_factor.clone()
 
             # Take product of factor with incoming messages.
             # Convert mesages to tangent space at linearisation point.
@@ -239,91 +241,85 @@ class Factor:
                     eta_mess, lam_mess = th.local_gaussian(
                         self.lin_point[i], vtof_msgs[i], return_mean=False
                     )
-
                     eta_factor[start : start + var_dofs] += eta_mess[0]
                     lam_factor[
                         start : start + var_dofs, start : start + var_dofs
                     ] += lam_mess[0]
 
-                    # if self.name == "Factor__0":
-                    #     print('from adj variable')
-                    #     print(eta_mess)
-                    #     print(lam_mess)
-
                 start += var_dofs
 
-            # Divide up parameters of distribution
             dofs = self.cf.optim_var_at(v).dof()
-            eo = eta_factor[sdim : sdim + dofs]
-            eno = torch.cat((eta_factor[:sdim], eta_factor[sdim + dofs :]))
 
-            loo = lam_factor[sdim : sdim + dofs, sdim : sdim + dofs]
-            lono = torch.cat(
-                (
-                    lam_factor[sdim : sdim + dofs, :sdim],
-                    lam_factor[sdim : sdim + dofs, sdim + dofs :],
-                ),
-                dim=1,
-            )
-            lnoo = torch.cat(
-                (
-                    lam_factor[:sdim, sdim : sdim + dofs],
-                    lam_factor[sdim + dofs :, sdim : sdim + dofs],
-                ),
-                dim=0,
-            )
-            lnono = torch.cat(
-                (
-                    torch.cat(
-                        (lam_factor[:sdim, :sdim], lam_factor[:sdim, sdim + dofs :]),
-                        dim=1,
-                    ),
-                    torch.cat(
-                        (
-                            lam_factor[sdim + dofs :, :sdim],
-                            lam_factor[sdim + dofs :, sdim + dofs :],
-                        ),
-                        dim=1,
-                    ),
-                ),
-                dim=0,
-            )
-
-            # print('det', lnono.det())
-            new_mess_lam = loo - lono @ torch.linalg.inv(lnono) @ lnoo
-            new_mess_eta = eo - lono @ torch.linalg.inv(lnono) @ eno
-
-            # damping in tangent space at linearisation point as message
-            # is already in this tangent space. Could equally do damping
-            # in the tangent space of the new or old message mean.
-            # mean damping
-            if damping[v] != 0:
-                if (
-                    new_mess_lam.count_nonzero() != 0
-                    and ftov_msgs[v].precision.count_nonzero() != 0
-                ):
-                    prev_mess_mean, prev_mess_lam = th.local_gaussian(
-                        self.lin_point[v], ftov_msgs[v], return_mean=True
-                    )
-
-                    new_mess_mean = torch.matmul(
-                        torch.inverse(new_mess_lam), new_mess_eta
-                    )
-                    new_mess_mean = (1 - damping[v]) * new_mess_mean + damping[
-                        v
-                    ] * prev_mess_mean[0]
-                    new_mess_eta = torch.matmul(new_mess_lam, new_mess_mean)
-
-            if new_mess_lam.count_nonzero() == 0:
-                # print(self.cf.__class__, 'not updating new message as lam is all zeros')
+            if torch.allclose(lam_factor, lam_factor_copy) and num_optim_vars > 1:
+                # print(self.cf.name, '---> not updating as incoming message lams are zeros')
                 new_mess = Message([self.cf.optim_var_at(v).copy()])
                 new_mess.zero_message()
-            elif not torch.allclose(new_mess_lam, new_mess_lam.transpose(0, 1)):
-                # print(self.cf.__class__, 'not updating new message as lam is not symmetric')
-                new_mess = Message([self.cf.optim_var_at(v).copy()])
-                new_mess.zero_message()
+
             else:
-                # print(self.cf.__class__, 'sending message')
+                # print(self.cf.name, '---> sending message')
+                # Divide up parameters of distribution
+                eo = eta_factor[sdim : sdim + dofs]
+                eno = torch.cat((eta_factor[:sdim], eta_factor[sdim + dofs :]))
+
+                loo = lam_factor[sdim : sdim + dofs, sdim : sdim + dofs]
+                lono = torch.cat(
+                    (
+                        lam_factor[sdim : sdim + dofs, :sdim],
+                        lam_factor[sdim : sdim + dofs, sdim + dofs :],
+                    ),
+                    dim=1,
+                )
+                lnoo = torch.cat(
+                    (
+                        lam_factor[:sdim, sdim : sdim + dofs],
+                        lam_factor[sdim + dofs :, sdim : sdim + dofs],
+                    ),
+                    dim=0,
+                )
+                lnono = torch.cat(
+                    (
+                        torch.cat(
+                            (
+                                lam_factor[:sdim, :sdim],
+                                lam_factor[:sdim, sdim + dofs :],
+                            ),
+                            dim=1,
+                        ),
+                        torch.cat(
+                            (
+                                lam_factor[sdim + dofs :, :sdim],
+                                lam_factor[sdim + dofs :, sdim + dofs :],
+                            ),
+                            dim=1,
+                        ),
+                    ),
+                    dim=0,
+                )
+
+                new_mess_lam = loo - lono @ np.linalg.inv(lnono) @ lnoo
+                new_mess_eta = eo - lono @ torch.linalg.inv(lnono) @ eno
+
+                # damping in tangent space at linearisation point as message
+                # is already in this tangent space. Could equally do damping
+                # in the tangent space of the new or old message mean.
+                # mean damping
+                if damping[v] != 0:  # and steps_since_lin > 0:
+                    if (
+                        new_mess_lam.count_nonzero() != 0
+                        and ftov_msgs[v].precision.count_nonzero() != 0
+                    ):
+                        prev_mess_mean, prev_mess_lam = th.local_gaussian(
+                            self.lin_point[v], ftov_msgs[v], return_mean=True
+                        )
+
+                        new_mess_mean = torch.matmul(
+                            torch.inverse(new_mess_lam), new_mess_eta
+                        )
+                        new_mess_mean = (1 - damping[v]) * new_mess_mean + damping[
+                            v
+                        ] * prev_mess_mean[0]
+                        new_mess_eta = torch.matmul(new_mess_lam, new_mess_mean)
+
                 new_mess_mean = torch.matmul(
                     torch.linalg.pinv(new_mess_lam), new_mess_eta
                 )
@@ -332,10 +328,8 @@ class Factor:
                 new_mess = th.retract_gaussian(
                     self.lin_point[v], new_mess_mean, new_mess_lam
                 )
-            new_messages.append(new_mess)
 
-            # if self.name == "Factor__0":
-            #     import ipdb; ipdb.set_trace()
+            new_messages.append(new_mess)
 
             sdim += dofs
 
@@ -526,6 +520,7 @@ class GaussianBeliefPropagation(Optimizer, abc.ABC):
             lams_tp = []  # message lams
             for j, msg in enumerate(ftov_msgs):
                 if self.var_ix_for_edges[j] == i:
+                    # print(msg.mean, msg.precision)
                     tau, lam_tp = th.local_gaussian(var, msg, return_mean=True)
                     taus.append(tau[None, ...])
                     lams_tp.append(lam_tp[None, ...])
@@ -573,11 +568,18 @@ class GaussianBeliefPropagation(Optimizer, abc.ABC):
         damping: torch.Tensor,
         relin_threshold: float,
     ):
+        relins = 0
+        did_relin = []
         start = 0
         for factor in self.factors:
             num_optim_vars = factor.cf.num_optim_vars()
 
-            # factor.linearize(relin_threshold=relin_threshold)
+            factor.linearize(relin_threshold=relin_threshold)
+            if factor.steps_since_lin == 0:
+                relins += 1
+                did_relin += [1]
+            else:
+                did_relin += [0]
 
             factor.comp_mess(
                 vtof_msgs[start : start + num_optim_vars],
@@ -586,6 +588,9 @@ class GaussianBeliefPropagation(Optimizer, abc.ABC):
             )
 
             start += num_optim_vars
+
+        # print(f"Factor relinearisations: {relins} / {len(self.factors)}")
+        # print(did_relin)
 
     """
     Optimization loop functions
@@ -648,8 +653,14 @@ class GaussianBeliefPropagation(Optimizer, abc.ABC):
         for cf in self.cf_ordering:
             self.factors.append(Factor(cf))
 
+        self.belief_history = {}
+        self.ftov_msgs_history = {}
+
         converged_indices = torch.zeros_like(info.last_err).bool()
         for it_ in range(start_iter, start_iter + num_iter):
+
+            self.ftov_msgs_history[it_] = [msg.copy() for msg in ftov_msgs]
+            self.belief_history[it_] = [belief.copy() for belief in self.beliefs]
 
             # damping
             # damping = self.gbp_settings.get_damping(iters_since_relin)

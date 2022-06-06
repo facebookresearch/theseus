@@ -6,15 +6,15 @@ import numpy as np
 import pytest  # noqa: F401
 import torch
 
-import theseus.core
+import theseus as th
 
 from .common import MockCostFunction, MockCostWeight
 
 
 def test_theseus_function_init():
     all_ids = []
-    variables = [theseus.core.Variable(torch.ones(1, 1), name="var_1")]
-    aux_vars = [theseus.core.Variable(torch.ones(1, 1), name="aux_1")]
+    variables = [th.Variable(torch.ones(1, 1), name="var_1")]
+    aux_vars = [th.Variable(torch.ones(1, 1), name="aux_1")]
     for i in range(100):
         cost_weight = MockCostWeight(torch.ones(1, 1), name=f"cost_weight_{i}")
         if np.random.random() < 0.5:
@@ -31,8 +31,8 @@ def test_theseus_function_init():
 
 
 def test_no_copy_vars_check():
-    variables = [theseus.core.Variable(torch.ones(1, 1), name="var_1")]
-    aux_vars = [theseus.core.Variable(torch.ones(1, 1), name="aux_1")]
+    variables = [th.Variable(torch.ones(1, 1), name="var_1")]
+    aux_vars = [th.Variable(torch.ones(1, 1), name="aux_1")]
     cost_weight = MockCostWeight(torch.ones(1, 1), name="cost_weight")
     cost_function = MockCostFunction(
         variables, aux_vars, cost_weight, no_copy_vars=True

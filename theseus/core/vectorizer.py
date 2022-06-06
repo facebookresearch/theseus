@@ -76,8 +76,6 @@ class _CostFunctionWrapper(CostFunction):
 # cost function vectorization
 # TODO:
 #   - Tests to add:
-#         + Test for shared_aux_var computation
-#         + Test that schemas are generated correctly
 #         + Test that vectorization results in correct costs
 #         + Vectorize variable update after NLOPT step
 class Vectorize:

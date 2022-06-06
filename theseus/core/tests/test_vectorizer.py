@@ -63,3 +63,80 @@ def test_costs_vars_and_err_before_vectorization():
             else:
                 assert False
         assert saw_cf1 and saw_cf2
+
+
+def test_correct_schemas_and_shared_vars():
+    v1 = th.Vector(1)
+    v2 = th.Vector(1)
+    tv = th.Vector(1)
+    w1 = th.ScaleCostWeight(1.0)
+    mv = th.Vector(1)
+
+    v3 = th.Vector(3)
+    v4 = th.Vector(3)
+
+    s1 = th.SE2()
+    s2 = th.SE2()
+    ts = th.SE2()
+
+    objective = th.Objective()
+    # these two can be grouped
+    cf1 = th.Difference(v1, w1, tv)
+    cf2 = th.Difference(v2, w1, tv)
+    objective.add(cf1)
+    objective.add(cf2)
+
+    # this one uses the same weight and v1, v2, but cannot be grouped
+    cf3 = th.Between(v1, v2, w1, mv)
+    objective.add(cf3)
+
+    # this one is the same cost function type, var type, and weight but different
+    # dimension, so cannot be grouped either
+    cf4 = th.Difference(v3, w1, v4)
+    objective.add(cf4)
+
+    # Now add another group with a different data-type (no-shared weight)
+    w2 = th.ScaleCostWeight(1.0)
+    w3 = th.ScaleCostWeight(2.0)
+    cf5 = th.Difference(s1, w2, ts)
+    cf6 = th.Difference(s2, w3, ts)
+    objective.add(cf5)
+    objective.add(cf6)
+
+    # Not grouped with anything cf1 and cf2 because weight type is different
+    w7 = th.DiagonalCostWeight([1.0])
+    cf7 = th.Difference(v1, w7, tv)
+    objective.add(cf7)
+
+    vectorization = th.Vectorize(objective)
+
+    assert len(vectorization._schema_dict) == 5
+    seen_cnt = [0] * 7
+    for schema, cost_fn_wrappers in vectorization._schema_dict.items():
+        cost_fns = [w.cost_fn for w in cost_fn_wrappers]
+        var_names = vectorization._var_names[schema]
+        if cf1 in cost_fns:
+            assert len(cost_fns) == 2
+            assert cf2 in cost_fns
+            seen_cnt[0] += 1
+            seen_cnt[1] += 1
+            assert f"{th.Vectorize._SHARED_TOKEN}{w1.scale.name}" in var_names
+            assert f"{th.Vectorize._SHARED_TOKEN}{tv.name}" in var_names
+        if cf3 in cost_fns:
+            assert len(cost_fns) == 1
+            seen_cnt[2] += 1
+        if cf4 in cost_fns:
+            assert len(cost_fns) == 1
+            seen_cnt[3] += 1
+        if cf5 in cost_fns:
+            assert len(cost_fns) == 2
+            assert cf6 in cost_fns
+            seen_cnt[4] += 1
+            seen_cnt[5] += 1
+            assert f"{th.Vectorize._SHARED_TOKEN}{w2.scale.name}" not in var_names
+            assert f"{th.Vectorize._SHARED_TOKEN}{w3.scale.name}" not in var_names
+            assert f"{th.Vectorize._SHARED_TOKEN}{ts.name}" in var_names
+        if cf7 in cost_fns:
+            assert len(cost_fns) == 1
+            seen_cnt[6] += 1
+    assert seen_cnt == [1] * 7

@@ -241,6 +241,9 @@ class Vectorize:
             else:
                 var.update(torch.cat(names_to_data[name], dim=0))
 
+    # Computes the error of the vectorized cost function and distributes the error
+    # to the cost function wrappers. The list of wrappers must correspond to the
+    # same schema from which the vectorized cost function was obtained.
     @staticmethod
     def _compute_error_and_replace_wrapper_caches(
         vectorized_cost_fn: CostFunction,

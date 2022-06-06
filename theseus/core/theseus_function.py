@@ -91,8 +91,10 @@ class TheseusFunction(abc.ABC):
 
         if self._has_duplicate_vars(new_fn):
             raise RuntimeError(
-                "TheseusFunction.copy() resulted in one of the original variables "
-                "being reused. copy() requires all variables to be copied as well."
+                f"{self.__class__.__name__}.copy() resulted in one of the original "
+                "variables being reused. copy() requires all variables to be copied "
+                "to new variables, so please re-implement _copy_impl() to satisfy this "
+                "property."
             )
 
         return new_fn

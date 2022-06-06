@@ -3,9 +3,9 @@ from typing import List, Optional, Tuple, Type
 
 import torch
 
-import theseus as th
-
+from .cost_function import CostFunction
 from .loss import Loss
+from .variable import Variable
 
 
 # This class implements a robust cost function that incorporates a loss for
@@ -25,12 +25,12 @@ from .loss import Loss
 #     -`robust_cost_fn.weighted_error()` returns a vectorized version of loss(||e||^2).
 #
 # Also, `robust_cost_fn.jacobians()` is not implemented.
-class RobustCostFunction(th.CostFunction, abc.ABC):
+class RobustCostFunction(CostFunction, abc.ABC):
     def __init__(
         self,
-        cost_function: th.CostFunction,
+        cost_function: CostFunction,
         loss_cls: Type[Loss],
-        log_loss_radius: th.Vector,
+        log_loss_radius: Variable,
         name: Optional[str] = None,
     ):
         super().__init__(cost_function.weight, name=name)

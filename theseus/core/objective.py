@@ -357,7 +357,7 @@ class Objective:
                 :, pos : pos + cost_function.dim()
             ] = cost_function.weighted_error()
             pos += cost_function.dim()
-        if not also_update:
+        if input_data is not None and not also_update:
             self.update(old_data)
         return error_vector
 

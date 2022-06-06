@@ -33,7 +33,7 @@ def test_costs_vars_and_err_before_vectorization():
         w2 = torch.randn(batch_size, 1)
 
         # disable for this test since we are not checking the result
-        objective._vectorization_final_callback = None
+        objective._vectorization_run = None
         objective.update({"w1": w1, "w2": w2})
 
         def _check_attr(cf, var):

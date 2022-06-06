@@ -78,7 +78,8 @@ class _CostFunctionWrapper(CostFunction):
 #   - Tests to add:
 #         + Test for shared_aux_var computation
 #         + Test that schemas are generated correctly
-#         + Test that vectorization results in correct cots
+#         + Test that vectorization results in correct costs
+#         + Vectorize variable update after NLOPT step
 class Vectorize:
     _SHARED_TOKEN = "__shared__"
 
@@ -92,22 +93,17 @@ class Vectorize:
             _CostFunctionSchema, List[_CostFunctionWrapper]
         ] = defaultdict(list)
 
-        # Used as examples from which the vectorized cost functions are copied.
-        self._cost_fn_templates: Dict[_CostFunctionSchema, CostFunction] = {}
-
         # Create wrappers for all cost functions and also get their schemas
         for cost_fn in objective.cost_functions.values():
             wrapper = _CostFunctionWrapper(cost_fn)
             self._cost_fn_wrappers.append(wrapper)
             schema = _get_cost_function_schema(cost_fn)
             self._schema_dict[schema].append(wrapper)
-            if schema not in self._cost_fn_templates:
-                self._cost_fn_templates[schema] = cost_fn
 
         # Now create a vectorized cost function for each unique schema
         self._vectorized_cost_fns: Dict[_CostFunctionSchema, CostFunction] = {}
         for schema in self._schema_dict:
-            base_cost_fn = self._cost_fn_templates[schema]
+            base_cost_fn = self._schema_dict[schema][0].cost_fn
             vectorized_cost_fn = base_cost_fn.copy(keep_variable_names=False)
             vectorized_cost_fn.weight = base_cost_fn.weight.copy(
                 keep_variable_names=False
@@ -122,8 +118,7 @@ class Vectorize:
         # Replacing `obj._cost_functions_iterable` allows to recover these when
         # iterating the Objective.
         objective._cost_functions_iterable = self._cost_fn_wrappers
-        objective._vectorization_init_callback = self._clear_wrapper_caches
-        objective._vectorization_final_callback = self._vectorize
+        objective._vectorization_run = self._vectorize
 
         self._objective = objective
 
@@ -135,7 +130,7 @@ class Vectorize:
     # where idx is the index of the var in the schema order.
     def _get_var_names(self) -> Dict[_CostFunctionSchema, List[Optional[str]]]:
         info = {}
-        for schema, cost_fns in self._schema_dict.items():
+        for schema, cost_fn_wrappers in self._schema_dict.items():
             # schema is (_, N optim_vars, M aux_vars, _, P aux_vars)
             # so the total number of vars is len(schema) - 2
             # var_names_per_position holds all variable names associated to each
@@ -144,7 +139,8 @@ class Vectorize:
             var_names_per_position: List[Set[str]] = [
                 set() for _ in range(len(schema) - 2)
             ]
-            for cf in cost_fns:
+            for wrapper in cost_fn_wrappers:
+                cf = wrapper.cost_fn
                 var_idx = 0
                 for var_iterators in [cf.optim_vars, cf.aux_vars, cf.weight.aux_vars]:
                     for v in var_iterators:
@@ -170,8 +166,9 @@ class Vectorize:
     def _expand(tensor: torch.Tensor, size: int) -> torch.Tensor:
         return tensor.expand((size,) + ((-1,) * (len(tensor.shape) - 1)))
 
-    # Populates names_to_data with a list for each variable that has the concatenated
-    # data of all cost functions. All functions must have the same schema.
+    # Populates names_to_data with a list with one element per vectorized variable,
+    # and which holds the concatenated data of its corresponding variables in all
+    # cost functions in the list (which are assumed to have the same schema).
     # Inputs:
     #   - vars_names; The names for all variables in the cost_fns' schema. Shared
     #       variables must be prefixed with `_SHARED_TOKEN`.`
@@ -182,13 +179,14 @@ class Vectorize:
     #       will be modified in place.
     @staticmethod
     def _update_all_cost_fns_var_data(
-        cost_fns: List[CostFunction],
+        cf_wrappers: List[_CostFunctionWrapper],
         var_names: List[str],
         batch_size: int,
         names_to_data: Dict[str, List[torch.Tensor]],
     ):
         # Get all the data from individual variables
-        for cost_fn in cost_fns:
+        for wrapper in cf_wrappers:
+            cost_fn = wrapper.cost_fn
             cost_fn_vars = Vectorize._get_all_vars(cost_fn)
             # some shared vars may appear in more than one position in the list
             # For example GPMotionModel and GPCostWeight both have dt in their
@@ -248,27 +246,28 @@ class Vectorize:
     @staticmethod
     def _compute_error_and_replace_wrapper_caches(
         vectorized_cost_fn: CostFunction,
-        cost_fns: List[_CostFunctionWrapper],
+        cost_fn_wrappers: List[_CostFunctionWrapper],
         batch_size: int,
     ):
         v_jac, v_err = vectorized_cost_fn.weighted_jacobians_error()
         start_idx = 0
-        for cost_fn in cost_fns:
-            assert cost_fn._cached_error is None
-            assert cost_fn._cached_jacobians is None
+        for wrapper in cost_fn_wrappers:
+            assert wrapper._cached_error is None
+            assert wrapper._cached_jacobians is None
             v_slice = slice(start_idx, start_idx + batch_size)
-            cost_fn._cached_error = v_err[v_slice]
-            cost_fn._cached_jacobians = [jac[v_slice] for jac in v_jac]
+            wrapper._cached_error = v_err[v_slice]
+            wrapper._cached_jacobians = [jac[v_slice] for jac in v_jac]
             start_idx += batch_size
 
     def _clear_wrapper_caches(self):
-        for cost_fns in self._schema_dict.values():
-            for cf in cost_fns:
+        for cost_fn_wrappers in self._schema_dict.values():
+            for cf in cost_fn_wrappers:
                 cf._cached_error = None
                 cf._cached_jacobians = None
 
     def _vectorize(self):
-        for schema, cost_fns in self._schema_dict.items():
+        self._clear_wrapper_caches()
+        for schema, cost_fn_wrappers in self._schema_dict.items():
             var_names = self._var_names[schema]
             vectorized_cost_fn = self._vectorized_cost_fns[schema]
             all_vectorized_vars = Vectorize._get_all_vars(vectorized_cost_fn)
@@ -277,11 +276,15 @@ class Vectorize:
             batch_size = self._objective.batch_size
 
             Vectorize._update_all_cost_fns_var_data(
-                cost_fns, var_names, batch_size, names_to_data
+                cost_fn_wrappers, var_names, batch_size, names_to_data
             )
             Vectorize._update_vectorized_vars(
-                all_vectorized_vars, names_to_data, var_names, batch_size, len(cost_fns)
+                all_vectorized_vars,
+                names_to_data,
+                var_names,
+                batch_size,
+                len(cost_fn_wrappers),
             )
             Vectorize._compute_error_and_replace_wrapper_caches(
-                vectorized_cost_fn, cost_fns, batch_size
+                vectorized_cost_fn, cost_fn_wrappers, batch_size
             )

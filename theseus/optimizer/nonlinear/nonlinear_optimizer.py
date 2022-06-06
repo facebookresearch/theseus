@@ -395,3 +395,4 @@ class NonlinearOptimizer(Optimizer, abc.ABC):
             else:
                 var.update(new_var.data, batch_ignore_mask=converged_indices)
             var_idx += var.dof()
+        self.objective.update_vectorization()

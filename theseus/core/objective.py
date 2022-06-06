@@ -65,10 +65,7 @@ class Objective:
         self._cost_functions_iterable: Optional[Iterable[CostFunction]] = None
 
         # Used to vectorize cost functions after update
-        self._vectorization_init_callback: Optional[Callable] = None
-
-        # Used to vectorize cost functions after update
-        self._vectorization_final_callback: Optional[Callable] = None
+        self._vectorization_run: Optional[Callable] = None
 
     def _add_function_variables(
         self,
@@ -435,9 +432,6 @@ class Objective:
         return the_copy
 
     def update(self, input_data: Optional[Dict[str, torch.Tensor]] = None):
-        if self._vectorization_init_callback is not None:
-            self._vectorization_init_callback()
-
         self._batch_size = None
 
         def _get_batch_size(batch_sizes: Sequence[int]) -> int:
@@ -482,8 +476,13 @@ class Objective:
         batch_sizes.extend([v.data.shape[0] for v in self.aux_vars.values()])
         self._batch_size = _get_batch_size(batch_sizes)
 
-        if self._vectorization_final_callback is not None:
-            self._vectorization_final_callback()
+        if self._vectorization_run is not None:
+            self._vectorization_run()
+
+    def update_vectorization(self):
+        if self._vectorization_run is None:
+            return
+        self._vectorization_run()
 
     # iterates over cost functions
     def __iter__(self):

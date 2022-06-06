@@ -13,7 +13,6 @@ import theseus as th
 from .common import (
     check_another_theseus_function_is_copy,
     check_another_theseus_tensor_is_copy,
-    create_mock_cost_functions,
 )
 
 
@@ -33,35 +32,37 @@ def test_copy_diagonal_cost_weight():
         check_another_theseus_tensor_is_copy(diagonal, the_copy.diagonal)
 
 
-def test_weight_error_scale_and_diagonal_cost_weight():
-    def _check(f1_, f2_, scale_):
-        j1, e1 = f1_.weighted_jacobians_error()
-        j2, e2 = f2_.weighted_jacobians_error()
-        assert torch.allclose(e1 * scale_, e2)
-        for i in range(len(j1)):
-            assert torch.allclose(j1[i] * scale_, j2[i])
+def test_scale_cost_weight():
+    for dim in [1, 2, 10]:
+        for batch_size in [1, 2, 10]:
+            v1 = th.Vector(data=torch.ones(batch_size, dim))
+            z = th.Vector(data=torch.zeros(batch_size, dim))
+            scale = torch.randn(1).item()
+            expected_err = torch.ones(batch_size, dim) * scale
+            expected_jac = (torch.eye(dim).unsqueeze(0) * scale).expand(
+                batch_size, dim, dim
+            )
 
-    for _ in range(10):
-        scale = torch.rand(1)
-        cost_functions, *_ = create_mock_cost_functions(
-            data=torch.ones(1, 10),
-            cost_weight=th.ScaleCostWeight(th.Variable(torch.tensor(1.0))),
-        )
-        cost_functions_x_scale, *_ = create_mock_cost_functions(
-            data=torch.ones(1, 10),
-            cost_weight=th.ScaleCostWeight(th.Variable(scale.squeeze())),
-        )
-        for f1, f2 in zip(cost_functions, cost_functions_x_scale):
-            _check(f1, f2, scale)
+            def _check(cw):
+                cf1 = th.Difference(v1, cw, z)
+                jacobians, error = cf1.weighted_jacobians_error()
+                assert error.allclose(expected_err)
+                assert jacobians[0].allclose(expected_jac)
 
-        diagonal = torch.ones(2)
-        cost_functions, *_ = create_mock_cost_functions(
-            data=torch.ones(1, 10),
-            cost_weight=th.DiagonalCostWeight(th.Variable(diagonal)),
-        )
-        cost_functions_x_scale, *_ = create_mock_cost_functions(
-            data=torch.ones(1, 10),
-            cost_weight=th.DiagonalCostWeight(th.Variable(diagonal * scale)),
-        )
-        for f1, f2 in zip(cost_functions, cost_functions_x_scale):
-            _check(f1, f2, scale)
+            _check(th.ScaleCostWeight(scale))
+            _check(th.ScaleCostWeight(torch.ones(1) * scale))
+            _check(th.ScaleCostWeight(torch.ones(batch_size) * scale))
+            _check(th.ScaleCostWeight(torch.ones(1, 1) * scale))
+            _check(th.ScaleCostWeight(torch.ones(batch_size, 1) * scale))
+            _check(th.ScaleCostWeight(th.Variable(torch.ones(1, 1) * scale)))
+
+            batched_scale = torch.randn(batch_size, 1)
+            expected_err = batched_scale * torch.ones(batch_size, dim)
+            expected_jac = (torch.eye(dim).unsqueeze(0)).expand(
+                batch_size, dim, dim
+            ) * batched_scale.view(-1, 1, 1)
+
+            cf1 = th.Difference(v1, th.ScaleCostWeight(batched_scale), z)
+            jacobians, error = cf1.weighted_jacobians_error()
+            assert error.allclose(expected_err)
+            assert jacobians[0].allclose(expected_jac)

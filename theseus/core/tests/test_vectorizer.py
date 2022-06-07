@@ -43,7 +43,7 @@ def test_costs_vars_and_err_before_vectorization():
         # Check that the vectorizer's cost functions have the right variables and error
         saw_cf1 = False
         saw_cf2 = False
-        for cf in objective:
+        for cf in objective._vectorized_iter():
             assert isinstance(cf, _CostFunctionWrapper)
             optim_vars = [v for v in cf.optim_vars]
             aux_vars = [v for v in cf.aux_vars]

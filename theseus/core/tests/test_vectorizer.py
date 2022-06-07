@@ -177,7 +177,7 @@ def test_vectorized_error():
             objective.add(th.Difference(s, ws, s_target))
 
         vectorization = th.Vectorize(objective)
-        objective.update()
+        objective.update_vectorization()
 
         assert objective._cost_functions_iterable is vectorization._cost_fn_wrappers
         for w in vectorization._cost_fn_wrappers:

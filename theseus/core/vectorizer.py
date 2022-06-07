@@ -179,7 +179,7 @@ class Vectorize:
     def _update_all_cost_fns_var_data(
         cf_wrappers: List[_CostFunctionWrapper],
         var_names: List[str],
-        batch_size: int,
+        objective_batch_size: int,
         names_to_data: Dict[str, List[torch.Tensor]],
     ):
         # Get all the data from individual variables
@@ -194,18 +194,31 @@ class Vectorize:
                 name = var_names[var_idx]
                 if name in seen_vars:
                     continue
-                # If not shared variable, always append the data
-                # If the variable is shared only need data for one of the cost
-                # functions and we can just extend later to complete the vectorized
-                # batch
-                if Vectorize._SHARED_TOKEN not in name or name not in names_to_data:
-                    # if not a shared variable, expand to batch size if needed
-                    data = (
-                        var.data
-                        if (var.data.shape[0] > 1 or Vectorize._SHARED_TOKEN in name)
-                        else Vectorize._expand(var.data, batch_size)
-                    )
-                    names_to_data[name].append(data)
+
+                # If the variable is shared and batch_size == 1, only need data for
+                # one of the cost functions and we can just extend later to complete
+                # the vectorized batch, so here we can do `continue`
+                var_batch_size = var.data.shape[0]
+                if (
+                    name in names_to_data
+                    and Vectorize._SHARED_TOKEN in name
+                    and var_batch_size == 1
+                ):
+                    continue
+
+                # Otherwise, we need to append to the list of data tensors. since
+                # we cannot extend to a full batch w/o copying.
+
+                # If not a shared variable, expand to batch size if needed, because
+                # those we will copy, no matter what.
+                # For shared variables, just append, we will handle the expansion
+                # when updating the vectorized variable containers.
+                data = (
+                    var.data
+                    if (var_batch_size > 1 or Vectorize._SHARED_TOKEN in name)
+                    else Vectorize._expand(var.data, objective_batch_size)
+                )
+                names_to_data[name].append(data)
                 seen_vars.add(name)
 
     # Goes through the list of vectorized variables and updates their data with the
@@ -226,20 +239,17 @@ class Vectorize:
                 var.update(names_to_data[name][0])
                 continue
 
-            if Vectorize._SHARED_TOKEN in name:
-                data = names_to_data[name][0]
-                if data.shape[0] > 1:
-                    original_name = name[len(Vectorize._SHARED_TOKEN) :]
-                    raise RuntimeError(
-                        f"Cannot vectorize shared variables with "
-                        f"batch size > 1, but variable named {original_name} has "
-                        f"batch size = {data.shape[0]}. If this is unavoidable for a "
-                        f"batch, consider setting the batch size of your problem to 1, "
-                        f"or turning cost function vectorization off."
-                    )
-                var.update(Vectorize._expand(data, batch_size * num_cost_fns))
+            all_var_data = names_to_data[name]
+            if Vectorize._SHARED_TOKEN in name and all_var_data[0].shape[0] == 1:
+                # In this case this is a shared variable, so all_var_data[i] is
+                # the same for any value of i. So, we can just expand to the full
+                # vectorized size. Sadly, this doesn't work if batch_size > 1
+                var_tensor = Vectorize._expand(
+                    all_var_data[0], batch_size * num_cost_fns
+                )
             else:
-                var.update(torch.cat(names_to_data[name], dim=0))
+                var_tensor = torch.cat(all_var_data, dim=0)
+            var.update(var_tensor)
 
     # Computes the error of the vectorized cost function and distributes the error
     # to the cost function wrappers. The list of wrappers must correspond to the

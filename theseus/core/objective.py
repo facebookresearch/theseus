@@ -476,9 +476,6 @@ class Objective:
         batch_sizes.extend([v.data.shape[0] for v in self.aux_vars.values()])
         self._batch_size = _get_batch_size(batch_sizes)
 
-        if self._vectorization_run is not None:
-            self._vectorization_run()
-
     def update_vectorization(self):
         if self._vectorization_run is None:
             return

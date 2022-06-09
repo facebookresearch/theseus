@@ -16,12 +16,12 @@ from theseus.optimizer.nonlinear import BackwardMode, GaussNewton
 
 
 class TheseusLayer(nn.Module):
-    def __init__(self, optimizer: Optimizer, vectorize_cost_fns: bool = True):
+    def __init__(self, optimizer: Optimizer, vectorize: bool = True):
         super().__init__()
         self.objective = optimizer.objective
         self.optimizer = optimizer
         self._objectives_version = optimizer.objective.current_version
-        if vectorize_cost_fns:
+        if vectorize:
             Vectorize(self.objective)
 
         self._dlm_bwd_objective = None

@@ -3,7 +3,7 @@ from typing import Dict, List, Optional, Set, Tuple
 
 import torch
 
-from .cost_function import CostFunction, _register_vars_in_list
+from .cost_function import CostFunction
 from .objective import Objective
 from .variable import Variable
 
@@ -35,8 +35,8 @@ class _CostFunctionWrapper(CostFunction):
             name = f"wrapper({cost_fn.name})"
         super().__init__(cost_fn.weight, name=name)
         self.cost_fn = cost_fn
-        _register_vars_in_list(self, cost_fn.optim_vars, is_optim=True)
-        _register_vars_in_list(self, cost_fn.aux_vars, is_optim=False)
+        self.register_vars(cost_fn.optim_vars, optim_vars=True)
+        self.register_vars(cost_fn.aux_vars, optim_vars=False)
         self._cached_error: Optional[torch.Tensor] = None
         self._cached_jacobians: Optional[List[torch.Tensor]] = None
 
@@ -74,10 +74,6 @@ class _CostFunctionWrapper(CostFunction):
 
 # This class replaces the Objective's iterator for one that takes advantage of
 # cost function vectorization
-# TODO:
-#   - Tests to add:
-#         + Test that vectorization results in correct costs
-#         + Vectorize variable update after NLOPT step
 class Vectorize:
     _SHARED_TOKEN = "__shared__"
 
@@ -157,8 +153,12 @@ class Vectorize:
         return info
 
     @staticmethod
-    def _get_all_vars(cf) -> List[Variable]:
-        return list(cf.optim_vars) + list(cf.aux_vars) + list(cf.weight.aux_vars)
+    def _get_all_vars(cf: CostFunction) -> List[Variable]:
+        return (
+            list(cf.optim_vars)
+            + list(cf.aux_vars)  # type:ignore
+            + list(cf.weight.aux_vars)  # type:ignore
+        )
 
     @staticmethod
     def _expand(tensor: torch.Tensor, size: int) -> torch.Tensor:

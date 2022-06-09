@@ -80,7 +80,7 @@ def test_ik_optimization(robot_model, batch_size, ee_pose_target, is_grad_enable
         max_iterations=15,
         step_size=0.5,
     )
-    theseus_optim = th.TheseusLayer(optimizer, vectorize=False)
+    theseus_optim = th.TheseusLayer(optimizer, vectorize=True)
 
     # Optimize
     theseus_inputs = {

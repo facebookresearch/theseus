@@ -61,11 +61,14 @@ class Objective:
         # objective structure might break optimizer initialization).
         self.current_version = 0
 
+        # ---- Callbacks for vectorization ---- #
         # This gets replaced when cost function vectorization is used
         self._cost_functions_iterable: Optional[Iterable[CostFunction]] = None
 
         # Used to vectorize cost functions after update
         self._vectorization_run: Optional[Callable] = None
+
+        self._vectorization_to: Optional[Callable] = None
 
     def _add_function_variables(
         self,
@@ -498,3 +501,5 @@ class Objective:
         device, dtype, *_ = torch._C._nn._parse_to(*args, **kwargs)
         self.device = device or self.device
         self.dtype = dtype or self.dtype
+        if self._vectorization_to is not None:
+            self._vectorization_to(*args, **kwargs)

@@ -50,6 +50,8 @@ class QuadraticFitCostFunction(th.CostFunction):
         self.xs = xs
         self.ys = ys
 
+        self._optim_vars = optim_vars
+
     def error_from_tensors(self, optim_var_0_data):
         pred_y = model(self.xs, optim_var_0_data)
         return self.ys - pred_y
@@ -71,7 +73,9 @@ class QuadraticFitCostFunction(th.CostFunction):
         self.ys = self.ys.to(*args, **kwargs)
 
     def _copy_impl(self, new_name=None):
-        return self
+        return QuadraticFitCostFunction(
+            [v.copy() for v in self._optim_vars], self.weight.copy(), self.xs, self.ys
+        )
 
 
 def create_qf_theseus_layer(
@@ -131,7 +135,7 @@ def create_qf_theseus_layer(
         max_iterations=max_iterations,
     )
     assert isinstance(optimizer.linear_solver, linear_solver_cls)
-    theseus_layer = th.TheseusLayer(optimizer, vectorize=False)
+    theseus_layer = th.TheseusLayer(optimizer, vectorize=True)
     return theseus_layer
 
 

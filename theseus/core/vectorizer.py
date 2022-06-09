@@ -118,6 +118,7 @@ class Vectorize:
         # iterating the Objective.
         objective._cost_functions_iterable = self._cost_fn_wrappers
         objective._vectorization_run = self._vectorize
+        objective._vectorization_to = self._to
 
         self._objective = objective
 
@@ -304,3 +305,8 @@ class Vectorize:
             Vectorize._compute_error_and_replace_wrapper_caches(
                 vectorized_cost_fn, cost_fn_wrappers, batch_size
             )
+
+    # Applies to() with given args to all vectorized cost functions in the objective
+    def _to(self, *args, **kwargs):
+        for cost_function in self._vectorized_cost_fns.values():
+            cost_function.to(*args, **kwargs)

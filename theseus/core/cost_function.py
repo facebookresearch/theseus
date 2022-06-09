@@ -115,8 +115,8 @@ class AutoDiffCostFunction(CostFunction):
             raise ValueError(
                 "AutodiffCostFunction must receive at least one optimization variable."
             )
-        self.register_vars(optim_vars, optim_vars=True)
-        self.register_vars(aux_vars, optim_vars=False)
+        self.register_vars(optim_vars, is_optim_vars=True)
+        self.register_vars(aux_vars, is_optim_vars=False)
 
         self._err_fn = err_fn
         self._dim = dim

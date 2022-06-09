@@ -64,12 +64,12 @@ class TheseusFunction(abc.ABC):
         for name in aux_var_names:
             self.register_aux_var(name)
 
-    def register_vars(self, vars: Iterable[Variable], optim_vars: bool = False):
+    def register_vars(self, vars: Iterable[Variable], is_optim_vars: bool = False):
         for var_ in vars:
             if hasattr(self, var_.name):
                 raise RuntimeError(f"Variable name {var_.name} is not allowed.")
             setattr(self, var_.name, var_)
-            if optim_vars:
+            if is_optim_vars:
                 self.register_optim_var(var_.name)
             else:
                 self.register_aux_var(var_.name)

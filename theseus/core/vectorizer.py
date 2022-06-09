@@ -40,8 +40,8 @@ class _CostFunctionWrapper(CostFunction):
             name = f"wrapper({cost_fn.name})"
         super().__init__(cost_fn.weight, name=name)
         self.cost_fn = cost_fn
-        self.register_vars(cost_fn.optim_vars, optim_vars=True)
-        self.register_vars(cost_fn.aux_vars, optim_vars=False)
+        self.register_vars(cost_fn.optim_vars, is_optim_vars=True)
+        self.register_vars(cost_fn.aux_vars, is_optim_vars=False)
         self._cached_error: Optional[torch.Tensor] = None
         self._cached_jacobians: Optional[List[torch.Tensor]] = None
 

@@ -489,7 +489,7 @@ class Objective:
     def __iter__(self):
         return iter([cf for cf in self.cost_functions.values()])
 
-    def _vectorized_iter(self):
+    def _get_iterator(self):
         if self._cost_functions_iterable is None:
             return iter([cf for cf in self.cost_functions.values()])
         return iter([cf for cf in self._cost_functions_iterable])

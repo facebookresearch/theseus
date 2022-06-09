@@ -75,7 +75,7 @@ def test_add():
     yet_another_cost_function = _create_cost_function_with_n_vars_and_m_aux(
         "yet_another", ["yet_var_1"], ["yet_aux_1"], cost_weight
     )
-    with pytest.warns(RuntimeWarning):  # optim var associated to weight
+    with pytest.raises(RuntimeError):  # optim var associated to weight
         objective.add(yet_another_cost_function)  # no conflict here
 
     cost_weight_with_conflict_in_aux_var = MockCostWeight(
@@ -151,8 +151,10 @@ def test_add_and_erase_step_by_step():
     var3 = MockVar(1, data=None, name="var3")
     aux1 = MockVar(1, data=None, name="aux1")
     aux2 = MockVar(1, data=None, name="aux2")
-    cw1 = MockCostWeight(aux1, name="cw1", add_dummy_var_with_name="ignored_optim_var")
-    cw2 = MockCostWeight(aux2, name="cw2", add_optim_var=var1)
+    cw1 = MockCostWeight(
+        aux1, name="cw1"
+    )  # , add_dummy_var_with_name="ignored_optim_var")
+    cw2 = MockCostWeight(aux2, name="cw2")  # , add_optim_var=var1)
 
     cf1 = MockCostFunction([var1, var2], [aux1, aux2], cw1, name="cf1")
     cf2 = MockCostFunction([var1, var3], [aux1], cw2, name="cf2")
@@ -160,15 +162,8 @@ def test_add_and_erase_step_by_step():
 
     objective = th.Objective()
     for cost_function in [cf1, cf2, cf3]:
-        if cost_function is not cf3:
-            with pytest.warns(RuntimeWarning):
-                # a warning should emit the first time cw1/cw2 are added
-                objective.add(cost_function)
-        else:
-            objective.add(cost_function)
+        objective.add(cost_function)
 
-    for name in ["var1", "ignored_optim_var"]:
-        assert name in objective.cost_weight_optim_vars
     for name in ["var1", "var2", "var2"]:
         assert name in objective.optim_vars
     for name in ["aux1", "aux2"]:
@@ -207,13 +202,10 @@ def test_add_and_erase_step_by_step():
         _check_funs_for_variable(var1, v1_lis_)
         _check_funs_for_variable(var2, v2_lis_)
         _check_funs_for_variable(var3, v3_lis_)
-        _check_funs_for_variable(
-            cw1.optim_var_at(0), cw1_opt_lis_, is_cost_weight_optim=True
-        )
         _check_funs_for_variable(aux1, a1_lis_, optim_var=False)
         _check_funs_for_variable(aux2, a2_lis_, optim_var=False)
 
-    v1_lis = [cw2, cf1, cf2]
+    v1_lis = [cf1, cf2]
     v2_lis = [cf1, cf3]
     v3_lis = [cf2, cf3]
     cw1o_lis = [cw1]
@@ -223,7 +215,7 @@ def test_add_and_erase_step_by_step():
     _check_all_vars(v1_lis, v2_lis, v3_lis, cw1o_lis, a1_lis, a2_lis)
 
     objective.erase("cf1")
-    v1_lis = [cw2, cf2]
+    v1_lis = [cf2]
     v2_lis = [cf3]
     cw1o_lis = []
     a1_lis = [cf2]  # cf1 and cw1 are deleted, since cw1 not used by any other cost fn
@@ -232,7 +224,7 @@ def test_add_and_erase_step_by_step():
     assert cw1 not in objective.cost_functions_for_weights
 
     objective.erase("cf2")
-    v1_lis = [cw2]  # cw2 still used by cf3
+    v1_lis = []
     v3_lis = [cf3]
     a1_lis = []
     _check_all_vars(v1_lis, v2_lis, v3_lis, cw1o_lis, a1_lis, a2_lis)

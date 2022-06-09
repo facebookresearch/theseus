@@ -103,10 +103,10 @@ class MockCostFunction(th.CostFunction):
 
     def error(self):
         mu = torch.stack([v.data for v in self.optim_vars]).sum()
-        return mu * torch.ones(self._dim)
+        return mu * torch.ones(1, self._dim)
 
     def jacobians(self):
-        return [self.error()] * len(self._optim_vars_attr_names)
+        return [torch.ones(1, self._dim, self._dim)] * len(self._optim_vars_attr_names)
 
     def dim(self) -> int:
         return self._dim

@@ -5,7 +5,7 @@
 
 import warnings
 from collections import OrderedDict
-from typing import Dict, List, Optional, Sequence, Union
+from typing import Callable, Dict, Iterable, List, Optional, Sequence, Union
 
 import torch
 
@@ -60,6 +60,15 @@ class Objective:
         # an optimizer to run on a stale version of the objective (since changing the
         # objective structure might break optimizer initialization).
         self.current_version = 0
+
+        # ---- Callbacks for vectorization ---- #
+        # This gets replaced when cost function vectorization is used
+        self._cost_functions_iterable: Optional[Iterable[CostFunction]] = None
+
+        # Used to vectorize cost functions after update
+        self._vectorization_run: Optional[Callable] = None
+
+        self._vectorization_to: Optional[Callable] = None
 
     def _add_function_variables(
         self,
@@ -160,15 +169,14 @@ class Objective:
             self.cost_functions_for_weights[cost_function.weight] = []
 
             if cost_function.weight.num_optim_vars() > 0:
-                warnings.warn(
+                raise RuntimeError(
                     f"The cost weight associated to {cost_function.name} receives one "
                     "or more optimization variables. Differentiating cost "
                     "weights with respect to optimization variables is not currently "
                     "supported, thus jacobians computed by our optimizers will be "
                     "incorrect. You may want to consider moving the weight computation "
                     "inside the cost function, so that the cost weight only receives "
-                    "auxiliary variables.",
-                    RuntimeWarning,
+                    "auxiliary variables."
                 )
 
         self.cost_functions_for_weights[cost_function.weight].append(cost_function)
@@ -471,9 +479,20 @@ class Objective:
         batch_sizes.extend([v.data.shape[0] for v in self.aux_vars.values()])
         self._batch_size = _get_batch_size(batch_sizes)
 
+    def update_vectorization(self):
+        if self._vectorization_run is not None:
+            if self._batch_size is None:
+                self.update()
+            self._vectorization_run()
+
     # iterates over cost functions
     def __iter__(self):
-        return iter([f for f in self.cost_functions.values()])
+        return iter([cf for cf in self.cost_functions.values()])
+
+    def _get_iterator(self):
+        if self._cost_functions_iterable is None:
+            return iter([cf for cf in self.cost_functions.values()])
+        return iter([cf for cf in self._cost_functions_iterable])
 
     # Applies to() with given args to all tensors in the objective
     def to(self, *args, **kwargs):
@@ -482,3 +501,5 @@ class Objective:
         device, dtype, *_ = torch._C._nn._parse_to(*args, **kwargs)
         self.device = device or self.device
         self.dtype = dtype or self.dtype
+        if self._vectorization_to is not None:
+            self._vectorization_to(*args, **kwargs)

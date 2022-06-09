@@ -59,7 +59,7 @@ theseus_inputs = {
     "x": data_x,
     "y": data_y,
 }
-theseus_optim = th.TheseusLayer(optimizer)
+theseus_optim = th.TheseusLayer(optimizer, vectorize=True)
 
 
 def test_backwards():

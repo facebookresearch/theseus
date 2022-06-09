@@ -477,11 +477,10 @@ class Objective:
         self._batch_size = _get_batch_size(batch_sizes)
 
     def update_vectorization(self):
-        if self._vectorization_run is None:
-            return
-        if self._batch_size is None:
-            self.update()
-        self._vectorization_run()
+        if self._vectorization_run is not None:
+            if self._batch_size is None:
+                self.update()
+            self._vectorization_run()
 
     # iterates over cost functions
     def __iter__(self):

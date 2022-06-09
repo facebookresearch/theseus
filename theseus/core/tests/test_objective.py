@@ -164,8 +164,6 @@ def test_add_and_erase_step_by_step():
     for cost_function in [cf1, cf2, cf3]:
         objective.add(cost_function)
 
-    # for name in ["var1", "ignored_optim_var"]:
-    #     assert name in objective.cost_weight_optim_vars
     for name in ["var1", "var2", "var2"]:
         assert name in objective.optim_vars
     for name in ["aux1", "aux2"]:
@@ -204,9 +202,6 @@ def test_add_and_erase_step_by_step():
         _check_funs_for_variable(var1, v1_lis_)
         _check_funs_for_variable(var2, v2_lis_)
         _check_funs_for_variable(var3, v3_lis_)
-        # _check_funs_for_variable(
-        #     cw1.optim_var_at(0), cw1_opt_lis_, is_cost_weight_optim=True
-        # )
         _check_funs_for_variable(aux1, a1_lis_, optim_var=False)
         _check_funs_for_variable(aux2, a2_lis_, optim_var=False)
 

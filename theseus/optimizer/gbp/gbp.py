@@ -388,6 +388,30 @@ class GaussianBeliefPropagation(Optimizer, abc.ABC):
         var_ixs = [item for sublist in var_ixs_nested for item in sublist]
         self.var_ix_for_edges = torch.tensor(var_ixs).long()
 
+        # initialise messages with zeros
+        self.vtof_msgs: List[Message] = []
+        self.ftov_msgs: List[Message] = []
+        for cf in self.cf_ordering:
+            for var in cf.optim_vars:
+                # Set mean of initial message to identity of the group
+                # doesn't matter what it is as long as precision is zero
+                vtof_msg = Message([var.copy()], name=f"msg_{var.name}_to_{cf.name}")
+                ftov_msg = Message([var.copy()], name=f"msg_{cf.name}_to_{var.name}")
+                vtof_msg.zero_message()
+                ftov_msg.zero_message()
+                self.vtof_msgs.append(vtof_msg)
+                self.ftov_msgs.append(ftov_msg)
+
+        # initialise ManifoldGaussian for belief
+        self.beliefs: List[th.ManifoldGaussian] = []
+        for var in self.ordering:
+            self.beliefs.append(th.ManifoldGaussian([var]))
+
+        # compute factor potentials for the first time
+        self.factors: List[Factor] = []
+        for cf in self.cf_ordering:
+            self.factors.append(Factor(cf))
+
     """
     Copied and slightly modified from nonlinear optimizer class
     """
@@ -522,8 +546,6 @@ class GaussianBeliefPropagation(Optimizer, abc.ABC):
 
     def _pass_var_to_fac_messages(
         self,
-        ftov_msgs,
-        vtof_msgs,
         update_belief=True,
     ):
         for i, var in enumerate(self.ordering):
@@ -531,7 +553,7 @@ class GaussianBeliefPropagation(Optimizer, abc.ABC):
             # Collect all incoming messages in the tangent space at the current belief
             taus = []  # message means
             lams_tp = []  # message lams
-            for j, msg in enumerate(ftov_msgs):
+            for j, msg in enumerate(self.ftov_msgs):
                 if self.var_ix_for_edges[j] == i:
                     # print(msg.mean, msg.precision)
                     tau, lam_tp = th.local_gaussian(var, msg, return_mean=True)
@@ -545,14 +567,14 @@ class GaussianBeliefPropagation(Optimizer, abc.ABC):
 
             # Compute outgoing messages
             ix = 0
-            for j, msg in enumerate(ftov_msgs):
+            for j, msg in enumerate(self.ftov_msgs):
                 if self.var_ix_for_edges[j] == i:
                     taus_inc = torch.cat((taus[:ix], taus[ix + 1 :]))
                     lams_inc = torch.cat((lams_tp[:ix], lams_tp[ix + 1 :]))
 
                     lam_a = lams_inc.sum(dim=0)
                     if lam_a.count_nonzero() == 0:
-                        vtof_msgs[j].zero_message()
+                        self.vtof_msgs[j].zero_message()
                     else:
                         inv_lam_a = torch.linalg.inv(lam_a)
                         sum_taus = torch.matmul(lams_inc, taus_inc.unsqueeze(-1)).sum(
@@ -560,7 +582,7 @@ class GaussianBeliefPropagation(Optimizer, abc.ABC):
                         )
                         tau_a = torch.matmul(inv_lam_a, sum_taus).squeeze(-1)
                         new_mess = th.retract_gaussian(var, tau_a, lam_a)
-                        vtof_msgs[j].update(new_mess.mean, new_mess.precision)
+                        self.vtof_msgs[j].update(new_mess.mean, new_mess.precision)
                     ix += 1
 
             # update belief mean and variance
@@ -575,8 +597,6 @@ class GaussianBeliefPropagation(Optimizer, abc.ABC):
 
     def _pass_fac_to_var_messages(
         self,
-        vtof_msgs,
-        ftov_msgs,
         schedule: torch.Tensor,
         damping: torch.Tensor,
         relin_threshold: float,
@@ -595,8 +615,8 @@ class GaussianBeliefPropagation(Optimizer, abc.ABC):
                 did_relin += [0]
 
             factor.comp_mess(
-                vtof_msgs[start : start + num_optim_vars],
-                ftov_msgs[start : start + num_optim_vars],
+                self.vtof_msgs[start : start + num_optim_vars],
+                self.ftov_msgs[start : start + num_optim_vars],
                 damping[start : start + num_optim_vars],
             )
 
@@ -643,37 +663,15 @@ class GaussianBeliefPropagation(Optimizer, abc.ABC):
                 f"but got {schedule.shape}."
             )
 
-        # initialise messages with zeros
-        vtof_msgs: List[Message] = []
-        ftov_msgs: List[Message] = []
-        for cf in self.cf_ordering:
-            for var in cf.optim_vars:
-                # Set mean of initial message to identity of the group
-                # doesn't matter what it is as long as precision is zero
-                vtof_msg = Message([var.copy()], name=f"msg_{var.name}_to_{cf.name}")
-                ftov_msg = Message([var.copy()], name=f"msg_{cf.name}_to_{var.name}")
-                vtof_msg.zero_message()
-                ftov_msg.zero_message()
-                vtof_msgs.append(vtof_msg)
-                ftov_msgs.append(ftov_msg)
-
-        # initialise ManifoldGaussian for belief
-        self.beliefs: List[th.ManifoldGaussian] = []
-        for var in self.ordering:
-            self.beliefs.append(th.ManifoldGaussian([var]))
-
-        # compute factor potentials for the first time
-        self.factors: List[Factor] = []
-        for cf in self.cf_ordering:
-            self.factors.append(Factor(cf, lin_system_damping=lin_system_damping))
+        for factor in self.factors:
+            factor.lin_system_damping = lin_system_damping
 
         self.belief_history = {}
         self.ftov_msgs_history = {}
 
         converged_indices = torch.zeros_like(info.last_err).bool()
         for it_ in range(start_iter, start_iter + num_iter):
-
-            self.ftov_msgs_history[it_] = [msg.copy() for msg in ftov_msgs]
+            self.ftov_msgs_history[it_] = [msg.copy() for msg in self.ftov_msgs]
             self.belief_history[it_] = [belief.copy() for belief in self.beliefs]
 
             # damping
@@ -685,16 +683,12 @@ class GaussianBeliefPropagation(Optimizer, abc.ABC):
                 damping_arr[dropout_ixs] = 1.0
 
             relins = self._pass_fac_to_var_messages(
-                vtof_msgs,
-                ftov_msgs,
                 schedule[it_],
                 damping_arr,
                 relin_threshold,
             )
 
             self._pass_var_to_fac_messages(
-                ftov_msgs,
-                vtof_msgs,
                 update_belief=True,
             )
 

@@ -70,7 +70,9 @@ class RobustCostFunction(CostFunction, abc.ABC):
         # Other options explored so far involve adding new methods to CostFunction,
         # and/or changing Objective/Optimizer class. I'd prefer to avoid changing
         # core class for experimental code, as long as it is possible [lep].
-        return torch.ones_like(weighted_error) * (error_loss / self.dim()).sqrt()
+        return (
+            torch.ones_like(weighted_error) * (error_loss / self.dim() + 1e-20).sqrt()
+        )
 
     def jacobians(self) -> Tuple[List[torch.Tensor], torch.Tensor]:
         raise NotImplementedError

@@ -1,21 +1,24 @@
+![Theseus Logo](https://github.com/facebookresearch/theseus/blob/main/docs/source/img/theseus-color-horizontal.png)
+
 [![CircleCI](https://circleci.com/gh/facebookresearch/theseus/tree/main.svg?style=svg)](https://circleci.com/gh/facebookresearch/theseus/tree/main)
 [![License](https://img.shields.io/badge/license-MIT-blue.svg)](https://github.com/facebookresearch/habitat-sim/blob/main/LICENSE)
-[![python 3.7, 3.8](https://img.shields.io/badge/python-3.7%20%7C%203.8-blue.svg)](https://www.python.org/downloads/release/)
+[![python 3.7, 3.8, 3.9](https://img.shields.io/badge/python-3.7%20%7C%203.8-blue.svg)](https://www.python.org/downloads/release/)
 [![pre-commit](https://img.shields.io/badge/pre--commit-enabled-green?logo=pre-commit&logoColor=white)](https://github.com/pre-commit/pre-commit)
 [![Code style: black](https://img.shields.io/badge/code%20style-black-000000.svg)](https://github.com/psf/black)
+[![PRs Welcome](https://img.shields.io/badge/PRs-welcome-green.svg)](https://github.com/facebookresearch/theseus/blob/main/CONTRIBUTING.md)
 
 
-# Theseus
-
-A library for differentiable nonlinear optimization built on PyTorch to support constructing various problems in robotics and vision as end-to-end differentiable architectures.
+Theseus is a library for differentiable nonlinear optimization built on PyTorch to support constructing various problems in robotics and vision as end-to-end differentiable architectures.
 
 The current focus is on nonlinear least squares with support for sparsity, batching, GPU, and backward modes for unrolling, truncated and implicit, and sampling based differentiation. This library is in beta with expected full release in mid 2022.
 
+-----
 
 ## Getting Started
 - Prerequisites
-    - We *strongly* recommend you install `theseus` in a venv or conda environment.
+    - We *strongly* recommend you install `theseus` in a venv or conda environment with Python 3.7-3.9.
     - Theseus requires `torch` installation. To install for your particular CPU/CUDA configuration, follow the instructions in the PyTorch [website](https://pytorch.org/get-started/locally/).
+    - For GPU support, Theseus requires [nvcc](https://docs.nvidia.com/cuda/cuda-compiler-driver-nvcc/index.html) to compile custom CUDA operations. Make sure it matches the version used to compile pytorch with `nvcc --version.` If not, install it and ensure its location is on your system's `$PATH` variable.
     - Theseus also requires [`suitesparse`](https://people.engr.tamu.edu/davis/suitesparse.html), which you can install via:
         - `sudo apt-get install libsuitesparse-dev` (Ubuntu).
         - `conda install -c conda-forge suitesparse` (Mac).

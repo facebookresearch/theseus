@@ -1,6 +1,7 @@
 .idea
 .DS_Store
 .vscode
+*.swp
 *.code-workspace
 debug/
 build/
@@ -16,3 +17,4 @@ outputs/
 examples/outputs/
 theseus/extlib/*.so
 datasets/
+data/

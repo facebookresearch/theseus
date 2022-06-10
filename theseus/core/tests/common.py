@@ -44,6 +44,8 @@ class MockCostWeight(th.CostWeight):
         self, the_data, name=None, add_dummy_var_with_name=None, add_optim_var=None
     ):
         super().__init__(name=name)
+        if isinstance(the_data, torch.Tensor):
+            the_data = th.Variable(the_data)
         self.the_data = the_data
         self.register_aux_var("the_data")
         if add_dummy_var_with_name:
@@ -55,7 +57,7 @@ class MockCostWeight(th.CostWeight):
             self.register_optim_var(add_optim_var.name)
 
     def weight_error(self, error):
-        return self.the_data * error
+        return self.the_data.data * error
 
     def weight_jacobians_and_error(self, jacobians, error):
         raise NotImplementedError(
@@ -84,7 +86,9 @@ class NullCostWeight(th.CostWeight):
 
 
 class MockCostFunction(th.CostFunction):
-    def __init__(self, optim_vars, aux_vars, cost_weight, name=None):
+    def __init__(
+        self, optim_vars, aux_vars, cost_weight, name=None, no_copy_vars=False
+    ):
         super().__init__(cost_weight, name=name)
         for i, var in enumerate(optim_vars):
             attr_name = f"optim_var_{i}"
@@ -95,21 +99,28 @@ class MockCostFunction(th.CostFunction):
             setattr(self, attr_name, aux)
             self.register_aux_var(attr_name)
         self._dim = 2
+        self._no_copy_vars = no_copy_vars
 
     def error(self):
         mu = torch.stack([v.data for v in self.optim_vars]).sum()
-        return mu * torch.ones(self._dim)
+        return mu * torch.ones(1, self._dim)
 
     def jacobians(self):
-        return [self.error()] * len(self._optim_vars_attr_names)
+        return [torch.ones(1, self._dim, self._dim)] * len(self._optim_vars_attr_names)
 
     def dim(self) -> int:
         return self._dim
 
     def _copy_impl(self, new_name=None):
+        def _copy_fn(var):
+            if self._no_copy_vars:
+                return var
+            else:
+                return var.copy()
+
         return MockCostFunction(
-            [v.copy() for v in self.optim_vars],
-            [aux.copy() for aux in self.aux_vars],
+            [_copy_fn(v) for v in self.optim_vars],
+            [_copy_fn(aux) for aux in self.aux_vars],
             self.weight.copy(),
             name=new_name,
         )

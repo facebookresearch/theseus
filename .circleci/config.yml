@@ -82,7 +82,7 @@ setup_environment: &setup_environment
       name: Setup virtualenv and tools
       working_directory: ~/project
       command: |
-        virtualenv ~/theseus_venv -p /usr/bin/python3.7
+        virtualenv ~/theseus_venv -p /usr/bin/python3
         echo ". ~/theseus_venv/bin/activate" >> $BASH_ENV
         . ~/theseus_venv/bin/activate
         pip install --progress-bar off --upgrade pip
@@ -152,6 +152,20 @@ jobs:
               pip install nox==2020.8.22
               nox
 
+  py39_linux:
+    docker:
+      - image: cimg/python:3.9
+    steps:
+      - checkout
+      - <<: *install_suitesparse
+      - <<: *install_nox
+      - run:
+          name: "Testing theseus"
+          command: |
+              export NOX_PYTHON_VERSIONS=3.9
+              pip install nox==2020.8.22
+              nox
+
   unittests_gpu17_cuda10:
     executor: gpu_cuda10
     steps:
@@ -182,5 +196,6 @@ workflows:
     jobs:
       - py37_linux
       - py38_linux
+      - py39_linux
       - unittests_gpu17_cuda10
       - unittests_gpu17_cuda11

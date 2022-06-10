@@ -38,7 +38,7 @@ class DenseLinearization(Linearization):
             device=self.objective.device,
             dtype=self.objective.dtype,
         )
-        for cost_function in self.objective:
+        for cost_function in self.objective._get_iterator():
             jacobians, error = cost_function.weighted_jacobians_error()
             num_rows = cost_function.dim()
             for var_idx_in_cost_function, var_jacobian in enumerate(jacobians):

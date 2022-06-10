@@ -88,6 +88,9 @@ class DenseSolver(LinearSolver):
         if self._check_singular:
             AtA = self.linearization.AtA
             Atb = self.linearization.Atb
+            import ipdb
+
+            ipdb.set_trace()
             with torch.no_grad():
                 output = torch.zeros(AtA.shape[0], AtA.shape[1]).to(AtA.device)
                 _, _, infos = torch.lu(AtA, get_infos=True)
@@ -134,7 +137,8 @@ class LUDenseSolver(DenseSolver):
             check_singular=check_singular,
         )
 
-    def _solve_sytem(self, Atb: torch.Tensor, AtA: torch.Tensor) -> torch.Tensor:
+    @staticmethod
+    def _solve_sytem(Atb: torch.Tensor, AtA: torch.Tensor) -> torch.Tensor:
         return torch.linalg.solve(AtA, Atb).squeeze(2)
 
 
@@ -153,6 +157,7 @@ class CholeskyDenseSolver(DenseSolver):
             check_singular=check_singular,
         )
 
-    def _solve_sytem(self, Atb: torch.Tensor, AtA: torch.Tensor) -> torch.Tensor:
+    @staticmethod
+    def _solve_sytem(Atb: torch.Tensor, AtA: torch.Tensor) -> torch.Tensor:
         lower = torch.linalg.cholesky(AtA)
         return torch.cholesky_solve(Atb, lower).squeeze(2)

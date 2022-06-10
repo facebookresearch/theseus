@@ -74,6 +74,9 @@ def run(cfg: omegaconf.OmegaConf):
         feat_random=0.0,
         prob_feat_is_outlier=0.0,
         outlier_feat_random=70,
+        cam_pos_rand=0.5,
+        cam_rot_rand=0.1,
+        point_rand=5.0,
     )
 
     # cams, points, obs = theg.BundleAdjustmentDataset.load_bal_dataset(
@@ -150,12 +153,7 @@ def run(cfg: omegaconf.OmegaConf):
     # print("Factors:\n", objective.cost_functions.keys(), "\n")
 
     # Create optimizer and theseus layer
-    # optimizer = th.GaussNewton(
-    #     objective,
-    #     max_iterations=cfg["inner_optim"]["max_iters"],
-    #     step_size=0.1,
-    # )
-    optimizer = GaussianBeliefPropagation(
+    optimizer = cfg["optimizer_cls"](
         objective,
         max_iterations=cfg["inner_optim"]["max_iters"],
     )
@@ -166,13 +164,18 @@ def run(cfg: omegaconf.OmegaConf):
         "track_err_history": True,
         "verbose": True,
         "backward_mode": th.BackwardMode.FULL,
-        "relin_threshold": 0.001,
-        "damping": 0.0,
-        "dropout": 0.0,
-        "schedule": synchronous_schedule(
-            cfg["inner_optim"]["max_iters"], optimizer.n_edges
-        ),
     }
+    if cfg["optimizer_cls"] == GaussianBeliefPropagation:
+        gbp_optim_arg = {
+            "relin_threshold": 0.0000000001,
+            "damping": 0.0,
+            "dropout": 0.0,
+            "schedule": synchronous_schedule(
+                cfg["inner_optim"]["max_iters"], optimizer.n_edges
+            ),
+            "lin_system_damping": 1e-5,
+        }
+        optim_arg = {**optim_arg, **gbp_optim_arg}
 
     theseus_inputs = {}
     for cam in ba.cameras:
@@ -200,6 +203,9 @@ def run(cfg: omegaconf.OmegaConf):
     are = average_repojection_error(objective)
     print("Average reprojection error (pixels): ", are)
 
+    with torch.no_grad():
+        camera_loss_ref = camera_loss(ba, camera_pose_vars).item()
+    print(f"CAMERA LOSS:  {camera_loss_ref: .3f}")
     print_histogram(ba, theseus_inputs, "Final histogram:")
 
     BAViewer(
@@ -211,18 +217,20 @@ if __name__ == "__main__":
 
     cfg = {
         "seed": 1,
-        "num_cameras": 10,
-        "num_points": 50,
+        "num_cameras": 5,
+        "num_points": 10,
         "average_track_length": 8,
         "track_locality": 0.2,
+        "optimizer_cls": GaussianBeliefPropagation,
+        # "optimizer_cls": th.GaussNewton,
         "inner_optim": {
-            "max_iters": 50,
+            "max_iters": 10,
             "verbose": True,
             "track_err_history": True,
             "keep_step_size": True,
             "regularize": True,
-            "ratio_known_cameras": 1.0,
-            "reg_w": 1e-4,
+            "ratio_known_cameras": 0.3,
+            "reg_w": 1e-7,
         },
     }
 

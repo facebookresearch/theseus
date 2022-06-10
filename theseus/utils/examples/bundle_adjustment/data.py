@@ -39,6 +39,11 @@ class Camera:
             float(self.calib_k2[0, 0]),
         ]
 
+    def position(self) -> torch.Tensor:
+        R = self.pose.data[:, :, :3].squeeze(0)
+        t = self.pose.data[:, :, 3].squeeze(0)
+        return -R.T @ t
+
     @staticmethod
     def from_params(params: List[float], name: str = "Cam") -> "Camera":
         r = th.SO3.exp_map(torch.tensor(params[:3], dtype=torch.float64).unsqueeze(0))
@@ -278,6 +283,9 @@ class BundleAdjustmentDataset:
         feat_random: float = 1.5,
         prob_feat_is_outlier: float = 0.02,
         outlier_feat_random: float = 70,
+        cam_pos_rand: float = 0.2,
+        cam_rot_rand: float = 0.1,
+        point_rand: float = 0.2,
     ):
 
         # add cameras
@@ -290,7 +298,10 @@ class BundleAdjustmentDataset:
             )
             for i in range(num_cameras)
         ]
-        cameras = [cam.perturbed() for cam in gt_cameras]
+        cameras = [
+            cam.perturbed(rot_random=cam_rot_rand, pos_random=cam_pos_rand)
+            for cam in gt_cameras
+        ]
 
         # add points
         gt_points = [
@@ -303,7 +314,7 @@ class BundleAdjustmentDataset:
         ]
         points = [
             th.Point3(
-                data=gt_points[i].data + (torch.rand((1, 3)) * 2 - 1) * 0.2,
+                data=gt_points[i].data + (torch.rand((1, 3)) * 2 - 1) * point_rand,
                 name=gt_points[i].name + "_copy",
             )
             for i in range(num_points)

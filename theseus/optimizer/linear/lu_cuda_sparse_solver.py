@@ -119,3 +119,7 @@ class LUCudaSparseSolver(LinearSolver):
             damping_alpha_beta,
             True,
         )
+
+    @property
+    def batch_size(self) -> int:
+        return self._solver_contexts[0].batch_size

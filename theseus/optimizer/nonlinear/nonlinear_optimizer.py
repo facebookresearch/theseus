@@ -16,7 +16,7 @@ import torch
 import theseus.constants
 from theseus.core import Objective
 from theseus.optimizer import Linearization, Optimizer, OptimizerInfo
-from theseus.optimizer.linear import LinearSolver
+from theseus.optimizer.linear import LinearSolver, LUCudaSparseSolver
 
 
 @dataclass
@@ -301,6 +301,12 @@ class NonlinearOptimizer(Optimizer, abc.ABC):
     ) -> OptimizerInfo:
         with torch.no_grad():
             info = self._init_info(track_best_solution, track_err_history, verbose)
+
+        if (
+            type(self.linear_solver) is LUCudaSparseSolver
+            and self.linear_solver.batch_size != self.objective.batch_size
+        ):
+            self.linear_solver.reset(self.objective.batch_size)
 
         if verbose:
             print(

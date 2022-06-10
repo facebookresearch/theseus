@@ -7,8 +7,10 @@ import abc
 
 import torch
 
+_LOSS_EPS = 1e-20
 
-class Loss:
+
+class Loss(abc.ABC):
     @staticmethod
     @abc.abstractmethod
     def evaluate(x: torch.Tensor, radius: torch.Tensor) -> torch.Tensor:
@@ -23,20 +25,20 @@ class Loss:
 class WelschLoss(Loss):
     @staticmethod
     def evaluate(x: torch.Tensor, radius: torch.Tensor) -> torch.Tensor:
-        return radius - radius * torch.exp(-x / radius)
+        return radius - radius * torch.exp(-x / (radius + _LOSS_EPS))
 
     @staticmethod
     def linearize(x: torch.Tensor, radius: torch.Tensor) -> torch.Tensor:
-        return torch.exp(-x / radius)
+        return torch.exp(-x / (radius + _LOSS_EPS))
 
 
 class HuberLoss(Loss):
     @staticmethod
     def evaluate(x: torch.Tensor, radius: torch.Tensor) -> torch.Tensor:
         return torch.where(
-            x > radius, 2 * torch.sqrt(radius * x.max(radius)) - radius, x
+            x > radius, 2 * torch.sqrt(radius * x.max(radius) + _LOSS_EPS) - radius, x
         )
 
     @staticmethod
     def linearize(x: torch.Tensor, radius: torch.Tensor) -> torch.Tensor:
-        return torch.sqrt(radius / torch.max(x, radius))
+        return torch.sqrt(radius / torch.max(x, radius) + _LOSS_EPS)

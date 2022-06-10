@@ -1,4 +1,8 @@
-import abc
+# Copyright (c) Meta Platforms, Inc. and affiliates.
+#
+# This source code is licensed under the MIT license found in the
+# LICENSE file in the root directory of this source tree.
+
 from typing import List, Optional, Tuple, Type
 
 import torch
@@ -25,7 +29,9 @@ from .variable import Variable
 #     -`robust_cost_fn.weighted_error()` returns a vectorized version of loss(||e||^2).
 #
 # Also, `robust_cost_fn.jacobians()` is not implemented.
-class RobustCostFunction(CostFunction, abc.ABC):
+class RobustCostFunction(CostFunction):
+    _EPS = 1e-20
+
     def __init__(
         self,
         cost_function: CostFunction,
@@ -66,12 +72,9 @@ class RobustCostFunction(CostFunction, abc.ABC):
         # function is that the theory requires us to maintain scaled errors/jacobians
         # of dim = robust_fn.cost_function.dim() to do the linearization properly,
         # but the actual error has dim = 1, being the result of loss(||error||^2).
-        #
-        # Other options explored so far involve adding new methods to CostFunction,
-        # and/or changing Objective/Optimizer class. I'd prefer to avoid changing
-        # core class for experimental code, as long as it is possible [lep].
         return (
-            torch.ones_like(weighted_error) * (error_loss / self.dim() + 1e-20).sqrt()
+            torch.ones_like(weighted_error)
+            * (error_loss / self.dim() + RobustCostFunction._EPS).sqrt()
         )
 
     def jacobians(self) -> Tuple[List[torch.Tensor], torch.Tensor]:
@@ -84,7 +87,9 @@ class RobustCostFunction(CostFunction, abc.ABC):
         ) = self.cost_function.weighted_jacobians_error()
         squared_norm = torch.sum(weighted_error**2, dim=1, keepdim=True)
         loss_radius = torch.exp(self.log_loss_radius.data)
-        rescale = (self.loss.linearize(squared_norm, loss_radius) + 1e-20).sqrt()
+        rescale = (
+            self.loss.linearize(squared_norm, loss_radius) + RobustCostFunction._EPS
+        ).sqrt()
 
         return [
             rescale.view(-1, 1, 1) * jacobian for jacobian in weighted_jacobians

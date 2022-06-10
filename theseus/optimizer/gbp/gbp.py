@@ -157,6 +157,7 @@ class Factor:
         self,
         cf: CostFunction,
         name: Optional[str] = None,
+        lin_system_damping: float = 1e-6,
     ):
         self._id = next(Factor._ids)
         if name:
@@ -165,6 +166,7 @@ class Factor:
             self.name = f"{self.__class__.__name__}__{self._id}"
 
         self.cf = cf
+        self.lin_system_damping = lin_system_damping
 
         batch_size = cf.optim_var_at(0).shape[0]
         self._dof = sum([var.dof() for var in cf.optim_vars])
@@ -193,11 +195,13 @@ class Factor:
         if relin_threshold is None:
             do_lin = True
         else:
-            lp_dists = [
-                lp.local(self.cf.optim_var_at(j)).norm()
-                for j, lp in enumerate(self.lin_point)
-            ]
-            do_lin = np.max(lp_dists) > relin_threshold
+            lp_dists = torch.tensor(
+                [
+                    lp.local(self.cf.optim_var_at(j)).norm()
+                    for j, lp in enumerate(self.lin_point)
+                ]
+            )
+            do_lin = bool((torch.max(lp_dists) > relin_threshold).item())
 
         if do_lin:
             J, error = self.cf.weighted_jacobians_error()
@@ -299,7 +303,7 @@ class Factor:
                     dim=0,
                 )
 
-                new_mess_lam = loo - lono @ np.linalg.inv(lnono) @ lnoo
+                new_mess_lam = loo - lono @ torch.linalg.inv(lnono) @ lnoo
                 new_mess_eta = eo - lono @ torch.linalg.inv(lnono) @ eno
 
                 # damping in tangent space at linearisation point as message
@@ -323,11 +327,16 @@ class Factor:
                         ] * prev_mess_mean[0]
                         new_mess_eta = torch.matmul(new_mess_lam, new_mess_mean)
 
-                new_mess_mean = torch.matmul(
-                    torch.linalg.pinv(new_mess_lam), new_mess_eta
+                new_mess_lam = th.DenseSolver._apply_damping(
+                    new_mess_lam[None, ...],
+                    self.lin_system_damping,
+                    ellipsoidal=True,
+                    eps=1e-8,
                 )
-                new_mess_mean = new_mess_mean[None, ...]
-                new_mess_lam = new_mess_lam[None, ...]
+                new_mess_mean = th.LUDenseSolver._solve_sytem(
+                    new_mess_eta[..., None], new_mess_lam
+                )
+
                 new_mess = th.retract_gaussian(
                     self.lin_point[v], new_mess_mean, new_mess_lam
                 )
@@ -544,7 +553,7 @@ class GaussianBeliefPropagation(Optimizer, abc.ABC):
                     if lam_a.count_nonzero() == 0:
                         vtof_msgs[j].zero_message()
                     else:
-                        inv_lam_a = torch.linalg.pinv(lam_a)
+                        inv_lam_a = torch.linalg.inv(lam_a)
                         sum_taus = torch.matmul(lams_inc, taus_inc.unsqueeze(-1)).sum(
                             dim=0
                         )
@@ -611,6 +620,7 @@ class GaussianBeliefPropagation(Optimizer, abc.ABC):
         damping: float,
         dropout: float,
         schedule: torch.Tensor,
+        lin_system_damping: float,
         **kwargs,
     ):
         if damping > 1.0 or damping < 0.0:
@@ -654,7 +664,7 @@ class GaussianBeliefPropagation(Optimizer, abc.ABC):
         # compute factor potentials for the first time
         self.factors: List[Factor] = []
         for cf in self.cf_ordering:
-            self.factors.append(Factor(cf))
+            self.factors.append(Factor(cf, lin_system_damping=lin_system_damping))
 
         self.belief_history = {}
         self.ftov_msgs_history = {}
@@ -723,6 +733,7 @@ class GaussianBeliefPropagation(Optimizer, abc.ABC):
         damping: float = 0.0,
         dropout: float = 0.0,
         schedule: torch.Tensor = None,
+        lin_system_damping: float = 1e-6,
         **kwargs,
     ) -> NonlinearOptimizerInfo:
         with torch.no_grad():
@@ -748,6 +759,7 @@ class GaussianBeliefPropagation(Optimizer, abc.ABC):
                 damping=damping,
                 dropout=dropout,
                 schedule=schedule,
+                lin_system_damping=lin_system_damping,
                 **kwargs,
             )
 

@@ -69,17 +69,8 @@ class LinearOptimizer(Optimizer):
                 warnings.warn(msg, RuntimeWarning)
                 info.status[:] = LinearOptimizerStatus.FAIL
                 return info
-        self.retract_and_update_variables(delta)
+        self.objective.step_optim_vars(delta, self.linear_solver.linearization.ordering)
         info.status[:] = LinearOptimizerStatus.CONVERGED
         for var in self.linear_solver.linearization.ordering:
             info.best_solution[var.name] = var.data.clone().cpu()
         return info
-
-    # retracts all variables in the given order and updates their values
-    # with the result
-    def retract_and_update_variables(self, delta: torch.Tensor):
-        var_idx = 0
-        for var in self.linear_solver.linearization.ordering:
-            new_var = var.retract(delta[:, var_idx : var_idx + var.dof()])
-            var.update(new_var.data)
-            var_idx += var.dof()

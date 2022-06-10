@@ -503,3 +503,20 @@ class Objective:
         self.dtype = dtype or self.dtype
         if self._vectorization_to is not None:
             self._vectorization_to(*args, **kwargs)
+
+    def step_optim_vars(
+        self,
+        delta: torch.Tensor,
+        ordering: Iterable[Manifold],
+        ignore_mask: Optional[torch.Tensor] = None,
+        force_update: bool = False,
+    ):
+        var_idx = 0
+        for var in ordering:
+            new_var = var.retract(delta[:, var_idx : var_idx + var.dof()])
+            if ignore_mask is None or force_update:
+                var.update(new_var.data)
+            else:
+                var.update(new_var.data, batch_ignore_mask=ignore_mask)
+            var_idx += var.dof()
+        self.update_vectorization()

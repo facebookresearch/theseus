@@ -5,6 +5,7 @@
 
 import abc
 import math
+import warnings
 from dataclasses import dataclass
 from itertools import count
 from typing import Dict, List, Optional, Sequence
@@ -744,11 +745,7 @@ class GaussianBeliefPropagation(Optimizer, abc.ABC):
                 f"GBP optimizer. Iteration: 0. " f"Error: {info.last_err.mean().item()}"
             )
 
-        grad = False
         if backward_mode == BackwardMode.FULL:
-            grad = True
-
-        with torch.set_grad_enabled(grad):
             info = self._optimize_loop(
                 start_iter=0,
                 num_iter=self.params.max_iterations,
@@ -768,3 +765,64 @@ class GaussianBeliefPropagation(Optimizer, abc.ABC):
                 info.status == NonlinearOptimizerStatus.MAX_ITERATIONS
             ] = -1
             return info
+
+        elif backward_mode in [BackwardMode.IMPLICIT, BackwardMode.TRUNCATED]:
+            if backward_mode == BackwardMode.IMPLICIT:
+                backward_num_iterations = 1
+            else:
+                if "backward_num_iterations" not in kwargs:
+                    raise ValueError(
+                        "backward_num_iterations expected but not received"
+                    )
+                if kwargs["backward_num_iterations"] > self.params.max_iterations:
+                    warnings.warn(
+                        f"Input backward_num_iterations "
+                        f"(={kwargs['backward_num_iterations']}) > "
+                        f"max_iterations (={self.params.max_iterations}). "
+                        f"Using backward_num_iterations=max_iterations."
+                    )
+                backward_num_iterations = min(
+                    kwargs["backward_num_iterations"], self.params.max_iterations
+                )
+
+            num_no_grad_iter = self.params.max_iterations - backward_num_iterations
+            with torch.no_grad():
+                self._optimize_loop(
+                    start_iter=0,
+                    num_iter=num_no_grad_iter,
+                    info=info,
+                    verbose=verbose,
+                    truncated_grad_loop=False,
+                    relin_threshold=relin_threshold,
+                    damping=damping,
+                    dropout=dropout,
+                    schedule=schedule,
+                    lin_system_damping=lin_system_damping,
+                    **kwargs,
+                )
+
+            grad_loop_info = self._init_info(
+                track_best_solution, track_err_history, verbose
+            )
+            self._optimize_loop(
+                start_iter=0,
+                num_iter=backward_num_iterations,
+                info=grad_loop_info,
+                verbose=verbose,
+                truncated_grad_loop=True,
+                relin_threshold=relin_threshold,
+                damping=damping,
+                dropout=dropout,
+                schedule=schedule,
+                lin_system_damping=lin_system_damping,
+                **kwargs,
+            )
+
+            # Adds grad_loop_info results to original info
+            self._merge_infos(
+                grad_loop_info, num_no_grad_iter, backward_num_iterations, info
+            )
+
+            return info
+        else:
+            raise ValueError("Unrecognized backward mode")

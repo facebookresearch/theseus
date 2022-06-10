@@ -93,7 +93,7 @@ class TactilePoseEstimator:
         # -------------------------------------------------------------------- #
         # Creating cost functions
         # -------------------------------------------------------------------- #
-        #  - VariableDifference: Penalizes deviation between first object pose from
+        #  - Difference: Penalizes deviation between first object pose from
         #    a global pose prior.
         #  - QuasiStaticPushingPlanar: Penalizes deviation from velocity-only
         #    quasi-static dynamics model QuasiStaticPushingPlanar
@@ -102,7 +102,7 @@ class TactilePoseEstimator:
         #    `nn_measurements` is obtained from a network prediction.
         #  - EffectorObjectContactPlanar: Penalizes intersections between object and end
         #    effector based on the object sdf.
-        #  - VariableDifference: Penalizes deviations of end-effector poses from motion
+        #  - Difference: Penalizes deviations of end-effector poses from motion
         #    capture readings
 
         # Loop over and add all cost functions,
@@ -113,7 +113,7 @@ class TactilePoseEstimator:
         for i in range(time_steps):
             if i == 0:
                 objective.add(
-                    th.eb.VariableDifference(
+                    th.Difference(
                         obj_poses[i],
                         motion_capture_weight,
                         obj_start_pose,
@@ -166,7 +166,7 @@ class TactilePoseEstimator:
             )
 
             objective.add(
-                th.eb.VariableDifference(
+                th.Difference(
                     eff_poses[i],
                     motion_capture_weight,
                     motion_captures[i],
@@ -181,7 +181,7 @@ class TactilePoseEstimator:
             for pose_list in [obj_poses, eff_poses]:
                 for pose in pose_list:
                     objective.add(
-                        th.eb.VariableDifference(
+                        th.Difference(
                             pose, reg_w, identity_se2, name=f"reg_{pose.name}"
                         )
                     )

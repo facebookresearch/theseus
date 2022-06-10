@@ -7,10 +7,15 @@ from .core import (
     CostFunction,
     CostWeight,
     DiagonalCostWeight,
-    AutoDiffCostFunction,
     Objective,
     ScaleCostWeight,
     Variable,
+    Vectorize,
+    Loss,
+    AutoDiffCostFunction,
+    RobustCostFunction,
+    HuberLoss,
+    WelschLoss,
 )
 from .geometry import (
     SE2,
@@ -76,3 +81,8 @@ from .optimizer.nonlinear import (
 from .theseus_layer import TheseusLayer
 
 import theseus.embodied as eb
+
+# Aliases for some standard cost functions
+Difference = eb.Local
+Between = eb.Between
+Local = eb.Local

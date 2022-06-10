@@ -51,6 +51,7 @@ class Linearization(abc.ABC):
             raise RuntimeError(
                 "Attempted to linearize an objective with an incomplete variable order."
             )
+        self.objective.update_vectorization()
         self._linearize_hessian_impl()
 
     def hessian_approx(self):

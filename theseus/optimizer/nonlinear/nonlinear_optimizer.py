@@ -55,6 +55,7 @@ class BackwardMode(Enum):
     FULL = 0
     IMPLICIT = 1
     TRUNCATED = 2
+    DLM = 3
 
 
 class NonlinearOptimizer(Optimizer, abc.ABC):
@@ -307,7 +308,7 @@ class NonlinearOptimizer(Optimizer, abc.ABC):
                 f"Error: {info.last_err.mean().item()}"
             )
 
-        if backward_mode == BackwardMode.FULL:
+        if backward_mode in [BackwardMode.FULL, BackwardMode.DLM]:
             info = self._optimize_loop(
                 start_iter=0,
                 num_iter=self.params.max_iterations,

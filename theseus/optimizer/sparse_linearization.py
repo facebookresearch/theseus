@@ -38,7 +38,7 @@ class SparseLinearization(Linearization):
         cost_function_row_block_starts = []  # where data start for this row block
         cost_function_stride = []  # total jacobian cols
 
-        for _, cost_function in enumerate(self.objective):
+        for _, cost_function in enumerate(self.objective._get_iterator()):
             num_rows = cost_function.dim()
             col_slices_indices = []
             for var_idx_in_cost_function, variable in enumerate(
@@ -101,7 +101,7 @@ class SparseLinearization(Linearization):
         )
 
         err_row_idx = 0
-        for f_idx, cost_function in enumerate(self.objective):
+        for f_idx, cost_function in enumerate(self.objective._get_iterator()):
             jacobians, error = cost_function.weighted_jacobians_error()
             num_rows = cost_function.dim()
             row_slice = slice(err_row_idx, err_row_idx + num_rows)

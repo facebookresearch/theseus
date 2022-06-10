@@ -6,8 +6,14 @@
 
 from pathlib import Path
 import setuptools
-import os
-from torch.utils import cpp_extension as torch_cpp_ext
+import sys
+
+try:
+    import torch
+    from torch.utils import cpp_extension as torch_cpp_ext
+except ModuleNotFoundError:
+    print("Theseus installation requires torch.")
+    sys.exit(1)
 
 
 def parse_requirements_file(path):
@@ -27,7 +33,7 @@ version = (root_dir / "version.txt").read_text().strip()
 with open("README.md", "r") as fh:
     long_description = fh.read()
 
-if "CUDA_HOME" in os.environ:
+if torch.cuda.is_available():
     ext_modules = [
         torch_cpp_ext.CUDAExtension(
             name="theseus.extlib.mat_mult", sources=["theseus/extlib/mat_mult.cu"]
@@ -42,6 +48,7 @@ if "CUDA_HOME" in os.environ:
         ),
     ]
 else:
+    print("No CUDA support found. CUDA extensions won't be installed.")
     ext_modules = []
 
 setuptools.setup(

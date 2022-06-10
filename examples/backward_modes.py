@@ -67,7 +67,7 @@ objective.add(cost_function)
 optimizer = th.GaussNewton(
     objective,
     max_iterations=15,
-    step_size=0.5,
+    step_size=1.0,
 )
 
 theseus_inputs = {
@@ -125,6 +125,22 @@ updated_inputs, info = theseus_optim.forward(
 da_dx = torch.autograd.grad(updated_inputs["a"], data_x, retain_graph=True)[0].squeeze()
 
 print("\n--- backward_mode=TRUNCATED, backward_num_iterations=5")
+print(da_dx.numpy())
+
+
+# We can also compute the direct loss minimization gradient.
+updated_inputs, info = theseus_optim.forward(
+    theseus_inputs,
+    optimizer_kwargs={
+        "track_best_solution": True,
+        "verbose": False,
+        "backward_mode": th.BackwardMode.DLM,
+        "dlm_epsilon": 1e-3,
+    },
+)
+
+da_dx = torch.autograd.grad(updated_inputs["a"], data_x, retain_graph=True)[0].squeeze()
+print("\n--- backward_mode=DLM")
 print(da_dx.numpy())
 
 
@@ -199,6 +215,21 @@ for trial in range(n_trials + 1):
     ].squeeze()
     times["bwd_trunc"].append(time.time() - start)
 
+    updated_inputs, info = theseus_optim.forward(
+        theseus_inputs,
+        optimizer_kwargs={
+            "track_best_solution": True,
+            "verbose": False,
+            "backward_mode": th.BackwardMode.DLM,
+            "dlm_epsilon": 1e-3,
+        },
+    )
+    start = time.time()
+    da_dx = torch.autograd.grad(updated_inputs["a"], data_x, retain_graph=True)[
+        0
+    ].squeeze()
+    times["bwd_dlm"].append(time.time() - start)
+
 
 print("\n=== Runtimes")
 k = "fwd"
@@ -214,3 +245,6 @@ k = "bwd_trunc"
 print(
     f"Backward (TRUNCATED, 5 steps) {np.mean(times[k]):.2e} s +/- {np.std(times[k]):.2e} s"
 )
+
+k = "bwd_dlm"
+print(f"Backward (DLM) {np.mean(times[k]):.2e} s +/- {np.std(times[k]):.2e} s")

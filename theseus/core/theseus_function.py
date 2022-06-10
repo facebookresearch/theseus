@@ -5,7 +5,7 @@
 
 import abc
 from itertools import count
-from typing import Generator, List, Optional, Sequence
+from typing import Generator, Iterable, List, Optional, Sequence
 
 from theseus.geometry import Manifold
 
@@ -64,10 +64,28 @@ class TheseusFunction(abc.ABC):
         for name in aux_var_names:
             self.register_aux_var(name)
 
+    def register_vars(self, vars: Iterable[Variable], is_optim_vars: bool = False):
+        for var in vars:
+            if hasattr(self, var.name):
+                raise RuntimeError(f"Variable name {var.name} is not allowed.")
+            setattr(self, var.name, var)
+            if is_optim_vars:
+                self.register_optim_var(var.name)
+            else:
+                self.register_aux_var(var.name)
+
     # Must copy everything
     @abc.abstractmethod
     def _copy_impl(self, new_name: Optional[str] = None) -> "TheseusFunction":
         pass
+
+    def _has_duplicate_vars(self, another: "TheseusFunction") -> bool:
+        def _check(base: Iterable[Variable], vectorized: Iterable[Variable]) -> bool:
+            return len(set(base) & set(vectorized)) > 0
+
+        return _check(self.optim_vars, another.optim_vars) | _check(
+            self.aux_vars, another.aux_vars
+        )
 
     def copy(
         self, new_name: Optional[str] = None, keep_variable_names: bool = False
@@ -80,6 +98,15 @@ class TheseusFunction(abc.ABC):
                 new_var.name = old_var.name
             for old_aux, new_aux in zip(self.aux_vars, new_fn.aux_vars):
                 new_aux.name = old_aux.name
+
+        if self._has_duplicate_vars(new_fn):
+            raise RuntimeError(
+                f"{self.__class__.__name__}.copy() resulted in one of the original "
+                "variables being reused. copy() requires all variables to be copied "
+                "to new variables, so please re-implement _copy_impl() to satisfy this "
+                "property."
+            )
+
         return new_fn
 
     def __deepcopy__(self, memo):

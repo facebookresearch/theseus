@@ -112,13 +112,13 @@ class Reprojection(th.CostFunction):
     def to(self, *args, **kwargs):
         super().to(*args, **kwargs)
 
-    def _copy_impl(self):
+    def _copy_impl(self, new_name: Optional[str] = None):
         return Reprojection(
-            self.camera_pose,
-            self.world_point,
-            self.log_loss_radius,
-            self.focal_length,
-            self.image_feature_point,
-            weight=self.weight,
-            name=self.name,
+            self.camera_pose.copy(),
+            self.world_point.copy(),
+            self.log_loss_radius.copy(),
+            self.focal_length.copy(),
+            self.image_feature_point.copy(),
+            weight=self.weight.copy(),
+            name=new_name,
         )

@@ -92,7 +92,6 @@ def run(cfg: omegaconf.OmegaConf):
     print("Setting up objective")
     objective = th.Objective(dtype=torch.float64)
 
-    print("obs")
     for i, obs in enumerate(ba.observations):
         # print(i, len(ba.observations))
         cam = ba.cameras[obs.camera_index]
@@ -109,7 +108,6 @@ def run(cfg: omegaconf.OmegaConf):
     dtype = objective.dtype
 
     # Add regularization
-    print("reg")
     if cfg["inner_optim"]["regularize"]:
         zero_point3 = th.Point3(dtype=dtype, name="zero_point")
         # identity_se3 = th.SE3(dtype=dtype, name="zero_se3")
@@ -126,7 +124,7 @@ def run(cfg: omegaconf.OmegaConf):
             else:
                 assert False
             objective.add(
-                th.eb.VariableDifference(
+                th.Difference(
                     var, damping_weight, target, name=f"reg_{name}"
                 )
             )
@@ -142,7 +140,7 @@ def run(cfg: omegaconf.OmegaConf):
                 continue
             print("fixing cam", i)
             objective.add(
-                th.eb.VariableDifference(
+                th.Difference(
                     camera_pose_vars[i],
                     camera_weight,
                     ba.gt_cameras[i].pose,
@@ -217,8 +215,8 @@ if __name__ == "__main__":
 
     cfg = {
         "seed": 1,
-        "num_cameras": 5,
-        "num_points": 10,
+        "num_cameras": 10,
+        "num_points": 100,
         "average_track_length": 8,
         "track_locality": 0.2,
         "optimizer_cls": GaussianBeliefPropagation,

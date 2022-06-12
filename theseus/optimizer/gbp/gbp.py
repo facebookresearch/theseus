@@ -9,6 +9,7 @@ import warnings
 from dataclasses import dataclass
 from itertools import count
 from typing import Dict, List, Optional, Sequence
+import time
 
 import numpy as np
 import torch
@@ -94,56 +95,56 @@ class Message(th.ManifoldGaussian):
         self.update(mean=new_mean, precision=new_precision)
 
 
-class CostFunctionOrdering:
-    def __init__(self, objective: Objective, default_order: bool = True):
-        self.objective = objective
-        self._cf_order: List[CostFunction] = []
-        self._cf_name_to_index: Dict[str, int] = {}
-        if default_order:
-            self._compute_default_order(objective)
+# class CostFunctionOrdering:
+#     def __init__(self, objective: Objective, default_order: bool = True):
+#         self.objective = objective
+#         self._cf_order: List[CostFunction] = []
+#         self._cf_name_to_index: Dict[str, int] = {}
+#         if default_order:
+#             self._compute_default_order(objective)
 
-    def _compute_default_order(self, objective: Objective):
-        assert not self._cf_order and not self._cf_name_to_index
-        cur_idx = 0
-        for cf_name, cf in objective.cost_functions.items():
-            if cf_name in self._cf_name_to_index:
-                continue
-            self._cf_order.append(cf)
-            self._cf_name_to_index[cf_name] = cur_idx
-            cur_idx += 1
+#     def _compute_default_order(self, objective: Objective):
+#         assert not self._cf_order and not self._cf_name_to_index
+#         cur_idx = 0
+#         for cf_name, cf in objective.cost_functions.items():
+#             if cf_name in self._cf_name_to_index:
+#                 continue
+#             self._cf_order.append(cf)
+#             self._cf_name_to_index[cf_name] = cur_idx
+#             cur_idx += 1
 
-    def index_of(self, key: str) -> int:
-        return self._cf_name_to_index[key]
+#     def index_of(self, key: str) -> int:
+#         return self._cf_name_to_index[key]
 
-    def __getitem__(self, index) -> CostFunction:
-        return self._cf_order[index]
+#     def __getitem__(self, index) -> CostFunction:
+#         return self._cf_order[index]
 
-    def __iter__(self):
-        return iter(self._cf_order)
+#     def __iter__(self):
+#         return iter(self._cf_order)
 
-    def append(self, cf: CostFunction):
-        if cf in self._cf_order:
-            raise ValueError(
-                f"Cost Function {cf.name} has already been added to the order."
-            )
-        if cf.name not in self.objective.cost_functions:
-            raise ValueError(
-                f"Cost Function {cf.name} is not a cost function for the objective."
-            )
-        self._cf_order.append(cf)
-        self._cf_name_to_index[cf.name] = len(self._cf_order) - 1
+#     def append(self, cf: CostFunction):
+#         if cf in self._cf_order:
+#             raise ValueError(
+#                 f"Cost Function {cf.name} has already been added to the order."
+#             )
+#         if cf.name not in self.objective.cost_functions:
+#             raise ValueError(
+#                 f"Cost Function {cf.name} is not a cost function for the objective."
+#             )
+#         self._cf_order.append(cf)
+#         self._cf_name_to_index[cf.name] = len(self._cf_order) - 1
 
-    def remove(self, cf: CostFunction):
-        self._cf_order.remove(cf)
-        del self._cf_name_to_index[cf.name]
+#     def remove(self, cf: CostFunction):
+#         self._cf_order.remove(cf)
+#         del self._cf_name_to_index[cf.name]
 
-    def extend(self, cfs: Sequence[CostFunction]):
-        for cf in cfs:
-            self.append(cf)
+#     def extend(self, cfs: Sequence[CostFunction]):
+#         for cf in cfs:
+#             self.append(cf)
 
-    @property
-    def complete(self):
-        return len(self._cf_order) == self.objective.size_variables()
+#     @property
+#     def complete(self):
+#         return len(self._cf_order) == self.objective.size_variables()
 
 
 """
@@ -372,45 +373,20 @@ class GaussianBeliefPropagation(Optimizer, abc.ABC):
 
         # ordering is required to identify which messages to send where
         self.ordering = VariableOrdering(objective, default_order=True)
-        self.cf_ordering = CostFunctionOrdering(objective)
 
         self.params = GBPOptimizerParams(
             abs_err_tolerance, rel_err_tolerance, max_iterations
         )
 
-        self.n_edges = sum([cf.num_optim_vars() for cf in self.cf_ordering])
+        self.n_edges = sum([cf.num_optim_vars() for cf in self.objective.cost_functions.values()])
 
         # create array for indexing the messages
         var_ixs_nested = [
             [self.ordering.index_of(var.name) for var in cf.optim_vars]
-            for cf in self.cf_ordering
+            for cf in self.objective.cost_functions.values()
         ]
         var_ixs = [item for sublist in var_ixs_nested for item in sublist]
         self.var_ix_for_edges = torch.tensor(var_ixs).long()
-
-        # initialise messages with zeros
-        self.vtof_msgs: List[Message] = []
-        self.ftov_msgs: List[Message] = []
-        for cf in self.cf_ordering:
-            for var in cf.optim_vars:
-                # Set mean of initial message to identity of the group
-                # doesn't matter what it is as long as precision is zero
-                vtof_msg = Message([var.copy()], name=f"msg_{var.name}_to_{cf.name}")
-                ftov_msg = Message([var.copy()], name=f"msg_{cf.name}_to_{var.name}")
-                vtof_msg.zero_message()
-                ftov_msg.zero_message()
-                self.vtof_msgs.append(vtof_msg)
-                self.ftov_msgs.append(ftov_msg)
-
-        # initialise ManifoldGaussian for belief
-        self.beliefs: List[th.ManifoldGaussian] = []
-        for var in self.ordering:
-            self.beliefs.append(th.ManifoldGaussian([var]))
-
-        # compute factor potentials for the first time
-        self.factors: List[Factor] = []
-        for cf in self.cf_ordering:
-            self.factors.append(Factor(cf))
 
     """
     Copied and slightly modified from nonlinear optimizer class
@@ -595,24 +571,39 @@ class GaussianBeliefPropagation(Optimizer, abc.ABC):
                 new_belief = th.retract_gaussian(var, tau, lam_tau)
                 self.beliefs[i].update(new_belief.mean, new_belief.precision)
 
-    def _pass_fac_to_var_messages(
-        self,
-        schedule: torch.Tensor,
-        damping: torch.Tensor,
-        relin_threshold: float,
-    ):
+
+    def _linearize_factors(self, relin_threshold: float):
         relins = 0
         did_relin = []
-        start = 0
-        for factor in self.factors:
-            num_optim_vars = factor.cf.num_optim_vars()
 
+        start = time.time()
+        # compute weighted error and jacobian for all factors
+        self.objective.update_vectorization()
+        print('vectorized update time', time.time() - start)
+
+        start = time.time()
+        for factor in self.factors:
             factor.linearize(relin_threshold=relin_threshold)
             if factor.steps_since_lin == 0:
                 relins += 1
                 did_relin += [1]
             else:
                 did_relin += [0]
+        print('compute factor time', time.time() - start)
+
+        # print(f"Factor relinearisations: {relins} / {len(self.factors)}")
+        return relins
+
+    def _pass_fac_to_var_messages(
+        self,
+        schedule: torch.Tensor,
+        damping: torch.Tensor,
+    ):
+        start = 0
+        for factor in self.factors:
+            num_optim_vars = factor.cf.num_optim_vars()
+
+
 
             factor.comp_mess(
                 self.vtof_msgs[start : start + num_optim_vars],
@@ -622,8 +613,6 @@ class GaussianBeliefPropagation(Optimizer, abc.ABC):
 
             start += num_optim_vars
 
-        # print(f"Factor relinearisations: {relins} / {len(self.factors)}")
-        return relins
 
     """
     Optimization loop functions
@@ -642,6 +631,7 @@ class GaussianBeliefPropagation(Optimizer, abc.ABC):
         dropout: float,
         schedule: torch.Tensor,
         lin_system_damping: float,
+        clear_messages: bool = True,
         **kwargs,
     ):
         if damping > 1.0 or damping < 0.0:
@@ -663,8 +653,31 @@ class GaussianBeliefPropagation(Optimizer, abc.ABC):
                 f"but got {schedule.shape}."
             )
 
-        for factor in self.factors:
-            factor.lin_system_damping = lin_system_damping
+        if clear_messages:
+            # initialise messages with zeros
+            self.vtof_msgs: List[Message] = []
+            self.ftov_msgs: List[Message] = []
+            for cf in self.objective.cost_functions.values():
+                for var in cf.optim_vars:
+                    # Set mean of initial message to identity of the group
+                    # doesn't matter what it is as long as precision is zero
+                    vtof_msg = Message([var.copy()], name=f"msg_{var.name}_to_{cf.name}")
+                    ftov_msg = Message([var.copy()], name=f"msg_{cf.name}_to_{var.name}")
+                    vtof_msg.zero_message()
+                    ftov_msg.zero_message()
+                    self.vtof_msgs.append(vtof_msg)
+                    self.ftov_msgs.append(ftov_msg)
+
+        # initialise ManifoldGaussian for belief
+        self.beliefs: List[th.ManifoldGaussian] = []
+        for var in self.ordering:
+            self.beliefs.append(th.ManifoldGaussian([var]))
+
+        # compute factor potentials for the first time
+        self.factors: List[Factor] = []
+        for cost_function in self.objective._get_iterator():
+            self.factors.append(Factor(cost_function, lin_system_damping))
+
 
         self.belief_history = {}
         self.ftov_msgs_history = {}
@@ -682,15 +695,17 @@ class GaussianBeliefPropagation(Optimizer, abc.ABC):
                 dropout_ixs = torch.rand(self.n_edges) < dropout
                 damping_arr[dropout_ixs] = 1.0
 
-            relins = self._pass_fac_to_var_messages(
-                schedule[it_],
-                damping_arr,
-                relin_threshold,
-            )
+            t1 = time.time()
+            relins = self._linearize_factors(relin_threshold)
+            print("relin time", time.time() - t1)
 
-            self._pass_var_to_fac_messages(
-                update_belief=True,
-            )
+            t1 = time.time()
+            self._pass_fac_to_var_messages(schedule[it_], damping_arr)
+            # print("ftov time", time.time() - t1)
+
+            t1 = time.time()
+            self._pass_var_to_fac_messages(update_belief=True)
+            # print("vtof time", time.time() - t1)
 
             # check for convergence
             if it_ > 0:
@@ -809,6 +824,7 @@ class GaussianBeliefPropagation(Optimizer, abc.ABC):
                 dropout=dropout,
                 schedule=schedule,
                 lin_system_damping=lin_system_damping,
+                clear_messages=False,
                 **kwargs,
             )
 

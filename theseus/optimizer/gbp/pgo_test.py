@@ -68,7 +68,7 @@ def create_pgo():
             inputs[f"x{p}"] = init[None, :]
             inputs[f"prior_{p}"] = init[None, :]
 
-            cf_prior = th.eb.VariableDifference(
+            cf_prior = th.Difference(
                 poses[p], w, prior_target, name=f"prior_cost_{p}"
             )
 

@@ -88,9 +88,6 @@ class DenseSolver(LinearSolver):
         if self._check_singular:
             AtA = self.linearization.AtA
             Atb = self.linearization.Atb
-            import ipdb
-
-            ipdb.set_trace()
             with torch.no_grad():
                 output = torch.zeros(AtA.shape[0], AtA.shape[1]).to(AtA.device)
                 _, _, infos = torch.lu(AtA, get_infos=True)

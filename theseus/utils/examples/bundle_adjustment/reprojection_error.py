@@ -117,8 +117,8 @@ class Reprojection(th.CostFunction):
             self.camera_pose.copy(),
             self.world_point.copy(),
             self.log_loss_radius.copy(),
-            self.focal_length.copy(),
             self.image_feature_point.copy(),
+            self.focal_length.copy(),
             weight=self.weight.copy(),
             name=new_name,
         )

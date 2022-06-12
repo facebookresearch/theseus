@@ -4,14 +4,24 @@
 # LICENSE file in the root directory of this source tree.
 
 import abc
-from typing import Dict, Optional, Union
+import os
+from dataclasses import dataclass
+from typing import Dict, List, Optional, Union, cast
 
 import differentiable_robot_model as drm
 import torch
+from stl import mesh
+from urdf_parser_py import urdf
 
-from theseus.geometry import SE3, LieGroup, Point2, Vector
+from theseus.geometry import SE3, LieGroup, Point2, Point3, Vector
 
 RobotModelInput = Union[torch.Tensor, Vector]
+
+
+@dataclass
+class Sphere:
+    position: Point3
+    radius: float
 
 
 class KinematicsModel(abc.ABC):
@@ -37,8 +47,71 @@ class IdentityModel(KinematicsModel):
 
 
 class UrdfRobotModel(KinematicsModel):
-    def __init__(self, urdf_path: str):
+    collision_spheres: Dict[str, List[Sphere]]
+
+    def __init__(self, urdf_path: str, collision_params: Dict[str, float] = None):
+        # Initialize DRM
         self.drm_model = drm.DifferentiableRobotModel(urdf_path)
+
+        # Parse collision params
+        collision_params = collision_params or {}
+        use_mesh = False
+        for key, value in collision_params.items():
+            if key == "use_mesh" and value:
+                use_mesh = True
+
+        # Parse URDF for collision geometries
+        self.collision_spheres = {}
+        robot = urdf.URDF.from_xml_file(urdf_path)
+
+        for link in robot.links:
+            self.collision_spheres[link.name] = []
+
+            for col in link.collisions:
+                # Get sphere from user defined spheres in xml
+                if not use_mesh and type(col.geometry) is urdf.Sphere:
+                    pos = col.origin.xyz if col.origin.xyz is not None else [0, 0, 0]
+                    rad = col.geometry.radius
+                    sphere_obj = Sphere(
+                        position=Point3(torch.Tensor(pos)),
+                        radius=float(rad),
+                    )
+                    self.collision_spheres[link.name].append(sphere_obj)
+
+                # Generate spheres from mesh
+                elif use_mesh and type(col.geometry) is urdf.Mesh:
+                    # Load mesh file
+                    mesh_path = os.path.join(
+                        os.path.dirname(urdf_path), col.geometry.filename
+                    )
+                    mesh_obj = mesh.Mesh.from_file(mesh_path)
+
+                    # Process mesh
+                    self.collision_spheres[
+                        link.name
+                    ] += self._generate_spheres_from_mesh(mesh_obj)
+
+    def _generate_spheres_from_mesh(self, mesh: mesh.Mesh) -> List[Sphere]:
+        """Approximates a mesh with a collection of spheres
+
+        Current placeholder primitive implementation: Generate a single sphere
+        located at the COM of the mesh, with r = distance to farthest triangle
+        """
+        # Find center of each triangle
+        mesh_coms = (
+            torch.Tensor(
+                mesh.points[:, 0:3] + mesh.points[:, 3:6] + mesh.points[:, 6:9]
+            )
+            / 3.0
+        )
+
+        # Sphere center as COM of all COMs
+        center = torch.mean(mesh_coms, dim=0)
+
+        # Sphere radius as farthest point from center
+        radius = float(torch.max(torch.linalg.norm(mesh_coms - center, dim=-1)))
+
+        return [Sphere(position=Point3(center), radius=radius)]
 
     def _postprocess_quaternion(self, quat):
         # Convert quaternion convention (DRM uses xyzw, Theseus uses wxyz)
@@ -102,3 +175,29 @@ class UrdfRobotModel(KinematicsModel):
                 jacobians[link_name] = torch.cat([jac_lin, jac_rot], dim=-2)
 
         return link_poses
+
+    def get_collision_spheres(self, link_states: Dict[str, LieGroup]) -> List[Sphere]:
+        spheres_ret = []
+        for link_name in link_states:
+            # Skip link if no collision spheres are associated
+            if link_name not in self.collision_spheres:
+                continue
+
+            # Apply link pose to link spheres
+            link_transform = link_states[link_name]
+            for sphere in self.collision_spheres[link_name]:
+                assert isinstance(
+                    link_transform, SE3
+                ), f'Input link states must be "th.SE3", instead got "{type(link_transform)}".'
+
+                sphere_pos_transformed = cast(SE3, link_transform).transform_from(
+                    sphere.position
+                )
+                spheres_ret.append(
+                    Sphere(
+                        position=sphere_pos_transformed,
+                        radius=sphere.radius,
+                    )
+                )
+
+        return spheres_ret

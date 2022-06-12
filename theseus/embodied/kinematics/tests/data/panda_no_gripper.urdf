@@ -20,6 +20,12 @@
                 <mesh filename="meshes/collision/link0.stl" />
             </geometry>
         </collision>
+        <collision>  <!-- collision approximation sphere -->
+            <origin xyz="-0.03 0 0.05"/>
+            <geometry>
+                <sphere radius="0.12"/>
+            </geometry>
+        </collision>
     </link>
     <link name="panda_link1">
         <inertial>
@@ -35,6 +41,18 @@
         <collision>
             <geometry>
                 <mesh filename="meshes/collision/link1.stl" />
+            </geometry>
+        </collision>
+        <collision>  <!-- collision approximation sphere -->
+            <origin xyz="0 -0.05 0"/>
+            <geometry>
+                <sphere radius="0.1"/>
+            </geometry>
+        </collision>
+        <collision>  <!-- collision approximation sphere -->
+            <origin xyz="0 0 -0.1"/>
+            <geometry>
+                <sphere radius="0.1"/>
             </geometry>
         </collision>
     </link>
@@ -62,6 +80,18 @@
                 <mesh filename="meshes/collision/link2.stl" />
             </geometry>
         </collision>
+        <collision>  <!-- collision approximation sphere -->
+            <origin xyz="0 0 0.05"/>
+            <geometry>
+                <sphere radius="0.1"/>
+            </geometry>
+        </collision>
+        <collision>  <!-- collision approximation sphere -->
+            <origin xyz="0 -0.15 0"/>
+            <geometry>
+                <sphere radius="0.09"/>
+            </geometry>
+        </collision>
     </link>
     <joint name="panda_joint2" type="revolute">
         <safety_controller k_position="100.0" k_velocity="40.0" soft_lower_limit="-1.7628" soft_upper_limit="1.7628" />
@@ -85,6 +115,18 @@
         <collision>
             <geometry>
                 <mesh filename="meshes/collision/link3.stl" />
+            </geometry>
+        </collision>
+        <collision>  <!-- collision approximation sphere -->
+            <origin xyz="0 0 -0.075"/>
+            <geometry>
+                <sphere radius="0.09"/>
+            </geometry>
+        </collision>
+        <collision>  <!-- collision approximation sphere -->
+            <origin xyz="0.08 0.05 0"/>
+            <geometry>
+                <sphere radius="0.1"/>
             </geometry>
         </collision>
     </link>
@@ -112,6 +154,18 @@
                 <mesh filename="meshes/collision/link4.stl" />
             </geometry>
         </collision>
+        <collision>  <!-- collision approximation sphere -->
+            <origin xyz="0 0 0.05"/>
+            <geometry>
+                <sphere radius="0.1"/>
+            </geometry>
+        </collision>
+        <collision>  <!-- collision approximation sphere -->
+            <origin xyz="-0.08 0.06 0"/>
+            <geometry>
+                <sphere radius="0.09"/>
+            </geometry>
+        </collision>
     </link>
     <joint name="panda_joint4" type="revolute">
         <safety_controller k_position="100.0" k_velocity="40.0" soft_lower_limit="-3.0718" soft_upper_limit="0.0175" />
@@ -135,6 +189,24 @@
         <collision>
             <geometry>
                 <mesh filename="meshes/collision/link5.stl" />
+            </geometry>
+        </collision>
+        <collision>  <!-- collision approximation sphere -->
+            <origin xyz="0 0 -0.2"/>
+            <geometry>
+                <sphere radius="0.09"/>
+            </geometry>
+        </collision>
+        <collision>  <!-- collision approximation sphere -->
+            <origin xyz="0 0.08 -0.12"/>
+            <geometry>
+                <sphere radius="0.06"/>
+            </geometry>
+        </collision>
+        <collision>  <!-- collision approximation sphere -->
+            <origin xyz="0 0.08 0"/>
+            <geometry>
+                <sphere radius="0.08"/>
             </geometry>
         </collision>
     </link>
@@ -162,6 +234,18 @@
                 <mesh filename="meshes/collision/link6.stl" />
             </geometry>
         </collision>
+        <collision>  <!-- collision approximation sphere -->
+            <origin xyz="0 0 0.01"/>
+            <geometry>
+                <sphere radius="0.07"/>
+            </geometry>
+        </collision>
+        <collision>  <!-- collision approximation sphere -->
+            <origin xyz="0.07 0.02 0.01"/>
+            <geometry>
+                <sphere radius="0.08"/>
+            </geometry>
+        </collision>
     </link>
     <joint name="panda_joint6" type="revolute">
         <safety_controller k_position="100.0" k_velocity="40.0" soft_lower_limit="-0.0175" soft_upper_limit="3.7525" />
@@ -185,6 +269,18 @@
         <collision>
             <geometry>
                 <mesh filename="meshes/collision/link7.stl" />
+            </geometry>
+        </collision>
+        <collision>  <!-- collision approximation sphere -->
+            <origin xyz="0 0 0.07"/>
+            <geometry>
+                <sphere radius="0.06"/>
+            </geometry>
+        </collision>
+        <collision>  <!-- collision approximation sphere -->
+            <origin xyz="0.04 0.04 0.085"/>
+            <geometry>
+                <sphere radius="0.042"/>
             </geometry>
         </collision>
     </link>

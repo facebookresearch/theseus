@@ -8,7 +8,7 @@ from typing import List, Optional, Tuple, Type
 import torch
 
 from .cost_function import CostFunction
-from .loss import Loss
+from .loss import RobustLoss
 from .variable import Variable
 
 
@@ -35,7 +35,7 @@ class RobustCostFunction(CostFunction):
     def __init__(
         self,
         cost_function: CostFunction,
-        loss_cls: Type[Loss],
+        loss_cls: Type[RobustLoss],
         log_loss_radius: Variable,
         name: Optional[str] = None,
     ):

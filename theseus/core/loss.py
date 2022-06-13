@@ -10,7 +10,7 @@ import torch
 _LOSS_EPS = 1e-20
 
 
-class Loss(abc.ABC):
+class RobustLoss(abc.ABC):
     @staticmethod
     @abc.abstractmethod
     def evaluate(x: torch.Tensor, radius: torch.Tensor) -> torch.Tensor:
@@ -22,7 +22,7 @@ class Loss(abc.ABC):
         pass
 
 
-class WelschLoss(Loss):
+class WelschLoss(RobustLoss):
     @staticmethod
     def evaluate(x: torch.Tensor, radius: torch.Tensor) -> torch.Tensor:
         return radius - radius * torch.exp(-x / (radius + _LOSS_EPS))
@@ -32,7 +32,7 @@ class WelschLoss(Loss):
         return torch.exp(-x / (radius + _LOSS_EPS))
 
 
-class HuberLoss(Loss):
+class HuberLoss(RobustLoss):
     @staticmethod
     def evaluate(x: torch.Tensor, radius: torch.Tensor) -> torch.Tensor:
         return torch.where(

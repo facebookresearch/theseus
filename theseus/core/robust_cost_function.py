@@ -2,7 +2,7 @@
 #
 # This source code is licensed under the MIT license found in the
 # LICENSE file in the root directory of this source tree.
-
+import warnings
 from typing import List, Optional, Tuple, Type
 
 import torch
@@ -22,13 +22,27 @@ from .variable import Variable
 # cost function's error and jacobians to solve for the full robust cost function
 # (see Theory section at http://ceres-solver.org/nnls_modeling.html#theory and
 # references therein); here we use alpha=0. The implementation of this part is done via
-# `RobustCostFunction.weighted_jacobians_error()`
+# `RobustCostFunction.weighted_jacobians_error()`.
 #
-# Let e := `robust_cost_fn.cost_function.error()`. Currently, the convention is that:
-#     -`robust_cost_fn.error()` returns e.
-#     -`robust_cost_fn.weighted_error()` returns a vectorized version of loss(||e||^2).
+# Due to the nature of `RobustCostFunction`, its behavior is different to typical cost
+# functions. Below we use the notation e, J, w, to refer to the error, jacobian, and
+# weight of the base cost function, and let rho be the robust loss used. The important
+# points are the following:
 #
-# Also, `robust_cost_fn.jacobians()` is not implemented.
+#   - For h := robust_cost_fn.weighted_error(), we have ||h||2 == rho(||w * e||2)
+#   - For r_J, r_e defined as any jacobian/error returned by
+#     robust_cost_fn.weighted_jacobians_error(), we have that
+#     r_Jv^T * r_e == rho' * J^T * e, which is the gradient of rho(||w * e||2).
+#   - Note that h != r_e. In general, weighted_jacobians_and_error()
+#       is used by our optimizers, since it allows RobustCostFunction to be coupled
+#       with any Jacobian-based NLS solver w/o modifications. However, if you are
+#       interested in the robust cost value itself, you should use the error returned
+#       by `weighted_error()` and **NOT** the one returned by
+#       `weighted_jacobians_error()`.
+#
+# Finally, since we apply the weight before the robust loss, we adopt the convention
+# that `robust_cost_fn.jacobians() == robust_cost_fn.weighted_jacobians_error()`, and
+# `robust_cost_fn.error() == robust_cost_fn.weighed_error()`.
 class RobustCostFunction(CostFunction):
     _EPS = 1e-20
 
@@ -57,7 +71,11 @@ class RobustCostFunction(CostFunction):
         self.loss = loss_cls()
 
     def error(self) -> torch.Tensor:
-        return self.cost_function.error()
+        warnings.warn(
+            "Computing the robust cost error requires weighting first, so "
+            "error() is equivalent to weighted_error()."
+        )
+        return self.weighted_error()
 
     def weighted_error(self) -> torch.Tensor:
         weighted_error = self.cost_function.weighted_error()
@@ -77,7 +95,11 @@ class RobustCostFunction(CostFunction):
         )
 
     def jacobians(self) -> Tuple[List[torch.Tensor], torch.Tensor]:
-        raise NotImplementedError
+        warnings.warn(
+            "Computing the robust cost error requires weighting first, so "
+            "jacobians() is equivalent to weighted_jacobians()."
+        )
+        return self.weighted_jacobians_error()
 
     def weighted_jacobians_error(self) -> Tuple[List[torch.Tensor], torch.Tensor]:
         (

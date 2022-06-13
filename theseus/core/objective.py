@@ -68,7 +68,11 @@ class Objective:
         # Used to vectorize cost functions after update
         self._vectorization_run: Optional[Callable] = None
 
+        # If vectorization is on, this will also handle vectorized containers
         self._vectorization_to: Optional[Callable] = None
+
+        # If vectorization is on, this gets replaced by a vectorized version
+        self._retract_method = Objective._retract_base
 
     def _add_function_variables(
         self,
@@ -504,8 +508,8 @@ class Objective:
         if self._vectorization_to is not None:
             self._vectorization_to(*args, **kwargs)
 
-    def retract_optim_vars(
-        self,
+    @staticmethod
+    def _retract_base(
         delta: torch.Tensor,
         ordering: Iterable[Manifold],
         ignore_mask: Optional[torch.Tensor] = None,
@@ -519,4 +523,14 @@ class Objective:
             else:
                 var.update(new_var.data, batch_ignore_mask=ignore_mask)
             var_idx += var.dof()
-        self.update_vectorization()
+
+    def retract_optim_vars(
+        self,
+        delta: torch.Tensor,
+        ordering: Iterable[Manifold],
+        ignore_mask: Optional[torch.Tensor] = None,
+        force_update: bool = False,
+    ):
+        self._retract_method(
+            delta, ordering, ignore_mask=ignore_mask, force_update=force_update
+        )

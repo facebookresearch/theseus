@@ -1,7 +1,6 @@
 import torch
 
 import theseus as th
-from theseus.utils import numeric_jacobian
 
 
 def _new_robust_cf(batch_size, loss_cls, generator) -> th.RobustCostFunction:
@@ -33,7 +32,7 @@ def test_robust_cost_weighted_error():
                 expected_rho2 = loss_cls.evaluate(
                     (e * e).sum(dim=1, keepdim=True), robust_cf.log_loss_radius.data
                 )
-                assert torch.allclose(rho2, expected_rho2)
+                assert rho2.allclose(expected_rho2)
 
 
 def test_robust_cost_grad_form():
@@ -54,39 +53,39 @@ def test_robust_cost_grad_form():
                 expected_grad = rho_prime.view(-1, 1, 1) * cf_grad
                 rescaled_jac, rescaled_e = robust_cf.weighted_jacobians_error()
                 grad = _grad(rescaled_jac[0], rescaled_e)
-                assert torch.allclose(grad, expected_grad, atol=1e-6)
+                assert grad.allclose(expected_grad, atol=1e-6)
 
 
 def test_robust_cost_jacobians():
     generator = torch.Generator()
     generator.manual_seed(0)
 
-    v1 = th.rand_vector(3, 3)
-    v2 = th.rand_vector(3, 3)
-    w = th.ScaleCostWeight(torch.randn(1, generator=generator))
-    cf = th.Local(v1, w, v2)
-    ll_radius = th.Variable(data=torch.ones(1, 1))
-    robust_cf = th.RobustCostFunction(cf, th.WelschLoss, ll_radius)
-    loss_cls = th.WelschLoss
+    for _ in range(10):
+        for batch_size in [1, 2, 10]:
+            for loss_cls in [th.WelschLoss, th.HuberLoss]:
+                robust_cf = _new_robust_cf(batch_size, loss_cls, generator)
+                v1, v2 = robust_cf.cost_function.var, robust_cf.cost_function.target
+                v_aux = v1.copy()
+                ll_radius = robust_cf.log_loss_radius
+                w = robust_cf.cost_function.weight
 
-    def new_error_fn(vars):
-        new_robust_cf = th.RobustCostFunction(
-            th.Local(vars[0], w, v2), loss_cls, ll_radius
-        )
-        e = new_robust_cf.cost_function.weighted_error()
-        e_norm = (e * e).sum(1, keepdim=True)
-        rho = loss_cls.evaluate(e_norm, ll_radius.data)
-        return th.Vector(data=rho)
+                def test_fn(v_data):
+                    v_aux.update(v_data)
+                    new_robust_cf = th.RobustCostFunction(
+                        th.Local(v_aux, w, v2), loss_cls, ll_radius
+                    )
+                    e = new_robust_cf.cost_function.weighted_error()
+                    e_norm = (e * e).sum(1, keepdim=True)
+                    return loss_cls.evaluate(e_norm, ll_radius.data) / 2.0
 
-    expected_grad = numeric_jacobian(
-        new_error_fn,
-        [v1],
-        function_dim=1,
-        delta_mag=1e-6,
-    )[0]
-    print(expected_grad)
+                aux_id = torch.arange(batch_size)
+                grad_raw_dense = torch.autograd.functional.jacobian(
+                    test_fn, (v1.data,)
+                )[0]
+                grad_raw_sparse = grad_raw_dense[aux_id, :, aux_id]
+                expected_grad = v1.project(grad_raw_sparse, is_sparse=True)
 
-    rescaled_jac, rescaled_err = robust_cf.weighted_jacobians_error()
-    grad = _grad(rescaled_jac[0], rescaled_err)
+                rescaled_jac, rescaled_err = robust_cf.weighted_jacobians_error()
+                grad = _grad(rescaled_jac[0], rescaled_err)
 
-    print(grad, expected_grad)
+                assert grad.allclose(expected_grad, atol=1e-4)

@@ -119,7 +119,7 @@ def run(cfg: omegaconf.OmegaConf, results_path: pathlib.Path):
     weight = th.ScaleCostWeight(torch.tensor(1.0).to(dtype=ba.cameras[0].pose.dtype))
     for obs in ba.observations:
         cam = ba.cameras[obs.camera_index]
-        cost_function = theg.Reprojection(
+        cost_function = th.eb.Reprojection(
             camera_pose=cam.pose,
             world_point=ba.points[obs.point_index],
             focal_length=cam.focal_length,
@@ -184,7 +184,7 @@ def run(cfg: omegaconf.OmegaConf, results_path: pathlib.Path):
     )
 
     # Set up Theseus layer
-    theseus_optim = th.TheseusLayer(optimizer, vectorize=True)
+    theseus_optim = th.TheseusLayer(optimizer)
 
     # copy the poses/pts to feed them to each outer iteration
     orig_poses = {cam.pose.name: cam.pose.data.clone() for cam in ba.cameras}

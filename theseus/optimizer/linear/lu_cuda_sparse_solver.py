@@ -22,6 +22,7 @@ class LUCudaSparseSolver(LinearSolver):
         linearization_kwargs: Optional[Dict[str, Any]] = None,
         num_solver_contexts=1,
         batch_size: Optional[int] = None,
+        auto_reset: bool = True,
         **kwargs,
     ):
         if not torch.cuda.is_available():
@@ -44,6 +45,9 @@ class LUCudaSparseSolver(LinearSolver):
                 self.reset(batch_size=batch_size)
             else:
                 self.reset()
+
+        self._objective = objective
+        self._auto_reset = auto_reset
 
     def reset(self, batch_size: int = 16):
         if not torch.cuda.is_available():
@@ -91,6 +95,9 @@ class LUCudaSparseSolver(LinearSolver):
         damping_eps: float = 1e-8,
         **kwargs,
     ) -> torch.Tensor:
+        if self._auto_reset:
+            if self._solver_contexts[0].batch_size != self._objective.batch_size:
+                self.reset(self._objective.batch_size)
         if not isinstance(self.linearization, SparseLinearization):
             raise RuntimeError(
                 "CholmodSparseSolver only works with theseus.optimizer.SparseLinearization."

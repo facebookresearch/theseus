@@ -47,7 +47,9 @@ class Reprojection(th.CostFunction):
         self.image_feature_point = image_feature_point
 
         self.register_optim_vars(["camera_pose", "world_point"])
-        self.register_aux_vars(["focal_length", "image_feature_point"])
+        self.register_aux_vars(
+            ["focal_length", "image_feature_point", "calib_k1", "calib_k2"]
+        )
 
     def error(self) -> torch.Tensor:
         point_cam = self.camera_pose.transform_from(self.world_point)
@@ -98,16 +100,13 @@ class Reprojection(th.CostFunction):
         super().to(*args, **kwargs)
 
     def _copy_impl(self, new_name: Optional[str] = None) -> "Reprojection":
-        calib_k1 = self.calib_k1.copy() if self.calib_k1 is not None else None
-        calib_k2 = self.calib_k2.copy() if self.calib_k2 is not None else None
-
         return Reprojection(
             self.camera_pose.copy(),
             self.world_point.copy(),
             self.image_feature_point.copy(),
             self.focal_length.copy(),
-            calib_k1=calib_k1,
-            calib_k2=calib_k2,
+            calib_k1=self.calib_k1.copy(),
+            calib_k2=self.calib_k2.copy(),
             weight=self.weight.copy(),
             name=new_name,
         )

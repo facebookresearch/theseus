@@ -116,6 +116,7 @@ def run(cfg: omegaconf.OmegaConf, results_path: pathlib.Path):
     # Set up objective
     objective = th.Objective(dtype=torch.float64)
 
+    weight = th.ScaleCostWeight(torch.tensor(1.0).to(dtype=ba.cameras[0].pose.dtype))
     for obs in ba.observations:
         cam = ba.cameras[obs.camera_index]
         cost_function = theg.Reprojection(
@@ -125,6 +126,7 @@ def run(cfg: omegaconf.OmegaConf, results_path: pathlib.Path):
             calib_k1=cam.calib_k1,
             calib_k2=cam.calib_k2,
             image_feature_point=obs.image_feature_point,
+            weight=weight,
         )
         robust_cost_function = th.RobustCostFunction(
             cost_function,
@@ -182,7 +184,7 @@ def run(cfg: omegaconf.OmegaConf, results_path: pathlib.Path):
     )
 
     # Set up Theseus layer
-    theseus_optim = th.TheseusLayer(optimizer, vectorize=False)
+    theseus_optim = th.TheseusLayer(optimizer, vectorize=True)
 
     # copy the poses/pts to feed them to each outer iteration
     orig_poses = {cam.pose.name: cam.pose.data.clone() for cam in ba.cameras}

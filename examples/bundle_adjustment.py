@@ -116,18 +116,25 @@ def run(cfg: omegaconf.OmegaConf, results_path: pathlib.Path):
     # Set up objective
     objective = th.Objective(dtype=torch.float64)
 
+    weight = th.ScaleCostWeight(torch.tensor(1.0).to(dtype=ba.cameras[0].pose.dtype))
     for obs in ba.observations:
         cam = ba.cameras[obs.camera_index]
-        cost_function = theg.Reprojection(
+        cost_function = th.eb.Reprojection(
             camera_pose=cam.pose,
             world_point=ba.points[obs.point_index],
             focal_length=cam.focal_length,
             calib_k1=cam.calib_k1,
             calib_k2=cam.calib_k2,
-            log_loss_radius=log_loss_radius,
             image_feature_point=obs.image_feature_point,
+            weight=weight,
         )
-        objective.add(cost_function)
+        robust_cost_function = th.RobustCostFunction(
+            cost_function,
+            th.HuberLoss,
+            log_loss_radius,
+            name=f"robust_{cost_function.name}",
+        )
+        objective.add(robust_cost_function)
     dtype = objective.dtype
 
     # Add regularization

@@ -6,7 +6,6 @@
 import torch
 
 import theseus as th
-import theseus.utils.examples as theg
 from theseus.utils.examples.bundle_adjustment.util import random_small_quaternion
 
 
@@ -38,10 +37,6 @@ def test_residual():
         data=torch.tensor([0.01], dtype=torch.float64).repeat(batch_size).unsqueeze(1),
         name="calib_k2",
     )
-    log_loss_radius = th.Vector(
-        data=torch.tensor([0], dtype=torch.float64).repeat(batch_size).unsqueeze(1),
-        name="log_loss_radius",
-    )
     world_point = th.Vector(
         data=torch.rand((batch_size, 3), dtype=torch.float64), name="worldPoint"
     )
@@ -56,13 +51,12 @@ def test_residual():
         data=point_projection.data + (torch.rand((batch_size, 2)) - 0.5) * 50,
         name="image_feature_point",
     )
-    r = theg.Reprojection(
+    r = th.eb.Reprojection(
         camera_pose=cam_pose,
         world_point=world_point,
         focal_length=focal_length,
         calib_k1=calib_k1,
         calib_k2=calib_k2,
-        log_loss_radius=log_loss_radius,
         image_feature_point=image_feature_point,
     )
 

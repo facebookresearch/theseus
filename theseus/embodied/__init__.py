@@ -5,7 +5,7 @@
 
 from .collision import Collision2D, EffectorObjectContactPlanar, SignedDistanceField2D
 from .kinematics import IdentityModel, KinematicsModel, UrdfRobotModel
-from .measurements import Between, MovingFrameBetween
+from .measurements import Between, MovingFrameBetween, Reprojection
 from .misc import Local
 from .motionmodel import (
     DoubleIntegrator,

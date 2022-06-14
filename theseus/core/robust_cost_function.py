@@ -7,9 +7,8 @@ from typing import List, Optional, Tuple, Type
 
 import torch
 
-from theseus.core.cost_weight import CostWeight
-
 from .cost_function import CostFunction
+from .cost_weight import CostWeight
 from .loss import RobustLoss
 from .variable import Variable
 

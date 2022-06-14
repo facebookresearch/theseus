@@ -93,4 +93,4 @@ def test_robust_cost_jacobians():
                 rescaled_jac, rescaled_err = robust_cf.weighted_jacobians_error()
                 grad = _grad(rescaled_jac[0], rescaled_err)
 
-                assert grad.allclose(expected_grad, atol=1e-4)
+                assert grad.allclose(expected_grad, atol=1e-2)

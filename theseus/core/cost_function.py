@@ -32,7 +32,15 @@ class CostFunction(TheseusFunction, abc.ABC):
         **kwargs: Any,
     ):
         super().__init__(name=name)
-        self.weight = cost_weight
+        self._weight = cost_weight
+
+    @property
+    def weight(self) -> CostWeight:
+        return self._weight
+
+    @weight.setter
+    def weight(self, weight: CostWeight):
+        self._weight = weight
 
     @abc.abstractmethod
     def error(self) -> torch.Tensor:

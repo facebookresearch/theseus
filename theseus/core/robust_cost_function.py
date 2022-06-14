@@ -7,6 +7,8 @@ from typing import List, Optional, Tuple, Type
 
 import torch
 
+from theseus.core.cost_weight import CostWeight
+
 from .cost_function import CostFunction
 from .loss import RobustLoss
 from .variable import Variable
@@ -53,9 +55,9 @@ class RobustCostFunction(CostFunction):
         log_loss_radius: Variable,
         name: Optional[str] = None,
     ):
+        self.cost_function = cost_function
         super().__init__(cost_function.weight, name=name)
 
-        self.cost_function = cost_function
         # Register optimization variables of the underlying cost function
         for attr in cost_function._optim_vars_attr_names:
             setattr(self, attr, getattr(cost_function, attr))
@@ -126,3 +128,11 @@ class RobustCostFunction(CostFunction):
             self.log_loss_radius.copy(),
             name=new_name,
         )
+
+    @property
+    def weight(self) -> CostWeight:
+        return self.cost_function.weight
+
+    @weight.setter
+    def weight(self, weight: CostWeight):
+        self.cost_function.weight = weight

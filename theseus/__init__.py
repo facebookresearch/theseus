@@ -11,7 +11,7 @@ from .core import (
     ScaleCostWeight,
     Variable,
     Vectorize,
-    Loss,
+    RobustLoss,
     AutoDiffCostFunction,
     RobustCostFunction,
     HuberLoss,

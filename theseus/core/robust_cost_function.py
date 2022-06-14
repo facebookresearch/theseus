@@ -1,10 +1,15 @@
-import abc
+# Copyright (c) Meta Platforms, Inc. and affiliates.
+#
+# This source code is licensed under the MIT license found in the
+# LICENSE file in the root directory of this source tree.
+import warnings
 from typing import List, Optional, Tuple, Type
 
 import torch
 
 from .cost_function import CostFunction
-from .loss import Loss
+from .cost_weight import CostWeight
+from .robust_loss import RobustLoss
 from .variable import Variable
 
 
@@ -18,24 +23,40 @@ from .variable import Variable
 # cost function's error and jacobians to solve for the full robust cost function
 # (see Theory section at http://ceres-solver.org/nnls_modeling.html#theory and
 # references therein); here we use alpha=0. The implementation of this part is done via
-# `RobustCostFunction.weighted_jacobians_error()`
+# `RobustCostFunction.weighted_jacobians_error()`.
 #
-# Let e := `robust_cost_fn.cost_function.error()`. Currently, the convention is that:
-#     -`robust_cost_fn.error()` returns e.
-#     -`robust_cost_fn.weighted_error()` returns a vectorized version of loss(||e||^2).
+# Due to the nature of `RobustCostFunction`, its behavior is different to typical cost
+# functions. Below we use the notation e, J, w, to refer to the error, jacobian, and
+# weight of the base cost function, and let rho be the robust loss used. The important
+# points are the following:
 #
-# Also, `robust_cost_fn.jacobians()` is not implemented.
-class RobustCostFunction(CostFunction, abc.ABC):
+#   - For h := robust_cost_fn.weighted_error(), we have ||h||2 == rho(||w * e||2)
+#   - For r_J, r_e defined as any jacobian/error returned by
+#     robust_cost_fn.weighted_jacobians_error(), we have that
+#     r_Jv^T * r_e == rho' * J^T * e, which is the gradient of rho(||w * e||2).
+#   - Note that h != r_e. In general, weighted_jacobians_and_error()
+#       is used by our optimizers, since it allows RobustCostFunction to be coupled
+#       with any Jacobian-based NLS solver w/o modifications. However, if you are
+#       interested in the robust cost value itself, you should use the error returned
+#       by `weighted_error()` and **NOT** the one returned by
+#       `weighted_jacobians_error()`.
+#
+# Finally, since we apply the weight before the robust loss, we adopt the convention
+# that `robust_cost_fn.jacobians() == robust_cost_fn.weighted_jacobians_error()`, and
+# `robust_cost_fn.error() == robust_cost_fn.weighed_error()`.
+class RobustCostFunction(CostFunction):
+    _EPS = 1e-20
+
     def __init__(
         self,
         cost_function: CostFunction,
-        loss_cls: Type[Loss],
+        loss_cls: Type[RobustLoss],
         log_loss_radius: Variable,
         name: Optional[str] = None,
     ):
+        self.cost_function = cost_function
         super().__init__(cost_function.weight, name=name)
 
-        self.cost_function = cost_function
         # Register optimization variables of the underlying cost function
         for attr in cost_function._optim_vars_attr_names:
             setattr(self, attr, getattr(cost_function, attr))
@@ -51,13 +72,16 @@ class RobustCostFunction(CostFunction, abc.ABC):
         self.loss = loss_cls()
 
     def error(self) -> torch.Tensor:
-        return self.cost_function.error()
+        warnings.warn(
+            "Computing the robust cost error requires weighting first, so "
+            "error() is equivalent to weighted_error()."
+        )
+        return self.weighted_error()
 
     def weighted_error(self) -> torch.Tensor:
         weighted_error = self.cost_function.weighted_error()
         squared_norm = torch.sum(weighted_error**2, dim=1, keepdim=True)
-        loss_radius = torch.exp(self.log_loss_radius.data)
-        error_loss = self.loss.evaluate(squared_norm, loss_radius)
+        error_loss = self.loss.evaluate(squared_norm, self.log_loss_radius.data)
 
         # The return value is a hacky way to make it so that
         # ||weighted_error||^2 = error_loss
@@ -66,16 +90,17 @@ class RobustCostFunction(CostFunction, abc.ABC):
         # function is that the theory requires us to maintain scaled errors/jacobians
         # of dim = robust_fn.cost_function.dim() to do the linearization properly,
         # but the actual error has dim = 1, being the result of loss(||error||^2).
-        #
-        # Other options explored so far involve adding new methods to CostFunction,
-        # and/or changing Objective/Optimizer class. I'd prefer to avoid changing
-        # core class for experimental code, as long as it is possible [lep].
         return (
-            torch.ones_like(weighted_error) * (error_loss / self.dim() + 1e-20).sqrt()
+            torch.ones_like(weighted_error)
+            * (error_loss / self.dim() + RobustCostFunction._EPS).sqrt()
         )
 
     def jacobians(self) -> Tuple[List[torch.Tensor], torch.Tensor]:
-        raise NotImplementedError
+        warnings.warn(
+            "Computing the robust cost error requires weighting first, so "
+            "jacobians() is equivalent to weighted_jacobians_error()."
+        )
+        return self.weighted_jacobians_error()
 
     def weighted_jacobians_error(self) -> Tuple[List[torch.Tensor], torch.Tensor]:
         (
@@ -83,8 +108,10 @@ class RobustCostFunction(CostFunction, abc.ABC):
             weighted_error,
         ) = self.cost_function.weighted_jacobians_error()
         squared_norm = torch.sum(weighted_error**2, dim=1, keepdim=True)
-        loss_radius = torch.exp(self.log_loss_radius.data)
-        rescale = (self.loss.linearize(squared_norm, loss_radius) + 1e-20).sqrt()
+        rescale = (
+            self.loss.linearize(squared_norm, self.log_loss_radius.data)
+            + RobustCostFunction._EPS
+        ).sqrt()
 
         return [
             rescale.view(-1, 1, 1) * jacobian for jacobian in weighted_jacobians
@@ -100,3 +127,11 @@ class RobustCostFunction(CostFunction, abc.ABC):
             self.log_loss_radius.copy(),
             name=new_name,
         )
+
+    @property
+    def weight(self) -> CostWeight:
+        return self.cost_function.weight
+
+    @weight.setter
+    def weight(self, weight: CostWeight):
+        self.cost_function.weight = weight

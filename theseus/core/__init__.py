@@ -5,8 +5,8 @@
 
 from .cost_function import AutoDiffCostFunction, CostFunction, ErrFnType
 from .cost_weight import CostWeight, DiagonalCostWeight, ScaleCostWeight
-from .loss import HuberLoss, RobustLoss, WelschLoss
 from .objective import Objective
 from .robust_cost_function import RobustCostFunction
+from .robust_loss import HuberLoss, RobustLoss, WelschLoss
 from .variable import Variable
 from .vectorizer import Vectorize

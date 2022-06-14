@@ -9,7 +9,7 @@ import torch
 
 from .cost_function import CostFunction
 from .cost_weight import CostWeight
-from .loss import RobustLoss
+from .robust_loss import RobustLoss
 from .variable import Variable
 
 

@@ -218,8 +218,8 @@ class TheseusLayerDLMForward(torch.autograd.Function):
         with torch.no_grad():
             bwd_optimizer.linear_solver.linearization.linearize()
             delta = bwd_optimizer.linear_solver.solve()
-            bwd_optimizer.retract_and_update_variables(
-                delta, None, 1.0, force_update=True
+            bwd_optimizer.objective.retract_optim_vars(
+                delta, bwd_optimizer.linear_solver.linearization.ordering
             )
 
         # Compute gradients.

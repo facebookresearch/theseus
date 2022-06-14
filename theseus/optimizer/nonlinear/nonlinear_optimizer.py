@@ -262,8 +262,11 @@ class NonlinearOptimizer(Optimizer, abc.ABC):
                 step_size = self.params.step_size
                 force_update = False
 
-            self.retract_and_update_variables(
-                delta, converged_indices, step_size, force_update=force_update
+            self.objective.retract_optim_vars(
+                delta * step_size,
+                self.linear_solver.linearization.ordering,
+                ignore_mask=converged_indices,
+                force_update=force_update,
             )
 
             # check for convergence
@@ -376,22 +379,3 @@ class NonlinearOptimizer(Optimizer, abc.ABC):
     @abc.abstractmethod
     def compute_delta(self, **kwargs) -> torch.Tensor:
         pass
-
-    # retracts all variables in the given order and updates their values
-    # with the result
-    def retract_and_update_variables(
-        self,
-        delta: torch.Tensor,
-        converged_indices: torch.Tensor,
-        step_size: float,
-        force_update: bool = False,
-    ):
-        var_idx = 0
-        delta = step_size * delta
-        for var in self.linear_solver.linearization.ordering:
-            new_var = var.retract(delta[:, var_idx : var_idx + var.dof()])
-            if force_update:
-                var.update(new_var.data)
-            else:
-                var.update(new_var.data, batch_ignore_mask=converged_indices)
-            var_idx += var.dof()

@@ -218,7 +218,7 @@ class TheseusLayerDLMForward(torch.autograd.Function):
         with torch.no_grad():
             bwd_optimizer.linear_solver.linearization.linearize()
             delta = bwd_optimizer.linear_solver.solve()
-            bwd_optimizer.objective.step_optim_vars(
+            bwd_optimizer.objective.retract_optim_vars(
                 delta, bwd_optimizer.linear_solver.linearization.ordering
             )
 

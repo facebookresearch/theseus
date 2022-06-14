@@ -504,7 +504,7 @@ class Objective:
         if self._vectorization_to is not None:
             self._vectorization_to(*args, **kwargs)
 
-    def step_optim_vars(
+    def retract_optim_vars(
         self,
         delta: torch.Tensor,
         ordering: Iterable[Manifold],

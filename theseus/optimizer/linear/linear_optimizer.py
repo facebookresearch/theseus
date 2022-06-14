@@ -69,7 +69,9 @@ class LinearOptimizer(Optimizer):
                 warnings.warn(msg, RuntimeWarning)
                 info.status[:] = LinearOptimizerStatus.FAIL
                 return info
-        self.objective.step_optim_vars(delta, self.linear_solver.linearization.ordering)
+        self.objective.retract_optim_vars(
+            delta, self.linear_solver.linearization.ordering
+        )
         info.status[:] = LinearOptimizerStatus.CONVERGED
         for var in self.linear_solver.linearization.ordering:
             info.best_solution[var.name] = var.data.clone().cpu()

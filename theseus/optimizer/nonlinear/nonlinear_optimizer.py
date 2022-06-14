@@ -262,7 +262,7 @@ class NonlinearOptimizer(Optimizer, abc.ABC):
                 step_size = self.params.step_size
                 force_update = False
 
-            self.objective.step_optim_vars(
+            self.objective.retract_optim_vars(
                 delta * step_size,
                 self.linear_solver.linearization.ordering,
                 ignore_mask=converged_indices,

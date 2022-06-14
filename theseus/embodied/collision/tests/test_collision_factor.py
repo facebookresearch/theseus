@@ -78,14 +78,18 @@ def test_collision2d_copy():
 
 
 def test_collision2d_jacobians():
+    rng = torch.Generator()
+    rng.manual_seed(0)
     for _ in range(10):
         for batch_size in [1, 10, 100, 1000]:
             cost_weight = th.ScaleCostWeight(torch.ones(1).squeeze().double())
-            pose = th.Point2(data=torch.randn(batch_size, 2).double())
+            pose = th.Point2(data=torch.randn(batch_size, 2, generator=rng).double())
             origin = th.Variable(torch.ones(batch_size, 2).double())
-            sdf_data = th.Variable(torch.randn(batch_size, 10, 10).double())
-            cell_size = th.Variable(torch.rand(batch_size, 1).double())
-            cost_eps = th.Variable(torch.rand(1).double())
+            sdf_data = th.Variable(
+                torch.randn(batch_size, 10, 10, generator=rng).double()
+            )
+            cell_size = th.Variable(torch.rand(batch_size, 1, generator=rng).double())
+            cost_eps = th.Variable(torch.rand(1, generator=rng).double())
             cost_function = th.eb.Collision2D(
                 pose, cost_weight, origin, sdf_data, cell_size, cost_eps
             )
@@ -105,4 +109,4 @@ def test_collision2d_jacobians():
             jacobians, error_jac = cost_function.jacobians()
             error = cost_function.error()
             assert torch.allclose(error_jac, error)
-            assert torch.allclose(jacobians[0], expected_jacs[0], atol=1e-6)
+            assert torch.allclose(jacobians[0], expected_jacs[0], atol=1e-5)

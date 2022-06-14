@@ -99,7 +99,7 @@ class RobustCostFunction(CostFunction):
     def jacobians(self) -> Tuple[List[torch.Tensor], torch.Tensor]:
         warnings.warn(
             "Computing the robust cost error requires weighting first, so "
-            "jacobians() is equivalent to weighted_jacobians()."
+            "jacobians() is equivalent to weighted_jacobians_error()."
         )
         return self.weighted_jacobians_error()
 

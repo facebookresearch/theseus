@@ -18,3 +18,5 @@ examples/outputs/
 theseus/extlib/*.so
 datasets/
 data/
+temp/
+scripts/

@@ -261,7 +261,6 @@ def _instantiate_dlm_bwd_objective(objective):
 
     bwd_optimizer = GaussNewton(
         bwd_objective,
-        vectorize=False,
         max_iterations=1,
         step_size=1.0,
     )

@@ -22,7 +22,7 @@ class OptimizerInfo:
 
 
 class Optimizer(abc.ABC):
-    def __init__(self, objective: Objective, *args, vectorize: bool = False, **kwargs):
+    def __init__(self, objective: Objective, *args, vectorize: bool = True, **kwargs):
         self.objective = objective
         if vectorize:
             Vectorize(self.objective)

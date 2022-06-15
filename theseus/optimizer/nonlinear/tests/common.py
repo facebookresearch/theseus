@@ -19,23 +19,47 @@ class ResidualCostFunction(th.CostFunction):
         point=None,
         multivar=False,
         noise_mag=0,
+        target=None,
     ):
         super().__init__(cost_weight, name=name)
         len_vars = len(optim_vars) if multivar else optim_vars[0].dof()
-        assert true_coeffs.ndim == 1 and true_coeffs.numel() == len_vars
-        if point.ndim == 1:
-            point = point.unsqueeze(0)
-        assert point.ndim == 2 and point.shape[1] == len_vars - 1
+        self._optim_vars = optim_vars
+
+        if isinstance(true_coeffs, torch.Tensor):
+            assert true_coeffs.ndim == 1 and true_coeffs.numel() == len_vars
+            self.true_coeffs = th.Variable(data=true_coeffs.unsqueeze(0))
+        else:
+            self.true_coeffs = true_coeffs
+
         batch_size = point.shape[0]
+        if isinstance(point, torch.Tensor):
+            if point.ndim == 1:
+                point = point.unsqueeze(0)
+            assert point.ndim == 2 and point.shape[1] == len_vars - 1
+            self.point = th.Variable(
+                data=torch.cat([point, torch.ones(batch_size, 1)], dim=1)
+            )
+        else:
+            self.point = point
         for i, var in enumerate(optim_vars):
             attr_name = f"optim_var_{i}"
             setattr(self, attr_name, var)
             self.register_optim_var(attr_name)
+        self.register_aux_var("true_coeffs")
+        self.register_aux_var("point")
 
-        self.point = torch.cat([point, torch.ones(batch_size, 1)], dim=1)
-        self.target = (self.point * true_coeffs.unsqueeze(0)).sum(1, keepdim=True) ** 2
-        if noise_mag:
-            self.target += noise_mag * torch.randn(size=self.target.shape)
+        if target is None:
+            target_data = (self.point.data * self.true_coeffs.data).sum(
+                1, keepdim=True
+            ) ** 2
+            if noise_mag:
+                target_data += noise_mag * torch.randn(size=target_data.shape)
+            self.target = th.Variable(data=target_data)
+        else:
+            self.target = target
+        self.register_aux_var("target")
+
+        self.noise_mag = noise_mag
         self.multivar = multivar
 
     def _eval_coeffs(self):
@@ -43,22 +67,31 @@ class ResidualCostFunction(th.CostFunction):
             coeffs = torch.cat([v.data for v in self.optim_vars], axis=1)
         else:
             coeffs = self.optim_var_0.data
-        return (self.point * coeffs).sum(1, keepdim=True)
+        return (self.point.data * coeffs).sum(1, keepdim=True)
 
     def error(self):
         # h(B * x) - h(Btrue * x)
-        return self._eval_coeffs() ** 2 - self.target
+        return self._eval_coeffs() ** 2 - self.target.data
 
     def jacobians(self):
         dhdz = 2 * self._eval_coeffs()
-        grad = self.point * dhdz
+        grad = self.point.data * dhdz
         return [grad.unsqueeze(1)], self.error()
 
     def dim(self):
         return 1
 
     def _copy_impl(self, new_name=None):
-        raise NotImplementedError
+        return ResidualCostFunction(
+            [v.copy() for v in self._optim_vars],
+            self.weight.copy(),
+            name=new_name,
+            true_coeffs=self.true_coeffs.copy(),
+            point=self.point.copy(),
+            multivar=self.multivar,
+            noise_mag=self.noise_mag,
+            target=self.target.copy(),
+        )
 
 
 def _check_info(info, batch_size, max_iterations, initial_error, objective):
@@ -110,7 +143,7 @@ def _check_nonlinear_least_squares_fit(
     objective.update(values)
     initial_error = objective.error_squared_norm() / 2
     max_iterations = 20
-    optimizer = nonlinear_optim_cls(objective, vectorize=False)
+    optimizer = nonlinear_optim_cls(objective)
     assert isinstance(optimizer.linear_solver, th.CholeskyDenseSolver)
     optimizer.set_params(max_iterations=max_iterations)
     info = optimizer.optimize(
@@ -152,7 +185,7 @@ def _check_nonlinear_least_squares_fit_multivar(
     initial_error = objective.error_squared_norm() / 2
 
     max_iterations = 20
-    optimizer = nonlinear_optim_cls(objective, vectorize=False)
+    optimizer = nonlinear_optim_cls(objective)
     assert isinstance(optimizer.linear_solver, th.CholeskyDenseSolver)
     optimizer.set_params(max_iterations=max_iterations)
     info = optimizer.optimize(

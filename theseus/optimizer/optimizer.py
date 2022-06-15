@@ -10,7 +10,7 @@ from typing import Dict, Optional
 import numpy as np
 import torch
 
-from theseus.core import Objective
+from theseus.core import Objective, Vectorize
 
 
 # All info information is batched
@@ -22,8 +22,10 @@ class OptimizerInfo:
 
 
 class Optimizer(abc.ABC):
-    def __init__(self, objective: Objective, *args, **kwargs):
+    def __init__(self, objective: Objective, *args, vectorize: bool = False, **kwargs):
         self.objective = objective
+        if vectorize:
+            Vectorize(self.objective)
         self._objectives_version = objective.current_version
 
     @abc.abstractmethod

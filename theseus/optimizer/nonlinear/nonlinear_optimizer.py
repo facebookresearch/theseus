@@ -64,6 +64,7 @@ class NonlinearOptimizer(Optimizer, abc.ABC):
         objective: Objective,
         linear_solver_cls: Type[LinearSolver],
         *args,
+        vectorize: bool = True,
         linearization_cls: Optional[Type[Linearization]] = None,
         linearization_kwargs: Optional[Dict[str, Any]] = None,
         linear_solver_kwargs: Optional[Dict[str, Any]] = None,
@@ -73,7 +74,7 @@ class NonlinearOptimizer(Optimizer, abc.ABC):
         step_size: float = 1.0,
         **kwargs,
     ):
-        super().__init__(objective)
+        super().__init__(objective, vectorize=vectorize)
         linear_solver_kwargs = linear_solver_kwargs or {}
         self.linear_solver = linear_solver_cls(
             objective,

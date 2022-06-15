@@ -134,8 +134,9 @@ def create_qf_theseus_layer(
         linear_solver_cls=linear_solver_cls,
         max_iterations=max_iterations,
     )
+    assert objective._cost_functions_iterable is not None  # vectorization is on
     assert isinstance(optimizer.linear_solver, linear_solver_cls)
-    theseus_layer = th.TheseusLayer(optimizer, vectorize=True)
+    theseus_layer = th.TheseusLayer(optimizer)
     return theseus_layer
 
 

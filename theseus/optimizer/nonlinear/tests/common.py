@@ -110,7 +110,7 @@ def _check_nonlinear_least_squares_fit(
     objective.update(values)
     initial_error = objective.error_squared_norm() / 2
     max_iterations = 20
-    optimizer = nonlinear_optim_cls(objective)
+    optimizer = nonlinear_optim_cls(objective, vectorize=False)
     assert isinstance(optimizer.linear_solver, th.CholeskyDenseSolver)
     optimizer.set_params(max_iterations=max_iterations)
     info = optimizer.optimize(
@@ -152,7 +152,7 @@ def _check_nonlinear_least_squares_fit_multivar(
     initial_error = objective.error_squared_norm() / 2
 
     max_iterations = 20
-    optimizer = nonlinear_optim_cls(objective)
+    optimizer = nonlinear_optim_cls(objective, vectorize=False)
     assert isinstance(optimizer.linear_solver, th.CholeskyDenseSolver)
     optimizer.set_params(max_iterations=max_iterations)
     info = optimizer.optimize(
@@ -207,7 +207,7 @@ def _check_optimizer_returns_fail_status_on_singular(
     values = {"dummy": torch.zeros(1, 1)}
     objective.update(values)
 
-    optimizer = nonlinear_optim_cls(objective)
+    optimizer = nonlinear_optim_cls(objective, vectorize=False)
     assert isinstance(optimizer.linear_solver, th.CholeskyDenseSolver)
     optimizer.set_params(max_iterations=30)
     optimizer.linear_solver.linearization = BadLinearization(objective)

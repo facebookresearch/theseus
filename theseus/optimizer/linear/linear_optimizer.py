@@ -28,12 +28,13 @@ class LinearOptimizer(Optimizer):
         objective: Objective,
         linear_solver_cls: Type[LinearSolver],
         *args,
+        vectorize: bool = True,
         linearization_cls: Optional[Type[Linearization]] = None,
         linearization_kwargs: Optional[Dict[str, Any]] = None,
         linear_solver_kwargs: Optional[Dict[str, Any]] = None,
         **kwargs,
     ):
-        super().__init__(objective)
+        super().__init__(objective, vectorize=vectorize)
         linearization_kwargs = linearization_kwargs or {}
         linear_solver_kwargs = linear_solver_kwargs or {}
         self.linear_solver = linear_solver_cls(

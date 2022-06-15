@@ -204,7 +204,9 @@ def test_vectorized_retract():
         batch_size = rng.choice(range(1, 11))
         n_vars = rng.choice([1, 10, 100])
         for _ in range(n_vars):
-            var_type: th.LieGroup = rng.choice([th.Vector, th.SE2, th.SE3])
+            var_type: th.LieGroup = rng.choice(
+                [th.Vector, th.SE2, th.SE3, th.SO2, th.SO3]
+            )
             if var_type == th.Vector:
                 dof = rng.integers(1, 10)
                 var = th.Vector.rand(batch_size, dof, generator=generator)

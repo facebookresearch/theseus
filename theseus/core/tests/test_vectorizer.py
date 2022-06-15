@@ -192,3 +192,42 @@ def test_vectorized_error():
                     assert w._cached_error.allclose(w_err)
                     for jac, exp_jac in zip(w._cached_jacobians, w_jac):
                         assert jac.allclose(exp_jac, atol=1e-6)
+
+
+def test_vectorized_retract():
+    rng = np.random.default_rng(0)
+    generator = torch.Generator()
+    generator.manual_seed(0)
+    for _ in range(100):
+        variables = []
+        deltas = []
+        batch_size = rng.choice(range(1, 11))
+        n_vars = rng.choice([1, 10, 100])
+        for _ in range(n_vars):
+            var_type: th.LieGroup = rng.choice(
+                [th.Vector, th.SE2, th.SE3, th.SO2, th.SO3]
+            )
+            if var_type == th.Vector:
+                dof = rng.integers(1, 10)
+                var = th.Vector.rand(batch_size, dof, generator=generator)
+            else:
+                var = var_type.rand(batch_size, generator=generator)
+            deltas.append(torch.randn((batch_size, var.dof()), generator=generator))
+            variables.append(var)
+        variables_vectorized = [v.copy() for v in variables]
+        delta = torch.cat(deltas, dim=1)
+
+        ignore_mask = torch.rand(batch_size, generator=generator) > 0.5
+        force_update = rng.random() > 0.5
+        th.Objective._retract_base(
+            delta, variables, ignore_mask=ignore_mask, force_update=force_update
+        )
+        th.Vectorize._vectorized_retract_optim_vars(
+            delta,
+            variables_vectorized,
+            ignore_mask=ignore_mask,
+            force_update=force_update,
+        )
+
+        for v1, v2 in zip(variables, variables_vectorized):
+            assert v1.data.allclose(v2.data)

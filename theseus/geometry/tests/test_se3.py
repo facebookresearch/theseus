@@ -87,6 +87,33 @@ def test_exp_map():
         check_exp_map(tangent_vector, th.SE3)
         check_projection_for_exp_map(tangent_vector, th.SE3)
 
+    def test_batch_size_3(angle):
+        tangent_vector_ang = torch.rand(6, 3, generator=rng).double() - 0.5
+        tangent_vector_ang /= tangent_vector_ang.norm(dim=1, keepdim=True)
+        tangent_vector_ang *= angle
+        tangent_vector_lin = torch.randn(6, 3, generator=rng).double()
+        tangent_vector = torch.cat([tangent_vector_lin, tangent_vector_ang], dim=1)
+
+        jac = []
+        jac1 = []
+        jac2 = []
+
+        g = th.SE3.exp_map(tangent_vector, jac)
+        g1 = th.SE3.exp_map(tangent_vector[:3], jac1)
+        g2 = th.SE3.exp_map(tangent_vector[3:], jac2)
+
+        torch.allclose(g.data[:3], g1.data, atol=1e-6)
+        torch.allclose(g.data[3:], g2.data, atol=1e-6)
+
+        torch.allclose(jac[0].data[:3], jac1[0].data, atol=1e-6)
+        torch.allclose(jac[0].data[3:], jac2[0].data, atol=1e-6)
+
+    test_batch_size_3(torch.rand(6, 1, generator=rng).double() * 2 * np.pi - np.pi)
+    test_batch_size_3(1e-5)
+    test_batch_size_3(3e-3)
+    test_batch_size_3(2 * np.pi - 1e-11)
+    test_batch_size_3(np.pi - 1e-11)
+
 
 def test_log_map():
     rng = torch.Generator()
@@ -145,6 +172,37 @@ def test_log_map():
 
         check_SE3_log_map(tangent_vector)
         check_projection_for_log_map(tangent_vector, th.SE3)
+
+    def test_batch_size_3(angle):
+        tangent_vector_ang = torch.rand(6, 3, generator=rng).double() - 0.5
+        tangent_vector_ang /= tangent_vector_ang.norm(dim=1, keepdim=True)
+        tangent_vector_ang *= angle
+        tangent_vector_lin = torch.randn(6, 3, generator=rng).double()
+        tangent_vector = torch.cat([tangent_vector_lin, tangent_vector_ang], dim=1)
+
+        g = th.SE3.exp_map(tangent_vector)
+        g1 = th.SE3(data=g.data[:3])
+        g2 = th.SE3(data=g.data[3:])
+
+        jac = []
+        jac1 = []
+        jac2 = []
+
+        d = g.log_map(jac)
+        d1 = g1.log_map(jac1)
+        d2 = g2.log_map(jac2)
+
+        torch.allclose(d.data[:3], d1.data, atol=1e-6)
+        torch.allclose(d.data[3:], d2.data, atol=1e-6)
+
+        torch.allclose(jac[0].data[:3], jac1[0].data, atol=1e-6)
+        torch.allclose(jac[0].data[3:], jac2[0].data, atol=1e-6)
+
+    test_batch_size_3(torch.rand(6, 1, generator=rng).double() * 2 * np.pi - np.pi)
+    test_batch_size_3(1e-5)
+    test_batch_size_3(3e-3)
+    test_batch_size_3(2 * np.pi - 1e-11)
+    test_batch_size_3(np.pi - 1e-11)
 
 
 def test_compose():

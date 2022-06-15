@@ -397,7 +397,7 @@ class SE3(LieGroup):
 
         translation = self[:, :, 3].view(-1, 3, 1)
         ret_lin = a.view(-1, 1) * self[:, :, 3]
-        ret_lin -= 0.5 * torch.cross(ret_ang, self[:, :, 3])
+        ret_lin -= 0.5 * torch.cross(ret_ang, self[:, :, 3], dim=1)
         ret_ang_ext = ret_ang.view(-1, 3, 1)
         ret_lin += b.view(-1, 1) * (
             ret_ang_ext @ (ret_ang_ext.transpose(1, 2) @ translation)

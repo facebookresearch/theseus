@@ -316,12 +316,13 @@ class Vectorize:
         ignore_mask: Optional[torch.Tensor] = None,
         force_update: bool = False,
     ):
-        # Each variable type gets mapped to a tuple with:
+        # Each (variable-type, dof) gets mapped to a tuple with:
         #   - the variable that will hold the vectorized data
         #   - all the variables of that type that will be vectorized together
         #   - the delta slices that go into the batch
         var_info: Dict[
-            Type[Manifold], Tuple[Manifold, List[Manifold], List[torch.Tensor]]
+            Tuple[Type[Manifold], int],
+            Tuple[Manifold, List[Manifold], List[torch.Tensor]],
         ] = {}
 
         start_idx = 0
@@ -336,10 +337,11 @@ class Vectorize:
 
             delta_slice = delta[:, start_idx : start_idx + var.dof()]
             start_idx += var.dof()
-            if var.__class__ not in var_info:
-                var_info[var.__class__] = (var.copy(), [], [])
-            var_info[var.__class__][1].append(var)
-            var_info[var.__class__][2].append(delta_slice)
+            var_type = (var.__class__, var.dof())
+            if var_type not in var_info:
+                var_info[var_type] = (var.copy(), [], [])
+            var_info[var_type][1].append(var)
+            var_info[var_type][2].append(delta_slice)
 
         for _, (vectorized_var, var_list, delta_list) in var_info.items():
             n_vars, dof = len(var_list), vectorized_var.dof()

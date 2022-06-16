@@ -19,11 +19,10 @@ class TheseusLayer(nn.Module):
     def __init__(self, optimizer: Optimizer, vectorize: bool = True):
         super().__init__()
         self.objective = optimizer.objective
+        if vectorize and not self.objective.vectorized:
+            Vectorize(self.objective)
         self.optimizer = optimizer
         self._objectives_version = optimizer.objective.current_version
-        if vectorize:
-            Vectorize(self.objective)
-
         self._dlm_bwd_objective = None
         self._dlm_bwd_optimizer = None
 

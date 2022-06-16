@@ -9,8 +9,8 @@ import theseus as th
 
 
 def _new_robust_cf(batch_size, loss_cls, generator) -> th.RobustCostFunction:
-    v1 = th.rand_se3(batch_size)
-    v2 = th.rand_se3(batch_size)
+    v1 = th.rand_se3(batch_size, generator=generator)
+    v2 = th.rand_se3(batch_size, generator=generator)
     w = th.ScaleCostWeight(torch.randn(1, generator=generator))
     cf = th.Local(v1, w, v2)
     ll_radius = th.Variable(data=torch.randn(1, 1, generator=generator))

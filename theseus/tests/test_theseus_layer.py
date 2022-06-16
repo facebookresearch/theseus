@@ -131,11 +131,14 @@ def create_qf_theseus_layer(
 
     optimizer = nonlinear_optimizer_cls(
         objective,
+        vectorize=False,
         linear_solver_cls=linear_solver_cls,
         max_iterations=max_iterations,
     )
     assert isinstance(optimizer.linear_solver, linear_solver_cls)
+    assert not objective.vectorized
     theseus_layer = th.TheseusLayer(optimizer, vectorize=True)
+    assert objective.vectorized
     return theseus_layer
 
 

@@ -9,18 +9,18 @@ from theseus.constants import EPS
 from theseus.utils import numeric_jacobian
 
 
-def check_exp_map(tangent_vector, group_cls):
+def check_exp_map(tangent_vector, group_cls, atol=EPS):
     group = group_cls.exp_map(tangent_vector)
     assert torch.allclose(
         group_cls.hat(tangent_vector).matrix_exp(),
         group.to_matrix(),
-        atol=EPS,
+        atol=atol,
     )
 
 
-def check_log_map(tangent_vector, group_cls):
+def check_log_map(tangent_vector, group_cls, atol=EPS):
     assert torch.allclose(
-        tangent_vector, group_cls.exp_map(tangent_vector).log_map(), atol=EPS
+        tangent_vector, group_cls.exp_map(tangent_vector).log_map(), atol=atol
     )
 
 

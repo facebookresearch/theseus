@@ -30,14 +30,14 @@ from .common import (
 def test_exp_map():
     for batch_size in [1, 20, 100]:
         theta = torch.from_numpy(np.linspace(-np.pi, np.pi, batch_size)).view(-1, 1)
-        check_exp_map(theta, th.SO2)
+        check_exp_map(theta, th.SO2, EPS)
         check_projection_for_exp_map(theta, th.SO2)
 
 
 def test_log_map():
     for batch_size in [1, 2, 100]:
         theta = torch.from_numpy(np.linspace(-np.pi, np.pi, batch_size)).view(-1, 1)
-        check_log_map(theta, th.SO2)
+        check_log_map(theta, th.SO2, EPS)
         check_projection_for_log_map(theta, th.SO2)
 
 

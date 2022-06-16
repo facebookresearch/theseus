@@ -17,8 +17,6 @@ from .so2 import SO2
 # If data is passed, must be x, y, cos, sin
 # If x_y_theta is passed, must be tensor with shape batch_size x 3
 class SE2(LieGroup):
-    SE2_EPS = 5e-7
-
     def __init__(
         self,
         x_y_theta: Optional[torch.Tensor] = None,
@@ -33,6 +31,11 @@ class SE2(LieGroup):
         super().__init__(data=data, name=name, dtype=dtype)
         if x_y_theta is not None:
             self.update_from_x_y_theta(x_y_theta)
+
+        self._resolve_eps()
+
+    def _resolve_eps(self):
+        self._EPS = theseus.constants._SE2_EPS[self.data.dtype]
 
     @staticmethod
     def rand(
@@ -166,7 +169,7 @@ class SE2(LieGroup):
         cosine, sine = rotation.to_cos_sin()
 
         # Compute the approximations when theta is near to 0
-        small_theta = theta.abs() < SE2.SE2_EPS
+        small_theta = theta.abs() < self._EPS
         non_zero = torch.ones(1, dtype=self.dtype, device=self.device)
         sine_nz = torch.where(small_theta, non_zero, sine)
         half_theta_by_tan_half_theta = (
@@ -229,7 +232,7 @@ class SE2(LieGroup):
         cosine, sine = rotation.to_cos_sin()
 
         # Compute the approximations when theta is near to 0
-        small_theta = theta.abs() < SE2.SE2_EPS
+        small_theta = theta.abs() < theseus.constants._SE2_EPS[tangent_vector.dtype]
         non_zero = torch.ones(
             1, dtype=tangent_vector.dtype, device=tangent_vector.device
         )
@@ -453,6 +456,11 @@ class SE2(LieGroup):
     # only added to avoid casting downstream
     def copy(self, new_name: Optional[str] = None) -> "SE2":
         return cast(SE2, super().copy(new_name=new_name))
+
+    # calls to() on the internal tensors
+    def to(self, *args, **kwargs):
+        super().to(*args, **kwargs)
+        self._resolve_eps()
 
 
 rand_se2 = SE2.rand

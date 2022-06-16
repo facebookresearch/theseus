@@ -114,14 +114,17 @@ class Vectorize:
         # Dict[_CostFunctionSchema, List[str]]
         self._var_names = self._get_var_names()
 
-        # `vectorize()` will compute an error vector for each schema, then populate
-        # the wrappers with their appropriate weighted error slice.
+        # `self._vectorize()` will compute an error vector for each schema,
+        # then populate the wrappers with their appropriate weighted error slice.
         # Replacing `obj._cost_functions_iterable` allows to recover these when
         # iterating the Objective.
-        objective._cost_functions_iterable = self._cost_fn_wrappers
-        objective._vectorization_run = self._vectorize
-        objective._vectorization_to = self._to
-        objective._retract_method = self._vectorized_retract_optim_vars
+        objective._enable_vectorization(
+            self._cost_fn_wrappers,
+            self._vectorize,
+            self._to,
+            self._vectorized_retract_optim_vars,
+            self,
+        )
 
         self._objective = objective
 

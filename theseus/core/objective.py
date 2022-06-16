@@ -5,7 +5,7 @@
 
 import warnings
 from collections import OrderedDict
-from typing import Callable, Dict, Iterable, List, Optional, Sequence, Union
+from typing import Any, Callable, Dict, Iterable, List, Optional, Sequence, Union
 
 import torch
 
@@ -73,6 +73,8 @@ class Objective:
 
         # If vectorization is on, this gets replaced by a vectorized version
         self._retract_method = Objective._retract_base
+
+        self._vectorized = False
 
     def _add_function_variables(
         self,
@@ -534,3 +536,41 @@ class Objective:
         self._retract_method(
             delta, ordering, ignore_mask=ignore_mask, force_update=force_update
         )
+
+    def _enable_vectorization(
+        self,
+        cost_fns_iter: Iterable[CostFunction],
+        vectorization_run_fn: Callable,
+        vectorized_to: Callable,
+        vectorized_retract_fn: Callable,
+        enabler: Any,
+    ):
+        # Hacky way to make Vectorize a "friend" class
+        assert (
+            enabler.__module__ == "theseus.core.vectorizer"
+            and enabler.__class__.__name__ == "Vectorize"
+        )
+        self._cost_functions_iterable = cost_fns_iter
+        self._vectorization_run = vectorization_run_fn
+        self._vectorization_to = vectorized_to
+        self._retract_method = vectorized_retract_fn
+        self._vectorized = True
+
+    # Making public, since this should be a safe operation
+    def disable_vectorization(self):
+        self._cost_functions_iterable = None
+        self._vectorization_run = None
+        self._vectorization_to = None
+        self._retract_method = Objective._retract_base
+        self._vectorized = False
+
+    @property
+    def vectorized(self):
+        assert (
+            (not self._vectorized)
+            == (self._cost_functions_iterable is None)
+            == (self._vectorization_run is None)
+            == (self._vectorization_to is None)
+            == (self._retract_method is Objective._retract_base)
+        )
+        return self._vectorized

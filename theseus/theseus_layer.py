@@ -9,16 +9,18 @@ import torch
 import torch.nn as nn
 from torch.autograd.function import once_differentiable
 
-from theseus.core import AutoDiffCostFunction, Variable
+from theseus.core import AutoDiffCostFunction, Variable, Vectorize
 from theseus.optimizer import Optimizer, OptimizerInfo
 from theseus.optimizer.linear import LinearSolver
 from theseus.optimizer.nonlinear import BackwardMode, GaussNewton
 
 
 class TheseusLayer(nn.Module):
-    def __init__(self, optimizer: Optimizer):
+    def __init__(self, optimizer: Optimizer, vectorize: bool = True):
         super().__init__()
         self.objective = optimizer.objective
+        if vectorize and not self.objective.vectorized:
+            Vectorize(self.objective)
         self.optimizer = optimizer
         self._objectives_version = optimizer.objective.current_version
         self._dlm_bwd_objective = None

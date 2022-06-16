@@ -35,7 +35,7 @@ class SE2(LieGroup):
         self._resolve_eps()
 
     def _resolve_eps(self):
-        self._EPS = theseus.constants._SE2_EPS[self.data.dtype]
+        self._NEAR_ZERO_EPS = theseus.constants._SE2_NEAR_ZERO_EPS[self.data.dtype]
 
     @staticmethod
     def rand(
@@ -169,7 +169,7 @@ class SE2(LieGroup):
         cosine, sine = rotation.to_cos_sin()
 
         # Compute the approximations when theta is near to 0
-        small_theta = theta.abs() < self._EPS
+        small_theta = theta.abs() < self._NEAR_ZERO_EPS
         non_zero = torch.ones(1, dtype=self.dtype, device=self.device)
         sine_nz = torch.where(small_theta, non_zero, sine)
         half_theta_by_tan_half_theta = (
@@ -232,7 +232,9 @@ class SE2(LieGroup):
         cosine, sine = rotation.to_cos_sin()
 
         # Compute the approximations when theta is near to 0
-        small_theta = theta.abs() < theseus.constants._SE2_EPS[tangent_vector.dtype]
+        small_theta = (
+            theta.abs() < theseus.constants._SE2_NEAR_ZERO_EPS[tangent_vector.dtype]
+        )
         non_zero = torch.ones(
             1, dtype=tangent_vector.dtype, device=tangent_vector.device
         )

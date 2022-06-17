@@ -14,6 +14,7 @@ class Variable:
 
     def __init__(self, data: torch.Tensor, name: Optional[str] = None):
         self._id = next(Variable._ids)
+        self._num_updates = 0
         if name:
             self.name = name
         else:
@@ -60,6 +61,7 @@ class Variable:
             self.data = torch.where(batch_ignore_mask.view(mask_shape), self.data, data)
         else:
             self.data = data
+        self._num_updates += 1
 
     def __repr__(self) -> str:
         return f"{self.__class__.__name__}(data={self.data}, name={self.name})"

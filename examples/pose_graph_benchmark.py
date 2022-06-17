@@ -10,7 +10,7 @@ import hydra
 from scipy.io import savemat
 
 
-@hydra.main(config_path="./configs/", config_name="pose_graph_benchmark")
+@hydra.main(config_path="./configs/pose_graph", config_name="pose_graph_benchmark")
 def main(cfg):
     dataset_name = cfg.dataset
     file_path = (
@@ -47,6 +47,7 @@ def main(cfg):
         step_size=1.0,
         linearization_cls=th.SparseLinearization,
         linear_solver_cls=th.CholmodSparseSolver,
+        vectorize=True,
     )
 
     inputs = {var.name: var.data for var in verts}

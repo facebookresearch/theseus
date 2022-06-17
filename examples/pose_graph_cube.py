@@ -86,13 +86,11 @@ def run(
         rel_err_tolerance=0,
         linearization_cls=th.SparseLinearization,
         linear_solver_cls=linear_solver_cls,
+        vectorize=True,
     )
 
     def run_batch(batch_idx: int):
         log.info(f" ------------------- Batch {batch_idx} ------------------- ")
-        start_event = torch.cuda.Event(enable_timing=True)
-        end_event = torch.cuda.Event(enable_timing=True)
-
         pg_batch = pg.get_batch_dataset(batch_idx=batch_idx)
         theseus_inputs = get_batch_data(pg_batch, pose_indices)
         objective.update(input_data=theseus_inputs)
@@ -134,7 +132,7 @@ def run(
         savemat(file, results)
 
 
-@hydra.main(config_path="./configs/", config_name="pose_graph_cube")
+@hydra.main(config_path="./configs/pose_graph", config_name="pose_graph_cube")
 def main(cfg):
     log.info((subprocess.check_output("lscpu", shell=True).strip()).decode())
 

@@ -1,6 +1,0 @@
-dataset: sphere2500
-hydra:
-  run:
-    dir: examples/outputs/pgo/benchmark
-  sweep:
-    dir: examples/outputs/pgo/benchmark

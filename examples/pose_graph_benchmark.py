@@ -44,7 +44,6 @@ def main(cfg):
         target=verts[0].copy(new_name=verts[0].name + "PRIOR"),
     )
     objective.add(pose_prior)
-    objective.to("cuda")
 
     optimizer = th.GaussNewton(  # GaussNewton(
         objective,

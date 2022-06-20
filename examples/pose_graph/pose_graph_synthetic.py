@@ -324,7 +324,7 @@ def run(
     print(s.getvalue())
 
 
-@hydra.main(config_path="./configs/pose_graph", config_name="pose_graph_synthetic")
+@hydra.main(config_path="../configs/pose_graph", config_name="pose_graph_synthetic")
 def main(cfg):
     log.info((subprocess.check_output("lscpu", shell=True).strip()).decode())
 

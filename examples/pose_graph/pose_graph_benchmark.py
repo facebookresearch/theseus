@@ -14,7 +14,7 @@ from scipy.io import savemat
 log = logging.getLogger(__name__)
 
 
-@hydra.main(config_path="./configs/pose_graph", config_name="pose_graph_benchmark")
+@hydra.main(config_path="../configs/pose_graph", config_name="pose_graph_benchmark")
 def main(cfg):
     dataset_name = cfg.dataset
     file_path = (

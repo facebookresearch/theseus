@@ -110,7 +110,7 @@ def run(
 
         return [forward_time, forward_mem]
 
-    log.info(f" ******************* BATCH SIZE {batch_size} ******************* ")
+    log.info(f" ******************** BATCH SIZE {batch_size} ******************** ")
 
     forward_times = []
     forward_mems = []
@@ -132,7 +132,7 @@ def run(
         savemat(file, results)
 
 
-@hydra.main(config_path="./configs/pose_graph", config_name="pose_graph_cube")
+@hydra.main(config_path="../configs/pose_graph", config_name="pose_graph_cube")
 def main(cfg):
     log.info((subprocess.check_output("lscpu", shell=True).strip()).decode())
 
@@ -141,7 +141,7 @@ def main(cfg):
     poses: List[th.SE3] = []
     edges: List[PoseGraphEdge] = []
 
-    for n in range(cfg.dataset_size):
+    for n in range(20):
         num_poses, poses_n, edges_n = theg.pose_graph.read_3D_g2o_file(
             (
                 f"/private/home/taoshaf/Documents/theseus/debug/datasets/"

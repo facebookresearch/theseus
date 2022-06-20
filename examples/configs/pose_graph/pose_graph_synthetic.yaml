@@ -1,0 +1,36 @@
+seed: 1
+solver_device: "cuda"
+
+num_poses: 256
+rotation_noise: 0.05
+translation_noise: 0.02
+loop_closure_ratio: 0.2
+loop_closure_outlier_ratio: 0.25
+dataset_size: 256 
+batch_size: 128
+
+
+inner_optim:
+  optimizer_cls: GaussNewton
+  solver: sparse
+  max_iters: 10 
+  step_size: 0.75
+  backward_mode: implicit
+  verbose: true
+  track_err_history: true
+  keep_step_size: true
+  regularize: true
+  ratio_known_poses: 0.1
+  reg_w: 1e-3
+  vectorize: true
+
+outer_optim:
+  lr: 0.1
+  num_epochs: 20
+  max_num_batches: 1000
+
+hydra:
+  run:
+    dir: examples/outputs/pose_graph
+  sweep:
+    dir: examples/outputs/pose_graph/${now:%Y.%m.%d}/${now:%H.%M.%S}

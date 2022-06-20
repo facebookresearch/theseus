@@ -6,15 +6,15 @@ learn the cost weight as a function of pose.
 - motion_planning_2d.py: Is an example of how to set up a differentiable motion planning
 problem, inspired by [Bhardwaj et al. 2020](https://arxiv.org/pdf/1907.09591.pdf).
 - tactile_pose_estimation.py: Is an example of how to set up learning models for
-tactile pose estimation, as described in [Sodhi et al. 2021](https://arxiv.org/abs/1705.10664)
+tactile pose estimation, as described in [Sodhi et al. 2021](https://arxiv.org/abs/1705.10664).
 - backward_modes.py: Shows how to compute derivatives through Theseus solves and switch between backward modes.
 - se2_inverse.py: Is an example of numerically computing the inverse of SE2. 
 - pose_graph/pose_graph_synthetic: Is an example of how to setup a differentiable pose graph optimization
-problem with loop closure outliers
-- pose_graph/pose_graph_cube: Is an example of profiling Theseus' optimizers on the cube datasets
-- pose_graph/pose_graph_benchmark: Is an example of using Theseus to solve pose graph optimizaiton problems
+problem with loop closure outliers.
+- pose_graph/pose_graph_cube: Is an example of profiling Theseus' optimizers on the cube datasets.
+- pose_graph/pose_graph_benchmark: Is an example of using Theseus to solve pose graph optimization problems.
 - pose_graph/pose_graph_g2o: Is an example of using Theseus to solve pose graph optimization problems in the
-g2o format
+g2o format.
 
 These can be run from your root `theseus` directory by doing
 

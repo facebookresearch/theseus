@@ -9,6 +9,12 @@ problem, inspired by [Bhardwaj et al. 2020](https://arxiv.org/pdf/1907.09591.pdf
 tactile pose estimation, as described in [Sodhi et al. 2021](https://arxiv.org/abs/1705.10664)
 - backward_modes.py: Shows how to compute derivatives through Theseus solves and switch between backward modes.
 - se2_inverse.py: Is an example of numerically computing the inverse of SE2. 
+- pose_graph/pose_graph_synthetic: Is an example of how to setup a differentiable pose graph optimization
+problem with loop closure outliers
+- pose_graph/pose_graph_cube: Is an example of profiling Theseus' optimizers on the cube datasets
+- pose_graph/pose_graph_benchmark: Is an example of using Theseus to solve pose graph optimizaiton problems
+- pose_graph/pose_graph_g2o: Is an example of using Theseus to solve pose graph optimization problems in the
+g2o format
 
 These can be run from your root `theseus` directory by doing
 
@@ -17,6 +23,10 @@ These can be run from your root `theseus` directory by doing
     python examples/tactile_pose_estimation.py
     python examples/backward_modes.py
     python examples/se2_inverse.py
+    python examples/pose_graph/pose_graph_synthetic
+    python examples/pose_graph/pose_graph_cube
+    python examples/pose_graph/pose_graph_benchmark
+    python examples/pose_graph/pose_graph_g2o
 
 The motion planning and tactile estimation examples require `hydra` installation which you can obtain
 by running.

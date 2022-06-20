@@ -266,15 +266,7 @@ class PoseGraphDataset:
         )
 
         info = torch.tensor(
-            [
-                1 / translation_noise,
-                1 / translation_noise,
-                1 / translation_noise,
-                1 / rotation_noise,
-                1 / rotation_noise,
-                1 / rotation_noise,
-            ],
-            dtype=dtype,
+            [1 / translation_noise] * 3 + [1 / rotation_noise] * 3, dtype=dtype
         )
 
         for n in range(1, num_poses):

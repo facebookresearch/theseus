@@ -112,6 +112,7 @@ class AutoDiffCostFunction(CostFunction):
         name: Optional[str] = None,
         autograd_strict: bool = False,
         autograd_vectorize: bool = False,
+        batched: bool = True,
     ):
         if cost_weight is None:
             cost_weight = ScaleCostWeight(1.0)
@@ -134,6 +135,7 @@ class AutoDiffCostFunction(CostFunction):
         # The following are auxiliary Variable objects to hold tensor data
         # during jacobian computation without modifying the original Variable objects
         self._tmp_optim_vars = tuple(v.copy() for v in optim_vars)
+        self._batched = batched
 
     def _compute_error(
         self,
@@ -162,22 +164,44 @@ class AutoDiffCostFunction(CostFunction):
 
             return self._err_fn(optim_vars=self._tmp_optim_vars, aux_vars=aux_vars)
 
-        jacobians_full = autogradF.jacobian(
-            jac_fn,
-            tuple(v.data for v in optim_vars),
-            create_graph=True,
-            strict=self._autograd_strict,
-            vectorize=self._autograd_vectorize,
-        )
-        aux_idx = torch.arange(err.shape[0])  # batch_size
+        if self._batched:
+            jacobians_full = autogradF.jacobian(
+                jac_fn,
+                tuple(v.data for v in optim_vars),
+                create_graph=True,
+                strict=self._autograd_strict,
+                vectorize=self._autograd_vectorize,
+            )
+            aux_idx = torch.arange(err.shape[0])  # batch_size
 
-        # torch autograd returns shape (batch_size, dim, batch_size, var_dim), which
-        # includes derivatives of batches against each other.
-        # this indexing recovers only the derivatives wrt the same batch
-        jacobians = list(
-            v.project(jac[aux_idx, :, aux_idx, :], is_sparse=True)
-            for v, jac in zip(optim_vars, jacobians_full)
-        )
+            # torch autograd returns shape (batch_size, dim, batch_size, var_dim), which
+            # includes derivatives of batches against each other.
+            # this indexing recovers only the derivatives wrt the same batch
+            jacobians = list(
+                v.project(jac[aux_idx, :, aux_idx, :], is_sparse=True)
+                for v, jac in zip(optim_vars, jacobians_full)
+            )
+        else:
+            jacobians_raw = []
+            assert len(optim_vars) > 0
+
+            for n in range(optim_vars[0].shape[0]):
+                jacobians_n = autogradF.jacobian(
+                    jac_fn,
+                    tuple(v.data[n : n + 1] for v in optim_vars),
+                    create_graph=True,
+                    strict=self._autograd_strict,
+                    vectorize=self._autograd_vectorize,
+                )
+                jacobians_raw.append(jacobians_n)
+
+            jacobians = list(
+                v.project(
+                    torch.cat([jacobians_n[k] for jacobians_n in jacobians_raw], dim=0)
+                )
+                for k, v in enumerate(optim_vars)
+            )
+
         return jacobians, err
 
     def dim(self) -> int:

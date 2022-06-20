@@ -43,12 +43,12 @@ pose_prior = th.Difference(
 )
 objective.add(pose_prior)
 
-optimizer = th.LevenbergMarquardt(  # GaussNewton(
+optimizer = th.LevenbergMarquardt(
     objective,
     max_iterations=20,
     step_size=0.5,
-    # linearization_cls=th.SparseLinearization,
-    # linear_solver_cls=th.CholmodSparseSolver
+    linearization_cls=th.SparseLinearization,
+    linear_solver_cls=th.CholmodSparseSolver,
 )
 
 theseus_optim = th.TheseusLayer(optimizer)

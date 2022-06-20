@@ -45,7 +45,7 @@ def main(cfg):
     )
     objective.add(pose_prior)
 
-    optimizer = th.GaussNewton(  # GaussNewton(
+    optimizer = th.GaussNewton(
         objective,
         max_iterations=10,
         step_size=1.0,

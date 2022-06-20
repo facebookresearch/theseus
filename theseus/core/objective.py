@@ -74,6 +74,12 @@ class Objective:
         # If vectorization is on, this gets replaced by a vectorized version
         self._retract_method = Objective._retract_base
 
+        # Keeps track of how many variable updates have been made to check
+        # if vectorization should be updated
+        self._num_updates_variables: Dict[str, int] = {}
+
+        self._last_vectorization_has_grad = False
+
         self._vectorized = False
 
     def _add_function_variables(
@@ -362,15 +368,11 @@ class Objective:
                 for var in self.optim_vars:
                     old_data[var] = self.optim_vars[var].data
             self.update(input_data=input_data)
-        error_vector = torch.zeros(self.batch_size, self.dim()).to(
-            device=self.device, dtype=self.dtype
+
+        error_vector = torch.cat(
+            [cf.weighted_error() for cf in self._get_iterator()], dim=1
         )
-        pos = 0
-        for cost_function in self.cost_functions.values():
-            error_vector[
-                :, pos : pos + cost_function.dim()
-            ] = cost_function.weighted_error()
-            pos += cost_function.dim()
+
         if input_data is not None and not also_update:
             self.update(old_data)
         return error_vector
@@ -485,17 +487,33 @@ class Objective:
         batch_sizes.extend([v.data.shape[0] for v in self.aux_vars.values()])
         self._batch_size = _get_batch_size(batch_sizes)
 
-    def update_vectorization(self):
-        if self._vectorization_run is not None:
+    def _vectorization_needs_update(self):
+        num_updates = dict(
+            (name, v._num_updates) for name, v in self._all_variables.items()
+        )
+        needs = False
+        if num_updates != self._num_updates_variables:
+            self._num_updates_variables = num_updates
+            needs = True
+
+        if torch.is_grad_enabled():
+            if not self._last_vectorization_has_grad:
+                needs = True
+        return needs
+
+    def update_vectorization_if_needed(self):
+        if self.vectorized and self._vectorization_needs_update():
             if self._batch_size is None:
                 self.update()
             self._vectorization_run()
+            self._last_vectorization_has_grad = torch.is_grad_enabled()
 
     # iterates over cost functions
     def __iter__(self):
         return iter([cf for cf in self.cost_functions.values()])
 
     def _get_iterator(self):
+        self.update_vectorization_if_needed()
         if self._cost_functions_iterable is None:
             return iter([cf for cf in self.cost_functions.values()])
         return iter([cf for cf in self._cost_functions_iterable])

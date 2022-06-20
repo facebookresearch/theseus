@@ -52,7 +52,7 @@ def run(
     pose_indices: List[int] = [index for index, _ in enumerate(pg_batch.poses)]
 
     for edge in pg_batch.edges:
-        relative_pose_cost = th.eb.Between(
+        relative_pose_cost = th.Between(
             pg_batch.poses[edge.i],
             pg_batch.poses[edge.j],
             edge.weight,
@@ -141,7 +141,7 @@ def main(cfg):
     poses: List[th.SE3] = []
     edges: List[PoseGraphEdge] = []
 
-    for n in range(20):
+    for n in range(cfg.dataset_size):
         num_poses, poses_n, edges_n = theg.pose_graph.read_3D_g2o_file(
             (
                 f"/private/home/taoshaf/Documents/theseus/debug/datasets/"

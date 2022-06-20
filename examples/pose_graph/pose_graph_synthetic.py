@@ -152,7 +152,7 @@ def run(
     backward_mems = []
 
     for edge in pg_batch.edges:
-        relative_pose_cost = th.eb.Between(
+        relative_pose_cost = th.Between(
             pg_batch.poses[edge.i],
             pg_batch.poses[edge.j],
             edge.weight,

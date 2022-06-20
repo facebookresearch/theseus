@@ -25,7 +25,7 @@ log_loss_radius = th.Vector(
 loss_cls = th.HuberLoss
 
 for edge in edges:
-    cost_func = th.eb.Between(
+    cost_func = th.Between(
         verts[edge.i],
         verts[edge.j],
         edge.weight,

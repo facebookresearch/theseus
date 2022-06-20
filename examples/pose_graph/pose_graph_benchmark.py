@@ -30,7 +30,7 @@ def main(cfg):
     objective = th.Objective(dtype)
 
     for edge in edges:
-        cost_func = th.eb.Between(
+        cost_func = th.Between(
             verts[edge.i],
             verts[edge.j],
             edge.weight,

@@ -161,82 +161,83 @@ def test_autodiff_cost_function_cost_weight():
         )
 
     def error_fn(optim_vars, aux_vars):
-        return torch.ones(batch_size, 1)
+        assert len(optim_vars) > 0
+        return torch.ones(optim_vars[0].shape[0], 1)
 
-    # test verifying default CostWeight
-    cost_function = th.AutoDiffCostFunction(
-        optim_vars,
-        error_fn,
-        1,
-        aux_vars=aux_vars,
-    )
-    assert type(cost_function.weight).__name__ == "ScaleCostWeight"
-    assert torch.allclose(cost_function.weight.scale.data, torch.ones(1, 1))
-    weighted_error = cost_function.weighted_error()
-    assert torch.allclose(weighted_error, torch.ones(batch_size, 1))
-
-    # test overriding default CostWeight
-    for i in range(10):
-        cost_weight_value = torch.randn(1, 1)
-        cost_weight = MockCostWeight(cost_weight_value)
+    for batched in [True, False]:
+        # test verifying default CostWeight
         cost_function = th.AutoDiffCostFunction(
             optim_vars,
             error_fn,
             1,
-            cost_weight=cost_weight,
             aux_vars=aux_vars,
+            batched=batched,
         )
-        assert torch.allclose(cost_function.weight.the_data.data, cost_weight_value)
+        assert type(cost_function.weight).__name__ == "ScaleCostWeight"
+        assert torch.allclose(cost_function.weight.scale.data, torch.ones(1, 1))
         weighted_error = cost_function.weighted_error()
-        direct_error_computation = cost_weight_value * torch.ones(batch_size, 1)
-        assert torch.allclose(weighted_error, direct_error_computation)
+        assert torch.allclose(weighted_error, torch.ones(batch_size, 1))
+
+        # test overriding default CostWeight
+        for i in range(10):
+            cost_weight_value = torch.randn(1, 1)
+            cost_weight = MockCostWeight(cost_weight_value)
+            cost_function = th.AutoDiffCostFunction(
+                optim_vars,
+                error_fn,
+                1,
+                cost_weight=cost_weight,
+                aux_vars=aux_vars,
+            )
+            assert torch.allclose(cost_function.weight.the_data.data, cost_weight_value)
+            weighted_error = cost_function.weighted_error()
+            direct_error_computation = cost_weight_value * torch.ones(batch_size, 1)
+            assert torch.allclose(weighted_error, direct_error_computation)
 
 
 def test_autodiff_cost_function_to():
-    batch_size = 10
-    optim_vars = []
-    aux_vars = []
+    for batched in [True, False]:
+        batch_size = 10
+        optim_vars = []
+        aux_vars = []
 
-    for i in range(5):
-        optim_vars.append(
-            MockVar(
-                1,
-                data=torch.ones(batch_size, 1) * torch.randn(1),
-                name=f"optim_var_{i}",
+        for i in range(5):
+            optim_vars.append(
+                MockVar(
+                    1,
+                    data=torch.ones(batch_size, 1) * torch.randn(1),
+                    name=f"optim_var_{i}",
+                )
             )
-        )
-        aux_vars.append(
-            MockVar(
-                1,
-                data=torch.ones(batch_size, 1) * torch.randn(1),
-                name=f"aux_var_{i}",
+            aux_vars.append(
+                MockVar(
+                    1,
+                    data=torch.ones(batch_size, 1) * torch.randn(1),
+                    name=f"aux_var_{i}",
+                )
             )
+
+        def error_fn(optim_vars, aux_vars):
+            res = 0
+            for var in optim_vars:
+                res += var.data
+            return res
+
+        # test verifying default CostWeight
+        cost_function = th.AutoDiffCostFunction(
+            optim_vars, error_fn, 1, aux_vars=aux_vars, batched=batched
         )
 
-    def error_fn(optim_vars, aux_vars):
-        res = 0
         for var in optim_vars:
-            res += var.data
-        return res
+            var.to(dtype=torch.double)
 
-    # test verifying default CostWeight
-    cost_function = th.AutoDiffCostFunction(
-        optim_vars,
-        error_fn,
-        1,
-        aux_vars=aux_vars,
-    )
+        # This fails because internal vars of the cost function have not been converted
+        # to double
+        with pytest.raises(ValueError):
+            cost_function.jacobians()
 
-    for var in optim_vars:
-        var.to(dtype=torch.double)
-
-    # This fails because internal vars of the cost function have not been converted
-    # to double
-    with pytest.raises(ValueError):
+        cost_function.to(dtype=torch.double)
         cost_function.jacobians()
-
-    cost_function.to(dtype=torch.double)
-    cost_function.jacobians()
 
 
 def test_autodiff_cost_function_error_and_jacobians_shape_on_SO3():

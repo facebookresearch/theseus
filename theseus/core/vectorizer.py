@@ -3,6 +3,7 @@
 # This source code is licensed under the MIT license found in the
 # LICENSE file in the root directory of this source tree.
 
+import warnings
 from collections import defaultdict
 from typing import Dict, Iterable, List, Optional, Set, Tuple, Type
 
@@ -100,6 +101,16 @@ class Vectorize:
             self._cost_fn_wrappers.append(wrapper)
             schema = _get_cost_function_schema(cost_fn)
             self._schema_dict[schema].append(wrapper)
+
+        # If all cost function groups have only one cost, there is no point in
+        # doing vectorization
+        if max([len(cfs) for cfs in self._schema_dict.values()]) <= 1:
+            warnings.warn(
+                "All cost function groups for vectorization have a single "
+                "cost function, so vectorization will result in unnecessary overhead. "
+                "Consider disabling cost function vectorization for your objective.",
+                RuntimeWarning,
+            )
 
         # Now create a vectorized cost function for each unique schema
         self._vectorized_cost_fns: Dict[_CostFunctionSchema, CostFunction] = {}

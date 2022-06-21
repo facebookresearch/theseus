@@ -3,13 +3,15 @@
 # This source code is licensed under the MIT license found in the
 # LICENSE file in the root directory of this source tree.
 
-from typing import Any, Dict, Optional, Tuple
+from typing import Any, Dict, List, Optional, Tuple
 
+import numpy as np
 import torch
 import torch.nn as nn
 from torch.autograd.function import once_differentiable
 
-from theseus.core import AutoDiffCostFunction, Variable, Vectorize
+from theseus.core import CostFunction, CostWeight, ScaleCostWeight, Variable, Vectorize
+from theseus.geometry import LieGroup
 from theseus.optimizer import Optimizer, OptimizerInfo
 from theseus.optimizer.linear import LinearSolver
 from theseus.optimizer.nonlinear import BackwardMode, GaussNewton
@@ -237,27 +239,61 @@ class TheseusLayerDLMForward(torch.autograd.Function):
         return (None, None, None, None, None, None, None, *nones, *grads)
 
 
-def _dlm_perturbation(optim_vars, aux_vars):
-    v = optim_vars[0]
-    g = aux_vars[0]
-    epsilon = aux_vars[1]
-    return epsilon.data * v.data - 0.5 * g.data
+class _DLMPerturbation(CostFunction):
+    def __init__(
+        self,
+        var: LieGroup,
+        epsilon: Variable,
+        grad: Variable,
+        cost_weight: CostWeight,
+        name: Optional[str] = None,
+    ):
+        super().__init__(cost_weight, name=name)
+        assert epsilon.ndim == 2 and epsilon.shape[1] == 1
+        self.var = var
+        self.epsilon = epsilon
+        self.grad = grad
+        self.register_optim_var("var")
+        self.register_aux_vars(["epsilon", "grad"])
+
+    def error(self) -> torch.Tensor:
+        err = (
+            self.epsilon.data.view((-1,) + (1,) * (self.var.ndim - 1)) * self.var.data
+            - 0.5 * self.grad.data
+        )
+        return err.flatten(start_dim=1)
+
+    def jacobians(self) -> Tuple[List[torch.Tensor], torch.Tensor]:
+        d = self.dim()
+        aux = torch.eye(d).unsqueeze(0).expand(self.var.shape[0], d, d)
+        euclidean_grad_flat = self.epsilon.data.view(-1, 1, 1) * aux
+        euclidean_grad = euclidean_grad_flat.unflatten(2, self.var.shape[1:])
+        return [self.var.project(euclidean_grad, is_sparse=True)], self.error()
+
+    def dim(self) -> int:
+        return np.prod(self.var.data.shape[1:])
+
+    def _copy_impl(self, new_name: Optional[str] = None) -> "CostFunction":
+        return _DLMPerturbation(
+            self.var.copy(),
+            self.epsilon.copy(),
+            self.grad.copy(),
+            self.weight.copy(),
+            name=new_name,
+        )
 
 
 def _instantiate_dlm_bwd_objective(objective):
     bwd_objective = objective.copy()
     epsilon_var = Variable(torch.ones(1, 1), name=TheseusLayerDLMForward._dlm_epsilon)
+    unit_weight = ScaleCostWeight(1.0)
     for name, var in bwd_objective.optim_vars.items():
         grad_var = Variable(
             torch.zeros_like(var.data), name=name + TheseusLayerDLMForward._grad_suffix
         )
         bwd_objective.add(
-            AutoDiffCostFunction(
-                [var],
-                _dlm_perturbation,
-                var.shape[1],
-                aux_vars=[grad_var, epsilon_var],
-                name="dlm_perturbation_" + name,
+            _DLMPerturbation(
+                var, epsilon_var, grad_var, unit_weight, name="dlm_perturbation" + name
             )
         )
 

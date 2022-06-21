@@ -90,15 +90,16 @@ def test_autodiff_cost_function_error_and_jacobians_shape():
         def error_fn(optim_vars, aux_vars):
             assert isinstance(optim_vars, tuple)
             assert len(optim_vars) == num_optim_vars
+            assert len(optim_vars) > 0
             assert len(aux_vars) == num_aux_vars
-            ret_val = torch.zeros(batch_size, err_dim)
+            ret_val = torch.zeros(optim_vars[0].shape[0], err_dim)
 
             all_vars = optim_vars + aux_vars
 
             vals = []
             for i, arg in enumerate(all_vars):
                 assert isinstance(arg, th.Variable)
-                assert arg.shape == (batch_size, i + 1)
+                assert arg.shape == (batch_size, i + 1) or arg.shape == (1, i + 1)
                 assert arg.data.allclose(variable_values[i] * torch.ones_like(arg.data))
                 vals.append(arg[0, 0])
             return ret_val + torch.Tensor(vals).sum()
@@ -115,23 +116,27 @@ def test_autodiff_cost_function_error_and_jacobians_shape():
                 )
         else:
             # check that the error function returns the correct value
-            cost_function = th.AutoDiffCostFunction(
-                optim_vars,
-                error_fn,
-                err_dim,
-                cost_weight=cost_weight,
-                aux_vars=aux_vars,
-            )
-            err = cost_function.error()
-            assert err.allclose(variable_values.sum() * torch.ones(batch_size, err_dim))
+            for batched in [True, False]:
+                cost_function = th.AutoDiffCostFunction(
+                    optim_vars,
+                    error_fn,
+                    err_dim,
+                    cost_weight=cost_weight,
+                    aux_vars=aux_vars,
+                    batched=batched,
+                )
+                err = cost_function.error()
+                assert err.allclose(
+                    variable_values.sum() * torch.ones(batch_size, err_dim)
+                )
 
-            # Now checking the jacobians
-            jacobians, err_jac = cost_function.jacobians()
-            assert err_jac.allclose(err)
-            assert len(jacobians) == num_optim_vars
-            for i in range(num_optim_vars):
-                # variable dim is i + 1 (see MockVar creation line)
-                assert jacobians[i].shape == (batch_size, err_dim, i + 1)
+                # Now checking the jacobians
+                jacobians, err_jac = cost_function.jacobians()
+                assert err_jac.allclose(err)
+                assert len(jacobians) == num_optim_vars
+                for i in range(num_optim_vars):
+                    # variable dim is i + 1 (see MockVar creation line)
+                    assert jacobians[i].shape == (batch_size, err_dim, i + 1)
 
 
 def test_autodiff_cost_function_cost_weight():

@@ -285,8 +285,12 @@ class _DLMPerturbation(CostFunction):
 
 def _instantiate_dlm_bwd_objective(objective):
     bwd_objective = objective.copy()
-    epsilon_var = Variable(torch.ones(1, 1), name=TheseusLayerDLMForward._dlm_epsilon)
+    epsilon_var = Variable(
+        torch.ones(1, 1, dtype=bwd_objective.dtype),
+        name=TheseusLayerDLMForward._dlm_epsilon,
+    )
     unit_weight = ScaleCostWeight(1.0)
+    unit_weight.to(dtype=objective.dtype)
     for name, var in bwd_objective.optim_vars.items():
         grad_var = Variable(
             torch.zeros_like(var.data), name=name + TheseusLayerDLMForward._grad_suffix

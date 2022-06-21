@@ -45,3 +45,41 @@ def test_dlm_perturbation_jacobian():
             error = cf.error()
             assert torch.allclose(error_jac, error)
             assert torch.allclose(jacobians[0], expected_jacs[0], atol=1e-5)
+
+
+def test_backward_pass_se3_runs():
+    generator = torch.Generator()
+    generator.manual_seed(0)
+    dtype = torch.float64
+    batch_size = 10
+    var = th.rand_se3(batch_size, generator=generator)
+    var.name = "v1"
+    target = th.rand_se3(batch_size, generator=generator)
+    target.name = "target"
+
+    objective = th.Objective()
+    objective.add(th.Difference(var, th.ScaleCostWeight(1.0), target))
+    objective.to(dtype=dtype)
+    optimizer = th.GaussNewton(objective)
+    layer = th.TheseusLayer(optimizer)
+
+    target_data = torch.nn.Parameter(th.rand_se3(batch_size, dtype=dtype).data)
+    adam = torch.optim.Adam([target_data], lr=0.01)
+    loss0 = None
+    for _ in range(5):
+        adam.zero_grad()
+        with th.enable_lie_tangent():
+            out, _ = layer.forward(
+                {"target": target_data},
+                optimizer_kwargs={
+                    "backward_mode": th.BackwardMode.DLM,
+                    "verbose": False,
+                },
+            )
+
+            loss = out["v1"].norm()
+            if loss0 is None:
+                loss0 = loss.item()
+            loss.backward()
+            adam.step()
+    assert loss.item() < loss0

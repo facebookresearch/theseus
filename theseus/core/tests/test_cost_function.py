@@ -259,8 +259,9 @@ def test_autodiff_cost_function_error_and_jacobians_shape_on_SO3():
         def error_fn(optim_vars, aux_vars):
             assert isinstance(optim_vars, tuple)
             assert len(optim_vars) == num_vars
+            assert len(optim_vars) > 0
             assert len(aux_vars) == num_vars
-            ret_val = torch.zeros(batch_size, err_dim)
+            ret_val = torch.zeros(optim_vars[0].shape[0], err_dim)
 
             for optim_var, aux_var in zip(optim_vars, aux_vars):
                 ret_val += th.SO3(data=optim_var.data).rotate(aux_var).data
@@ -279,22 +280,24 @@ def test_autodiff_cost_function_error_and_jacobians_shape_on_SO3():
                 )
         else:
             # check that the error function returns the correct value
-            cost_function = th.AutoDiffCostFunction(
-                optim_vars,
-                error_fn,
-                err_dim,
-                cost_weight=cost_weight,
-                aux_vars=aux_vars,
-            )
-            err = cost_function.error()
+            for batched in [True, False]:
+                cost_function = th.AutoDiffCostFunction(
+                    optim_vars,
+                    error_fn,
+                    err_dim,
+                    cost_weight=cost_weight,
+                    aux_vars=aux_vars,
+                    batched=batched,
+                )
+                err = cost_function.error()
 
-            # Now checking the jacobians
-            jacobians, err_jac = cost_function.jacobians()
-            assert err_jac.allclose(err)
-            assert len(jacobians) == num_vars
-            for i in range(num_vars):
-                # variable dim is i + 1 (see MockVar creation line)
-                assert jacobians[i].shape == (batch_size, err_dim, 3)
+                # Now checking the jacobians
+                jacobians, err_jac = cost_function.jacobians()
+                assert err_jac.allclose(err)
+                assert len(jacobians) == num_vars
+                for i in range(num_vars):
+                    # variable dim is i + 1 (see MockVar creation line)
+                    assert jacobians[i].shape == (batch_size, err_dim, 3)
 
 
 def test_autodiff_cost_function_error_and_jacobians_value_on_SO3():
@@ -316,8 +319,9 @@ def test_autodiff_cost_function_error_and_jacobians_value_on_SO3():
         def error_fn(optim_vars, aux_vars):
             assert isinstance(optim_vars, tuple)
             assert len(optim_vars) == num_vars
+            assert len(optim_vars) > 0
             assert len(aux_vars) == num_vars
-            ret_val = torch.zeros(batch_size, err_dim, dtype=torch.float64)
+            ret_val = torch.zeros(optim_vars[0].shape[0], err_dim, dtype=torch.float64)
 
             for optim_var, aux_var in zip(optim_vars, aux_vars):
                 ret_val += th.SO3(data=optim_var.data).rotate(aux_var).data
@@ -336,19 +340,23 @@ def test_autodiff_cost_function_error_and_jacobians_value_on_SO3():
                 )
         else:
             # check that the error function returns the correct value
-            cost_function = th.AutoDiffCostFunction(
-                optim_vars,
-                error_fn,
-                err_dim,
-                cost_weight=cost_weight,
-                aux_vars=aux_vars,
-            )
-            jac_actual, err_actual = cost_function.jacobians()
+            for batched in [True, False]:
+                cost_function = th.AutoDiffCostFunction(
+                    optim_vars,
+                    error_fn,
+                    err_dim,
+                    cost_weight=cost_weight,
+                    aux_vars=aux_vars,
+                    batched=batched,
+                )
+                jac_actual, err_actual = cost_function.jacobians()
 
-            err_expected = torch.zeros(batch_size, 3, dtype=torch.float64)
-            for n in torch.arange(num_vars):
-                jac = []
-                err_expected += optim_vars[n].rotate(aux_vars[n], jacobians=jac).data
-                assert torch.allclose(jac_actual[n], jac[0])
+                err_expected = torch.zeros(batch_size, 3, dtype=torch.float64)
+                for n in torch.arange(num_vars):
+                    jac = []
+                    err_expected += (
+                        optim_vars[n].rotate(aux_vars[n], jacobians=jac).data
+                    )
+                    assert torch.allclose(jac_actual[n], jac[0])
 
-            assert torch.allclose(err_actual, err_expected)
+                assert torch.allclose(err_actual, err_expected)

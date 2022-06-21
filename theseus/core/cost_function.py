@@ -222,7 +222,8 @@ class AutoDiffCostFunction(CostFunction):
                     torch.cat(
                         [jacobians_n[k][:, :, 0, :] for jacobians_n in jacobians_raw],
                         dim=0,
-                    )
+                    ),
+                    is_sparse=True,
                 )
                 for k, v in enumerate(optim_vars)
             )

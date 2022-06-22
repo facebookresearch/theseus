@@ -5,20 +5,22 @@
 
 import torch
 
-from theseus.constants import EPS
+from theseus.constants import TEST_EPS
 from theseus.utils import numeric_jacobian
 
 
-def check_exp_map(tangent_vector, group_cls, atol=EPS):
+def check_exp_map(tangent_vector, group_cls, atol=TEST_EPS):
     group = group_cls.exp_map(tangent_vector)
+    tangent_vector_double = tangent_vector.double()
+    tangent_vector_double.to(dtype=torch.float64)
     assert torch.allclose(
-        group_cls.hat(tangent_vector).matrix_exp(),
-        group.to_matrix(),
+        group_cls.hat(tangent_vector_double).matrix_exp(),
+        group.to_matrix().double(),
         atol=atol,
     )
 
 
-def check_log_map(tangent_vector, group_cls, atol=EPS):
+def check_log_map(tangent_vector, group_cls, atol=TEST_EPS):
     assert torch.allclose(
         tangent_vector, group_cls.exp_map(tangent_vector).log_map(), atol=atol
     )
@@ -28,34 +30,46 @@ def check_compose(group_1, group_2):
     Jcmp = []
     composition = group_1.compose(group_2, jacobians=Jcmp)
     expected_matrix = group_1.to_matrix() @ group_2.to_matrix()
+    group_1_double = group_1.copy()
+    group_1_double.to(torch.float64)
+    group_2_double = group_2.copy()
+    group_2_double.to(torch.float64)
     expected_jacs = numeric_jacobian(
         lambda groups: groups[0].compose(groups[1]),
-        [group_1, group_2],
+        [group_1_double, group_2_double],
     )
-    assert torch.allclose(composition.to_matrix(), expected_matrix, atol=EPS)
-    assert torch.allclose(Jcmp[0], expected_jacs[0])
-    assert torch.allclose(Jcmp[1], expected_jacs[1])
+    assert torch.allclose(composition.to_matrix(), expected_matrix, atol=TEST_EPS)
+    assert torch.allclose(Jcmp[0].double(), expected_jacs[0])
+    assert torch.allclose(Jcmp[1].double(), expected_jacs[1])
 
 
 def check_inverse(group):
     tangent_vector = group.log_map()
-    inverse_group = group.exp_map(-tangent_vector)
+    inverse_group = group.exp_map(-tangent_vector.double())
     jac = []
     inverse_result = group.inverse(jacobian=jac)
-    expected_jac = numeric_jacobian(lambda groups: groups[0].inverse(), [group])
+    group_double = group.copy()
+    group_double.to(torch.float64)
+    expected_jac = numeric_jacobian(lambda groups: groups[0].inverse(), [group_double])
     assert torch.allclose(
-        inverse_group.to_matrix(), inverse_result.to_matrix(), atol=EPS
+        inverse_group.to_matrix().double(),
+        inverse_result.to_matrix().double(),
+        atol=TEST_EPS,
     )
-    assert torch.allclose(jac[0], expected_jac[0])
+    assert torch.allclose(jac[0].double(), expected_jac[0])
 
 
 def check_adjoint(group, tangent_vector):
-    group_matrix = group.to_matrix()
     tangent_left = group.__class__.adjoint(group) @ tangent_vector.unsqueeze(2)
+    group_matrix = group.to_matrix()
     tangent_right = group.__class__.vee(
-        group_matrix @ group.hat(tangent_vector) @ group.inverse().to_matrix()
+        group_matrix.double()
+        @ group.hat(tangent_vector.double())
+        @ group.inverse().to_matrix().double()
     )
-    assert torch.allclose(tangent_left.squeeze(2), tangent_right, atol=EPS)
+    assert torch.allclose(
+        tangent_left.double().squeeze(2), tangent_right, atol=TEST_EPS
+    )
 
 
 # Func can be SO2.rotate, SE2.transform_to, SO3.unrotate, etc., whose third argument
@@ -152,8 +166,8 @@ def check_projection_for_compose(Group, batch_size, generator=None):
     expected[0][aux_id, :, aux_id, :] = jac[0]
     expected[1][aux_id, :, aux_id, :] = jac[1]
 
-    assert torch.allclose(actual[0], expected[0])
-    assert torch.allclose(actual[1], expected[1])
+    assert torch.allclose(actual[0], expected[0], atol=TEST_EPS)
+    assert torch.allclose(actual[1], expected[1], atol=TEST_EPS)
 
     # Check for sparse jacobian matrices
     temp = [

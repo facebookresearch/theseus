@@ -136,14 +136,14 @@ class AutoDiffCostFunction(CostFunction):
         # during jacobian computation without modifying the original Variable objects
         self._tmp_optim_vars = tuple(v.copy() for v in optim_vars)
 
-        self._tmp_optim_vars_n = tuple(v.copy() for v in optim_vars)
-        self._tmp_aux_vars_n = tuple(v.copy() for v in aux_vars)
+        self._tmp_optim_vars_for_loop = tuple(v.copy() for v in optim_vars)
+        self._tmp_aux_vars_for_loop = tuple(v.copy() for v in aux_vars)
 
         for i, optim_var in enumerate(optim_vars):
-            self._tmp_optim_vars_n[i].update(optim_var.data)
+            self._tmp_optim_vars_for_loop[i].update(optim_var.data)
 
         for i, aux_var in enumerate(aux_vars):
-            self._tmp_aux_vars_n[i].update(aux_var.data)
+            self._tmp_aux_vars_for_loop[i].update(aux_var.data)
 
         self._batched = batched
 
@@ -197,15 +197,16 @@ class AutoDiffCostFunction(CostFunction):
 
             for n in range(optim_vars[0].shape[0]):
                 for i, aux_var in enumerate(aux_vars):
-                    self._tmp_aux_vars_n[i].update(aux_var.data[n : n + 1])
+                    self._tmp_aux_vars_for_loop[i].update(aux_var.data[n : n + 1])
 
                 def jac_fn_n(*optim_vars_data_n_):
-                    assert len(optim_vars_data_n_) == len(self._tmp_optim_vars_n)
+                    assert len(optim_vars_data_n_) == len(self._tmp_optim_vars_for_loop)
                     for i, tensor in enumerate(optim_vars_data_n_):
-                        self._tmp_optim_vars_n[i].update(tensor)
+                        self._tmp_optim_vars_for_loop[i].update(tensor)
 
                     return self._err_fn(
-                        optim_vars=self._tmp_optim_vars_n, aux_vars=self._tmp_aux_vars_n
+                        optim_vars=self._tmp_optim_vars_for_loop,
+                        aux_vars=self._tmp_aux_vars_for_loop,
                     )
 
                 jacobians_n = autogradF.jacobian(
@@ -249,8 +250,8 @@ class AutoDiffCostFunction(CostFunction):
         for var in self._tmp_optim_vars:
             var.to(*args, **kwargs)
 
-        for var in self._tmp_optim_vars_n:
+        for var in self._tmp_optim_vars_for_loop:
             var.to(*args, **kwargs)
 
-        for var in self._tmp_aux_vars_n:
+        for var in self._tmp_aux_vars_for_loop:
             var.to(*args, **kwargs)

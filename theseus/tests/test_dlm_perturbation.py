@@ -6,6 +6,13 @@ from theseus.theseus_layer import _DLMPerturbation
 from theseus.utils import numeric_jacobian
 
 
+def _original_dlm_perturbation(optim_vars, aux_vars):
+    v = optim_vars[0]
+    g = aux_vars[0]
+    epsilon = aux_vars[1]
+    return epsilon.data * v.data - 0.5 * g.data
+
+
 def test_dlm_perturbation_jacobian():
     generator = torch.Generator()
     generator.manual_seed(0)
@@ -43,8 +50,20 @@ def test_dlm_perturbation_jacobian():
             )
             jacobians, error_jac = cf.jacobians()
             error = cf.error()
-            assert torch.allclose(error_jac, error)
-            assert torch.allclose(jacobians[0], expected_jacs[0], atol=1e-5)
+            assert error.allclose(error_jac)
+            assert jacobians[0].allclose(expected_jacs[0], atol=1e-5)
+
+            if group_cls in [th.Vector, th.SO2, th.SE2]:
+                # Original cf didn't work for SO3 or SE3
+                original_cf = th.AutoDiffCostFunction(
+                    [var],
+                    _original_dlm_perturbation,
+                    var.shape[1],
+                    aux_vars=[grad, epsilon],
+                )
+                original_jac, original_err = original_cf.jacobians()
+                assert error.allclose(original_err)
+                assert jacobians[0].allclose(original_jac[0], atol=1e-5)
 
 
 def test_backward_pass_se3_runs():

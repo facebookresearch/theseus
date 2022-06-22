@@ -10,8 +10,15 @@ import torch
 import torch.nn as nn
 from torch.autograd.function import once_differentiable
 
-from theseus.core import CostFunction, CostWeight, ScaleCostWeight, Variable, Vectorize
-from theseus.geometry import LieGroup
+from theseus.core import (
+    CostFunction,
+    CostWeight,
+    Objective,
+    ScaleCostWeight,
+    Variable,
+    Vectorize,
+)
+from theseus.geometry import LieGroup, Manifold
 from theseus.optimizer import Optimizer, OptimizerInfo
 from theseus.optimizer.linear import LinearSolver
 from theseus.optimizer.nonlinear import BackwardMode, GaussNewton
@@ -242,12 +249,17 @@ class TheseusLayerDLMForward(torch.autograd.Function):
 class _DLMPerturbation(CostFunction):
     def __init__(
         self,
-        var: LieGroup,
+        var: Manifold,
         epsilon: Variable,
         grad: Variable,
         cost_weight: CostWeight,
         name: Optional[str] = None,
     ):
+        if not isinstance(var, LieGroup):
+            raise ValueError(
+                f"DLM requires LieGroup-type variables, but "
+                f"{var.name} has type {var.__class__.__name__}"
+            )
         super().__init__(cost_weight, name=name)
         assert epsilon.ndim == 2 and epsilon.shape[1] == 1
         self.var = var
@@ -283,14 +295,14 @@ class _DLMPerturbation(CostFunction):
         )
 
 
-def _instantiate_dlm_bwd_objective(objective):
+def _instantiate_dlm_bwd_objective(objective: Objective):
     bwd_objective = objective.copy()
     epsilon_var = Variable(
-        torch.ones(1, 1, dtype=bwd_objective.dtype),
+        torch.ones(1, 1, dtype=bwd_objective.dtype, device=bwd_objective.device),
         name=TheseusLayerDLMForward._dlm_epsilon,
     )
     unit_weight = ScaleCostWeight(1.0)
-    unit_weight.to(dtype=objective.dtype)
+    unit_weight.to(dtype=objective.dtype, device=objective.device)
     for name, var in bwd_objective.optim_vars.items():
         grad_var = Variable(
             torch.zeros_like(var.data), name=name + TheseusLayerDLMForward._grad_suffix

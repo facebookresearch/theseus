@@ -112,7 +112,7 @@ class AutoDiffCostFunction(CostFunction):
         name: Optional[str] = None,
         autograd_strict: bool = False,
         autograd_vectorize: bool = False,
-        autograd_loop_over_batch: bool = True,
+        autograd_loop_over_batch: bool = False,
     ):
         if cost_weight is None:
             cost_weight = ScaleCostWeight(1.0)
@@ -166,7 +166,7 @@ class AutoDiffCostFunction(CostFunction):
     def jacobians(self) -> Tuple[List[torch.Tensor], torch.Tensor]:
         err, optim_vars, aux_vars = self._compute_error()
 
-        if self._autograd_loop_over_batch:
+        if not self._autograd_loop_over_batch:
             # this receives a list of torch tensors with data to set for tmp_optim_vars
             def jac_fn(*optim_vars_data_):
                 assert len(optim_vars_data_) == len(self._tmp_optim_vars)

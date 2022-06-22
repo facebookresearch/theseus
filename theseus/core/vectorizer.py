@@ -3,7 +3,6 @@
 # This source code is licensed under the MIT license found in the
 # LICENSE file in the root directory of this source tree.
 
-import warnings
 from collections import defaultdict
 from typing import Dict, Iterable, List, Optional, Set, Tuple, Type
 
@@ -101,16 +100,6 @@ class Vectorize:
             self._cost_fn_wrappers.append(wrapper)
             schema = _get_cost_function_schema(cost_fn)
             self._schema_dict[schema].append(wrapper)
-
-        # If all cost function groups have only one cost, there is no point in
-        # doing vectorization
-        if max([len(cfs) for cfs in self._schema_dict.values()]) <= 1:
-            warnings.warn(
-                "All cost function groups for vectorization have a single "
-                "cost function, so vectorization will result in unnecessary overhead. "
-                "Consider disabling cost function vectorization for your objective.",
-                RuntimeWarning,
-            )
 
         # Now create a vectorized cost function for each unique schema
         self._vectorized_cost_fns: Dict[_CostFunctionSchema, CostFunction] = {}
@@ -299,9 +288,19 @@ class Vectorize:
                 cf._cached_error = None
                 cf._cached_jacobians = None
 
+    @staticmethod
+    def _handle_singleton_wrapper(wrapper: _CostFunctionWrapper):
+        (
+            wrapper._cached_jacobians,
+            wrapper._cached_error,
+        ) = wrapper.cost_fn.weighted_jacobians_error()
+
     def _vectorize(self):
         self._clear_wrapper_caches()
         for schema, cost_fn_wrappers in self._schema_dict.items():
+            if len(cost_fn_wrappers) == 1:
+                Vectorize._handle_singleton_wrapper(cost_fn_wrappers[0])
+                continue
             var_names = self._var_names[schema]
             vectorized_cost_fn = self._vectorized_cost_fns[schema]
             all_vectorized_vars = Vectorize._get_all_vars(vectorized_cost_fn)

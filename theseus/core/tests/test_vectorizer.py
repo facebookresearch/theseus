@@ -33,9 +33,7 @@ def test_costs_vars_and_err_before_vectorization():
         # Chech that vectorizer's has the correct number of wrappers
         objective.add(cf1)
         objective.add(cf2)
-        # Emits warning since cost function groups have only one cost function
-        with pytest.warns(RuntimeWarning):
-            th.Vectorize(objective)
+        th.Vectorize(objective)
 
         # Update weights after creating vectorizer to see if data is picked up correctly
         w1 = torch.randn(1, 1)  # also check that broadcasting works

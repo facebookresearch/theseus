@@ -139,7 +139,6 @@ def create_qf_theseus_layer(
     assert not objective.vectorized
     theseus_layer = th.TheseusLayer(optimizer, vectorize=True)
     assert objective.vectorized
-    objective.disable_vectorization()
     return theseus_layer
 
 

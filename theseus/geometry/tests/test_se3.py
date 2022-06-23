@@ -159,7 +159,7 @@ def test_adjoint(dtype):
     rng.manual_seed(0)
     for batch_size in [1, 20, 100]:
         se3 = th.SE3.rand(batch_size, generator=rng, dtype=dtype)
-        tangent = torch.randn(batch_size, 6, dtype=dtype)
+        tangent = torch.randn(batch_size, 6, generator=rng, dtype=dtype)
         check_adjoint(se3, tangent)
 
 

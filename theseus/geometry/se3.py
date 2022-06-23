@@ -377,9 +377,9 @@ class SE3(LieGroup):
         aux = torch.ones(sel_rows.shape[0], dtype=torch.bool)
         sel_rows[aux, major] -= cosine[near_pi]
         axis = sel_rows / sel_rows.norm(dim=1, keepdim=True)
-        ret_ang[near_pi] = axis * (
-            theta[near_pi] * sine_axis[near_pi, major].sign()
-        ).view(-1, 1)
+        sign_tmp = sine_axis[near_pi, major].sign()
+        sign = torch.where(sign_tmp != 0, sign_tmp, torch.ones_like(sign_tmp))
+        ret_ang[near_pi] = axis * (theta[near_pi] * sign).view(-1, 1)
 
         # Compute the translation
         sine_theta = sine * theta

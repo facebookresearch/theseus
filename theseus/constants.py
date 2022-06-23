@@ -7,7 +7,7 @@ import math
 
 import torch
 
-TEST_EPS = 1e-7
+TEST_EPS = 3e-7
 EPS = 1e-10
 PI = math.pi
 

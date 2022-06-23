@@ -8,7 +8,7 @@ import pytest  # noqa: F401
 import torch
 
 import theseus as th
-from theseus.constants import EPS
+from theseus.constants import TEST_EPS
 from theseus.utils import numeric_jacobian
 
 from .common import (
@@ -25,7 +25,7 @@ from .common import (
 )
 
 
-def check_SE3_log_map(tangent_vector, atol=EPS):
+def check_SE3_log_map(tangent_vector, atol=TEST_EPS):
     g = th.SE3.exp_map(tangent_vector)
     assert torch.allclose(th.SE3.exp_map(g.log_map()).data, g.data, atol=atol)
 
@@ -106,7 +106,7 @@ def test_log_map(batch_size, dtype, ang_factor):
 
 
 # This test checks that cross products are done correctly
-@pytest.mark.parametrize("dtype", [torch.float64])
+@pytest.mark.parametrize("dtype", [torch.float32, torch.float64])
 @pytest.mark.parametrize(
     "ang_factor", [None, 1e-5, 3e-3, 2 * np.pi - 1e-11, np.pi - 1e-11]
 )
@@ -134,7 +134,7 @@ def test_batch_size_3_log_map(dtype, ang_factor):
     torch.allclose(jac[0].data[3:], jac2[0].data, atol=ATOL)
 
 
-@pytest.mark.parametrize("dtype", [torch.float64])
+@pytest.mark.parametrize("dtype", [torch.float32, torch.float64])
 def test_compose(dtype):
     rng = torch.Generator()
     rng.manual_seed(0)
@@ -191,8 +191,10 @@ def test_transform_from_and_to(dtype):
                 point_from = se3.transform_from(point_to, jacobians_from)
 
                 # Check the operation result
-                assert torch.allclose(expected_to.squeeze(2), point_to.data, atol=EPS)
-                assert torch.allclose(point_tensor, point_from.data, atol=EPS)
+                assert torch.allclose(
+                    expected_to.squeeze(2), point_to.data, atol=TEST_EPS
+                )
+                assert torch.allclose(point_tensor, point_from.data, atol=TEST_EPS)
 
                 # Check the jacobians
                 expected_jac = numeric_jacobian(

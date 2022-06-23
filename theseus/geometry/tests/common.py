@@ -39,8 +39,16 @@ def check_compose(group_1, group_2):
         [group_1_double, group_2_double],
     )
     assert torch.allclose(composition.to_matrix(), expected_matrix, atol=TEST_EPS)
-    assert torch.allclose(Jcmp[0].double(), expected_jacs[0])
-    assert torch.allclose(Jcmp[1].double(), expected_jacs[1])
+    assert torch.allclose(Jcmp[0].double(), expected_jacs[0], atol=TEST_EPS)
+    assert torch.allclose(
+        Jcmp[1].double(),
+        torch.eye(6, 6, dtype=torch.float64)
+        .unsqueeze(0)
+        .expand(group_1.shape[0], 6, 6),
+        atol=TEST_EPS,
+    )
+    if group_1.dtype == torch.float64:
+        assert torch.allclose(Jcmp[1].double(), expected_jacs[1], atol=TEST_EPS)
 
 
 def check_inverse(group):

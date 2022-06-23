@@ -40,7 +40,7 @@ def _create_tangent_vector(batch_size, ang_factor, rng, dtype):
 
 
 @pytest.mark.parametrize("batch_size", [1, 20, 100])
-@pytest.mark.parametrize("dtype", [torch.float64])
+@pytest.mark.parametrize("dtype", [torch.float32, torch.float64])
 @pytest.mark.parametrize(
     "ang_factor", [None, 1e-5, 3e-3, 2 * np.pi - 1e-11, np.pi - 1e-11]
 )

@@ -244,14 +244,17 @@ def check_projection_for_exp_map(tangent_vector, Group, is_projected=True, atol=
         return Group.exp_map(xi).to_matrix()
 
     actual = []
-    group = Group.exp_map(tangent_vector, jacobians=actual).to_matrix()
-    jac_raw = torch.autograd.functional.jacobian(exp_func, (tangent_vector))
+    _ = Group.exp_map(tangent_vector, jacobians=actual).to_matrix()
+
+    tangent_vector_double = tangent_vector.double()
+    group_double = Group.exp_map(tangent_vector_double).to_matrix()
+    jac_raw = torch.autograd.functional.jacobian(exp_func, (tangent_vector_double))
 
     if is_projected:
         jac_raw = jac_raw[aux_id, :, :, aux_id]
         expected = torch.cat(
             [
-                Group.vee(group.inverse() @ jac_raw[:, :, :, i]).view(-1, dof, 1)
+                Group.vee(group_double.inverse() @ jac_raw[:, :, :, i]).view(-1, dof, 1)
                 for i in torch.arange(dof)
             ],
             dim=2,
@@ -259,7 +262,7 @@ def check_projection_for_exp_map(tangent_vector, Group, is_projected=True, atol=
     else:
         expected = jac_raw[aux_id, :, aux_id]
 
-    assert torch.allclose(actual[0], expected, atol=atol)
+    assert torch.allclose(actual[0].double(), expected, atol=atol)
 
 
 def check_projection_for_log_map(tangent_vector, Group, is_projected=True, atol=1e-8):

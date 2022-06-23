@@ -47,7 +47,7 @@ def _create_tangent_vector(batch_size, ang_factor, rng, dtype):
 def test_exp_map(batch_size, dtype, ang_factor):
     rng = torch.Generator()
     rng.manual_seed(0)
-    ATOL = 1e-3 if dtype == torch.float32 else 1e-6
+    ATOL = 2e-4 if dtype == torch.float32 else 1e-6
 
     if ang_factor is None:
         ang_factor = (
@@ -59,14 +59,14 @@ def test_exp_map(batch_size, dtype, ang_factor):
 
 
 # This test checks that cross products are done correctly
-@pytest.mark.parametrize("dtype", [torch.float64])
+@pytest.mark.parametrize("dtype", [torch.float32, torch.float64])
 @pytest.mark.parametrize(
     "ang_factor", [None, 1e-5, 3e-3, 2 * np.pi - 1e-11, np.pi - 1e-11]
 )
 def test_batch_size_3_exp_map(dtype, ang_factor):
     rng = torch.Generator()
     rng.manual_seed(0)
-    ATOL = 1e-3 if dtype == torch.float32 else 1e-6
+    ATOL = 1e-4 if dtype == torch.float32 else 1e-6
 
     if ang_factor is None:
         ang_factor = torch.rand(6, 1, generator=rng, dtype=dtype) * 2 * np.pi - np.pi
@@ -84,21 +84,25 @@ def test_batch_size_3_exp_map(dtype, ang_factor):
 
 
 @pytest.mark.parametrize("batch_size", [1, 20, 100])
-@pytest.mark.parametrize("dtype", [torch.float64])
+@pytest.mark.parametrize("dtype", [torch.float32, torch.float64])
 @pytest.mark.parametrize(
-    "ang_factor", [None, 1e-5, 3e-3, 2 * np.pi - 1e-11, np.pi - 1e-11]
+    "ang_factor", [None, 1e-5, 3e-3, 2 * np.pi - 1e-11, np.pi - 1e-7, np.pi - 1e-10]
 )
 def test_log_map(batch_size, dtype, ang_factor):
+    if dtype == torch.float32 and ang_factor == np.pi - 1e-10:
+        return
+
     rng = torch.Generator()
     rng.manual_seed(0)
     ATOL = 1e-3 if dtype == torch.float32 else 1e-8
+    PROJECTION_ATOL = 1e-2 if dtype == torch.float32 else 1e-8
     if ang_factor is None:
         ang_factor = (
             torch.rand(batch_size, 1, generator=rng, dtype=dtype) * 2 * np.pi - np.pi
         )
     tangent_vector = _create_tangent_vector(batch_size, ang_factor, rng, dtype)
     check_SE3_log_map(tangent_vector, atol=ATOL)
-    check_projection_for_log_map(tangent_vector, th.SE3, atol=ATOL)
+    check_projection_for_log_map(tangent_vector, th.SE3, atol=PROJECTION_ATOL)
 
 
 # This test checks that cross products are done correctly

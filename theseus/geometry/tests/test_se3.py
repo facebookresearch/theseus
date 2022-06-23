@@ -144,7 +144,7 @@ def test_compose(dtype):
         check_compose(se3_1, se3_2)
 
 
-@pytest.mark.parametrize("dtype", [torch.float64])
+@pytest.mark.parametrize("dtype", [torch.float32, torch.float64])
 def test_inverse(dtype):
     rng = torch.Generator()
     rng.manual_seed(0)
@@ -153,7 +153,7 @@ def test_inverse(dtype):
         check_inverse(se3)
 
 
-@pytest.mark.parametrize("dtype", [torch.float64])
+@pytest.mark.parametrize("dtype", [torch.float32, torch.float64])
 def test_adjoint(dtype):
     rng = torch.Generator()
     rng.manual_seed(0)
@@ -163,7 +163,7 @@ def test_adjoint(dtype):
         check_adjoint(se3, tangent)
 
 
-@pytest.mark.parametrize("dtype", [torch.float64])
+@pytest.mark.parametrize("dtype", [torch.float32, torch.float64])
 def test_transform_from_and_to(dtype):
     rng = torch.Generator()
     rng.manual_seed(0)
@@ -177,7 +177,9 @@ def test_transform_from_and_to(dtype):
                 ):
                     continue
                 se3 = th.SE3.rand(batch_size_group, generator=rng, dtype=dtype)
-                point_tensor = torch.randn(batch_size_pnt, 3, dtype=dtype)
+                point_tensor = torch.randn(
+                    batch_size_pnt, 3, generator=rng, dtype=dtype
+                )
                 point_tensor_ext = torch.cat(
                     (point_tensor, torch.ones(batch_size_pnt, 1, dtype=dtype)), dim=1
                 )
@@ -185,33 +187,44 @@ def test_transform_from_and_to(dtype):
                 jacobians_to = []
                 point_to = se3.transform_to(point_tensor, jacobians=jacobians_to)
                 expected_to = (
-                    se3.inverse().to_matrix() @ point_tensor_ext.unsqueeze(2)
-                )[:, :3]
+                    se3.inverse().to_matrix().double()
+                    @ point_tensor_ext.double().unsqueeze(2)
+                )[:, :3].squeeze(2)
                 jacobians_from = []
                 point_from = se3.transform_from(point_to, jacobians_from)
 
                 # Check the operation result
                 assert torch.allclose(
-                    expected_to.squeeze(2), point_to.data, atol=TEST_EPS
+                    expected_to, point_to.data.double(), atol=TEST_EPS
                 )
-                assert torch.allclose(point_tensor, point_from.data, atol=TEST_EPS)
+                assert torch.allclose(point_tensor, point_from.data, atol=5e-7)
 
                 # Check the jacobians
+                se3_double = se3.copy()
+                se3_double.to(torch.float64)
                 expected_jac = numeric_jacobian(
                     lambda groups: groups[0].transform_to(groups[1]),
-                    [se3, th.Point3(point_tensor)],
+                    [se3_double, th.Point3(point_tensor.double())],
                     function_dim=3,
                 )
-                assert torch.allclose(jacobians_to[0], expected_jac[0])
-                assert torch.allclose(jacobians_to[1], expected_jac[1])
+                assert torch.allclose(
+                    jacobians_to[0].double(), expected_jac[0], atol=5e-7
+                )
+                assert torch.allclose(
+                    jacobians_to[1].double(), expected_jac[1], atol=TEST_EPS
+                )
                 expected_jac = numeric_jacobian(
                     lambda groups: groups[0].transform_from(groups[1]),
-                    [se3, point_to],
+                    [se3_double, th.Vector(data=point_to.data.double())],
                     delta_mag=1e-5,
                     function_dim=3,
                 )
-                assert torch.allclose(jacobians_from[0], expected_jac[0])
-                assert torch.allclose(jacobians_from[1], expected_jac[1])
+                assert torch.allclose(
+                    jacobians_from[0].double(), expected_jac[0], atol=TEST_EPS
+                )
+                assert torch.allclose(
+                    jacobians_from[1].double(), expected_jac[1], atol=TEST_EPS
+                )
 
 
 def test_projection():

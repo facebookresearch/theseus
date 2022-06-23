@@ -64,7 +64,7 @@ def check_inverse(group):
         inverse_result.to_matrix().double(),
         atol=TEST_EPS,
     )
-    assert torch.allclose(jac[0].double(), expected_jac[0])
+    assert torch.allclose(jac[0].double(), expected_jac[0], atol=TEST_EPS)
 
 
 def check_adjoint(group, tangent_vector):

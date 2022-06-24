@@ -38,13 +38,13 @@ def check_compose(group_1, group_2):
         lambda groups: groups[0].compose(groups[1]),
         [group_1_double, group_2_double],
     )
+    batch = group_1.shape[0]
+    dof = group_1.dof()
     assert torch.allclose(composition.to_matrix(), expected_matrix, atol=TEST_EPS)
     assert torch.allclose(Jcmp[0].double(), expected_jacs[0], atol=TEST_EPS)
     assert torch.allclose(
         Jcmp[1].double(),
-        torch.eye(6, 6, dtype=torch.float64)
-        .unsqueeze(0)
-        .expand(group_1.shape[0], 6, 6),
+        torch.eye(dof, dof, dtype=torch.float64).unsqueeze(0).expand(batch, dof, dof),
         atol=TEST_EPS,
     )
     if group_1.dtype == torch.float64:

@@ -179,22 +179,16 @@ class AutoDiffCostFunction(CostFunction):
 
                 return self._err_fn(optim_vars=self._tmp_optim_vars, aux_vars=aux_vars)
 
-            jacobians_full = autogradF.jacobian(
+            jacobians_raw = autogradF.jacobian(
                 jac_fn,
                 tuple(v.data for v in optim_vars),
                 create_graph=True,
                 strict=self._autograd_strict,
                 vectorize=self._autograd_vectorize,
             )
-            aux_idx = torch.arange(err.shape[0])  # batch_size
 
-            # torch autograd returns shape (batch_size, dim, batch_size, var_dim), which
-            # includes derivatives of batches against each other.
-            # this indexing recovers only the derivatives wrt the same batch
-            jacobians = list(
-                v.project(jac[aux_idx, :, aux_idx, :], is_sparse=True)
-                for v, jac in zip(optim_vars, jacobians_full)
-            )
+            aux_idx = torch.arange(err.shape[0])  # batch_size
+            jacobians_full = [jac[aux_idx, :, aux_idx, :] for jac in jacobians_raw]
         else:
             jacobians_raw = []
             assert len(optim_vars) > 0
@@ -222,16 +216,20 @@ class AutoDiffCostFunction(CostFunction):
                 )
                 jacobians_raw.append(jacobians_n)
 
-            jacobians = list(
-                v.project(
-                    torch.cat(
-                        [jacobians_n[k][:, :, 0, :] for jacobians_n in jacobians_raw],
-                        dim=0,
-                    ),
-                    is_sparse=True,
+            jacobians_full = [
+                torch.cat(
+                    [jacobians_n[k][:, :, 0, :] for jacobians_n in jacobians_raw],
+                    dim=0,
                 )
-                for k, v in enumerate(optim_vars)
-            )
+                for k in range(len(optim_vars))
+            ]
+
+        # torch autograd returns shape (batch_size, dim, batch_size, var_dim), which
+        # includes derivatives of batches against each other.
+        # this indexing recovers only the derivatives wrt the same batch
+        jacobians = list(
+            v.project(jac, is_sparse=True) for v, jac in zip(optim_vars, jacobians_full)
+        )
 
         return jacobians, err
 

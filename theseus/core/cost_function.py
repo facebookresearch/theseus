@@ -136,14 +136,18 @@ class AutoDiffCostFunction(CostFunction):
         # during jacobian computation without modifying the original Variable objects
         self._tmp_optim_vars = tuple(v.copy() for v in optim_vars)
 
-        self._tmp_optim_vars_for_loop = tuple(v.copy() for v in optim_vars)
-        self._tmp_aux_vars_for_loop = tuple(v.copy() for v in aux_vars)
+        self._tmp_optim_vars_for_loop = None
+        self._tmp_aux_vars_for_loop = None
 
-        for i, optim_var in enumerate(optim_vars):
-            self._tmp_optim_vars_for_loop[i].update(optim_var.data)
+        if autograd_loop_over_batch:
+            self._tmp_optim_vars_for_loop = tuple(v.copy() for v in optim_vars)
+            self._tmp_aux_vars_for_loop = tuple(v.copy() for v in aux_vars)
 
-        for i, aux_var in enumerate(aux_vars):
-            self._tmp_aux_vars_for_loop[i].update(aux_var.data)
+            for i, optim_var in enumerate(optim_vars):
+                self._tmp_optim_vars_for_loop[i].update(optim_var.data)
+
+            for i, aux_var in enumerate(aux_vars):
+                self._tmp_aux_vars_for_loop[i].update(aux_var.data)
 
         self._autograd_loop_over_batch = autograd_loop_over_batch
 
@@ -250,8 +254,9 @@ class AutoDiffCostFunction(CostFunction):
         for var in self._tmp_optim_vars:
             var.to(*args, **kwargs)
 
-        for var in self._tmp_optim_vars_for_loop:
-            var.to(*args, **kwargs)
+        if self._autograd_loop_over_batch:
+            for var in self._tmp_optim_vars_for_loop:
+                var.to(*args, **kwargs)
 
-        for var in self._tmp_aux_vars_for_loop:
-            var.to(*args, **kwargs)
+            for var in self._tmp_aux_vars_for_loop:
+                var.to(*args, **kwargs)

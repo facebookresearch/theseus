@@ -4,6 +4,7 @@
 # LICENSE file in the root directory of this source tree.
 
 import copy
+from xmlrpc.client import Boolean
 
 import numpy as np
 import pytest  # noqa: F401
@@ -53,7 +54,10 @@ def test_default_name_and_ids():
     assert len(seen_ids) == reps
 
 
-def test_autodiff_cost_function_error_and_jacobians_shape():
+@pytest.mark.parametrize("autograd_loop_over_batch", [True, False])
+def test_autodiff_cost_function_error_and_jacobians_shape(
+    autograd_loop_over_batch: Boolean,
+):
     for i in range(100):
         num_optim_vars = np.random.randint(0, 5)
         num_aux_vars = np.random.randint(0, 5)
@@ -116,30 +120,28 @@ def test_autodiff_cost_function_error_and_jacobians_shape():
                 )
         else:
             # check that the error function returns the correct value
-            for autograd_loop_over_batch in [True, False]:
-                cost_function = th.AutoDiffCostFunction(
-                    optim_vars,
-                    error_fn,
-                    err_dim,
-                    cost_weight=cost_weight,
-                    aux_vars=aux_vars,
-                    autograd_loop_over_batch=autograd_loop_over_batch,
-                )
-                err = cost_function.error()
-                assert err.allclose(
-                    variable_values.sum() * torch.ones(batch_size, err_dim)
-                )
+            cost_function = th.AutoDiffCostFunction(
+                optim_vars,
+                error_fn,
+                err_dim,
+                cost_weight=cost_weight,
+                aux_vars=aux_vars,
+                autograd_loop_over_batch=autograd_loop_over_batch,
+            )
+            err = cost_function.error()
+            assert err.allclose(variable_values.sum() * torch.ones(batch_size, err_dim))
 
-                # Now checking the jacobians
-                jacobians, err_jac = cost_function.jacobians()
-                assert err_jac.allclose(err)
-                assert len(jacobians) == num_optim_vars
-                for i in range(num_optim_vars):
-                    # variable dim is i + 1 (see MockVar creation line)
-                    assert jacobians[i].shape == (batch_size, err_dim, i + 1)
+            # Now checking the jacobians
+            jacobians, err_jac = cost_function.jacobians()
+            assert err_jac.allclose(err)
+            assert len(jacobians) == num_optim_vars
+            for i in range(num_optim_vars):
+                # variable dim is i + 1 (see MockVar creation line)
+                assert jacobians[i].shape == (batch_size, err_dim, i + 1)
 
 
-def test_autodiff_cost_function_cost_weight():
+@pytest.mark.parametrize("autograd_loop_over_batch", [True, False])
+def test_autodiff_cost_function_cost_weight(autograd_loop_over_batch: Boolean):
     batch_size = 10
     optim_vars = []
     aux_vars = []
@@ -164,87 +166,89 @@ def test_autodiff_cost_function_cost_weight():
         assert len(optim_vars) > 0
         return torch.ones(optim_vars[0].shape[0], 1)
 
-    for autograd_loop_over_batch in [True, False]:
-        # test verifying default CostWeight
+    # test verifying default CostWeight
+    cost_function = th.AutoDiffCostFunction(
+        optim_vars,
+        error_fn,
+        1,
+        aux_vars=aux_vars,
+        autograd_loop_over_batch=autograd_loop_over_batch,
+    )
+    assert type(cost_function.weight).__name__ == "ScaleCostWeight"
+    assert torch.allclose(cost_function.weight.scale.data, torch.ones(1, 1))
+    weighted_error = cost_function.weighted_error()
+    assert torch.allclose(weighted_error, torch.ones(batch_size, 1))
+
+    # test overriding default CostWeight
+    for i in range(10):
+        cost_weight_value = torch.randn(1, 1)
+        cost_weight = MockCostWeight(cost_weight_value)
         cost_function = th.AutoDiffCostFunction(
             optim_vars,
             error_fn,
             1,
+            cost_weight=cost_weight,
             aux_vars=aux_vars,
-            autograd_loop_over_batch=autograd_loop_over_batch,
         )
-        assert type(cost_function.weight).__name__ == "ScaleCostWeight"
-        assert torch.allclose(cost_function.weight.scale.data, torch.ones(1, 1))
+        assert torch.allclose(cost_function.weight.the_data.data, cost_weight_value)
         weighted_error = cost_function.weighted_error()
-        assert torch.allclose(weighted_error, torch.ones(batch_size, 1))
+        direct_error_computation = cost_weight_value * torch.ones(batch_size, 1)
+        assert torch.allclose(weighted_error, direct_error_computation)
 
-        # test overriding default CostWeight
-        for i in range(10):
-            cost_weight_value = torch.randn(1, 1)
-            cost_weight = MockCostWeight(cost_weight_value)
-            cost_function = th.AutoDiffCostFunction(
-                optim_vars,
-                error_fn,
+
+@pytest.mark.parametrize("autograd_loop_over_batch", [True, False])
+def test_autodiff_cost_function_to(autograd_loop_over_batch: Boolean):
+    batch_size = 10
+    optim_vars = []
+    aux_vars = []
+
+    for i in range(5):
+        optim_vars.append(
+            MockVar(
                 1,
-                cost_weight=cost_weight,
-                aux_vars=aux_vars,
+                data=torch.ones(batch_size, 1) * torch.randn(1),
+                name=f"optim_var_{i}",
             )
-            assert torch.allclose(cost_function.weight.the_data.data, cost_weight_value)
-            weighted_error = cost_function.weighted_error()
-            direct_error_computation = cost_weight_value * torch.ones(batch_size, 1)
-            assert torch.allclose(weighted_error, direct_error_computation)
-
-
-def test_autodiff_cost_function_to():
-    for autograd_loop_over_batch in [True, False]:
-        batch_size = 10
-        optim_vars = []
-        aux_vars = []
-
-        for i in range(5):
-            optim_vars.append(
-                MockVar(
-                    1,
-                    data=torch.ones(batch_size, 1) * torch.randn(1),
-                    name=f"optim_var_{i}",
-                )
+        )
+        aux_vars.append(
+            MockVar(
+                1,
+                data=torch.ones(batch_size, 1) * torch.randn(1),
+                name=f"aux_var_{i}",
             )
-            aux_vars.append(
-                MockVar(
-                    1,
-                    data=torch.ones(batch_size, 1) * torch.randn(1),
-                    name=f"aux_var_{i}",
-                )
-            )
-
-        def error_fn(optim_vars, aux_vars):
-            res = 0
-            for var in optim_vars:
-                res += var.data
-            return res
-
-        # test verifying default CostWeight
-        cost_function = th.AutoDiffCostFunction(
-            optim_vars,
-            error_fn,
-            1,
-            aux_vars=aux_vars,
-            autograd_loop_over_batch=autograd_loop_over_batch,
         )
 
+    def error_fn(optim_vars, aux_vars):
+        res = 0
         for var in optim_vars:
-            var.to(dtype=torch.double)
+            res += var.data
+        return res
 
-        # This fails because internal vars of the cost function have not been converted
-        # to double
-        with pytest.raises(ValueError):
-            cost_function.jacobians()
+    # test verifying default CostWeight
+    cost_function = th.AutoDiffCostFunction(
+        optim_vars,
+        error_fn,
+        1,
+        aux_vars=aux_vars,
+        autograd_loop_over_batch=autograd_loop_over_batch,
+    )
 
-        cost_function.to(dtype=torch.double)
+    for var in optim_vars:
+        var.to(dtype=torch.double)
+
+    # This fails because internal vars of the cost function have not been converted
+    # to double
+    with pytest.raises(ValueError):
         cost_function.jacobians()
 
+    cost_function.to(dtype=torch.double)
+    cost_function.jacobians()
 
-def test_autodiff_cost_function_error_and_jacobians_shape_on_SO3():
+
+@pytest.mark.parametrize("autograd_loop_over_batch", [True, False])
+def test_autodiff_cost_function_error_and_jacobians_shape_on_SO3(
+    autograd_loop_over_batch: Boolean,
+):
     for i in range(100):
         num_vars = np.random.randint(0, 5)
         batch_size = np.random.randint(1, 10)
@@ -284,27 +288,29 @@ def test_autodiff_cost_function_error_and_jacobians_shape_on_SO3():
                 )
         else:
             # check that the error function returns the correct value
-            for autograd_loop_over_batch in [True, False]:
-                cost_function = th.AutoDiffCostFunction(
-                    optim_vars,
-                    error_fn,
-                    err_dim,
-                    cost_weight=cost_weight,
-                    aux_vars=aux_vars,
-                    autograd_loop_over_batch=autograd_loop_over_batch,
-                )
-                err = cost_function.error()
+            cost_function = th.AutoDiffCostFunction(
+                optim_vars,
+                error_fn,
+                err_dim,
+                cost_weight=cost_weight,
+                aux_vars=aux_vars,
+                autograd_loop_over_batch=autograd_loop_over_batch,
+            )
+            err = cost_function.error()
 
-                # Now checking the jacobians
-                jacobians, err_jac = cost_function.jacobians()
-                assert err_jac.allclose(err)
-                assert len(jacobians) == num_vars
-                for i in range(num_vars):
-                    # variable dim is i + 1 (see MockVar creation line)
-                    assert jacobians[i].shape == (batch_size, err_dim, 3)
+            # Now checking the jacobians
+            jacobians, err_jac = cost_function.jacobians()
+            assert err_jac.allclose(err)
+            assert len(jacobians) == num_vars
+            for i in range(num_vars):
+                # variable dim is i + 1 (see MockVar creation line)
+                assert jacobians[i].shape == (batch_size, err_dim, 3)
 
 
-def test_autodiff_cost_function_error_and_jacobians_value_on_SO3():
+@pytest.mark.parametrize("autograd_loop_over_batch", [True, False])
+def test_autodiff_cost_function_error_and_jacobians_value_on_SO3(
+    autograd_loop_over_batch: Boolean,
+):
     for i in range(100):
         num_vars = np.random.randint(0, 5)
         batch_size = np.random.randint(1, 10)
@@ -344,23 +350,20 @@ def test_autodiff_cost_function_error_and_jacobians_value_on_SO3():
                 )
         else:
             # check that the error function returns the correct value
-            for autograd_loop_over_batch in [True, False]:
-                cost_function = th.AutoDiffCostFunction(
-                    optim_vars,
-                    error_fn,
-                    err_dim,
-                    cost_weight=cost_weight,
-                    aux_vars=aux_vars,
-                    autograd_loop_over_batch=autograd_loop_over_batch,
-                )
-                jac_actual, err_actual = cost_function.jacobians()
+            cost_function = th.AutoDiffCostFunction(
+                optim_vars,
+                error_fn,
+                err_dim,
+                cost_weight=cost_weight,
+                aux_vars=aux_vars,
+                autograd_loop_over_batch=autograd_loop_over_batch,
+            )
+            jac_actual, err_actual = cost_function.jacobians()
 
-                err_expected = torch.zeros(batch_size, 3, dtype=torch.float64)
-                for n in torch.arange(num_vars):
-                    jac = []
-                    err_expected += (
-                        optim_vars[n].rotate(aux_vars[n], jacobians=jac).data
-                    )
-                    assert torch.allclose(jac_actual[n], jac[0])
+            err_expected = torch.zeros(batch_size, 3, dtype=torch.float64)
+            for n in torch.arange(num_vars):
+                jac = []
+                err_expected += optim_vars[n].rotate(aux_vars[n], jacobians=jac).data
+                assert torch.allclose(jac_actual[n], jac[0])
 
-                assert torch.allclose(err_actual, err_expected)
+            assert torch.allclose(err_actual, err_expected)

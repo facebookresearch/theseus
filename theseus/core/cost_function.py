@@ -4,7 +4,7 @@
 # LICENSE file in the root directory of this source tree.
 
 import abc
-from typing import Any, List, Optional, Tuple, cast
+from typing import Any, List, Optional, Sequence, Tuple, cast
 
 import torch
 import torch.autograd.functional as autogradF
@@ -104,11 +104,11 @@ class ErrFnType(Protocol):
 class AutoDiffCostFunction(CostFunction):
     def __init__(
         self,
-        optim_vars: List[Manifold],
+        optim_vars: Sequence[Manifold],
         err_fn: ErrFnType,
         dim: int,
         cost_weight: Optional[CostWeight] = None,
-        aux_vars: Optional[List[Variable]] = None,
+        aux_vars: Optional[Sequence[Variable]] = None,
         name: Optional[str] = None,
         autograd_strict: bool = False,
         autograd_vectorize: bool = False,

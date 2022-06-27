@@ -227,33 +227,38 @@ def test_transform_from_and_to(dtype):
                 )
 
 
-def test_projection():
+@pytest.mark.parametrize("dtype", [torch.float32, torch.float64])
+def test_projection(dtype):
     rng = torch.Generator()
     rng.manual_seed(0)
     for _ in range(10):  # repeat a few times
         for batch_size in [1, 20]:
             # Test SE3.transform_to
             check_projection_for_rotate_and_transform(
-                th.SE3, th.Point3, th.SE3.transform_to, batch_size, rng
+                th.SE3, th.Point3, th.SE3.transform_to, batch_size, rng, dtype=dtype
             )
 
             # Test SE3.transform_from
             check_projection_for_rotate_and_transform(
-                th.SE3, th.Point3, th.SE3.transform_from, batch_size, rng
+                th.SE3, th.Point3, th.SE3.transform_from, batch_size, rng, dtype=dtype
             )
 
             # Test SE3.compose
-            check_projection_for_compose(th.SE3, batch_size, rng)
+            check_projection_for_compose(th.SE3, batch_size, rng, dtype=dtype)
 
             # Test SE3.inverse
-            check_projection_for_inverse(th.SE3, batch_size, rng)
+            check_projection_for_inverse(th.SE3, batch_size, rng, dtype=dtype)
 
 
-@pytest.mark.parametrize("dtype", [torch.float64])
+@pytest.mark.parametrize("dtype", [torch.float32, torch.float64])
 def test_local_map(dtype):
     rng = torch.Generator()
     rng.manual_seed(0)
+    ATOL = 3e-5 if dtype == torch.float32 else 1e-7
+
     for batch_size in [1, 20, 100]:
         group0 = th.SE3.rand(batch_size, dtype=dtype)
         group1 = th.SE3.rand(batch_size, dtype=dtype)
-        check_jacobian_for_local(group0, group1, Group=th.SE3, is_projected=True)
+        check_jacobian_for_local(
+            group0, group1, Group=th.SE3, is_projected=True, atol=ATOL
+        )

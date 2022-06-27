@@ -24,12 +24,17 @@ _SO3_NEAR_ZERO_EPS = {
 }
 
 _SO3_MATRIX_EPS = {
-    torch.float32: 1e-5,
-    torch.float64: 5e-7,
+    torch.float32: 4e-4,
+    torch.float64: 1e-6,
 }
 
 _SO3_QUATERNION_EPS = {
     torch.float32: 2e-4,
+    torch.float64: 5e-7,
+}
+
+_SO3_HAT_EPS = {
+    torch.float32: 5e-6,
     torch.float64: 5e-7,
 }
 
@@ -41,4 +46,9 @@ _SE3_NEAR_PI_EPS = {
 _SE3_NEAR_ZERO_EPS = {
     torch.float32: 1e-2,
     torch.float64: 5e-3,
+}
+
+_SE3_HAT_EPS = {
+    torch.float32: 5e-6,
+    torch.float64: 5e-7,
 }

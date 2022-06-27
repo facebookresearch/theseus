@@ -83,20 +83,30 @@ def check_adjoint(group, tangent_vector):
 # Func can be SO2.rotate, SE2.transform_to, SO3.unrotate, etc., whose third argument
 # populates the jacobians
 def check_projection_for_rotate_and_transform(
-    Group, Point, Func, batch_size, generator=None
+    Group, Point, Func, batch_size, generator=None, dtype=torch.float64
 ):
-    group = Group.rand(batch_size, generator=generator, dtype=torch.float64)
-    point = Point.rand(batch_size, generator=generator, dtype=torch.float64)
+    group_double = Group.rand(batch_size, generator=generator, dtype=torch.float64)
+    point_double = Point.rand(batch_size, generator=generator, dtype=torch.float64)
+    group = group_double.copy()
+    group.to(dtype)
+    point = point_double.copy()
+    point.to(dtype)
 
     def func(g, p):
         return Func(Group(data=g), p).data
 
-    jac_raw = torch.autograd.functional.jacobian(func, (group.data, point.data))
+    jac_raw = torch.autograd.functional.jacobian(
+        func, (group_double.data, point_double.data)
+    )
+
+    if dtype == torch.float32:
+        jac_raw = [jac_raw_n.float() for jac_raw_n in jac_raw]
+
     jac = []
 
     # Check returns
     rets = Func(group, point, jac)
-    assert torch.allclose(rets.data, func(group.data, point.data))
+    assert torch.allclose(rets.data.double(), func(group.data, point.data).double())
 
     # Check dense jacobian matrices
     actual = [group.project(jac_raw[0]), point.project(jac_raw[1])]
@@ -108,11 +118,11 @@ def check_projection_for_rotate_and_transform(
 
     aux_id = torch.arange(batch_size)
 
-    expected[0][aux_id, :, aux_id, :] = jac[0]
-    expected[1][aux_id, :, aux_id, :] = jac[1]
+    expected[0][aux_id, :, aux_id, :] = jac[0].double()
+    expected[1][aux_id, :, aux_id, :] = jac[1].double()
 
-    assert torch.allclose(actual[0], expected[0])
-    assert torch.allclose(actual[1], expected[1])
+    assert torch.allclose(actual[0].double(), expected[0], atol=TEST_EPS)
+    assert torch.allclose(actual[1].double(), expected[1], atol=TEST_EPS)
 
     # Check sparse jacobian matrices
     actual = [
@@ -121,13 +131,19 @@ def check_projection_for_rotate_and_transform(
     ]
 
     expected = jac
-    assert torch.allclose(actual[0], expected[0])
-    assert torch.allclose(actual[1], expected[1])
+    assert torch.allclose(actual[0], expected[0], atol=TEST_EPS)
+    assert torch.allclose(actual[1], expected[1], atol=TEST_EPS)
 
 
-def check_projection_for_compose(Group, batch_size, generator=None):
-    group1 = Group.rand(batch_size, generator=generator, dtype=torch.float64)
-    group2 = Group.rand(batch_size, generator=generator, dtype=torch.float64)
+def check_projection_for_compose(
+    Group, batch_size, generator=None, dtype=torch.float64
+):
+    group1_double = Group.rand(batch_size, generator=generator, dtype=torch.float64)
+    group2_double = Group.rand(batch_size, generator=generator, dtype=torch.float64)
+    group1 = group1_double.copy()
+    group1.to(dtype)
+    group2 = group2_double.copy()
+    group2.to(dtype)
 
     jac = []
     rets = group1.compose(group2, jacobians=jac)
@@ -135,20 +151,21 @@ def check_projection_for_compose(Group, batch_size, generator=None):
     def func(g1, g2):
         return Group(data=g1).compose(Group(data=g2)).to_matrix()
 
-    jac_raw = torch.autograd.functional.jacobian(func, (group1.data, group2.data))
+    jac_raw = torch.autograd.functional.jacobian(
+        func, (group1_double.data, group2_double.data)
+    )
 
     # Check returns
     assert torch.allclose(rets.to_matrix(), func(group1.data, group2.data))
 
     # Check for dense jacobian matrices
+    if dtype == torch.float32:
+        jac_raw = [jac_raw_n.float() for jac_raw_n in jac_raw]
+
     temp = [group1.project(jac_raw[0]), group2.project(jac_raw[1])]
     actual = [
-        torch.zeros(
-            batch_size, rets.dof(), batch_size, rets.dof(), dtype=torch.float64
-        ),
-        torch.zeros(
-            batch_size, rets.dof(), batch_size, rets.dof(), dtype=torch.float64
-        ),
+        torch.zeros(batch_size, rets.dof(), batch_size, rets.dof(), dtype=dtype),
+        torch.zeros(batch_size, rets.dof(), batch_size, rets.dof(), dtype=dtype),
     ]
 
     for n in torch.arange(batch_size):
@@ -161,12 +178,8 @@ def check_projection_for_compose(Group, batch_size, generator=None):
             )
 
     expected = [
-        torch.zeros(
-            batch_size, rets.dof(), batch_size, rets.dof(), dtype=torch.float64
-        ),
-        torch.zeros(
-            batch_size, rets.dof(), batch_size, rets.dof(), dtype=torch.float64
-        ),
+        torch.zeros(batch_size, rets.dof(), batch_size, rets.dof(), dtype=dtype),
+        torch.zeros(batch_size, rets.dof(), batch_size, rets.dof(), dtype=dtype),
     ]
 
     aux_id = torch.arange(batch_size)
@@ -183,8 +196,8 @@ def check_projection_for_compose(Group, batch_size, generator=None):
         group2.project(jac_raw[1][aux_id, :, :, aux_id], is_sparse=True),
     ]
     actual = [
-        torch.zeros(batch_size, rets.dof(), rets.dof(), dtype=torch.float64),
-        torch.zeros(batch_size, rets.dof(), rets.dof(), dtype=torch.float64),
+        torch.zeros(batch_size, rets.dof(), rets.dof(), dtype=dtype),
+        torch.zeros(batch_size, rets.dof(), rets.dof(), dtype=dtype),
     ]
 
     for i in torch.arange(rets.dof()):
@@ -193,12 +206,16 @@ def check_projection_for_compose(Group, batch_size, generator=None):
 
     expected = jac
 
-    assert torch.allclose(actual[0], expected[0])
-    assert torch.allclose(actual[1], expected[1])
+    assert torch.allclose(actual[0], expected[0], atol=TEST_EPS)
+    assert torch.allclose(actual[1], expected[1], atol=TEST_EPS)
 
 
-def check_projection_for_inverse(Group, batch_size, generator=None):
-    group = Group.rand(batch_size, generator=generator, dtype=torch.float64)
+def check_projection_for_inverse(
+    Group, batch_size, generator=None, dtype=torch.float64
+):
+    group_double = Group.rand(batch_size, generator=generator, dtype=torch.float64)
+    group = group_double.copy()
+    group.to(dtype)
 
     jac = []
     rets = group.inverse(jacobian=jac)
@@ -206,41 +223,42 @@ def check_projection_for_inverse(Group, batch_size, generator=None):
     def func(g):
         return Group(data=g).inverse().to_matrix()
 
-    jac_raw = torch.autograd.functional.jacobian(func, (group.data))
+    jac_raw = torch.autograd.functional.jacobian(func, (group_double.data))
+
+    if dtype == torch.float32:
+        jac_raw = jac_raw.float()
 
     # Check returns
-    assert torch.allclose(rets.to_matrix(), func(group.data))
+    assert torch.allclose(rets.to_matrix(), func(group.data), atol=TEST_EPS)
 
     # Check for dense jacobian matrices
     temp = group.project(jac_raw)
-    actual = torch.zeros(
-        batch_size, group.dof(), batch_size, group.dof(), dtype=torch.float64
-    )
+    actual = torch.zeros(batch_size, group.dof(), batch_size, group.dof(), dtype=dtype)
 
     for n in torch.arange(batch_size):
         for i in torch.arange(group.dof()):
             actual[:, :, n, i] = group.vee(group.to_matrix() @ temp[:, :, :, n, i])
 
     expected = torch.zeros(
-        batch_size, group.dof(), batch_size, group.dof(), dtype=torch.float64
+        batch_size, group.dof(), batch_size, group.dof(), dtype=dtype
     )
 
     aux_id = torch.arange(batch_size)
 
     expected[aux_id, :, aux_id, :] = jac[0]
 
-    assert torch.allclose(actual, expected)
+    assert torch.allclose(actual, expected, atol=TEST_EPS)
 
     # Check for sparse jacobian matrices
     temp = group.project(jac_raw[aux_id, :, :, aux_id], is_sparse=True)
-    actual = torch.zeros(batch_size, group.dof(), group.dof(), dtype=torch.float64)
+    actual = torch.zeros(batch_size, group.dof(), group.dof(), dtype=dtype)
 
     for i in torch.arange(group.dof()):
         actual[:, :, i] = group.vee(group.to_matrix() @ temp[:, :, :, i])
 
     expected = jac[0]
 
-    assert torch.allclose(actual, expected)
+    assert torch.allclose(actual, expected, atol=TEST_EPS)
 
 
 def check_projection_for_exp_map(tangent_vector, Group, is_projected=True, atol=1e-8):
@@ -299,18 +317,26 @@ def check_projection_for_log_map(tangent_vector, Group, is_projected=True, atol=
     assert torch.allclose(actual[0].double(), expected, atol=atol)
 
 
-def check_jacobian_for_local(group0, group1, Group, is_projected=True, atol=1e-8):
+def check_jacobian_for_local(group0, group1, Group, is_projected=True, atol=TEST_EPS):
     batch_size = group0.shape[0]
     aux_id = torch.arange(batch_size)
+
+    group0_double = group0.copy()
+    group0_double.to(torch.float64)
+    group1_double = group1.copy()
+    group1_double.to(torch.float64)
 
     def local_func(group0, group1):
         return Group(data=group0).local(Group(data=group1))
 
-    jac_raw = torch.autograd.functional.jacobian(local_func, (group0.data, group1.data))
+    jac_raw = torch.autograd.functional.jacobian(
+        local_func, (group0_double.data, group1_double.data)
+    )
+
     if is_projected:
         expected = [
-            group0.project(jac_raw[0][aux_id, :, aux_id], is_sparse=True),
-            group1.project(jac_raw[1][aux_id, :, aux_id], is_sparse=True),
+            group0_double.project(jac_raw[0][aux_id, :, aux_id], is_sparse=True),
+            group1_double.project(jac_raw[1][aux_id, :, aux_id], is_sparse=True),
         ]
     else:
         expected = [jac_raw[0][aux_id, :, aux_id], jac_raw[1][aux_id, :, aux_id]]
@@ -318,5 +344,5 @@ def check_jacobian_for_local(group0, group1, Group, is_projected=True, atol=1e-8
     actual = []
     _ = group0.local(group1, jacobians=actual)
 
-    assert torch.allclose(actual[0], expected[0], atol=atol)
-    assert torch.allclose(actual[1], expected[1], atol=atol)
+    assert torch.allclose(actual[0].double(), expected[0], atol=atol)
+    assert torch.allclose(actual[1].double(), expected[1], atol=atol)

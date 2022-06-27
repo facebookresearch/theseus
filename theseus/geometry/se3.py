@@ -171,15 +171,17 @@ class SE3(LieGroup):
 
     @staticmethod
     def _hat_matrix_check(matrix: torch.Tensor):
+        HAT_EPS = theseus.constants._SE3_HAT_EPS[matrix.dtype]
+
         if matrix.ndim != 3 or matrix.shape[1:] != (4, 4):
             raise ValueError("Hat matrices of SE(3) can only be 4x4 matrices")
 
-        if matrix[:, 3].abs().max().item() > theseus.constants.EPS:
+        if matrix[:, 3].abs().max().item() > HAT_EPS:
             raise ValueError("The last row of hat matrices of SE(3) can only be zero.")
 
         if (
             matrix[:, :3, :3].transpose(1, 2) + matrix[:, :3, :3]
-        ).abs().max().item() > theseus.constants.EPS:
+        ).abs().max().item() > HAT_EPS:
             raise ValueError(
                 "The 3x3 top-left corner of hat matrices of SE(3) can only be skew-symmetric."
             )

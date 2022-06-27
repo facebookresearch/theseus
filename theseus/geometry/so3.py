@@ -14,8 +14,6 @@ from .point_types import Point3
 
 
 class SO3(LieGroup):
-    SO3_EPS = 5e-7
-
     def __init__(
         self,
         quaternion: Optional[torch.Tensor] = None,
@@ -33,6 +31,12 @@ class SO3(LieGroup):
         super().__init__(data=data, name=name, dtype=dtype)
         if quaternion is not None:
             self.update_from_unit_quaternion(quaternion)
+
+        self._resolve_eps()
+
+    def _resolve_eps(self):
+        self._NEAR_ZERO_EPS = theseus.constants._SO3_NEAR_ZERO_EPS[self.data.dtype]
+        self._NEAR_PI_EPS = theseus.constants._SO3_NEAR_PI_EPS[self.data.dtype]
 
     @staticmethod
     def rand(
@@ -119,14 +123,23 @@ class SO3(LieGroup):
         return ret
 
     @staticmethod
-    def _SO3_matrix_check(matrix: torch.Tensor):
+    def _SO3_matrix_check(
+        matrix: torch.Tensor, EPS=theseus.constants._SO3_MATRIX_EPS[torch.float64]
+    ):
         if matrix.ndim != 3 or matrix.shape[1:] != (3, 3):
             raise ValueError("3D rotations can only be 3x3 matrices.")
+
+        if matrix.dtype != torch.float64:
+            SO3._SO3_matrix_check(
+                matrix.double(), theseus.constants._SO3_MATRIX_EPS[matrix.dtype]
+            )
+            return
+
         _check = (
             torch.matmul(matrix, matrix.transpose(1, 2))
             - torch.eye(3, 3, dtype=matrix.dtype, device=matrix.device)
-        ).abs().max().item() < SO3.SO3_EPS
-        _check &= (torch.linalg.det(matrix) - 1).abs().max().item() < SO3.SO3_EPS
+        ).abs().max().item() < EPS
+        _check &= (torch.linalg.det(matrix) - 1).abs().max().item() < EPS
 
         if not _check:
             raise ValueError("Not valid 3D rotations.")
@@ -136,7 +149,9 @@ class SO3(LieGroup):
         if quaternion.ndim != 2 or quaternion.shape[1] != 4:
             raise ValueError("Quaternions can only be 4-D vectors.")
 
-        if (torch.linalg.norm(quaternion, dim=1) - 1).abs().max().item() >= SO3.SO3_EPS:
+        if (
+            torch.linalg.norm(quaternion, dim=1) - 1
+        ).abs().max().item() >= theseus.constants._SO3_QUATERNION_EPS[quaternion.dtype]:
             raise ValueError("Not unit quaternions.")
 
     @staticmethod
@@ -144,7 +159,9 @@ class SO3(LieGroup):
         if matrix.ndim != 3 or matrix.shape[1:] != (3, 3):
             raise ValueError("Hat matrices of SO(3) can only be 3x3 matrices")
 
-        if (matrix.transpose(1, 2) + matrix).abs().max().item() > theseus.constants.EPS:
+        if (
+            matrix.transpose(1, 2) + matrix
+        ).abs().max().item() > theseus.constants._SO3_HAT_EPS[matrix.dtype]:
             raise ValueError("Hat matrices of SO(3) can only be skew-symmetric.")
 
     @staticmethod
@@ -157,12 +174,13 @@ class SO3(LieGroup):
         theta = torch.linalg.norm(tangent_vector, dim=1, keepdim=True).unsqueeze(1)
         theta2 = theta**2
         # Compute the approximations when theta ~ 0
-        near_zero = theta < 0.005
+        near_zero = theta < theseus.constants._SO3_NEAR_ZERO_EPS[tangent_vector.dtype]
         non_zero = torch.ones(
             1, dtype=tangent_vector.dtype, device=tangent_vector.device
         )
         theta_nz = torch.where(near_zero, non_zero, theta)
         theta2_nz = torch.where(near_zero, non_zero, theta2)
+
         cosine = torch.where(near_zero, 8 / (4 + theta2) - 1, theta.cos())
         sine = theta.sin()
         sine_by_theta = torch.where(near_zero, 0.5 * cosine + 0.5, sine / theta_nz)
@@ -174,6 +192,7 @@ class SO3(LieGroup):
             * tangent_vector.view(-1, 3, 1)
             @ tangent_vector.view(-1, 1, 3)
         )
+
         ret[:, 0, 0] += cosine.view(-1)
         ret[:, 1, 1] += cosine.view(-1)
         ret[:, 2, 2] += cosine.view(-1)
@@ -223,9 +242,9 @@ class SO3(LieGroup):
         sine = sine_axis.norm(dim=1)
         theta = torch.atan2(sine, cosine)
 
-        near_zero = theta < 5e-3
+        near_zero = theta < self._NEAR_ZERO_EPS
 
-        not_near_pi = 1 + cosine > 1e-7
+        not_near_pi = 1 + cosine > self._NEAR_PI_EPS
         # theta != pi
         near_zero_not_near_pi = near_zero[not_near_pi]
         # Compute the approximation of theta / sin(theta) when theta is near to 0
@@ -317,7 +336,7 @@ class SO3(LieGroup):
         ret[:, 0] = w
 
         # theta != pi
-        not_near_pi = ret[:, 0] > 1e-5
+        not_near_pi = ret[:, 0] > self._NEAR_PI_EPS
         ret[:, 1:] = 0.5 * sine_axis / w.view(-1, 1)
 
         # theta ~ pi

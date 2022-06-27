@@ -54,7 +54,7 @@ def test_exp_map(batch_size, dtype, ang_factor):
             torch.rand(batch_size, 1, generator=rng, dtype=dtype) * 2 * np.pi - np.pi
         )
     tangent_vector = _create_tangent_vector(batch_size, ang_factor, rng, dtype)
-    check_exp_map(tangent_vector, th.SE3, ATOL)
+    check_exp_map(tangent_vector, th.SE3, atol=ATOL)
     check_projection_for_exp_map(tangent_vector, th.SE3, atol=ATOL)
 
 
@@ -153,14 +153,14 @@ def test_inverse(dtype):
         check_inverse(se3)
 
 
+@pytest.mark.parametrize("batch_size", [1, 20, 100])
 @pytest.mark.parametrize("dtype", [torch.float32, torch.float64])
-def test_adjoint(dtype):
+def test_adjoint(batch_size, dtype):
     rng = torch.Generator()
     rng.manual_seed(0)
-    for batch_size in [1, 20, 100]:
-        se3 = th.SE3.rand(batch_size, generator=rng, dtype=dtype)
-        tangent = torch.randn(batch_size, 6, generator=rng, dtype=dtype)
-        check_adjoint(se3, tangent)
+    se3 = th.SE3.rand(batch_size, generator=rng, dtype=dtype)
+    tangent = torch.randn(batch_size, 6, generator=rng, dtype=dtype)
+    check_adjoint(se3, tangent)
 
 
 @pytest.mark.parametrize("dtype", [torch.float32, torch.float64])

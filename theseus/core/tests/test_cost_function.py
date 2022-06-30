@@ -4,7 +4,6 @@
 # LICENSE file in the root directory of this source tree.
 
 import copy
-from xmlrpc.client import Boolean
 
 import numpy as np
 import pytest  # noqa: F401
@@ -56,9 +55,7 @@ def test_default_name_and_ids():
 
 
 @pytest.mark.parametrize("autograd_loop_over_batch", [True, False])
-def test_autodiff_cost_function_error_and_jacobians_shape(
-    autograd_loop_over_batch: Boolean,
-):
+def test_autodiff_cost_function_error_and_jacobians_shape(autograd_loop_over_batch):
     for i in range(100):
         num_optim_vars = np.random.randint(0, 5)
         num_aux_vars = np.random.randint(0, 5)
@@ -142,7 +139,7 @@ def test_autodiff_cost_function_error_and_jacobians_shape(
 
 
 @pytest.mark.parametrize("autograd_loop_over_batch", [True, False])
-def test_autodiff_cost_function_cost_weight(autograd_loop_over_batch: Boolean):
+def test_autodiff_cost_function_cost_weight(autograd_loop_over_batch):
     batch_size = 10
     optim_vars = []
     aux_vars = []
@@ -199,7 +196,7 @@ def test_autodiff_cost_function_cost_weight(autograd_loop_over_batch: Boolean):
 
 
 @pytest.mark.parametrize("autograd_loop_over_batch", [True, False])
-def test_autodiff_cost_function_to(autograd_loop_over_batch: Boolean):
+def test_autodiff_cost_function_to(autograd_loop_over_batch):
     batch_size = 10
     optim_vars = []
     aux_vars = []
@@ -249,7 +246,7 @@ def test_autodiff_cost_function_to(autograd_loop_over_batch: Boolean):
 
 @pytest.mark.parametrize("autograd_loop_over_batch", [True, False])
 def test_autodiff_cost_function_error_and_jacobians_shape_on_SO3(
-    autograd_loop_over_batch: Boolean,
+    autograd_loop_over_batch,
 ):
     for i in range(100):
         num_vars = np.random.randint(0, 5)
@@ -311,7 +308,7 @@ def test_autodiff_cost_function_error_and_jacobians_shape_on_SO3(
 
 @pytest.mark.parametrize("autograd_loop_over_batch", [True, False])
 def test_autodiff_cost_function_error_and_jacobians_value_on_SO3(
-    autograd_loop_over_batch: Boolean,
+    autograd_loop_over_batch,
 ):
     for i in range(100):
         num_vars = np.random.randint(0, 5)

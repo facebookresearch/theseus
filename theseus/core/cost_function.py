@@ -4,7 +4,7 @@
 # LICENSE file in the root directory of this source tree.
 
 import abc
-from typing import Any, List, Optional, Sequence, Tuple, cast
+from typing import Any, Callable, List, Optional, Sequence, Tuple, cast
 
 import torch
 import torch.autograd.functional as autogradF
@@ -166,61 +166,56 @@ class AutoDiffCostFunction(CostFunction):
     def error(self) -> torch.Tensor:
         return self._compute_error()[0]
 
+    def _make_jac_fn(
+        self, tmp_optim_vars: Tuple[Manifold, ...], tmp_aux_vars: Tuple[Variable, ...]
+    ) -> Callable:
+        def jac_fn(*optim_vars_data_):
+            assert len(optim_vars_data_) == len(tmp_optim_vars)
+            for i, tensor in enumerate(optim_vars_data_):
+                tmp_optim_vars[i].update(tensor)
+
+            return self._err_fn(optim_vars=tmp_optim_vars, aux_vars=tmp_aux_vars)
+
+        return jac_fn
+
+    def _compute_autograd_jacobian(
+        self, optim_tensors: Tuple[torch.Tensor, ...], jac_fn: Callable
+    ) -> Tuple[torch.Tensor, ...]:
+        return autogradF.jacobian(
+            jac_fn,
+            optim_tensors,
+            create_graph=True,
+            strict=self._autograd_strict,
+            vectorize=self._autograd_vectorize,
+        )
+
     # Returns (jacobians, error)
     def jacobians(self) -> Tuple[List[torch.Tensor], torch.Tensor]:
         err, optim_vars, aux_vars = self._compute_error()
 
         if not self._autograd_loop_over_batch:
-            # this receives a list of torch tensors with data to set for tmp_optim_vars
-            def jac_fn(*optim_vars_data_):
-                assert len(optim_vars_data_) == len(self._tmp_optim_vars)
-                for i, tensor in enumerate(optim_vars_data_):
-                    self._tmp_optim_vars[i].update(tensor)
-
-                return self._err_fn(optim_vars=self._tmp_optim_vars, aux_vars=aux_vars)
-
-            jacobians_raw = autogradF.jacobian(
-                jac_fn,
+            jacobians_raw = self._compute_autograd_jacobian(
                 tuple(v.data for v in optim_vars),
-                create_graph=True,
-                strict=self._autograd_strict,
-                vectorize=self._autograd_vectorize,
+                self._make_jac_fn(self._tmp_optim_vars, aux_vars),
             )
-
             aux_idx = torch.arange(err.shape[0])  # batch_size
             jacobians_full = [jac[aux_idx, :, aux_idx, :] for jac in jacobians_raw]
         else:
-            jacobians_raw = []
-            assert len(optim_vars) > 0
-
+            jacobians_raw_loop: List[Tuple[torch.Tensor, ...]] = []
             for n in range(optim_vars[0].shape[0]):
                 for i, aux_var in enumerate(aux_vars):
                     self._tmp_aux_vars_for_loop[i].update(aux_var.data[n : n + 1])
 
-                def jac_fn_n(*optim_vars_data_n_):
-                    assert len(optim_vars_data_n_) == len(self._tmp_optim_vars_for_loop)
-                    for i, tensor in enumerate(optim_vars_data_n_):
-                        self._tmp_optim_vars_for_loop[i].update(tensor)
-
-                    return self._err_fn(
-                        optim_vars=self._tmp_optim_vars_for_loop,
-                        aux_vars=self._tmp_aux_vars_for_loop,
-                    )
-
-                jacobians_n = autogradF.jacobian(
-                    jac_fn_n,
+                jacobians_n = self._compute_autograd_jacobian(
                     tuple(v.data[n : n + 1] for v in optim_vars),
-                    create_graph=True,
-                    strict=self._autograd_strict,
-                    vectorize=self._autograd_vectorize,
+                    self._make_jac_fn(
+                        self._tmp_optim_vars_for_loop, self._tmp_aux_vars_for_loop
+                    ),
                 )
-                jacobians_raw.append(jacobians_n)
+                jacobians_raw_loop.append(jacobians_n)
 
             jacobians_full = [
-                torch.cat(
-                    [jacobians_n[k][:, :, 0, :] for jacobians_n in jacobians_raw],
-                    dim=0,
-                )
+                torch.cat([jac[k][:, :, 0, :] for jac in jacobians_raw_loop], dim=0)
                 for k in range(len(optim_vars))
             ]
 

@@ -11,6 +11,7 @@ import pytest  # noqa: F401
 import torch
 
 import theseus as th
+from theseus.core.cost_weight import ScaleCostWeight
 
 from .common import (
     MockCostFunction,
@@ -174,7 +175,7 @@ def test_autodiff_cost_function_cost_weight(autograd_loop_over_batch: Boolean):
         aux_vars=aux_vars,
         autograd_loop_over_batch=autograd_loop_over_batch,
     )
-    assert type(cost_function.weight).__name__ == "ScaleCostWeight"
+    assert isinstance(cost_function.weight, ScaleCostWeight)
     assert torch.allclose(cost_function.weight.scale.data, torch.ones(1, 1))
     weighted_error = cost_function.weighted_error()
     assert torch.allclose(weighted_error, torch.ones(batch_size, 1))
@@ -190,7 +191,8 @@ def test_autodiff_cost_function_cost_weight(autograd_loop_over_batch: Boolean):
             cost_weight=cost_weight,
             aux_vars=aux_vars,
         )
-        assert torch.allclose(cost_function.weight.the_data.data, cost_weight_value)
+        assert cost_function.weight is cost_weight
+        assert torch.allclose(cost_function.weight.the_data.data, cost_weight_value)  # type: ignore
         weighted_error = cost_function.weighted_error()
         direct_error_computation = cost_weight_value * torch.ones(batch_size, 1)
         assert torch.allclose(weighted_error, direct_error_computation)
@@ -362,7 +364,7 @@ def test_autodiff_cost_function_error_and_jacobians_value_on_SO3(
 
             err_expected = torch.zeros(batch_size, 3, dtype=torch.float64)
             for n in torch.arange(num_vars):
-                jac = []
+                jac = []  # type: ignore
                 err_expected += optim_vars[n].rotate(aux_vars[n], jacobians=jac).data
                 assert torch.allclose(jac_actual[n], jac[0])
 

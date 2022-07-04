@@ -755,12 +755,8 @@ if __name__ == "__main__":
 
     # fg.compute_all_messages()
 
-    import ipdb
-
-    ipdb.set_trace()
-
     # i = 0
-    n_iters = 5
+    n_iters = 20
     while i <= n_iters:
         # img = draw(i)
         # cv2.imshow('img', img)
@@ -776,10 +772,4 @@ if __name__ == "__main__":
         #     for m in f.messages:
         #         print(np.linalg.inv(m.lam) @ m.eta)
 
-        print(fg.belief_means())
-
-        import ipdb
-
-        ipdb.set_trace()
-
-        # time.sleep(0.05)
+    print(fg.belief_means())

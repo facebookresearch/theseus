@@ -124,9 +124,7 @@ def run(cfg: omegaconf.OmegaConf):
             else:
                 assert False
             objective.add(
-                th.Difference(
-                    var, damping_weight, target, name=f"reg_{name}"
-                )
+                th.Difference(var, damping_weight, target, name=f"reg_{name}")
             )
 
     camera_pose_vars: List[th.LieGroup] = [
@@ -156,6 +154,9 @@ def run(cfg: omegaconf.OmegaConf):
         max_iterations=cfg["inner_optim"]["max_iters"],
     )
     theseus_optim = th.TheseusLayer(optimizer)
+
+    # device = "cuda" if torch.cuda.is_available() else "cpu"
+    # theseus_optim.to(device)
 
     optim_arg = {
         "track_best_solution": True,

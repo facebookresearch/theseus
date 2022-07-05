@@ -288,29 +288,48 @@ class Vectorize:
                 cf._cached_error = None
                 cf._cached_jacobians = None
 
+    # This could be a static method, but writing like this makes some unit tests
+    # easier
+    def _handle_singleton_wrapper(
+        self, _: _CostFunctionSchema, cost_fn_wrappers: List[_CostFunctionWrapper]
+    ):
+        wrapper = cost_fn_wrappers[0]
+        (
+            wrapper._cached_jacobians,
+            wrapper._cached_error,
+        ) = wrapper.cost_fn.weighted_jacobians_error()
+
+    def _handle_schema_vectorization(
+        self, schema: _CostFunctionSchema, cost_fn_wrappers: List[_CostFunctionWrapper]
+    ):
+        var_names = self._var_names[schema]
+        vectorized_cost_fn = self._vectorized_cost_fns[schema]
+        all_vectorized_vars = Vectorize._get_all_vars(vectorized_cost_fn)
+        assert len(all_vectorized_vars) == len(var_names)
+        names_to_data: Dict[str, List[torch.Tensor]] = defaultdict(list)
+        batch_size = self._objective.batch_size
+
+        Vectorize._update_all_cost_fns_var_data(
+            cost_fn_wrappers, var_names, batch_size, names_to_data
+        )
+        Vectorize._update_vectorized_vars(
+            all_vectorized_vars,
+            names_to_data,
+            var_names,
+            batch_size,
+            len(cost_fn_wrappers),
+        )
+        Vectorize._compute_error_and_replace_wrapper_caches(
+            vectorized_cost_fn, cost_fn_wrappers, batch_size
+        )
+
     def _vectorize(self):
         self._clear_wrapper_caches()
         for schema, cost_fn_wrappers in self._schema_dict.items():
-            var_names = self._var_names[schema]
-            vectorized_cost_fn = self._vectorized_cost_fns[schema]
-            all_vectorized_vars = Vectorize._get_all_vars(vectorized_cost_fn)
-            assert len(all_vectorized_vars) == len(var_names)
-            names_to_data: Dict[str, List[torch.Tensor]] = defaultdict(list)
-            batch_size = self._objective.batch_size
-
-            Vectorize._update_all_cost_fns_var_data(
-                cost_fn_wrappers, var_names, batch_size, names_to_data
-            )
-            Vectorize._update_vectorized_vars(
-                all_vectorized_vars,
-                names_to_data,
-                var_names,
-                batch_size,
-                len(cost_fn_wrappers),
-            )
-            Vectorize._compute_error_and_replace_wrapper_caches(
-                vectorized_cost_fn, cost_fn_wrappers, batch_size
-            )
+            if len(cost_fn_wrappers) == 1:
+                self._handle_singleton_wrapper(schema, cost_fn_wrappers)
+            else:
+                self._handle_schema_vectorization(schema, cost_fn_wrappers)
 
     @staticmethod
     def _vectorized_retract_optim_vars(

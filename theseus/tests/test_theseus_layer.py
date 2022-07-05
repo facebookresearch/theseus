@@ -86,6 +86,7 @@ def create_qf_theseus_layer(
     linear_solver_cls=th.CholeskyDenseSolver,
     max_iterations=10,
     use_learnable_error=False,
+    force_vectorization=False,
 ):
     variables = [th.Vector(2, name="coefficients")]
     objective = th.Objective()
@@ -137,8 +138,15 @@ def create_qf_theseus_layer(
     )
     assert isinstance(optimizer.linear_solver, linear_solver_cls)
     assert not objective.vectorized
+
+    if force_vectorization:
+        th.Vectorize._handle_singleton_wrapper = (
+            th.Vectorize._handle_schema_vectorization
+        )
+
     theseus_layer = th.TheseusLayer(optimizer, vectorize=True)
     assert objective.vectorized
+
     return theseus_layer
 
 
@@ -183,6 +191,7 @@ def _run_optimizer_test(
     use_learnable_error=False,
     verbose=True,
     learning_method="default",
+    force_vectorization=False,
 ):
     device = "cuda:0" if torch.cuda.is_available() else "cpu"
     print(f"_run_test_for: {device}")
@@ -217,6 +226,7 @@ def _run_optimizer_test(
         nonlinear_optimizer_cls=nonlinear_optimizer_cls,
         linear_solver_cls=linear_solver_cls,
         use_learnable_error=use_learnable_error,
+        force_vectorization=force_vectorization,
     )
     layer_ref.to(device)
     with torch.no_grad():
@@ -267,6 +277,7 @@ def _run_optimizer_test(
         nonlinear_optimizer_cls=nonlinear_optimizer_cls,
         linear_solver_cls=linear_solver_cls,
         use_learnable_error=use_learnable_error,
+        force_vectorization=force_vectorization,
     )
     layer_to_learn.to(device)
 
@@ -365,6 +376,7 @@ def test_backward_gauss_newton():
                     {},
                     cost_weight_model,
                     use_learnable_error=use_learnable_error,
+                    force_vectorization=True,
                 )
 
 
@@ -402,6 +414,7 @@ def test_backward_levenberg_marquardt_choleskysparse():
                 {"damping": 0.01, "ellipsoidal_damping": False},
                 cost_weight_model,
                 use_learnable_error=use_learnable_error,
+                force_vectorization=True,
             )
 
 

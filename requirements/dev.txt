@@ -6,3 +6,5 @@ pre-commit>=2.9.2
 isort>=5.6.4
 types-PyYAML==5.4.3
 types-mock>=4.0.8
+Sphinx>=5.0.2
+sphinx-rtd-theme>=1.0.0

@@ -145,6 +145,9 @@ class SO3(LieGroup):
         if quaternion.ndim != 2 or quaternion.shape[1] != 4:
             raise ValueError("Quaternions can only be 4-D vectors.")
 
+        if quaternion.dtype != torch.float64:
+            quaternion = quaternion.double()
+
         if (
             torch.linalg.norm(quaternion, dim=1) - 1
         ).abs().max().item() >= theseus.constants._SO3_QUATERNION_EPS[quaternion.dtype]:

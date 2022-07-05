@@ -193,14 +193,7 @@ class AutoDiffCostFunction(CostFunction):
     def jacobians(self) -> Tuple[List[torch.Tensor], torch.Tensor]:
         err, optim_vars, aux_vars = self._compute_error()
 
-        if not self._autograd_loop_over_batch:
-            jacobians_raw = self._compute_autograd_jacobian(
-                tuple(v.data for v in optim_vars),
-                self._make_jac_fn(self._tmp_optim_vars, aux_vars),
-            )
-            aux_idx = torch.arange(err.shape[0])  # batch_size
-            jacobians_full = [jac[aux_idx, :, aux_idx, :] for jac in jacobians_raw]
-        else:
+        if self._autograd_loop_over_batch:
             jacobians_raw_loop: List[Tuple[torch.Tensor, ...]] = []
             for n in range(optim_vars[0].shape[0]):
                 for i, aux_var in enumerate(aux_vars):
@@ -218,6 +211,13 @@ class AutoDiffCostFunction(CostFunction):
                 torch.cat([jac[k][:, :, 0, :] for jac in jacobians_raw_loop], dim=0)
                 for k in range(len(optim_vars))
             ]
+        else:
+            jacobians_raw = self._compute_autograd_jacobian(
+                tuple(v.data for v in optim_vars),
+                self._make_jac_fn(self._tmp_optim_vars, aux_vars),
+            )
+            aux_idx = torch.arange(err.shape[0])  # batch_size
+            jacobians_full = [jac[aux_idx, :, aux_idx, :] for jac in jacobians_raw]
 
         # torch autograd returns shape (batch_size, dim, batch_size, var_dim), which
         # includes derivatives of batches against each other.

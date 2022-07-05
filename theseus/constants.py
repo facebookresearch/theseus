@@ -16,7 +16,7 @@ _SO2_MATRIX_EPS = {
     torch.float64: 1e-7,
 }
 
-_SE2_NEAR_ZERO_EPS = {torch.float32: 3e-2, torch.float64: 5e-7}
+_SE2_NEAR_ZERO_EPS = {torch.float32: 3e-2, torch.float64: 1e-6}
 
 _SO3_NEAR_PI_EPS = {
     torch.float32: 1e-2,

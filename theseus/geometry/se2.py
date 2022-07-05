@@ -23,11 +23,14 @@ class SE2(LieGroup):
         data: Optional[torch.Tensor] = None,
         name: Optional[str] = None,
         dtype: Optional[torch.dtype] = None,
+        requires_check: bool = True,
     ):
         if x_y_theta is not None and data is not None:
             raise ValueError("Please provide only one of x_y_theta or data.")
         if x_y_theta is not None:
             dtype = x_y_theta.dtype
+        if data is not None and requires_check:
+            self._SE2_matrix_check(data)
         super().__init__(data=data, name=name, dtype=dtype)
         if x_y_theta is not None:
             self.update_from_x_y_theta(x_y_theta)
@@ -222,6 +225,12 @@ class SE2(LieGroup):
         return torch.stack((ux, uy, theta), dim=1)
 
     @staticmethod
+    def _SE2_matrix_check(matrix: torch.Tensor):
+        if matrix.ndim != 2 or matrix.shape[1] != 4:
+            raise ValueError("SE2 can only be 4D vectors.")
+        SO2._SO2_matrix_check(matrix.data[:, 2:])
+
+    @staticmethod
     def exp_map(
         tangent_vector: torch.Tensor, jacobians: Optional[List[torch.Tensor]] = None
     ) -> "SE2":
@@ -307,7 +316,10 @@ class SE2(LieGroup):
             Point2,
             translation_1.compose(rotation_1.rotate(translation_2)),
         )
-        return SE2(data=torch.cat([new_translation.data, new_rotation.data], dim=1))
+        return SE2(
+            data=torch.cat([new_translation.data, new_rotation.data], dim=1),
+            requires_check=False,
+        )
 
     def _inverse_impl(self) -> "SE2":
         inverse_rotation = self.rotation._inverse_impl()

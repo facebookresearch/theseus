@@ -11,11 +11,7 @@ import torch
 
 import theseus as th
 import theseus.utils.examples as theg
-from theseus.optimizer.gbp import (
-    BAViewer,
-    GaussianBeliefPropagation,
-    synchronous_schedule,
-)
+from theseus.optimizer.gbp import BAViewer, GaussianBeliefPropagation, GBPSchedule
 
 # Smaller values result in error
 th.SO3.SO3_EPS = 1e-6
@@ -47,7 +43,9 @@ def camera_loss(
 ) -> torch.Tensor:
     loss: torch.Tensor = 0  # type:ignore
     for i in range(len(ba.cameras)):
-        camera_loss = th.local(camera_pose_vars[i], ba.gt_cameras[i].pose).norm(dim=1)
+        cam_pose = camera_pose_vars[i].copy()
+        cam_pose.to(ba.gt_cameras[i].pose.device)
+        camera_loss = th.local(cam_pose, ba.gt_cameras[i].pose).norm(dim=1).cpu()
         loss += camera_loss
     return loss
 
@@ -169,10 +167,9 @@ def run(cfg: omegaconf.OmegaConf):
             "relin_threshold": 0.0000000001,
             "damping": 0.0,
             "dropout": 0.0,
-            "schedule": synchronous_schedule(
-                cfg["inner_optim"]["max_iters"], optimizer.n_edges
-            ),
+            "schedule": GBPSchedule.SYNCHRONOUS,
             "lin_system_damping": 1e-5,
+            "vectorize": True,
         }
         optim_arg = {**optim_arg, **gbp_optim_arg}
 

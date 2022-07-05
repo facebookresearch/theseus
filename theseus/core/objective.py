@@ -70,6 +70,9 @@ class Objective:
 
         self._vectorization_to: Optional[Callable] = None
 
+        self.vectorized_cost_fns: Optional[List[CostFunction]] = None
+        self.vectorized_msg_ixs: Optional[List[List[int]]] = None
+
     def _add_function_variables(
         self,
         function: TheseusFunction,
@@ -479,11 +482,11 @@ class Objective:
         batch_sizes.extend([v.data.shape[0] for v in self.aux_vars.values()])
         self._batch_size = _get_batch_size(batch_sizes)
 
-    def update_vectorization(self):
+    def update_vectorization(self, compute_caches=True):
         if self._vectorization_run is not None:
             if self._batch_size is None:
                 self.update()
-            self._vectorization_run()
+            self._vectorization_run(compute_caches=compute_caches)
 
     # iterates over cost functions
     def __iter__(self):

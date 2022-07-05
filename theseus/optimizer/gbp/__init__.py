@@ -4,4 +4,4 @@
 # LICENSE file in the root directory of this source tree.
 
 from .ba_viewer import BAViewer
-from .gbp import GaussianBeliefPropagation, random_schedule, synchronous_schedule
+from .gbp import GaussianBeliefPropagation, GBPSchedule

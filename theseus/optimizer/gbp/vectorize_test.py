@@ -1,7 +1,7 @@
 import torch
 
 import theseus as th
-from theseus.optimizer.gbp import GaussianBeliefPropagation, synchronous_schedule
+from theseus.optimizer.gbp import GaussianBeliefPropagation, GBPSchedule
 
 torch.manual_seed(0)
 
@@ -91,7 +91,7 @@ optimizer = GaussianBeliefPropagation(
     max_iterations=50,  # step_size=0.5,
 )
 
-theseus_optim = th.TheseusLayer(optimizer, vectorize=False)
+theseus_optim = th.TheseusLayer(optimizer, vectorize=True)
 
 a_tensor = torch.nn.Parameter(torch.rand(num_models, 1))
 
@@ -104,8 +104,9 @@ optim_arg = {
     "relin_threshold": 0.0000000001,
     "damping": 0.5,
     "dropout": 0.0,
-    "schedule": synchronous_schedule(50, optimizer.n_edges),
+    "schedule": GBPSchedule.SYNCHRONOUS,
     "lin_system_damping": 1e-5,
+    "vectorize": True,
 }
 
 

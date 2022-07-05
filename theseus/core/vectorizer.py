@@ -92,12 +92,18 @@ class Vectorize:
             _CostFunctionSchema, List[_CostFunctionWrapper]
         ] = defaultdict(list)
 
+        schema_ixs_dict: Dict[_CostFunctionSchema, List[int]] = defaultdict(list)
+
         # Create wrappers for all cost functions and also get their schemas
+        msg_ix = 0
         for cost_fn in objective.cost_functions.values():
             wrapper = _CostFunctionWrapper(cost_fn)
             self._cost_fn_wrappers.append(wrapper)
             schema = _get_cost_function_schema(cost_fn)
             self._schema_dict[schema].append(wrapper)
+
+            schema_ixs_dict[schema].append(msg_ix)
+            msg_ix += cost_fn.num_optim_vars()
 
         # Now create a vectorized cost function for each unique schema
         self._vectorized_cost_fns: Dict[_CostFunctionSchema, CostFunction] = {}
@@ -119,6 +125,8 @@ class Vectorize:
         objective._cost_functions_iterable = self._cost_fn_wrappers
         objective._vectorization_run = self._vectorize
         objective._vectorization_to = self._to
+        objective.vectorized_cost_fns = list(self._vectorized_cost_fns.values())
+        objective.vectorized_msg_ixs = list(schema_ixs_dict.values())
 
         self._objective = objective
 
@@ -282,8 +290,9 @@ class Vectorize:
                 cf._cached_error = None
                 cf._cached_jacobians = None
 
-    def _vectorize(self):
-        self._clear_wrapper_caches()
+    def _vectorize(self, compute_caches=True):
+        if compute_caches:
+            self._clear_wrapper_caches()
         for schema, cost_fn_wrappers in self._schema_dict.items():
             var_names = self._var_names[schema]
             vectorized_cost_fn = self._vectorized_cost_fns[schema]
@@ -302,9 +311,10 @@ class Vectorize:
                 batch_size,
                 len(cost_fn_wrappers),
             )
-            Vectorize._compute_error_and_replace_wrapper_caches(
-                vectorized_cost_fn, cost_fn_wrappers, batch_size
-            )
+            if compute_caches:
+                Vectorize._compute_error_and_replace_wrapper_caches(
+                    vectorized_cost_fn, cost_fn_wrappers, batch_size
+                )
 
     # Applies to() with given args to all vectorized cost functions in the objective
     def _to(self, *args, **kwargs):

@@ -7,7 +7,7 @@ import numpy as np
 import torch
 
 import theseus as th
-from theseus.optimizer.gbp import GaussianBeliefPropagation, synchronous_schedule
+from theseus.optimizer.gbp import GaussianBeliefPropagation, GBPSchedule
 
 # This example illustrates the Gaussian Belief Propagation (GBP) optimizer
 # for a 2D pose graph optimization problem.
@@ -68,9 +68,7 @@ def create_pgo():
             inputs[f"x{p}"] = init[None, :]
             inputs[f"prior_{p}"] = init[None, :]
 
-            cf_prior = th.Difference(
-                poses[p], w, prior_target, name=f"prior_cost_{p}"
-            )
+            cf_prior = th.Difference(poses[p], w, prior_target, name=f"prior_cost_{p}")
 
             objective.add(cf_prior)
 
@@ -170,7 +168,8 @@ def gbp_solve_pgo(backward_mode, max_iterations=20):
         "relin_threshold": 1e-8,
         "damping": 0.0,
         "dropout": 0.0,
-        "schedule": synchronous_schedule(max_iterations, optimizer.n_edges),
+        "schedule": GBPSchedule.SYNCHRONOUS,
+        "vectorize": True,
     }
 
     outputs_gbp, info = theseus_optim.forward(inputs, optim_arg)

@@ -52,7 +52,13 @@ class Reprojection(th.CostFunction):
 
         self.register_optim_vars(["camera_pose", "world_point"])
         self.register_aux_vars(
-            ["log_loss_radius", "focal_length", "image_feature_point"]
+            [
+                "log_loss_radius",
+                "focal_length",
+                "image_feature_point",
+                "calib_k1",
+                "calib_k2",
+            ]
         )
 
     def error(self) -> torch.Tensor:

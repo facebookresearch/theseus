@@ -47,7 +47,10 @@ class TheseusLayer(nn.Module):
             )
         optimizer_kwargs = optimizer_kwargs or {}
         backward_mode = optimizer_kwargs.get("backward_mode", None)
-        dlm_epsilon = optimizer_kwargs.get(TheseusLayerDLMForward._dlm_epsilon, 1e-2)
+        dlm_epsilon = optimizer_kwargs.get(
+            TheseusLayerDLMForward._DLM_EPSILON_STR, 1e-2
+        )
+        assert isinstance(dlm_epsilon, float)
         if backward_mode == BackwardMode.DLM:
 
             if self._dlm_bwd_objective is None:
@@ -144,8 +147,8 @@ class TheseusLayerDLMForward(torch.autograd.Function):
     but computes the direct loss minimization in the backward pass.
     """
 
-    _dlm_epsilon = "dlm_epsilon"
-    _grad_suffix = "_grad"
+    _DLM_EPSILON_STR = "dlm_epsilon"
+    _GRAD_SUFFIX = "_grad"
 
     @staticmethod
     def forward(
@@ -213,12 +216,12 @@ class TheseusLayerDLMForward(torch.autograd.Function):
 
         # Add in gradient values.
         grad_data = {
-            TheseusLayerDLMForward._dlm_epsilon: torch.tensor(epsilon)
+            TheseusLayerDLMForward._DLM_EPSILON_STR: torch.tensor(epsilon)
             .to(grad_outputs[0])
             .reshape(1, 1)
         }
         for i, name in enumerate(bwd_objective.optim_vars.keys()):
-            grad_data[name + TheseusLayerDLMForward._grad_suffix] = grad_outputs[i]
+            grad_data[name + TheseusLayerDLMForward._GRAD_SUFFIX] = grad_outputs[i]
         bwd_data.update(grad_data)
 
         # Solve backward objective.
@@ -299,13 +302,13 @@ def _instantiate_dlm_bwd_objective(objective: Objective):
     bwd_objective = objective.copy()
     epsilon_var = Variable(
         torch.ones(1, 1, dtype=bwd_objective.dtype, device=bwd_objective.device),
-        name=TheseusLayerDLMForward._dlm_epsilon,
+        name=TheseusLayerDLMForward._DLM_EPSILON_STR,
     )
     unit_weight = ScaleCostWeight(1.0)
     unit_weight.to(dtype=objective.dtype, device=objective.device)
     for name, var in bwd_objective.optim_vars.items():
         grad_var = Variable(
-            torch.zeros_like(var.data), name=name + TheseusLayerDLMForward._grad_suffix
+            torch.zeros_like(var.data), name=name + TheseusLayerDLMForward._GRAD_SUFFIX
         )
         bwd_objective.add(
             _DLMPerturbation(

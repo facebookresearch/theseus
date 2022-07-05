@@ -13,7 +13,7 @@ PI = math.pi
 
 _SO2_MATRIX_EPS = {
     torch.float32: 1e-5,
-    torch.float64: 1e-7,
+    torch.float64: 4e-7,
 }
 
 _SE2_NEAR_ZERO_EPS = {torch.float32: 3e-2, torch.float64: 1e-6}

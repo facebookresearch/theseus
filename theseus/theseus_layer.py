@@ -50,7 +50,11 @@ class TheseusLayer(nn.Module):
         dlm_epsilon = optimizer_kwargs.get(
             TheseusLayerDLMForward._DLM_EPSILON_STR, 1e-2
         )
-        assert isinstance(dlm_epsilon, float)
+        if not isinstance(dlm_epsilon, float):
+            raise ValueError(
+                f"{TheseusLayerDLMForward._DLM_EPSILON_STR} must be a float "
+                f"but {type(dlm_epsilon)} was given."
+            )
         if backward_mode == BackwardMode.DLM:
 
             if self._dlm_bwd_objective is None:

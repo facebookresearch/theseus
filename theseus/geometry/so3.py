@@ -123,23 +123,19 @@ class SO3(LieGroup):
         return ret
 
     @staticmethod
-    def _SO3_matrix_check(
-        matrix: torch.Tensor, EPS=theseus.constants._SO3_MATRIX_EPS[torch.float64]
-    ):
+    def _SO3_matrix_check(matrix: torch.Tensor):
         if matrix.ndim != 3 or matrix.shape[1:] != (3, 3):
             raise ValueError("3D rotations can only be 3x3 matrices.")
 
+        MATRIX_EPS = theseus.constants._SO3_MATRIX_EPS[matrix.dtype]
         if matrix.dtype != torch.float64:
-            SO3._SO3_matrix_check(
-                matrix.double(), theseus.constants._SO3_MATRIX_EPS[matrix.dtype]
-            )
-            return
+            matrix = matrix.double()
 
         _check = (
             torch.matmul(matrix, matrix.transpose(1, 2))
             - torch.eye(3, 3, dtype=matrix.dtype, device=matrix.device)
-        ).abs().max().item() < EPS
-        _check &= (torch.linalg.det(matrix) - 1).abs().max().item() < EPS
+        ).abs().max().item() < MATRIX_EPS
+        _check &= (torch.linalg.det(matrix) - 1).abs().max().item() < MATRIX_EPS
 
         if not _check:
             raise ValueError("Not valid 3D rotations.")

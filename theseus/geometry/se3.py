@@ -34,6 +34,12 @@ class SE3(LieGroup):
         if x_y_z_quaternion is not None:
             self.update_from_x_y_z_quaternion(x_y_z_quaternion=x_y_z_quaternion)
 
+        self._resolve_eps()
+
+    def _resolve_eps(self):
+        self._NEAR_ZERO_EPS = theseus.constants._SE3_NEAR_ZERO_EPS[self.data.dtype]
+        self._NEAR_PI_EPS = theseus.constants._SE3_NEAR_PI_EPS[self.data.dtype]
+
     @staticmethod
     def rand(
         *size: int,
@@ -165,15 +171,17 @@ class SE3(LieGroup):
 
     @staticmethod
     def _hat_matrix_check(matrix: torch.Tensor):
+        HAT_EPS = theseus.constants._SE3_HAT_EPS[matrix.dtype]
+
         if matrix.ndim != 3 or matrix.shape[1:] != (4, 4):
             raise ValueError("Hat matrices of SE(3) can only be 4x4 matrices")
 
-        if matrix[:, 3].abs().max().item() > theseus.constants.EPS:
+        if matrix[:, 3].abs().max().item() > HAT_EPS:
             raise ValueError("The last row of hat matrices of SE(3) can only be zero.")
 
         if (
             matrix[:, :3, :3].transpose(1, 2) + matrix[:, :3, :3]
-        ).abs().max().item() > theseus.constants.EPS:
+        ).abs().max().item() > HAT_EPS:
             raise ValueError(
                 "The 3x3 top-left corner of hat matrices of SE(3) can only be skew-symmetric."
             )
@@ -185,8 +193,6 @@ class SE3(LieGroup):
         if tangent_vector.ndim != 2 or tangent_vector.shape[1] != 6:
             raise ValueError("Tangent vectors of SE(3) can only be 6-D vectors.")
 
-        NEAR_ZERO_EPS = 5e-3
-
         ret = SE3(dtype=tangent_vector.dtype)
 
         tangent_vector_lin = tangent_vector[:, :3].view(-1, 3, 1)
@@ -196,7 +202,7 @@ class SE3(LieGroup):
         theta2 = theta**2
         theta3 = theta**3
 
-        near_zero = theta < NEAR_ZERO_EPS
+        near_zero = theta < theseus.constants._SE3_NEAR_ZERO_EPS[tangent_vector.dtype]
         non_zero = torch.ones(
             1, dtype=tangent_vector.dtype, device=tangent_vector.device
         )
@@ -335,8 +341,6 @@ class SE3(LieGroup):
     def _log_map_impl(
         self, jacobians: Optional[List[torch.Tensor]] = None
     ) -> torch.Tensor:
-        NEAR_PI_EPS = 1e-7
-        NEAR_ZERO_EPS = 5e-3
 
         sine_axis = torch.zeros(self.shape[0], 3, dtype=self.dtype, device=self.device)
         sine_axis[:, 0] = 0.5 * (self[:, 2, 1] - self[:, 1, 2])
@@ -348,10 +352,10 @@ class SE3(LieGroup):
         theta2 = theta**2
         non_zero = torch.ones(1, dtype=self.dtype, device=self.device)
 
-        near_zero = theta < NEAR_ZERO_EPS
+        near_zero = theta < self._NEAR_ZERO_EPS
 
         # Compute the rotation
-        not_near_pi = 1 + cosine > NEAR_PI_EPS
+        not_near_pi = 1 + cosine > self._NEAR_PI_EPS
         # theta is not near pi
         near_zero_not_near_pi = near_zero[not_near_pi]
         # Compute the approximation of theta / sin(theta) when theta is near to 0
@@ -375,9 +379,9 @@ class SE3(LieGroup):
         aux = torch.ones(sel_rows.shape[0], dtype=torch.bool)
         sel_rows[aux, major] -= cosine[near_pi]
         axis = sel_rows / sel_rows.norm(dim=1, keepdim=True)
-        ret_ang[near_pi] = axis * (
-            theta[near_pi] * sine_axis[near_pi, major].sign()
-        ).view(-1, 1)
+        sign_tmp = sine_axis[near_pi, major].sign()
+        sign = torch.where(sign_tmp != 0, sign_tmp, torch.ones_like(sign_tmp))
+        ret_ang[near_pi] = axis * (theta[near_pi] * sign).view(-1, 1)
 
         # Compute the translation
         sine_theta = sine * theta
@@ -604,6 +608,11 @@ class SE3(LieGroup):
             jacobians.extend([Jg, Jpnt])
 
         return ret
+
+    # calls to() on the internal tensors
+    def to(self, *args, **kwargs):
+        super().to(*args, **kwargs)
+        self._resolve_eps()
 
 
 rand_se3 = SE3.rand

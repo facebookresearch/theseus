@@ -72,7 +72,7 @@ def test_to():
     for i in range(10):
         mean, precision = random_manifold_gaussian_params()
         t = th.ManifoldGaussian(mean, precision=precision)
-        dtype = torch.float64 if np.random.random() < 0.5 else torch.long
+        dtype = torch.float64 if np.random.random() < 0.5 else torch.float32
         t.to(dtype)
 
         for var in t.mean:

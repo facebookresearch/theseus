@@ -8,7 +8,7 @@ import pytest  # noqa: F401
 import torch
 
 import theseus as th
-from theseus.constants import EPS
+from theseus.constants import TEST_EPS
 from theseus.core.tests.common import check_copy_var
 from theseus.utils import numeric_jacobian
 
@@ -25,53 +25,62 @@ from .common import (
 )
 
 
-def create_random_se2(batch_size, rng):
+def create_random_se2(batch_size, rng, dtype=torch.float64):
     theta = torch.rand(batch_size, 1, generator=rng) * 2 * np.pi - np.pi
     u = torch.randn(batch_size, 2)
     tangent_vector = torch.cat([u, theta], dim=1)
-    return th.SE2.exp_map(tangent_vector.double())
+    return th.SE2.exp_map(tangent_vector.to(dtype=dtype))
 
 
-def test_exp_map():
+@pytest.mark.parametrize("dtype", [torch.float32, torch.float64])
+def test_exp_map(dtype):
+    rng = torch.Generator()
+    rng.manual_seed(0)
     for batch_size in [1, 20, 100]:
         theta = torch.from_numpy(np.linspace(-np.pi, np.pi, batch_size))
-        u = torch.randn(batch_size, 2)
+        u = torch.randn(batch_size, 2, dtype=dtype, generator=rng)
         tangent_vector = torch.cat([u, theta.unsqueeze(1)], dim=1)
-        check_exp_map(tangent_vector.double(), th.SE2)
+        check_exp_map(tangent_vector.to(dtype=dtype), th.SE2)
 
 
-def test_log_map():
+@pytest.mark.parametrize("dtype", [torch.float32, torch.float64])
+def test_log_map(dtype):
+    rng = torch.Generator()
+    rng.manual_seed(0)
     for batch_size in [1, 20, 100]:
         theta = torch.from_numpy(np.linspace(-np.pi, np.pi, batch_size))
-        u = torch.randn(batch_size, 2)
+        u = torch.randn(batch_size, 2, dtype=dtype, generator=rng)
         tangent_vector = torch.cat([u, theta.unsqueeze(1)], dim=1)
         check_log_map(tangent_vector, th.SE2)
         check_projection_for_exp_map(tangent_vector, th.SE2)
 
 
-def test_compose():
+@pytest.mark.parametrize("dtype", [torch.float32, torch.float64])
+def test_compose(dtype):
     rng = torch.Generator()
     rng.manual_seed(0)
     for batch_size in [1, 20, 100]:
-        se2_1 = th.SE2.rand(batch_size, generator=rng, dtype=torch.float64)
-        se2_2 = th.SE2.rand(batch_size, generator=rng, dtype=torch.float64)
+        se2_1 = th.SE2.rand(batch_size, generator=rng, dtype=dtype)
+        se2_2 = th.SE2.rand(batch_size, generator=rng, dtype=dtype)
         check_compose(se2_1, se2_2)
 
 
-def test_inverse():
+@pytest.mark.parametrize("dtype", [torch.float32, torch.float64])
+def test_inverse(dtype):
     rng = torch.Generator()
     rng.manual_seed(0)
     for batch_size in [1, 20, 100]:
-        se2 = th.SE2.rand(batch_size, generator=rng, dtype=torch.float64)
+        se2 = th.SE2.rand(batch_size, generator=rng, dtype=dtype)
         check_inverse(se2)
 
 
-def test_adjoint():
+@pytest.mark.parametrize("dtype", [torch.float32, torch.float64])
+def test_adjoint(dtype):
     rng = torch.Generator()
     rng.manual_seed(0)
     for batch_size in [1, 20, 100]:
-        se2 = th.SE2.rand(batch_size, generator=rng, dtype=torch.float64)
-        tangent = torch.randn(batch_size, 3).double()
+        se2 = th.SE2.rand(batch_size, generator=rng, dtype=dtype)
+        tangent = torch.randn(batch_size, 3, dtype=dtype)
         check_adjoint(se2, tangent)
 
 
@@ -81,7 +90,8 @@ def test_copy():
     check_copy_var(se2)
 
 
-def test_transform_from_and_to():
+@pytest.mark.parametrize("dtype", [torch.float32, torch.float64])
+def test_transform_from_and_to(dtype):
     rng = torch.Generator()
     rng.manual_seed(0)
     for _ in range(10):  # repeat a few times
@@ -94,52 +104,68 @@ def test_transform_from_and_to():
                 ):
                     continue
 
-                se2 = th.SE2.rand(batch_size_se2, generator=rng, dtype=torch.float64)
-                point_tensor = torch.randn(batch_size_pnt, 2).double()
+                se2 = th.SE2.rand(batch_size_se2, generator=rng, dtype=dtype)
+                point_tensor = torch.randn(batch_size_pnt, 2, dtype=dtype)
                 point_tensor_ext = torch.cat(
-                    (point_tensor, torch.ones(batch_size_pnt, 1).double()), dim=1
+                    [point_tensor, torch.ones(batch_size_pnt, 1, dtype=dtype)], dim=1
                 )
 
                 jacobians_to = []
                 point_to = se2.transform_to(point_tensor, jacobians=jacobians_to)
                 expected_to = (
-                    se2.inverse().to_matrix() @ point_tensor_ext.unsqueeze(2)
+                    se2.inverse().to_matrix().double()
+                    @ point_tensor_ext.unsqueeze(2).double()
                 )[:, :2]
                 jacobians_from = []
                 point_from = se2.transform_from(point_to, jacobians_from)
 
                 # Check the operation result
-                assert torch.allclose(expected_to.squeeze(2), point_to.data, atol=EPS)
-                assert torch.allclose(point_tensor, point_from.data, atol=EPS)
+                assert torch.allclose(
+                    expected_to.squeeze(2), point_to.data.double(), atol=TEST_EPS
+                )
+                assert torch.allclose(
+                    point_tensor.double(), point_from.data.double(), atol=TEST_EPS
+                )
 
                 # Check the jacobians
+                se2_double = se2.copy()
+                se2_double.to(torch.float64)
                 expected_jac = numeric_jacobian(
                     lambda groups: groups[0].transform_to(groups[1]),
-                    [se2, th.Point2(point_tensor)],
+                    [se2_double, th.Point2(point_tensor.double())],
                     function_dim=2,
                 )
 
                 assert jacobians_to[0].shape == expected_jac[0].shape
                 assert jacobians_to[1].shape == expected_jac[1].shape
-                assert torch.allclose(jacobians_to[0], expected_jac[0])
-                assert torch.allclose(jacobians_to[1], expected_jac[1])
+                assert torch.allclose(
+                    jacobians_to[0].double(), expected_jac[0], atol=TEST_EPS
+                )
+                assert torch.allclose(
+                    jacobians_to[1].double(), expected_jac[1], atol=TEST_EPS
+                )
 
                 expected_jac = numeric_jacobian(
                     lambda groups: groups[0].transform_from(groups[1]),
-                    [se2, point_to],
+                    [se2_double, th.Point2(point_to.data.double())],
                     function_dim=2,
                 )
                 assert jacobians_from[0].shape == expected_jac[0].shape
                 assert jacobians_from[1].shape == expected_jac[1].shape
-                assert torch.allclose(jacobians_from[0], expected_jac[0])
-                assert torch.allclose(jacobians_from[1], expected_jac[1])
+                assert torch.allclose(
+                    jacobians_from[0].double(), expected_jac[0], atol=TEST_EPS
+                )
+                assert torch.allclose(
+                    jacobians_from[1].double(), expected_jac[1], atol=TEST_EPS
+                )
 
 
-def test_xy_jacobian():
+@pytest.mark.parametrize("dtype", [torch.float32, torch.float64])
+def test_xy_jacobian(dtype):
     rng = torch.Generator()
     rng.manual_seed(0)
     for batch_size in [1, 20, 100]:
-        se2 = th.SE2.rand(batch_size, generator=rng, dtype=torch.float64)
+        se2 = th.SE2.rand(batch_size, generator=rng, dtype=dtype)
         jacobian = []
         se2.xy(jacobians=jacobian)
         expected_jac = numeric_jacobian(
@@ -148,11 +174,12 @@ def test_xy_jacobian():
         torch.allclose(jacobian[0], expected_jac[0])
 
 
-def test_theta_jacobian():
+@pytest.mark.parametrize("dtype", [torch.float32, torch.float64])
+def test_theta_jacobian(dtype):
     rng = torch.Generator()
     rng.manual_seed(0)
     for batch_size in [1, 20, 100]:
-        se2 = th.SE2.rand(batch_size, generator=rng, dtype=torch.float64)
+        se2 = th.SE2.rand(batch_size, generator=rng, dtype=dtype)
         jacobian = []
         se2.theta(jacobians=jacobian)
         expected_jac = numeric_jacobian(

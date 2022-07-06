@@ -17,22 +17,28 @@ from .so2 import SO2
 # If data is passed, must be x, y, cos, sin
 # If x_y_theta is passed, must be tensor with shape batch_size x 3
 class SE2(LieGroup):
-    SE2_EPS = 5e-7
-
     def __init__(
         self,
         x_y_theta: Optional[torch.Tensor] = None,
         data: Optional[torch.Tensor] = None,
         name: Optional[str] = None,
         dtype: Optional[torch.dtype] = None,
+        requires_check: bool = True,
     ):
         if x_y_theta is not None and data is not None:
             raise ValueError("Please provide only one of x_y_theta or data.")
         if x_y_theta is not None:
             dtype = x_y_theta.dtype
+        if data is not None and requires_check:
+            self._SE2_matrix_check(data)
         super().__init__(data=data, name=name, dtype=dtype)
         if x_y_theta is not None:
             self.update_from_x_y_theta(x_y_theta)
+
+        self._resolve_eps()
+
+    def _resolve_eps(self):
+        self._NEAR_ZERO_EPS = theseus.constants._SE2_NEAR_ZERO_EPS[self.data.dtype]
 
     @staticmethod
     def rand(
@@ -166,7 +172,7 @@ class SE2(LieGroup):
         cosine, sine = rotation.to_cos_sin()
 
         # Compute the approximations when theta is near to 0
-        small_theta = theta.abs() < SE2.SE2_EPS
+        small_theta = theta.abs() < self._NEAR_ZERO_EPS
         non_zero = torch.ones(1, dtype=self.dtype, device=self.device)
         sine_nz = torch.where(small_theta, non_zero, sine)
         half_theta_by_tan_half_theta = (
@@ -219,6 +225,12 @@ class SE2(LieGroup):
         return torch.stack((ux, uy, theta), dim=1)
 
     @staticmethod
+    def _SE2_matrix_check(matrix: torch.Tensor):
+        if matrix.ndim != 2 or matrix.shape[1] != 4:
+            raise ValueError("SE2 can only be 4D vectors.")
+        SO2._SO2_matrix_check(matrix.data[:, 2:])
+
+    @staticmethod
     def exp_map(
         tangent_vector: torch.Tensor, jacobians: Optional[List[torch.Tensor]] = None
     ) -> "SE2":
@@ -229,7 +241,9 @@ class SE2(LieGroup):
         cosine, sine = rotation.to_cos_sin()
 
         # Compute the approximations when theta is near to 0
-        small_theta = theta.abs() < SE2.SE2_EPS
+        small_theta = (
+            theta.abs() < theseus.constants._SE2_NEAR_ZERO_EPS[tangent_vector.dtype]
+        )
         non_zero = torch.ones(
             1, dtype=tangent_vector.dtype, device=tangent_vector.device
         )
@@ -302,7 +316,10 @@ class SE2(LieGroup):
             Point2,
             translation_1.compose(rotation_1.rotate(translation_2)),
         )
-        return SE2(data=torch.cat([new_translation.data, new_rotation.data], dim=1))
+        return SE2(
+            data=torch.cat([new_translation.data, new_rotation.data], dim=1),
+            requires_check=False,
+        )
 
     def _inverse_impl(self) -> "SE2":
         inverse_rotation = self.rotation._inverse_impl()
@@ -453,6 +470,11 @@ class SE2(LieGroup):
     # only added to avoid casting downstream
     def copy(self, new_name: Optional[str] = None) -> "SE2":
         return cast(SE2, super().copy(new_name=new_name))
+
+    # calls to() on the internal tensors
+    def to(self, *args, **kwargs):
+        super().to(*args, **kwargs)
+        self._resolve_eps()
 
 
 rand_se2 = SE2.rand

@@ -232,6 +232,21 @@ class SO3(LieGroup):
 
         return ret
 
+    @staticmethod
+    def normalize(matrix: torch.Tensor) -> torch.Tensor:
+        if matrix.ndim != 3 or matrix.shape[1:] != (3, 3):
+            raise ValueError("3D rotations can only be 3x3 matrices.")
+
+        U, _, V = torch.svd(matrix)
+        Vtr = V.transpose(1, 2)
+        S = torch.diag(
+            torch.tensor([1, 1, -1], dtype=matrix.dtype, device=matrix.device)
+        )
+        temp = (U @ Vtr, U @ S @ Vtr)
+        sign = torch.det(temp[0]).reshape([-1, 1, 1]) > 0
+
+        return torch.where(sign, temp[0], temp[1])
+
     def _log_map_impl(
         self, jacobians: Optional[List[torch.Tensor]] = None
     ) -> torch.Tensor:

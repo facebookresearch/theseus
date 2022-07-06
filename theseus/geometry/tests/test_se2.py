@@ -208,3 +208,18 @@ def test_projection():
 
             # Test SE2.inverse
             check_projection_for_inverse(th.SE2, batch_size, rng)
+
+
+@pytest.mark.parametrize("batch_size", [1, 20, 100])
+@pytest.mark.parametrize("dtype", [torch.float32, torch.float64])
+def test_normalization(batch_size, dtype):
+    rng = torch.Generator()
+    rng.manual_seed(0)
+
+    matrix = torch.rand([batch_size, 4], dtype=dtype)
+    se2_mat = th.SE2.normalize(matrix)
+    th.SE2._SE2_matrix_check(se2_mat)
+
+    matrix = th.SE2.rand(batch_size, dtype=dtype).data
+    se2_mat = th.SE2.normalize(matrix)
+    torch.allclose(se2_mat, matrix)

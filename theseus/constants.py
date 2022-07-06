@@ -11,6 +11,11 @@ TEST_EPS = 5e-7
 EPS = 1e-10
 PI = math.pi
 
+_SO2_NORMALIZATION_EPS = {
+    torch.float32: 1e-12,
+    torch.float64: 1e-12,
+}
+
 _SO2_MATRIX_EPS = {
     torch.float32: 1e-5,
     torch.float64: 4e-7,

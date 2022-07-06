@@ -21,6 +21,7 @@ from .common import (
     check_projection_for_inverse,
     check_projection_for_log_map,
     check_projection_for_rotate_and_transform,
+    check_so3_se3_normalize,
 )
 
 
@@ -143,7 +144,9 @@ def test_rotate_and_unrotate(dtype):
                     continue
 
                 so3 = th.SO3.rand(batch_size_group, generator=rng, dtype=dtype)
-                point_tensor = torch.randn(batch_size_pnt, 3, dtype=dtype)
+                point_tensor = torch.randn(
+                    batch_size_pnt, 3, generator=rng, dtype=dtype
+                )
 
                 jacobians_rotate = []
                 rotated_point = so3.rotate(point_tensor, jacobians=jacobians_rotate)
@@ -222,3 +225,9 @@ def test_local_map(dtype):
         check_jacobian_for_local(
             group0, group1, Group=th.SO3, is_projected=True, atol=ATOL
         )
+
+
+@pytest.mark.parametrize("batch_size", [1, 20, 100])
+@pytest.mark.parametrize("dtype", [torch.float32, torch.float64])
+def test_normalization(batch_size, dtype):
+    check_so3_se3_normalize(th.SO3, batch_size, dtype)

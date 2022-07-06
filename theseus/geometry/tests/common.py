@@ -346,3 +346,31 @@ def check_jacobian_for_local(group0, group1, Group, is_projected=True, atol=TEST
 
     assert torch.allclose(actual[0].double(), expected[0], atol=atol)
     assert torch.allclose(actual[1].double(), expected[1], atol=atol)
+
+
+def check_normalize(group, batch_size, dtype):
+    rng = torch.Generator()
+    rng.manual_seed(0)
+
+    matrix = group.rand(batch_size, dtype=dtype, generator=rng).data
+    group_mat = group.normalize(matrix)
+    torch.allclose(group_mat, matrix)
+
+    matrix = torch.rand(matrix.shape, dtype=dtype)
+    group_mat = group.normalize(matrix)
+    group._data_check(group_mat)
+
+
+def check_so3_se3_normalize(group, batch_size, dtype):
+    rng = torch.Generator()
+    rng.manual_seed(0)
+
+    check_normalize(group, batch_size, dtype)
+
+    matrix = group.rand(batch_size, dtype=dtype).data
+    matrix[:, :, 2] *= -1
+    group_mat = group.normalize(matrix)
+    torch.allclose(
+        (group_mat - matrix).norm(dim=[1, 2]),
+        2 * torch.ones(matrix.shape[0], dtype=dtype),
+    )

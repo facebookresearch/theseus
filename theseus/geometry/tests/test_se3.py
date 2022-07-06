@@ -22,6 +22,7 @@ from .common import (
     check_projection_for_inverse,
     check_projection_for_log_map,
     check_projection_for_rotate_and_transform,
+    check_so3_se3_normalize,
 )
 
 
@@ -262,3 +263,9 @@ def test_local_map(dtype):
         check_jacobian_for_local(
             group0, group1, Group=th.SE3, is_projected=True, atol=ATOL
         )
+
+
+@pytest.mark.parametrize("batch_size", [1, 20, 100])
+@pytest.mark.parametrize("dtype", [torch.float32, torch.float64])
+def test_normalization(batch_size, dtype):
+    check_so3_se3_normalize(th.SE3, batch_size, dtype)

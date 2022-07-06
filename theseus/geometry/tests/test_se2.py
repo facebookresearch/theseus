@@ -18,6 +18,7 @@ from .common import (
     check_exp_map,
     check_inverse,
     check_log_map,
+    check_normalize,
     check_projection_for_compose,
     check_projection_for_exp_map,
     check_projection_for_inverse,
@@ -208,3 +209,9 @@ def test_projection():
 
             # Test SE2.inverse
             check_projection_for_inverse(th.SE2, batch_size, rng)
+
+
+@pytest.mark.parametrize("batch_size", [1, 20, 100])
+@pytest.mark.parametrize("dtype", [torch.float32, torch.float64])
+def test_normalization(batch_size, dtype):
+    check_normalize(th.SE2, batch_size, dtype)

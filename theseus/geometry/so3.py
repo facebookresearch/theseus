@@ -27,7 +27,7 @@ class SO3(LieGroup):
         if quaternion is not None:
             dtype = quaternion.dtype
         if data is not None and requires_check:
-            self._SO3_matrix_check(data)
+            self._data_check(data)
         super().__init__(data=data, name=name, dtype=dtype)
         if quaternion is not None:
             self.update_from_unit_quaternion(quaternion)
@@ -123,7 +123,7 @@ class SO3(LieGroup):
         return ret
 
     @staticmethod
-    def _SO3_matrix_check(matrix: torch.Tensor):
+    def _data_check(matrix: torch.Tensor):
         if matrix.ndim != 3 or matrix.shape[1:] != (3, 3):
             raise ValueError("3D rotations can only be 3x3 matrices.")
 
@@ -231,6 +231,19 @@ class SO3(LieGroup):
             jacobians.append(jac)
 
         return ret
+
+    @staticmethod
+    def normalize(data: torch.Tensor) -> torch.Tensor:
+        if data.ndim != 3 or data.shape[1:] != (3, 3):
+            raise ValueError("3D rotations can only be 3x3 matrices.")
+
+        U, _, V = torch.svd(data)
+        Vtr = V.transpose(1, 2)
+        S = torch.diag(torch.tensor([1, 1, -1], dtype=data.dtype, device=data.device))
+        temp = (U @ Vtr, U @ S @ Vtr)
+        sign = torch.det(temp[0]).reshape([-1, 1, 1]) > 0
+
+        return torch.where(sign, temp[0], temp[1])
 
     def _log_map_impl(
         self, jacobians: Optional[List[torch.Tensor]] = None

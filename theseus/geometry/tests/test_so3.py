@@ -21,6 +21,7 @@ from .common import (
     check_projection_for_inverse,
     check_projection_for_log_map,
     check_projection_for_rotate_and_transform,
+    check_so3_se3_normalize,
 )
 
 
@@ -143,7 +144,9 @@ def test_rotate_and_unrotate(dtype):
                     continue
 
                 so3 = th.SO3.rand(batch_size_group, generator=rng, dtype=dtype)
-                point_tensor = torch.randn(batch_size_pnt, 3, dtype=dtype)
+                point_tensor = torch.randn(
+                    batch_size_pnt, 3, generator=rng, dtype=dtype
+                )
 
                 jacobians_rotate = []
                 rotated_point = so3.rotate(point_tensor, jacobians=jacobians_rotate)
@@ -227,21 +230,4 @@ def test_local_map(dtype):
 @pytest.mark.parametrize("batch_size", [1, 20, 100])
 @pytest.mark.parametrize("dtype", [torch.float32, torch.float64])
 def test_normalization(batch_size, dtype):
-    rng = torch.Generator()
-    rng.manual_seed(0)
-
-    matrix = torch.rand([batch_size, 3, 3], dtype=dtype)
-    so3_mat = th.SO3.normalize(matrix)
-    th.SO3._SO3_matrix_check(so3_mat)
-
-    matrix = th.SO3.rand(batch_size, dtype=dtype).data
-    so3_mat = th.SO3.normalize(matrix)
-    torch.allclose(so3_mat, matrix)
-
-    matrix = th.SO3.rand(batch_size, dtype=dtype).data
-    matrix[:, :, 2] *= -1
-    so3_mat = th.SO3.normalize(matrix)
-    torch.allclose(
-        (so3_mat - matrix).norm(dim=[1, 2]),
-        2 * torch.ones(matrix.shape[0], dtype=dtype),
-    )
+    check_so3_se3_normalize(th.SO3, batch_size, dtype)

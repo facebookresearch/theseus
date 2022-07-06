@@ -22,6 +22,7 @@ from .common import (
     check_projection_for_inverse,
     check_projection_for_log_map,
     check_projection_for_rotate_and_transform,
+    check_so3_se3_normalize,
 )
 
 
@@ -267,21 +268,4 @@ def test_local_map(dtype):
 @pytest.mark.parametrize("batch_size", [1, 20, 100])
 @pytest.mark.parametrize("dtype", [torch.float32, torch.float64])
 def test_normalization(batch_size, dtype):
-    rng = torch.Generator()
-    rng.manual_seed(0)
-
-    matrix = torch.rand([batch_size, 3, 4], dtype=dtype)
-    se3_mat = th.SE3.normalize(matrix)
-    th.SE3._SE3_matrix_check(se3_mat)
-
-    matrix = th.SE3.rand(batch_size, dtype=dtype).data
-    se3_mat = th.SE3.normalize(matrix)
-    torch.allclose(se3_mat, matrix)
-
-    matrix = th.SE3.rand(batch_size, dtype=dtype).data
-    matrix[:, :, 2] *= -1
-    se3_mat = th.SE3.normalize(matrix)
-    torch.allclose(
-        (se3_mat - matrix).norm(dim=[1, 2]),
-        2 * torch.ones(matrix.shape[0], dtype=dtype),
-    )
+    check_so3_se3_normalize(th.SE3, batch_size, dtype)

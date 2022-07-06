@@ -262,3 +262,26 @@ def test_local_map(dtype):
         check_jacobian_for_local(
             group0, group1, Group=th.SE3, is_projected=True, atol=ATOL
         )
+
+
+@pytest.mark.parametrize("batch_size", [1, 20, 100])
+@pytest.mark.parametrize("dtype", [torch.float32, torch.float64])
+def test_normalization(batch_size, dtype):
+    rng = torch.Generator()
+    rng.manual_seed(0)
+
+    matrix = torch.rand([batch_size, 3, 4], dtype=dtype)
+    rot_mat = th.SE3.normalize(matrix)
+    th.SE3._SE3_matrix_check(rot_mat)
+
+    matrix = th.SE3.rand(batch_size, dtype=dtype).data
+    rot_mat = th.SE3.normalize(matrix)
+    torch.allclose(rot_mat, matrix)
+
+    matrix = th.SE3.rand(batch_size, dtype=dtype).data
+    matrix[:, :, 2] *= -1
+    rot_mat = th.SE3.normalize(matrix)
+    torch.allclose(
+        (rot_mat - matrix).norm(dim=[1, 2]),
+        2 * torch.ones(matrix.shape[0], dtype=dtype),
+    )

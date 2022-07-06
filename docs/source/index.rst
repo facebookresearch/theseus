@@ -46,3 +46,9 @@ See `tutorials <https://github.com/facebookresearch/theseus/blob/main/tutorials/
 .. toctree::
    :maxdepth: 3
    :caption: API Documentation
+
+   core.rst
+   embodied.rst
+   geometry.rst
+   optimizer.rst
+   utils.rst

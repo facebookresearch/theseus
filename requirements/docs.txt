@@ -1,0 +1,11 @@
+differentiable-robot-model>=0.2.3
+numpy>=1.19.2
+scipy>=1.5.3
+scikit-sparse>=0.4.5
+torch>=1.11
+pytest>=6.2.1
+numdifftools>=0.9.40
+pybind11>=2.7.1
+mock>=4.0.3
+Sphinx==5.0.2
+sphinx-rtd-theme==1.0.0

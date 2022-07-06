@@ -5,7 +5,7 @@
 
 import warnings
 from collections import OrderedDict
-from typing import Callable, Dict, Iterable, List, Optional, Sequence, Union
+from typing import Any, Callable, Dict, Iterable, List, Optional, Sequence, Union
 
 import torch
 
@@ -68,10 +68,22 @@ class Objective:
         # Used to vectorize cost functions after update
         self._vectorization_run: Optional[Callable] = None
 
+        # If vectorization is on, this will also handle vectorized containers
         self._vectorization_to: Optional[Callable] = None
 
         self.vectorized_cost_fns: Optional[List[CostFunction]] = None
         self.vectorized_msg_ixs: Optional[List[List[int]]] = None
+
+        # If vectorization is on, this gets replaced by a vectorized version
+        self._retract_method = Objective._retract_base
+
+        # Keeps track of how many variable updates have been made to check
+        # if vectorization should be updated
+        self._num_updates_variables: Dict[str, int] = {}
+
+        self._last_vectorization_has_grad = False
+
+        self._vectorized = False
 
     def _add_function_variables(
         self,
@@ -359,15 +371,11 @@ class Objective:
                 for var in self.optim_vars:
                     old_data[var] = self.optim_vars[var].data
             self.update(input_data=input_data)
-        error_vector = torch.zeros(self.batch_size, self.dim()).to(
-            device=self.device, dtype=self.dtype
+
+        error_vector = torch.cat(
+            [cf.weighted_error() for cf in self._get_iterator()], dim=1
         )
-        pos = 0
-        for cost_function in self.cost_functions.values():
-            error_vector[
-                :, pos : pos + cost_function.dim()
-            ] = cost_function.weighted_error()
-            pos += cost_function.dim()
+
         if input_data is not None and not also_update:
             self.update(old_data)
         return error_vector
@@ -482,17 +490,33 @@ class Objective:
         batch_sizes.extend([v.data.shape[0] for v in self.aux_vars.values()])
         self._batch_size = _get_batch_size(batch_sizes)
 
-    def update_vectorization(self, compute_caches=True):
-        if self._vectorization_run is not None:
+    def _vectorization_needs_update(self):
+        num_updates = dict(
+            (name, v._num_updates) for name, v in self._all_variables.items()
+        )
+        needs = False
+        if num_updates != self._num_updates_variables:
+            self._num_updates_variables = num_updates
+            needs = True
+
+        if torch.is_grad_enabled():
+            if not self._last_vectorization_has_grad:
+                needs = True
+        return needs
+
+    def update_vectorization_if_needed(self, compute_caches=True):
+        if self.vectorized and self._vectorization_needs_update():
             if self._batch_size is None:
                 self.update()
             self._vectorization_run(compute_caches=compute_caches)
+            self._last_vectorization_has_grad = torch.is_grad_enabled()
 
     # iterates over cost functions
     def __iter__(self):
         return iter([cf for cf in self.cost_functions.values()])
 
     def _get_iterator(self):
+        self.update_vectorization_if_needed()
         if self._cost_functions_iterable is None:
             return iter([cf for cf in self.cost_functions.values()])
         return iter([cf for cf in self._cost_functions_iterable])
@@ -506,3 +530,76 @@ class Objective:
         self.dtype = dtype or self.dtype
         if self._vectorization_to is not None:
             self._vectorization_to(*args, **kwargs)
+
+    @staticmethod
+    def _retract_base(
+        delta: torch.Tensor,
+        ordering: Iterable[Manifold],
+        ignore_mask: Optional[torch.Tensor] = None,
+        force_update: bool = False,
+    ):
+        var_idx = 0
+        for var in ordering:
+            new_var = var.retract(delta[:, var_idx : var_idx + var.dof()])
+            if ignore_mask is None or force_update:
+                var.update(new_var.data)
+            else:
+                var.update(new_var.data, batch_ignore_mask=ignore_mask)
+            var_idx += var.dof()
+
+    def retract_optim_vars(
+        self,
+        delta: torch.Tensor,
+        ordering: Iterable[Manifold],
+        ignore_mask: Optional[torch.Tensor] = None,
+        force_update: bool = False,
+    ):
+        self._retract_method(
+            delta, ordering, ignore_mask=ignore_mask, force_update=force_update
+        )
+
+    def _enable_vectorization(
+        self,
+        cost_fns_iter: Iterable[CostFunction],
+        vectorization_run_fn: Callable,
+        vectorized_to: Callable,
+        vectorized_retract_fn: Callable,
+        vectorized_cost_fns: List[CostFunction],
+        vectorized_msg_ixs: List[List[int]],
+        enabler: Any,
+    ):
+        # Hacky way to make Vectorize a "friend" class
+        assert (
+            enabler.__module__ == "theseus.core.vectorizer"
+            and enabler.__class__.__name__ == "Vectorize"
+        )
+        self._cost_functions_iterable = cost_fns_iter
+        self._vectorization_run = vectorization_run_fn
+        self._vectorization_to = vectorized_to
+        self._retract_method = vectorized_retract_fn
+        self.vectorized_cost_fns = vectorized_cost_fns
+        self.vectorized_msg_ixs = vectorized_msg_ixs
+        self._vectorized = True
+
+    # Making public, since this should be a safe operation
+    def disable_vectorization(self):
+        self._cost_functions_iterable = None
+        self._vectorization_run = None
+        self._vectorization_to = None
+        self._retract_method = Objective._retract_base
+        self.vectorized_cost_fns = None
+        self.vectorized_msg_ixs = None
+        self._vectorized = False
+
+    @property
+    def vectorized(self):
+        assert (
+            (not self._vectorized)
+            == (self._cost_functions_iterable is None)
+            == (self._vectorization_run is None)
+            == (self._vectorization_to is None)
+            == (self._retract_method is Objective._retract_base)
+            == (self.vectorized_cost_fns is None)
+            == (self.vectorized_msg_ixs is None)
+        )
+        return self._vectorized

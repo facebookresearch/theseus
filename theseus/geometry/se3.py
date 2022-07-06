@@ -244,7 +244,7 @@ class SE3(LieGroup):
 
         ret[:, :, 3:] = sine_by_theta * tangent_vector_lin
         ret[:, :, 3:] += one_minus_cosine_by_theta2 * torch.cross(
-            tangent_vector_ang, tangent_vector_lin
+            tangent_vector_ang, tangent_vector_lin, dim=1
         )
         ret[:, :, 3:] += theta_minus_sine_by_theta3_t * (
             tangent_vector_ang
@@ -309,8 +309,8 @@ class SE3(LieGroup):
 
             w = tangent_vector[:, 3:]
             v = tangent_vector[:, :3]
-            wv = w.cross(v)
-            wwv = w.cross(wv)
+            wv = w.cross(v, dim=1)
+            wwv = w.cross(wv, dim=1)
             sw = theta_minus_sine_by_theta3_t.view(-1, 1) * w
 
             jac_temp_t = (
@@ -397,7 +397,7 @@ class SE3(LieGroup):
 
         translation = self[:, :, 3].view(-1, 3, 1)
         ret_lin = a.view(-1, 1) * self[:, :, 3]
-        ret_lin -= 0.5 * torch.cross(ret_ang, self[:, :, 3])
+        ret_lin -= 0.5 * torch.cross(ret_ang, self[:, :, 3], dim=1)
         ret_ang_ext = ret_ang.view(-1, 3, 1)
         ret_lin += b.view(-1, 1) * (
             ret_ang_ext @ (ret_ang_ext.transpose(1, 2) @ translation)

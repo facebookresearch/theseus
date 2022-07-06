@@ -343,11 +343,12 @@ class GaussianBeliefPropagation(Optimizer, abc.ABC):
     def __init__(
         self,
         objective: Objective,
+        vectorize: bool = True,
         abs_err_tolerance: float = 1e-10,
         rel_err_tolerance: float = 1e-8,
         max_iterations: int = 20,
     ):
-        super().__init__(objective)
+        super().__init__(objective, vectorize=vectorize)
 
         # ordering is required to identify which messages to send where
         self.ordering = VariableOrdering(objective, default_order=True)
@@ -573,7 +574,7 @@ class GaussianBeliefPropagation(Optimizer, abc.ABC):
             )
             start_d += n_factors
 
-            if self.vectorize:
+            if self.objective.vectorized:
                 # prepare vectorized messages
                 ixs = torch.tensor(self.objective.vectorized_msg_ixs[j])
                 vtof_msgs: List[Message] = []
@@ -612,7 +613,7 @@ class GaussianBeliefPropagation(Optimizer, abc.ABC):
 
             factor.comp_mess(vtof_msgs, ftov_msgs, damping_tsr)
 
-            if self.vectorize:
+            if self.objective.vectorized:
                 # fill in messages using vectorized messages
                 ixs = torch.tensor(self.objective.vectorized_msg_ixs[j])
                 for ftov_msg in ftov_msgs:
@@ -684,8 +685,7 @@ class GaussianBeliefPropagation(Optimizer, abc.ABC):
         self.n_individual_factors = (
             len(self.objective.cost_functions) * self.objective.batch_size
         )
-        if self.vectorize:
-            self.objective.update_vectorization(compute_caches=False)
+        if self.objective.vectorized:
             cf_iterator = iter(self.objective.vectorized_cost_fns)
         else:
             cf_iterator = self.objective._get_iterator()
@@ -745,9 +745,9 @@ class GaussianBeliefPropagation(Optimizer, abc.ABC):
             t_vtof = time.time() - t1
 
             t_vec = 0.0
-            if self.vectorize:
+            if self.objective.vectorized:
                 t1 = time.time()
-                self.objective.update_vectorization(compute_caches=False)
+                self.objective.update_vectorization_if_needed(compute_caches=False)
                 t_vec = time.time() - t1
 
             t_tot = time.time() - t0
@@ -793,10 +793,8 @@ class GaussianBeliefPropagation(Optimizer, abc.ABC):
         dropout: float = 0.0,
         schedule: GBPSchedule = GBPSchedule.SYNCHRONOUS,
         lin_system_damping: float = 1e-6,
-        vectorize: bool = True,
         **kwargs,
     ) -> NonlinearOptimizerInfo:
-        self.vectorize = vectorize and self.objective.vectorized_cost_fns is not None
         with torch.no_grad():
             info = self._init_info(track_best_solution, track_err_history, verbose)
 

@@ -153,11 +153,14 @@ def gbp_solve_pgo(backward_mode, max_iterations=20):
     outer_optimizer = torch.optim.Adam([meas_std_tensor], lr=lr)
     outer_optimizer.zero_grad()
 
+    vectorize = True
+
     optimizer = GaussianBeliefPropagation(
         objective,
         max_iterations=max_iterations,
+        vectorize=vectorize,
     )
-    theseus_optim = th.TheseusLayer(optimizer)
+    theseus_optim = th.TheseusLayer(optimizer, vectorize=vectorize)
 
     optim_arg = {
         "verbose": True,
@@ -169,7 +172,6 @@ def gbp_solve_pgo(backward_mode, max_iterations=20):
         "damping": 0.0,
         "dropout": 0.0,
         "schedule": GBPSchedule.SYNCHRONOUS,
-        "vectorize": True,
     }
 
     outputs_gbp, info = theseus_optim.forward(inputs, optim_arg)

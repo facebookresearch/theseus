@@ -83,25 +83,33 @@ def run(cfg: omegaconf.OmegaConf):
     # ba.save_to_file(results_path / "ba.txt", gt_path=results_path / "ba_gt.txt")
 
     # param that control transition from squared loss to huber
-    radius_tensor = torch.tensor([1.0], dtype=torch.float64)
-    log_loss_radius = th.Vector(data=radius_tensor, name="log_loss_radius")
+    # radius_tensor = torch.tensor([1.0], dtype=torch.float64)
+    # log_loss_radius = th.Vector(data=radius_tensor, name="log_loss_radius")
 
     # Set up objective
     print("Setting up objective")
     objective = th.Objective(dtype=torch.float64)
 
+    weight = th.ScaleCostWeight(torch.tensor(1.0).to(dtype=ba.cameras[0].pose.dtype))
     for i, obs in enumerate(ba.observations):
         # print(i, len(ba.observations))
         cam = ba.cameras[obs.camera_index]
-        cost_function = theg.Reprojection(
+        cost_function = th.eb.Reprojection(
             camera_pose=cam.pose,
             world_point=ba.points[obs.point_index],
             focal_length=cam.focal_length,
             calib_k1=cam.calib_k1,
             calib_k2=cam.calib_k2,
-            log_loss_radius=log_loss_radius,
             image_feature_point=obs.image_feature_point,
+            weight=weight,
         )
+        # robust_cost_function = th.RobustCostFunction(
+        #     cost_function,
+        #     th.HuberLoss,
+        #     log_loss_radius,
+        #     name=f"robust_{cost_function.name}",
+        # )
+        # objective.add(robust_cost_function)
         objective.add(cost_function)
     dtype = objective.dtype
 
@@ -147,11 +155,13 @@ def run(cfg: omegaconf.OmegaConf):
     # print("Factors:\n", objective.cost_functions.keys(), "\n")
 
     # Create optimizer and theseus layer
+    vectorize = True
     optimizer = cfg["optimizer_cls"](
         objective,
         max_iterations=cfg["inner_optim"]["max_iters"],
+        vectorize=vectorize,
     )
-    theseus_optim = th.TheseusLayer(optimizer)
+    theseus_optim = th.TheseusLayer(optimizer, vectorize=vectorize)
 
     # device = "cuda" if torch.cuda.is_available() else "cpu"
     # theseus_optim.to(device)
@@ -169,7 +179,6 @@ def run(cfg: omegaconf.OmegaConf):
             "dropout": 0.0,
             "schedule": GBPSchedule.SYNCHRONOUS,
             "lin_system_damping": 1e-5,
-            "vectorize": True,
         }
         optim_arg = {**optim_arg, **gbp_optim_arg}
 
@@ -178,7 +187,6 @@ def run(cfg: omegaconf.OmegaConf):
         theseus_inputs[cam.pose.name] = cam.pose.data.clone()
     for pt in ba.points:
         theseus_inputs[pt.name] = pt.data.clone()
-    theseus_inputs["log_loss_radius"] = log_loss_radius.data.clone()
 
     with torch.no_grad():
         camera_loss_ref = camera_loss(ba, camera_pose_vars).item()

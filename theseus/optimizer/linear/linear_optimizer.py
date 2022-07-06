@@ -28,12 +28,13 @@ class LinearOptimizer(Optimizer):
         objective: Objective,
         linear_solver_cls: Type[LinearSolver],
         *args,
+        vectorize: bool = True,
         linearization_cls: Optional[Type[Linearization]] = None,
         linearization_kwargs: Optional[Dict[str, Any]] = None,
         linear_solver_kwargs: Optional[Dict[str, Any]] = None,
         **kwargs,
     ):
-        super().__init__(objective)
+        super().__init__(objective, vectorize=vectorize)
         linearization_kwargs = linearization_kwargs or {}
         linear_solver_kwargs = linear_solver_kwargs or {}
         self.linear_solver = linear_solver_cls(
@@ -69,17 +70,10 @@ class LinearOptimizer(Optimizer):
                 warnings.warn(msg, RuntimeWarning)
                 info.status[:] = LinearOptimizerStatus.FAIL
                 return info
-        self.retract_and_update_variables(delta)
+        self.objective.retract_optim_vars(
+            delta, self.linear_solver.linearization.ordering
+        )
         info.status[:] = LinearOptimizerStatus.CONVERGED
         for var in self.linear_solver.linearization.ordering:
             info.best_solution[var.name] = var.data.clone().cpu()
         return info
-
-    # retracts all variables in the given order and updates their values
-    # with the result
-    def retract_and_update_variables(self, delta: torch.Tensor):
-        var_idx = 0
-        for var in self.linear_solver.linearization.ordering:
-            new_var = var.retract(delta[:, var_idx : var_idx + var.dof()])
-            var.update(new_var.data)
-            var_idx += var.dof()

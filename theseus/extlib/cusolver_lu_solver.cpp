@@ -26,6 +26,8 @@ enum Ordering {
 
 struct CusolverLUSolver {
 
+	~CusolverLUSolver();
+
     CusolverLUSolver(int batchSize,
                      int64_t numCols,
                      const torch::Tensor& A_rowPtr,
@@ -52,6 +54,10 @@ struct CusolverLUSolver {
 	// stores the id of the factor stored (to enable workaround related to reusing contexts...)
 	int64_t factorId = 0;
 };
+
+CusolverLUSolver::~CusolverLUSolver() {
+    CUSOLVER_CHECK(cusolverRfDestroy(cusolverRfH));
+}
 
 CusolverLUSolver::CusolverLUSolver(int batchSize,
                                    int64_t numCols,

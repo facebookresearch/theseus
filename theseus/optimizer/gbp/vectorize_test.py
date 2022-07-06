@@ -86,12 +86,15 @@ objective.add(prior_b)
 
 print([cf.name for cf in objective.cost_functions.values()])
 
+vectorize = True
+
 optimizer = GaussianBeliefPropagation(
     objective,
     max_iterations=50,  # step_size=0.5,
+    vectorize=vectorize,
 )
 
-theseus_optim = th.TheseusLayer(optimizer, vectorize=True)
+theseus_optim = th.TheseusLayer(optimizer, vectorize=vectorize)
 
 a_tensor = torch.nn.Parameter(torch.rand(num_models, 1))
 
@@ -106,7 +109,6 @@ optim_arg = {
     "dropout": 0.0,
     "schedule": GBPSchedule.SYNCHRONOUS,
     "lin_system_damping": 1e-5,
-    "vectorize": True,
 }
 
 

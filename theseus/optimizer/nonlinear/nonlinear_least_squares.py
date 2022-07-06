@@ -22,6 +22,7 @@ class NonlinearLeastSquares(NonlinearOptimizer, abc.ABC):
         objective: Objective,
         *args,
         linear_solver_cls: Optional[Type[LinearSolver]] = None,
+        vectorize: bool = True,
         linearization_cls: Optional[Type[Linearization]] = None,
         linearization_kwargs: Optional[Dict[str, Any]] = None,
         linear_solver_kwargs: Optional[Dict[str, Any]] = None,
@@ -35,6 +36,7 @@ class NonlinearLeastSquares(NonlinearOptimizer, abc.ABC):
         super().__init__(
             objective,
             linear_solver_cls=linear_solver_cls,
+            vectorize=vectorize,
             linearization_cls=linearization_cls,
             linearization_kwargs=linearization_kwargs,
             linear_solver_kwargs=linear_solver_kwargs,

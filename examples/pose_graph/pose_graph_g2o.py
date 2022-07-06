@@ -19,11 +19,22 @@ num_verts, verts, edges = theg.pose_graph.read_3D_g2o_file(file_path, dtype=dtyp
 
 objective = th.Objective(dtype)
 
+log_loss_radius = th.Vector(
+    data=torch.tensor([[0]], dtype=dtype), name="log_loss_radius"
+)
+loss_cls = th.HuberLoss
+
 for edge in edges:
     cost_func = th.Between(
-        verts[edge.i], verts[edge.j], edge.weight, edge.relative_pose
+        verts[edge.i],
+        verts[edge.j],
+        edge.weight,
+        edge.relative_pose,
     )
-    objective.add(cost_func)
+    robust_cost_func = th.RobustCostFunction(
+        cost_func, loss_cls=loss_cls, log_loss_radius=log_loss_radius
+    )
+    objective.add(robust_cost_func)
 
 pose_prior = th.Difference(
     var=verts[0],
@@ -32,10 +43,12 @@ pose_prior = th.Difference(
 )
 objective.add(pose_prior)
 
-optimizer = th.LevenbergMarquardt(  # GaussNewton(
+optimizer = th.LevenbergMarquardt(
     objective,
     max_iterations=20,
     step_size=0.5,
+    linearization_cls=th.SparseLinearization,
+    linear_solver_cls=th.CholmodSparseSolver,
 )
 
 theseus_optim = th.TheseusLayer(optimizer)

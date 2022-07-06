@@ -9,15 +9,12 @@ import torch
 
 import theseus as th
 
-from .util import soft_loss_huber_like_reprojection
-
 
 class Reprojection(th.CostFunction):
     def __init__(
         self,
         camera_pose: th.SE3,
         world_point: th.Point3,
-        log_loss_radius: th.Vector,
         image_feature_point: th.Point2,
         focal_length: th.Vector,
         calib_k1: th.Vector = None,
@@ -32,7 +29,6 @@ class Reprojection(th.CostFunction):
             name=name,
         )
         self.camera_pose = camera_pose
-        self.log_loss_radius = log_loss_radius
         self.focal_length = focal_length
         self.calib_k1 = calib_k1
         self.calib_k2 = calib_k2
@@ -52,13 +48,7 @@ class Reprojection(th.CostFunction):
 
         self.register_optim_vars(["camera_pose", "world_point"])
         self.register_aux_vars(
-            [
-                "log_loss_radius",
-                "focal_length",
-                "image_feature_point",
-                "calib_k1",
-                "calib_k2",
-            ]
+            ["focal_length", "image_feature_point", "calib_k1", "calib_k2"]
         )
 
     def error(self) -> torch.Tensor:
@@ -71,11 +61,7 @@ class Reprojection(th.CostFunction):
         point_projection = proj * proj_factor
 
         err = point_projection - self.image_feature_point.data
-
-        loss_radius = torch.exp(self.log_loss_radius.data)
-
-        val, _ = soft_loss_huber_like_reprojection(err, loss_radius)
-        return val
+        return err
 
     def jacobians(self) -> Tuple[List[torch.Tensor], torch.Tensor]:
         cpose_wpt_jacs: List[torch.Tensor] = []
@@ -105,12 +91,7 @@ class Reprojection(th.CostFunction):
         ) + proj_sqn_jac * d_proj_factor.unsqueeze(2)
 
         err = point_projection - self.image_feature_point.data
-        loss_radius = torch.exp(self.log_loss_radius.data)
-        val, der = soft_loss_huber_like_reprojection(err, loss_radius)
-
-        soft_jac = torch.bmm(der, point_projection_jac)
-
-        return [soft_jac[:, :, :6], soft_jac[:, :, 6:]], val
+        return [point_projection_jac[..., :6], point_projection_jac[..., 6:]], err
 
     def dim(self) -> int:
         return 2
@@ -118,13 +99,14 @@ class Reprojection(th.CostFunction):
     def to(self, *args, **kwargs):
         super().to(*args, **kwargs)
 
-    def _copy_impl(self, new_name: Optional[str] = None):
+    def _copy_impl(self, new_name: Optional[str] = None) -> "Reprojection":
         return Reprojection(
             self.camera_pose.copy(),
             self.world_point.copy(),
-            self.log_loss_radius.copy(),
             self.image_feature_point.copy(),
             self.focal_length.copy(),
+            calib_k1=self.calib_k1.copy(),
+            calib_k2=self.calib_k2.copy(),
             weight=self.weight.copy(),
             name=new_name,
         )

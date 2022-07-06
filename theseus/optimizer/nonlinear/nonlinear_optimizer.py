@@ -64,6 +64,7 @@ class NonlinearOptimizer(Optimizer, abc.ABC):
         objective: Objective,
         linear_solver_cls: Type[LinearSolver],
         *args,
+        vectorize: bool = True,
         linearization_cls: Optional[Type[Linearization]] = None,
         linearization_kwargs: Optional[Dict[str, Any]] = None,
         linear_solver_kwargs: Optional[Dict[str, Any]] = None,
@@ -73,7 +74,7 @@ class NonlinearOptimizer(Optimizer, abc.ABC):
         step_size: float = 1.0,
         **kwargs,
     ):
-        super().__init__(objective)
+        super().__init__(objective, vectorize=vectorize)
         linear_solver_kwargs = linear_solver_kwargs or {}
         self.linear_solver = linear_solver_cls(
             objective,
@@ -262,8 +263,11 @@ class NonlinearOptimizer(Optimizer, abc.ABC):
                 step_size = self.params.step_size
                 force_update = False
 
-            self.retract_and_update_variables(
-                delta, converged_indices, step_size, force_update=force_update
+            self.objective.retract_optim_vars(
+                delta * step_size,
+                self.linear_solver.linearization.ordering,
+                ignore_mask=converged_indices,
+                force_update=force_update,
             )
 
             # check for convergence
@@ -376,22 +380,3 @@ class NonlinearOptimizer(Optimizer, abc.ABC):
     @abc.abstractmethod
     def compute_delta(self, **kwargs) -> torch.Tensor:
         pass
-
-    # retracts all variables in the given order and updates their values
-    # with the result
-    def retract_and_update_variables(
-        self,
-        delta: torch.Tensor,
-        converged_indices: torch.Tensor,
-        step_size: float,
-        force_update: bool = False,
-    ):
-        var_idx = 0
-        delta = step_size * delta
-        for var in self.linear_solver.linearization.ordering:
-            new_var = var.retract(delta[:, var_idx : var_idx + var.dof()])
-            if force_update:
-                var.update(new_var.data)
-            else:
-                var.update(new_var.data, batch_ignore_mask=converged_indices)
-            var_idx += var.dof()

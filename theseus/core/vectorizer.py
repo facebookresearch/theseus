@@ -4,9 +4,11 @@
 # LICENSE file in the root directory of this source tree.
 
 from collections import defaultdict
-from typing import Dict, List, Optional, Set, Tuple
+from typing import Dict, Iterable, List, Optional, Set, Tuple, Type
 
 import torch
+
+from theseus.geometry.manifold import Manifold
 
 from .cost_function import CostFunction
 from .objective import Objective
@@ -118,15 +120,19 @@ class Vectorize:
         # Dict[_CostFunctionSchema, List[str]]
         self._var_names = self._get_var_names()
 
-        # `vectorize()` will compute an error vector for each schema, then populate
-        # the wrappers with their appropriate weighted error slice.
+        # `self._vectorize()` will compute an error vector for each schema,
+        # then populate the wrappers with their appropriate weighted error slice.
         # Replacing `obj._cost_functions_iterable` allows to recover these when
         # iterating the Objective.
-        objective._cost_functions_iterable = self._cost_fn_wrappers
-        objective._vectorization_run = self._vectorize
-        objective._vectorization_to = self._to
-        objective.vectorized_cost_fns = list(self._vectorized_cost_fns.values())
-        objective.vectorized_msg_ixs = list(schema_ixs_dict.values())
+        objective._enable_vectorization(
+            self._cost_fn_wrappers,
+            self._vectorize,
+            self._to,
+            self._vectorized_retract_optim_vars,
+            list(self._vectorized_cost_fns.values()),
+            list(schema_ixs_dict.values()),
+            self,
+        )
 
         self._objective = objective
 
@@ -315,6 +321,68 @@ class Vectorize:
                 Vectorize._compute_error_and_replace_wrapper_caches(
                     vectorized_cost_fn, cost_fn_wrappers, batch_size
                 )
+
+    @staticmethod
+    def _vectorized_retract_optim_vars(
+        delta: torch.Tensor,
+        ordering: Iterable[Manifold],
+        ignore_mask: Optional[torch.Tensor] = None,
+        force_update: bool = False,
+    ):
+        # Each (variable-type, dof) gets mapped to a tuple with:
+        #   - the variable that will hold the vectorized data
+        #   - all the variables of that type that will be vectorized together
+        #   - the delta slices that go into the batch
+        var_info: Dict[
+            Tuple[Type[Manifold], int],
+            Tuple[Manifold, List[Manifold], List[torch.Tensor]],
+        ] = {}
+
+        start_idx = 0
+        batch_size = -1
+        # Create var info by looping variables in the given order
+        # All variables of the same type get grouped together, and their deltas saved
+        for var in ordering:
+            if batch_size == -1:
+                batch_size = var.shape[0]
+            else:
+                assert batch_size == var.shape[0]
+
+            delta_slice = delta[:, start_idx : start_idx + var.dof()]
+            start_idx += var.dof()
+            var_type = (var.__class__, var.dof())
+            if var_type not in var_info:
+                var_info[var_type] = (var.copy(), [], [])
+            var_info[var_type][1].append(var)
+            var_info[var_type][2].append(delta_slice)
+
+        for _, (vectorized_var, var_list, delta_list) in var_info.items():
+            n_vars, dof = len(var_list), vectorized_var.dof()
+
+            # Get the vectorized tensor that has the current variable data.
+            # The resulting shape is (N * b, M), b is batch size, N is the number of
+            # variables in the group, and M is the data shape for this class
+            vectorized_data = torch.cat([v.data for v in var_list], dim=0)
+            assert (
+                vectorized_data.shape
+                == (n_vars * batch_size,) + vectorized_data.shape[1:]
+            )
+            # delta_list is a list of N tensors of shape (b, d), where
+            # d is var.dof(). After vectorization, we get tensor of shape (N * b, d)
+            vectorized_delta = torch.cat(delta_list, dim=0)
+            assert vectorized_delta.shape == (n_vars * batch_size, dof)
+
+            # Retract the vectorized data, then redistribute to the variables
+            vectorized_var.update(vectorized_data)
+            new_var = vectorized_var.retract(vectorized_delta)
+            start_idx = 0
+            for var in var_list:
+                retracted_data_slice = new_var[start_idx : start_idx + batch_size, :]
+                if ignore_mask is None or force_update:
+                    var.update(retracted_data_slice)
+                else:
+                    var.update(retracted_data_slice, batch_ignore_mask=ignore_mask)
+                start_idx += batch_size
 
     # Applies to() with given args to all vectorized cost functions in the objective
     def _to(self, *args, **kwargs):

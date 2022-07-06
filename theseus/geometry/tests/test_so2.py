@@ -158,3 +158,18 @@ def test_local_map():
         group1 = th.SO2.rand(batch_size)
 
         check_jacobian_for_local(group0, group1, Group=th.SO2, is_projected=True)
+
+
+@pytest.mark.parametrize("batch_size", [1, 20, 100])
+@pytest.mark.parametrize("dtype", [torch.float32, torch.float64])
+def test_normalization(batch_size, dtype):
+    rng = torch.Generator()
+    rng.manual_seed(0)
+
+    matrix = torch.rand([batch_size, 2], dtype=dtype)
+    so2_mat = th.SO2.normalize(matrix)
+    th.SO2._SO2_matrix_check(so2_mat)
+
+    matrix = th.SO2.rand(batch_size, dtype=dtype).data
+    so2_mat = th.SO2.normalize(matrix)
+    torch.allclose(so2_mat, matrix)

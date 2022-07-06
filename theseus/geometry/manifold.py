@@ -81,6 +81,10 @@ class Manifold(Variable, abc.ABC):
     ) -> torch.Tensor:
         return self._project_impl(euclidean_grad, is_sparse)
 
+    @staticmethod
+    def normalize(data: torch.Tensor) -> torch.Tensor:
+        return data
+
     def local(
         self,
         variable2: "Manifold",

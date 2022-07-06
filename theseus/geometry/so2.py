@@ -153,6 +153,17 @@ class SO2(LieGroup):
 
         return so2
 
+    @staticmethod
+    def normalize(data: torch.Tensor) -> torch.Tensor:
+        data_norm = torch.norm(data, dim=1, keepdim=True)
+        near_zero = data_norm < theseus.constants._SO2_NORMALIZATION_EPS[data.dtype]
+        non_zero = torch.ones([data.shape[0], 1], dtype=data.dtype, device=data.device)
+        data_norm_nz = torch.where(near_zero, non_zero, data_norm)
+        default_data = torch.tensor(
+            [1, 0], dtype=data.dtype, device=data.device
+        ).expand([data.shape[0], 2])
+        return torch.where(near_zero, default_data, data / data_norm_nz)
+
     def _log_map_impl(
         self, jacobians: Optional[List[torch.Tensor]] = None
     ) -> torch.Tensor:

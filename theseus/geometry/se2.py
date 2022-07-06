@@ -30,7 +30,7 @@ class SE2(LieGroup):
         if x_y_theta is not None:
             dtype = x_y_theta.dtype
         if data is not None and requires_check:
-            self._SE2_matrix_check(data)
+            self._data_check(data)
         super().__init__(data=data, name=name, dtype=dtype)
         if x_y_theta is not None:
             self.update_from_x_y_theta(x_y_theta)
@@ -225,10 +225,10 @@ class SE2(LieGroup):
         return torch.stack((ux, uy, theta), dim=1)
 
     @staticmethod
-    def _SE2_matrix_check(matrix: torch.Tensor):
+    def _data_check(matrix: torch.Tensor) -> None:
         if matrix.ndim != 2 or matrix.shape[1] != 4:
             raise ValueError("SE2 can only be 4D vectors.")
-        SO2._SO2_matrix_check(matrix.data[:, 2:])
+        SO2._data_check(matrix.data[:, 2:])
 
     @staticmethod
     def exp_map(

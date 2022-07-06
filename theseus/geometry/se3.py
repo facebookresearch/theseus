@@ -29,7 +29,7 @@ class SE3(LieGroup):
         if x_y_z_quaternion is not None:
             dtype = x_y_z_quaternion.dtype
         if data is not None and requires_check:
-            self._SE3_matrix_check(data)
+            self._data_check(data)
         super().__init__(data=data, name=name, dtype=dtype)
         if x_y_z_quaternion is not None:
             self.update_from_x_y_z_quaternion(x_y_z_quaternion=x_y_z_quaternion)
@@ -145,10 +145,10 @@ class SE3(LieGroup):
         return ret
 
     @staticmethod
-    def _SE3_matrix_check(matrix: torch.Tensor):
+    def _data_check(matrix: torch.Tensor) -> None:
         if matrix.ndim != 3 or matrix.shape[1:] != (3, 4):
             raise ValueError("SE(3) can only be 3x4 matrices.")
-        SO3._SO3_matrix_check(matrix.data[:, :3, :3])
+        SO3._data_check(matrix.data[:, :3, :3])
 
     @staticmethod
     def x_y_z_unit_quaternion_to_SE3(x_y_z_quaternion: torch.Tensor) -> "SE3":

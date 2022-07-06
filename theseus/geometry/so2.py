@@ -27,7 +27,7 @@ class SO2(LieGroup):
         if theta is not None:
             dtype = theta.dtype
         if data is not None and requires_check:
-            self._SO2_matrix_check(data)
+            self._data_check(data)
         super().__init__(data=data, name=name, dtype=dtype)
         if theta is not None:
             if theta.ndim == 1:
@@ -121,7 +121,7 @@ class SO2(LieGroup):
             return torch.einsum("...k,...k", euclidean_grad, temp).unsqueeze(-1)
 
     @staticmethod
-    def _SO2_matrix_check(matrix: torch.Tensor):
+    def _data_check(matrix: torch.Tensor) -> None:
         if matrix.ndim != 2 or matrix.shape[1] != 2:
             raise ValueError("2D rotations can only be 2D vectors.")
 

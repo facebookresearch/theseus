@@ -27,7 +27,7 @@ class SO3(LieGroup):
         if quaternion is not None:
             dtype = quaternion.dtype
         if data is not None and requires_check:
-            self._SO3_matrix_check(data)
+            self._data_check(data)
         super().__init__(data=data, name=name, dtype=dtype)
         if quaternion is not None:
             self.update_from_unit_quaternion(quaternion)
@@ -123,7 +123,7 @@ class SO3(LieGroup):
         return ret
 
     @staticmethod
-    def _SO3_matrix_check(matrix: torch.Tensor):
+    def _data_check(matrix: torch.Tensor) -> None:
         if matrix.ndim != 3 or matrix.shape[1:] != (3, 3):
             raise ValueError("3D rotations can only be 3x3 matrices.")
 

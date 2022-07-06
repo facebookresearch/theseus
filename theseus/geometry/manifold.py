@@ -85,6 +85,10 @@ class Manifold(Variable, abc.ABC):
     def normalize(data: torch.Tensor) -> torch.Tensor:
         return data
 
+    @staticmethod
+    def _data_check(data: torch.Tensor) -> None:
+        pass
+
     def local(
         self,
         variable2: "Manifold",

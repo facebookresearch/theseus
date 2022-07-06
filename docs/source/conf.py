@@ -34,6 +34,7 @@ author = "Meta AI, FAIR team"
 # ones.
 extensions = [
     "sphinx.ext.autodoc",
+    "sphinx.ext.autosummary",
     "sphinx.ext.coverage",
     "sphinx.ext.napoleon",
     # "nbsphinx",

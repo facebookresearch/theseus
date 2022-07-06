@@ -10,6 +10,8 @@ import torch
 
 
 class Variable:
+    """A variable in a differentiable optimization problem."""
+
     _ids = count(0)
 
     def __init__(self, tensor: torch.Tensor, name: Optional[str] = None):

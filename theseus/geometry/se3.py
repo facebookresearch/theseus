@@ -339,11 +339,11 @@ class SE3(LieGroup):
         return ret
 
     @staticmethod
-    def normalize(matrix: torch.Tensor) -> torch.Tensor:
-        if matrix.ndim != 3 or matrix.shape[1:] != (3, 4):
+    def normalize(data: torch.Tensor) -> torch.Tensor:
+        if data.ndim != 3 or data.shape[1:] != (3, 4):
             raise ValueError("SE(3) can only be 3x4 matrices.")
 
-        return torch.cat([SO3.normalize(matrix[:, :, :3]), matrix[:, :, 3:]], dim=-1)
+        return torch.cat([SO3.normalize(data[:, :, :3]), data[:, :, 3:]], dim=-1)
 
     def _log_map_impl(
         self, jacobians: Optional[List[torch.Tensor]] = None

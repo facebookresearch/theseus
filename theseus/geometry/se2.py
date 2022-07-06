@@ -297,11 +297,11 @@ class SE2(LieGroup):
         return se2
 
     @staticmethod
-    def normalize(matrix: torch.Tensor) -> torch.Tensor:
-        if matrix.ndim != 2 or matrix.shape[1] != 4:
+    def normalize(data: torch.Tensor) -> torch.Tensor:
+        if data.ndim != 2 or data.shape[1] != 4:
             raise ValueError("SE2 can only be 4D vectors.")
 
-        return torch.cat([matrix[:, :2], SO2.normalize(matrix[:, 2:])], dim=1)
+        return torch.cat([data[:, :2], SO2.normalize(data[:, 2:])], dim=1)
 
     def _adjoint_impl(self) -> torch.Tensor:
         ret = torch.zeros(self.shape[0], 3, 3).to(device=self.device, dtype=self.dtype)

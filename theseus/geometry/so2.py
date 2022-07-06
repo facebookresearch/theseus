@@ -154,21 +154,21 @@ class SO2(LieGroup):
         return so2
 
     @staticmethod
-    def normalize(matrix: torch.Tensor) -> torch.Tensor:
-        if matrix.ndim != 2 or matrix.shape[1] != 2:
+    def normalize(data: torch.Tensor) -> torch.Tensor:
+        if data.ndim != 2 or data.shape[1] != 2:
             raise ValueError("2D rotations can only be 2D vectors.")
 
-        matrix_norm = torch.norm(matrix, dim=1, keepdim=True)
-        near_zero = matrix_norm < theseus.constants._SO2_NORMALIZATION_EPS[matrix.dtype]
-        matrix_norm_nz = torch.where(
+        data_norm = torch.norm(data, dim=1, keepdim=True)
+        near_zero = data_norm < theseus.constants._SO2_NORMALIZATION_EPS[data.dtype]
+        data_norm_nz = torch.where(
             near_zero,
-            torch.tensor(1.0, dtype=matrix.dtype, device=matrix.device),
-            matrix_norm,
+            torch.tensor(1.0, dtype=data.dtype, device=data.device),
+            data_norm,
         )
-        default_matrix = torch.tensor(
-            [1, 0], dtype=matrix.dtype, device=matrix.device
-        ).expand([matrix.shape[0], 2])
-        return torch.where(near_zero, default_matrix, matrix / matrix_norm_nz)
+        default_data = torch.tensor(
+            [1, 0], dtype=data.dtype, device=data.device
+        ).expand([data.shape[0], 2])
+        return torch.where(near_zero, default_data, data / data_norm_nz)
 
     def _log_map_impl(
         self, jacobians: Optional[List[torch.Tensor]] = None

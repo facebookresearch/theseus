@@ -10,6 +10,9 @@ build:
   tools:
     python: "3.9"
 
+  apt_packages:
+    - libsuitesparse-dev
+
 sphinx:
    configuration: docs/source/conf.py
 
@@ -18,8 +21,6 @@ formats:
 
 python:
    install:
-   - requirements: requirements/docs.txt
-
-build:
-  apt_packages:
-    - libsuitesparse-dev
+    - requirements: requirements/docs.txt
+    - method: pip
+      path: .

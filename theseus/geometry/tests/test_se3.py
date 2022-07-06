@@ -271,17 +271,17 @@ def test_normalization(batch_size, dtype):
     rng.manual_seed(0)
 
     matrix = torch.rand([batch_size, 3, 4], dtype=dtype)
-    rot_mat = th.SE3.normalize(matrix)
-    th.SE3._SE3_matrix_check(rot_mat)
+    se3_mat = th.SE3.normalize(matrix)
+    th.SE3._SE3_matrix_check(se3_mat)
 
     matrix = th.SE3.rand(batch_size, dtype=dtype).data
-    rot_mat = th.SE3.normalize(matrix)
-    torch.allclose(rot_mat, matrix)
+    se3_mat = th.SE3.normalize(matrix)
+    torch.allclose(se3_mat, matrix)
 
     matrix = th.SE3.rand(batch_size, dtype=dtype).data
     matrix[:, :, 2] *= -1
-    rot_mat = th.SE3.normalize(matrix)
+    se3_mat = th.SE3.normalize(matrix)
     torch.allclose(
-        (rot_mat - matrix).norm(dim=[1, 2]),
+        (se3_mat - matrix).norm(dim=[1, 2]),
         2 * torch.ones(matrix.shape[0], dtype=dtype),
     )

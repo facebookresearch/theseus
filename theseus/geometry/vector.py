@@ -214,6 +214,13 @@ class Vector(LieGroup):
         return Vector(data=tangent_vector.clone())
 
     @staticmethod
+    def normalize(matrix: torch.Tensor) -> torch.Tensor:
+        if matrix.ndim != 2:
+            raise ValueError("The dimension of vectors should be 2.")
+
+        return matrix
+
+    @staticmethod
     def _exp_map_jacobian_impl(
         tangent_vector: torch.Tensor, jacobians: Optional[List[torch.Tensor]]
     ):

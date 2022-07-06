@@ -160,10 +160,11 @@ class SO2(LieGroup):
 
         matrix_norm = torch.norm(matrix, dim=1, keepdim=True)
         near_zero = matrix_norm < theseus.constants._SO2_NORMALIZATION_EPS[matrix.dtype]
-        non_zero = torch.ones(
-            [matrix.shape[0], 1], dtype=matrix.dtype, device=matrix.device
+        matrix_norm_nz = torch.where(
+            near_zero,
+            torch.tensor(1.0, dtype=matrix.dtype, device=matrix.device),
+            matrix_norm,
         )
-        matrix_norm_nz = torch.where(near_zero, non_zero, matrix_norm)
         default_matrix = torch.tensor(
             [1, 0], dtype=matrix.dtype, device=matrix.device
         ).expand([matrix.shape[0], 2])

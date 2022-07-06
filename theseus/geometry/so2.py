@@ -121,7 +121,7 @@ class SO2(LieGroup):
             return torch.einsum("...k,...k", euclidean_grad, temp).unsqueeze(-1)
 
     @staticmethod
-    def _data_check(matrix: torch.Tensor) -> None:
+    def _data_check(matrix: torch.Tensor):
         if matrix.ndim != 2 or matrix.shape[1] != 2:
             raise ValueError("2D rotations can only be 2D vectors.")
 

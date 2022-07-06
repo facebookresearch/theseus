@@ -86,7 +86,7 @@ class Manifold(Variable, abc.ABC):
         return data
 
     @staticmethod
-    def _data_check(data: torch.Tensor) -> None:
+    def _data_check(data: torch.Tensor):
         pass
 
     def local(

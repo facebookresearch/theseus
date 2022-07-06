@@ -123,7 +123,7 @@ class SO3(LieGroup):
         return ret
 
     @staticmethod
-    def _data_check(matrix: torch.Tensor) -> None:
+    def _data_check(matrix: torch.Tensor):
         if matrix.ndim != 3 or matrix.shape[1:] != (3, 3):
             raise ValueError("3D rotations can only be 3x3 matrices.")
 

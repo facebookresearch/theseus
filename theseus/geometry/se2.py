@@ -225,7 +225,7 @@ class SE2(LieGroup):
         return torch.stack((ux, uy, theta), dim=1)
 
     @staticmethod
-    def _data_check(matrix: torch.Tensor) -> None:
+    def _data_check(matrix: torch.Tensor):
         if matrix.ndim != 2 or matrix.shape[1] != 4:
             raise ValueError("SE2 can only be 4D vectors.")
         SO2._data_check(matrix.data[:, 2:])

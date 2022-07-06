@@ -145,7 +145,7 @@ class SE3(LieGroup):
         return ret
 
     @staticmethod
-    def _data_check(matrix: torch.Tensor) -> None:
+    def _data_check(matrix: torch.Tensor):
         if matrix.ndim != 3 or matrix.shape[1:] != (3, 4):
             raise ValueError("SE(3) can only be 3x4 matrices.")
         SO3._data_check(matrix.data[:, :3, :3])

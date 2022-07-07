@@ -10,7 +10,7 @@ import warnings
 from dataclasses import dataclass
 from enum import Enum
 from itertools import count
-from typing import Dict, List, Optional, Sequence
+from typing import Dict, List, Optional, Sequence, Tuple, Type
 
 import numpy as np
 import torch
@@ -29,6 +29,10 @@ from theseus.optimizer.nonlinear.nonlinear_optimizer import (
 """
 TODO
  - solving inverse problem to compute message mean
+ - move vectorized indices compute to init
+ - use schedule
+ - random schedule not vectorized
+ - factor inherits CF class
 """
 
 
@@ -114,6 +118,7 @@ class Factor:
     def __init__(
         self,
         cf: CostFunction,
+        var_ixs: torch.Tensor,
         name: Optional[str] = None,
         lin_system_damping: float = 1e-6,
     ):
@@ -124,6 +129,7 @@ class Factor:
             self.name = f"{self.__class__.__name__}__{self._id}"
 
         self.cf = cf
+        self.var_ixs = var_ixs
         self.lin_system_damping = lin_system_damping
 
         # batch_size of the vectorized factor. In general != objective.batch_size.
@@ -146,6 +152,18 @@ class Factor:
         self.steps_since_lin = torch.zeros(
             self.batch_size, device=device, dtype=torch.int
         )
+
+        self.vtof_msgs: List[Message] = []
+        self.ftov_msgs: List[Message] = []
+        for var in cf.optim_vars:
+            # Set mean of initial message to identity of the group
+            # NB doesn't matter what it is as long as precision is zero
+            vtof_msg = Message([var.copy()], name=f"msg_{var.name}_to_{cf.name}")
+            ftov_msg = Message([var.copy()], name=f"msg_{cf.name}_to_{var.name}")
+            vtof_msg.zero_message()
+            ftov_msg.zero_message()
+            self.vtof_msgs.append(vtof_msg)
+            self.ftov_msgs.append(ftov_msg)
 
     # Linearizes factors at current belief if beliefs have deviated
     # from the linearization point by more than the threshold.
@@ -196,8 +214,6 @@ class Factor:
     # Compute all outgoing messages from the factor.
     def comp_mess(
         self,
-        vtof_msgs,
-        ftov_msgs,
         damping,
     ):
         num_optim_vars = self.cf.num_optim_vars()
@@ -216,7 +232,7 @@ class Factor:
                 var_dofs = self.cf.optim_var_at(i).dof()
                 if i != v:
                     eta_mess, lam_mess = th.local_gaussian(
-                        self.lin_point[i], vtof_msgs[i], return_mean=False
+                        self.lin_point[i], self.vtof_msgs[i], return_mean=False
                     )
                     eta_factor[:, start : start + var_dofs] += eta_mess
                     lam_factor[
@@ -288,12 +304,12 @@ class Factor:
                 if do_damping.sum() > 0:
                     damping_check = torch.logical_and(
                         new_mess_lam.count_nonzero(1, 2) != 0,
-                        ftov_msgs[v].precision.count_nonzero(1, 2) != 0,
+                        self.ftov_msgs[v].precision.count_nonzero(1, 2) != 0,
                     )
                     do_damping = torch.logical_and(do_damping, damping_check)
                     if do_damping.sum() > 0:
                         prev_mess_mean, prev_mess_lam = th.local_gaussian(
-                            self.lin_point[v], ftov_msgs[v], return_mean=True
+                            self.lin_point[v], self.ftov_msgs[v], return_mean=True
                         )
                         new_mess_mean = torch.bmm(
                             torch.inverse(new_mess_lam), new_mess_eta.unsqueeze(-1)
@@ -327,11 +343,9 @@ class Factor:
 
         # update messages
         for v in range(num_optim_vars):
-            ftov_msgs[v].update(
+            self.ftov_msgs[v].update(
                 mean=new_messages[v].mean, precision=new_messages[v].precision
             )
-
-        return new_messages
 
     @property
     def dof(self) -> int:
@@ -357,13 +371,8 @@ class GaussianBeliefPropagation(Optimizer, abc.ABC):
             abs_err_tolerance, rel_err_tolerance, max_iterations
         )
 
-        # create array for indexing the messages
-        var_ixs_nested = [
-            [self.ordering.index_of(var.name) for var in cf.optim_vars]
-            for cf in self.objective.cost_functions.values()
-        ]
-        var_ixs = [item for sublist in var_ixs_nested for item in sublist]
-        self.var_ix_for_edges = torch.tensor(var_ixs).long()
+        self.beliefs: List[th.ManifoldGaussian] = []
+        self.factors: List[Factor] = []
 
     """
     Copied and slightly modified from nonlinear optimizer class
@@ -497,63 +506,211 @@ class GaussianBeliefPropagation(Optimizer, abc.ABC):
     GBP functions
     """
 
-    def _pass_var_to_fac_messages(
+    def _pass_var_to_fac_messages_loop(
         self,
         update_belief=True,
     ):
         for i, var in enumerate(self.ordering):
 
             # Collect all incoming messages in the tangent space at the current belief
-            taus = []  # message means
+            etas_tp = []  # message etas
             lams_tp = []  # message lams
-            for j, msg in enumerate(self.ftov_msgs):
-                if self.var_ix_for_edges[j] == i:
-                    # print(msg.mean, msg.precision)
-                    tau, lam_tp = th.local_gaussian(var, msg, return_mean=True)
-                    taus.append(tau[None, ...])
-                    lams_tp.append(lam_tp[None, ...])
+            for factor in self.factors:
+                for j, msg in enumerate(factor.ftov_msgs):
+                    if factor.var_ixs[j] == i:
+                        eta_tp, lam_tp = th.local_gaussian(var, msg, return_mean=False)
+                        etas_tp.append(eta_tp[None, ...])
+                        lams_tp.append(lam_tp[None, ...])
 
-            taus = torch.cat(taus)
+            etas_tp = torch.cat(etas_tp)
             lams_tp = torch.cat(lams_tp)
 
             lam_tau = lams_tp.sum(dim=0)
 
             # Compute outgoing messages
-            ix = 0
-            for j, msg in enumerate(self.ftov_msgs):
-                if self.var_ix_for_edges[j] == i:
-                    taus_inc = torch.cat((taus[:ix], taus[ix + 1 :]))
-                    lams_inc = torch.cat((lams_tp[:ix], lams_tp[ix + 1 :]))
+            ix = 0  # index for msg in list of msgs to variables
+            for factor in self.factors:
+                for j, msg in enumerate(factor.vtof_msgs):
+                    if factor.var_ixs[j] == i:
+                        etas_inc = torch.cat((etas_tp[:ix], etas_tp[ix + 1 :]))
+                        lams_inc = torch.cat((lams_tp[:ix], lams_tp[ix + 1 :]))
 
-                    lam_a = lams_inc.sum(dim=0)
-                    if lam_a.count_nonzero() == 0:
-                        self.vtof_msgs[j].zero_message()
-                    else:
-                        inv_lam_a = torch.linalg.inv(lam_a)
-                        sum_taus = torch.matmul(lams_inc, taus_inc.unsqueeze(-1)).sum(
-                            dim=0
-                        )
-                        tau_a = torch.matmul(inv_lam_a, sum_taus).squeeze(-1)
-                        new_mess = th.retract_gaussian(var, tau_a, lam_a)
-                        self.vtof_msgs[j].update(new_mess.mean, new_mess.precision)
-                    ix += 1
+                        lam_a = lams_inc.sum(dim=0)
+                        if lam_a.count_nonzero() == 0:
+                            msg.zero_message()
+                        else:
+                            inv_lam_a = torch.linalg.inv(lam_a)
+                            sum_etas = etas_inc.sum(dim=0)
+                            mean_a = torch.matmul(
+                                inv_lam_a, sum_etas.unsqueeze(-1)
+                            ).squeeze(-1)
+                            new_mess = th.retract_gaussian(var, mean_a, lam_a)
+                            msg.update(new_mess.mean, new_mess.precision)
+                        ix += 1
 
             # update belief mean and variance
             # if no incoming messages then leave current belief unchanged
             if update_belief and lam_tau.count_nonzero() != 0:
                 inv_lam_tau = torch.inverse(lam_tau)
-                sum_taus = torch.matmul(lams_tp, taus.unsqueeze(-1)).sum(dim=0)
-                tau = torch.matmul(inv_lam_tau, sum_taus).squeeze(-1)
+                sum_taus = etas_tp.sum(dim=0)
+                tau = torch.matmul(inv_lam_tau, sum_taus.unsqueeze(-1)).squeeze(-1)
 
                 new_belief = th.retract_gaussian(var, tau, lam_tau)
                 self.beliefs[i].update(new_belief.mean, new_belief.precision)
+
+    def _pass_var_to_fac_messages_vectorized(
+        self,
+        update_belief=True,
+    ):
+        # Each (variable-type, dof) gets mapped to a tuple with:
+        #   - the variable that will hold the vectorized data
+        #   - all the variables of that type that will be vectorized together
+        #   - list of variable indices from ordering
+        #   - tensor that will hold incoming messages [eta, lam] in the belief tangent plane
+        var_info: Dict[
+            Tuple[Type[Manifold], int],
+            Tuple[Manifold, List[Manifold], List[int], List[torch.Tensor]],
+        ] = {}
+
+        batch_size = -1
+        # Create var info by looping variables in the given order
+        # All variables of the same type get grouped together
+        for ix, var in enumerate(self.ordering):
+            if batch_size == -1:
+                batch_size = var.shape[0]
+            else:
+                assert batch_size == var.shape[0]
+
+            var_type = (var.__class__, var.dof())
+            if var_type not in var_info:
+                var_info[var_type] = (var.copy(), [], [], [])
+            var_info[var_type][1].append(var)
+            var_info[var_type][2].append(ix)
+
+        for var_type, (vectorized_var, var_list, _, eta_lam) in var_info.items():
+            n_vars, dof = len(var_list), vectorized_var.dof()
+
+            # Get the vectorized tensor that has the current variable data.
+            # The resulting shape is (N * b, M), b is batch size, N is the number of
+            # variables in the group, and M is the data shape for this class
+            vectorized_data = torch.cat([v.data for v in var_list], dim=0)
+            assert (
+                vectorized_data.shape
+                == (n_vars * batch_size,) + vectorized_data.shape[1:]
+            )
+            vectorized_var.update(vectorized_data)
+
+            eta_tp_acc = torch.zeros(n_vars * batch_size, dof)
+            lam_tp_acc = torch.zeros(n_vars * batch_size, dof, dof)
+            eta_tp_acc = eta_tp_acc.to(vectorized_data.device, vectorized_data.dtype)
+            lam_tp_acc = lam_tp_acc.to(vectorized_data.device, vectorized_data.dtype)
+            eta_lam.extend([eta_tp_acc, lam_tp_acc])
+
+        # add ftov messages to eta_tp and lam_tp accumulator tensors
+        for factor in self.factors:
+            for i, msg in enumerate(factor.ftov_msgs):
+
+                # transform messages to tangent plane at the current variable value
+                eta_tp, lam_tp = th.local_gaussian(
+                    factor.cf.optim_var_at(i), msg, return_mean=False
+                )
+
+                receiver_var_type = (msg.mean[0].__class__, msg.mean[0].dof())
+
+                #  add messages to correct variable using indices
+                eta_tp_acc = var_info[receiver_var_type][3][0]
+                lam_tp_acc = var_info[receiver_var_type][3][1]
+
+                # COULD MOVE THIS TO THE INIT
+                # get indices of the vectorized variables that receive each message
+                receiver_var_ixs = factor.var_ixs[:, i]  # ixs of the receiver variables
+                var_type_ixs = torch.tensor(
+                    var_info[receiver_var_type][2]
+                )  # all ixs for variables of this type
+                var_type_ixs = var_type_ixs[None, :].repeat(len(receiver_var_ixs), 1)
+                is_receiver = (var_type_ixs - receiver_var_ixs[:, None]) == 0
+                indices = is_receiver.nonzero()[:, 1]
+
+                # expand indices for all batch variables when batch size > 1
+                if self.objective.batch_size != 1:
+                    indices = indices[:, None].repeat(1, self.objective.batch_size)
+                    shift = (
+                        torch.arange(self.objective.batch_size)[None, :]
+                        .long()
+                        .to(indices.device)
+                    )
+                    indices = indices + shift
+                    indices = indices.flatten()
+
+                eta_tp_acc.index_add_(0, indices, eta_tp)
+                lam_tp_acc.index_add_(0, indices, lam_tp)
+
+        # compute variable to factor messages, now all incoming messages are accumulated
+        for factor in self.factors:
+            for i, msg in enumerate(factor.vtof_msgs):
+
+                # transform messages to tangent plane at the current variable value
+                ftov_msg = factor.ftov_msgs[i]
+                eta_tp, lam_tp = th.local_gaussian(
+                    factor.cf.optim_var_at(i), ftov_msg, return_mean=False
+                )
+
+                receiver_var_type = (msg.mean[0].__class__, msg.mean[0].dof())
+                eta_tp_acc = var_info[receiver_var_type][3][0]
+                lam_tp_acc = var_info[receiver_var_type][3][1]
+
+                # COULD MOVE THIS TO THE INIT
+                # get indices of the vectorized variables that receive each message
+                receiver_var_ixs = factor.var_ixs[:, i]  # ixs of the receiver variables
+                var_type_ixs = torch.tensor(
+                    var_info[receiver_var_type][2]
+                )  # all ixs for variables of this type
+                var_type_ixs = var_type_ixs[None, :].repeat(len(receiver_var_ixs), 1)
+                is_receiver = (var_type_ixs - receiver_var_ixs[:, None]) == 0
+                indices = is_receiver.nonzero()[:, 1]
+
+                # new outgoing message is belief - last incoming mesage (in log space parameters)
+                sum_etas = eta_tp_acc[indices] - eta_tp
+                lam_a = lam_tp_acc[indices] - lam_tp
+
+                if lam_a.count_nonzero() == 0:
+                    msg.zero_message()
+                else:
+                    print(lam_a.shape, lam_a)
+                    inv_lam_a = torch.linalg.inv(lam_a)
+                    mean_a = torch.matmul(inv_lam_a, sum_etas.unsqueeze(-1)).squeeze(-1)
+                    new_mess = th.retract_gaussian(
+                        factor.cf.optim_var_at(i), mean_a, lam_a
+                    )
+                    msg.update(new_mess.mean, new_mess.precision)
+
+        # compute the new belief for the vectorized variables
+        for (vectorized_var, _, var_ixs, eta_lam) in var_info.values():
+            eta_tp_acc = eta_lam[0]
+            lam_tau = eta_lam[1]
+
+            if update_belief and lam_tau.count_nonzero() != 0:
+                inv_lam_tau = torch.inverse(lam_tau)
+                tau = torch.matmul(inv_lam_tau, eta_tp_acc.unsqueeze(-1)).squeeze(-1)
+
+                new_belief = th.retract_gaussian(vectorized_var, tau, lam_tau)
+                # update non vectorized beliefs with slices
+                start_idx = 0
+                for ix in var_ixs:
+                    belief_mean_slice = new_belief.mean[0][
+                        start_idx : start_idx + batch_size
+                    ]
+                    belief_precision_slice = new_belief.precision[
+                        start_idx : start_idx + batch_size
+                    ]
+                    self.beliefs[ix].update([belief_mean_slice], belief_precision_slice)
+                    start_idx += batch_size
 
     def _linearize_factors(self, relin_threshold: float = None):
         relins = 0
         for factor in self.factors:
             factor.linearize(relin_threshold=relin_threshold)
             relins += int((factor.steps_since_lin == 0).sum().item())
-
         return relins
 
     def _pass_fac_to_var_messages(
@@ -564,72 +721,15 @@ class GaussianBeliefPropagation(Optimizer, abc.ABC):
 
         # USE THE SCHEDULE!!!!!
 
-        start = 0
         start_d = 0
         for j, factor in enumerate(self.factors):
             num_optim_vars = factor.cf.num_optim_vars()
             n_factors = num_optim_vars * factor.batch_size
-            damping_tsr = damping[start_d : start_d + n_factors].reshape(
-                num_optim_vars, factor.batch_size
-            )
+            damping_tsr = damping[start_d : start_d + n_factors]
+            damping_tsr = damping_tsr.reshape(num_optim_vars, factor.batch_size)
             start_d += n_factors
 
-            if self.objective.vectorized:
-                # prepare vectorized messages
-                ixs = torch.tensor(self.objective.vectorized_msg_ixs[j])
-                vtof_msgs: List[Message] = []
-                ftov_msgs: List[Message] = []
-                for var in factor.cf.optim_vars:
-                    mean_vtof_msgs = var.copy()
-                    mean_ftov_msgs = var.copy()
-                    mean_data_vtof_msgs = torch.cat(
-                        [self.vtof_msgs[i].mean[0].data for i in ixs]
-                    )
-                    mean_data_ftov_msgs = torch.cat(
-                        [self.ftov_msgs[i].mean[0].data for i in ixs]
-                    )
-                    mean_vtof_msgs.update(data=mean_data_vtof_msgs)
-                    mean_ftov_msgs.update(data=mean_data_ftov_msgs)
-                    precision_vtof_msgs = torch.cat(
-                        [self.vtof_msgs[i].precision for i in ixs]
-                    )
-                    precision_ftov_msgs = torch.cat(
-                        [self.ftov_msgs[i].precision for i in ixs]
-                    )
-
-                    vtof_msg = Message(
-                        mean=[mean_vtof_msgs], precision=precision_vtof_msgs
-                    )
-                    ftov_msg = Message(
-                        mean=[mean_ftov_msgs], precision=precision_ftov_msgs
-                    )
-                    vtof_msgs.append(vtof_msg)
-                    ftov_msgs.append(ftov_msg)
-
-                    ixs += 1
-            else:
-                vtof_msgs = self.vtof_msgs[start : start + num_optim_vars]
-                ftov_msgs = self.ftov_msgs[start : start + num_optim_vars]
-
-            factor.comp_mess(vtof_msgs, ftov_msgs, damping_tsr)
-
-            if self.objective.vectorized:
-                # fill in messages using vectorized messages
-                ixs = torch.tensor(self.objective.vectorized_msg_ixs[j])
-                for ftov_msg in ftov_msgs:
-                    start_idx = 0
-                    for ix in ixs:
-                        v_slice = slice(
-                            start_idx, start_idx + self.objective.batch_size
-                        )
-                        self.ftov_msgs[ix].update(
-                            mean=[ftov_msg.mean[0][v_slice]],
-                            precision=ftov_msg.precision[v_slice],
-                        )
-                        start_idx += self.objective.batch_size
-                    ixs += 1
-
-            start += num_optim_vars
+            factor.comp_mess(damping_tsr)
 
     """
     Optimization loop functions
@@ -658,49 +758,56 @@ class GaussianBeliefPropagation(Optimizer, abc.ABC):
                 f"Dropout probability must be between 0 and 1. Got {dropout}."
             )
 
-        if clear_messages:
-            # initialise messages with zeros
-            self.vtof_msgs: List[Message] = []
-            self.ftov_msgs: List[Message] = []
-            for cf in self.objective.cost_functions.values():
-                for var in cf.optim_vars:
-                    # Set mean of initial message to identity of the group
-                    # doesn't matter what it is as long as precision is zero
-                    vtof_msg = Message(
-                        [var.copy()], name=f"msg_{var.name}_to_{cf.name}"
-                    )
-                    ftov_msg = Message(
-                        [var.copy()], name=f"msg_{cf.name}_to_{var.name}"
-                    )
-                    vtof_msg.zero_message()
-                    ftov_msg.zero_message()
-                    self.vtof_msgs.append(vtof_msg)
-                    self.ftov_msgs.append(ftov_msg)
-
-        # initialise ManifoldGaussian for belief
-        self.beliefs: List[th.ManifoldGaussian] = []
+        # initialise beliefs
         for var in self.ordering:
             self.beliefs.append(th.ManifoldGaussian([var]))
 
-        self.n_individual_factors = (
-            len(self.objective.cost_functions) * self.objective.batch_size
-        )
-        if self.objective.vectorized:
-            cf_iterator = iter(self.objective.vectorized_cost_fns)
-        else:
-            cf_iterator = self.objective._get_iterator()
-
-        # compute factor potentials for the first time
-        self.factors: List[Factor] = []
-        for cost_function in cf_iterator:
-            self.factors.append(
-                Factor(
-                    cost_function,
-                    name=cost_function.name,
-                    lin_system_damping=lin_system_damping,
-                )
+        if clear_messages:
+            self.n_individual_factors = (
+                len(self.objective.cost_functions) * self.objective.batch_size
             )
-        relins = self._linearize_factors()
+
+            if self.objective.vectorized:
+                cf_iterator = iter(self.objective.vectorized_cost_fns)
+                self._pass_var_to_fac_messages = (
+                    self._pass_var_to_fac_messages_vectorized
+                )
+            else:
+                cf_iterator = self.objective._get_iterator()
+                self._pass_var_to_fac_messages = self._pass_var_to_fac_messages_loop
+
+            # compute factor potentials for the first time
+            for i, cost_function in enumerate(cf_iterator):
+
+                if self.objective.vectorized:
+                    # create array for indexing the messages
+                    base_cf_names = self.objective.vectorized_cf_names[i]
+                    base_cfs = [
+                        self.objective.get_cost_function(name) for name in base_cf_names
+                    ]
+                    var_ixs = torch.tensor(
+                        [
+                            [self.ordering.index_of(var.name) for var in cf.optim_vars]
+                            for cf in base_cfs
+                        ]
+                    ).long()
+                else:
+                    var_ixs = torch.tensor(
+                        [
+                            self.ordering.index_of(var.name)
+                            for var in cost_function.optim_vars
+                        ]
+                    ).long()
+
+                self.factors.append(
+                    Factor(
+                        cost_function,
+                        name=cost_function.name,
+                        var_ixs=var_ixs,
+                        lin_system_damping=lin_system_damping,
+                    )
+                )
+            relins = self._linearize_factors()
 
         self.n_edges = sum(
             [factor.cf.num_optim_vars() * factor.batch_size for factor in self.factors]
@@ -717,7 +824,10 @@ class GaussianBeliefPropagation(Optimizer, abc.ABC):
 
         converged_indices = torch.zeros_like(info.last_err).bool()
         for it_ in range(start_iter, start_iter + num_iter):
-            self.ftov_msgs_history[it_] = [msg.copy() for msg in self.ftov_msgs]
+            curr_ftov_msgs = []
+            for factor in self.factors:
+                curr_ftov_msgs.extend([msg.copy() for msg in factor.ftov_msgs])
+            self.ftov_msgs_history[it_] = curr_ftov_msgs
             self.belief_history[it_] = [belief.copy() for belief in self.beliefs]
 
             # damping
@@ -751,10 +861,11 @@ class GaussianBeliefPropagation(Optimizer, abc.ABC):
                 t_vec = time.time() - t1
 
             t_tot = time.time() - t0
-            print(
-                f"Timings ----- relin {t_relin:.4f}, ftov {t_ftov:.4f}, vtof {t_vtof:.4f},"
-                f" vectorization {t_vec:.4f}, TOTAL {t_tot:.4f}"
-            )
+            if verbose:
+                print(
+                    f"Timings ----- relin {t_relin:.4f}, ftov {t_ftov:.4f}, vtof {t_vtof:.4f},"
+                    f" vectorization {t_vec:.4f}, TOTAL {t_tot:.4f}"
+                )
 
             # check for convergence
             if it_ >= 0:

@@ -83,8 +83,8 @@ def run(cfg: omegaconf.OmegaConf):
     # ba.save_to_file(results_path / "ba.txt", gt_path=results_path / "ba_gt.txt")
 
     # param that control transition from squared loss to huber
-    # radius_tensor = torch.tensor([1.0], dtype=torch.float64)
-    # log_loss_radius = th.Vector(data=radius_tensor, name="log_loss_radius")
+    radius_tensor = torch.tensor([1.0], dtype=torch.float64)
+    log_loss_radius = th.Vector(data=radius_tensor, name="log_loss_radius")
 
     # Set up objective
     print("Setting up objective")
@@ -103,14 +103,13 @@ def run(cfg: omegaconf.OmegaConf):
             image_feature_point=obs.image_feature_point,
             weight=weight,
         )
-        # robust_cost_function = th.RobustCostFunction(
-        #     cost_function,
-        #     th.HuberLoss,
-        #     log_loss_radius,
-        #     name=f"robust_{cost_function.name}",
-        # )
-        # objective.add(robust_cost_function)
-        objective.add(cost_function)
+        robust_cost_function = th.RobustCostFunction(
+            cost_function,
+            th.HuberLoss,
+            log_loss_radius,
+            name=f"robust_{cost_function.name}",
+        )
+        objective.add(robust_cost_function)
     dtype = objective.dtype
 
     # Add regularization

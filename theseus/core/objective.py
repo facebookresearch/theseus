@@ -72,7 +72,8 @@ class Objective:
         self._vectorization_to: Optional[Callable] = None
 
         self.vectorized_cost_fns: Optional[List[CostFunction]] = None
-        self.vectorized_msg_ixs: Optional[List[List[int]]] = None
+        # nested list of name of each base cost function in the vectorized cfs
+        self.vectorized_cf_names: Optional[List[List[str]]] = None
 
         # If vectorization is on, this gets replaced by a vectorized version
         self._retract_method = Objective._retract_base
@@ -565,7 +566,7 @@ class Objective:
         vectorized_to: Callable,
         vectorized_retract_fn: Callable,
         vectorized_cost_fns: List[CostFunction],
-        vectorized_msg_ixs: List[List[int]],
+        vectorized_cf_names: List[List[str]],
         enabler: Any,
     ):
         # Hacky way to make Vectorize a "friend" class
@@ -578,7 +579,7 @@ class Objective:
         self._vectorization_to = vectorized_to
         self._retract_method = vectorized_retract_fn
         self.vectorized_cost_fns = vectorized_cost_fns
-        self.vectorized_msg_ixs = vectorized_msg_ixs
+        self.vectorized_cf_names = vectorized_cf_names
         self._vectorized = True
 
     # Making public, since this should be a safe operation
@@ -588,7 +589,7 @@ class Objective:
         self._vectorization_to = None
         self._retract_method = Objective._retract_base
         self.vectorized_cost_fns = None
-        self.vectorized_msg_ixs = None
+        self.vectorized_cf_names = None
         self._vectorized = False
 
     @property
@@ -600,6 +601,6 @@ class Objective:
             == (self._vectorization_to is None)
             == (self._retract_method is Objective._retract_base)
             == (self.vectorized_cost_fns is None)
-            == (self.vectorized_msg_ixs is None)
+            == (self.vectorized_cf_names is None)
         )
         return self._vectorized

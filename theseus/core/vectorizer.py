@@ -94,18 +94,16 @@ class Vectorize:
             _CostFunctionSchema, List[_CostFunctionWrapper]
         ] = defaultdict(list)
 
-        schema_ixs_dict: Dict[_CostFunctionSchema, List[int]] = defaultdict(list)
+        schema_cf_names_dict: Dict[_CostFunctionSchema, List[str]] = defaultdict(list)
 
         # Create wrappers for all cost functions and also get their schemas
-        msg_ix = 0
         for cost_fn in objective.cost_functions.values():
             wrapper = _CostFunctionWrapper(cost_fn)
             self._cost_fn_wrappers.append(wrapper)
             schema = _get_cost_function_schema(cost_fn)
             self._schema_dict[schema].append(wrapper)
 
-            schema_ixs_dict[schema].append(msg_ix)
-            msg_ix += cost_fn.num_optim_vars()
+            schema_cf_names_dict[schema].append(cost_fn.name)
 
         # Now create a vectorized cost function for each unique schema
         self._vectorized_cost_fns: Dict[_CostFunctionSchema, CostFunction] = {}
@@ -130,7 +128,7 @@ class Vectorize:
             self._to,
             self._vectorized_retract_optim_vars,
             list(self._vectorized_cost_fns.values()),
-            list(schema_ixs_dict.values()),
+            list(schema_cf_names_dict.values()),
             self,
         )
 
@@ -297,8 +295,7 @@ class Vectorize:
                 cf._cached_jacobians = None
 
     def _vectorize(self, compute_caches=True):
-        if compute_caches:
-            self._clear_wrapper_caches()
+        self._clear_wrapper_caches()
         for schema, cost_fn_wrappers in self._schema_dict.items():
             var_names = self._var_names[schema]
             vectorized_cost_fn = self._vectorized_cost_fns[schema]

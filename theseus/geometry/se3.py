@@ -484,7 +484,7 @@ class SE3(LieGroup):
         ret = torch.zeros(self.shape[0], 3, 4).to(dtype=self.dtype, device=self.device)
         rotT = self.tensor[:, :3, :3].transpose(1, 2)
         ret[:, :, :3] = rotT
-        ret[:, :, 3] = -(rotT @ self.data[:, :3, 3].unsqueeze(2)).view(-1, 3)
+        ret[:, :, 3] = -(rotT @ self.tensor[:, :3, 3].unsqueeze(2)).view(-1, 3)
         # if self.tensor is a valid SE3, so is the inverse
         return SE3(tensor=ret, strict=False)
 

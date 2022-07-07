@@ -200,7 +200,7 @@ class SO2(LieGroup):
 
     def _inverse_impl(self, get_jacobian: bool = False) -> "SO2":
         cosine, sine = self.to_cos_sin()
-        return SO2(data=torch.stack([cosine, -sine], dim=1), strict=False)
+        return SO2(tensor=torch.stack([cosine, -sine], dim=1), strict=False)
 
     def _rotate_shape_check(self, point: Union[Point2, torch.Tensor]):
         err_msg = (

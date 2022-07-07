@@ -171,7 +171,7 @@ def test_vectorized_error():
 
         se3s = [
             th.SE3(
-                tensor=th.SE3.rand(batch_size, generator=generator).data,
+                tensor=th.SE3.rand(batch_size, generator=generator).tensor,
                 strict=False,
             )
             for i in range(rng.choice([1, 10]))

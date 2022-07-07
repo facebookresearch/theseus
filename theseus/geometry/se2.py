@@ -23,15 +23,13 @@ class SE2(LieGroup):
         data: Optional[torch.Tensor] = None,
         name: Optional[str] = None,
         dtype: Optional[torch.dtype] = None,
-        requires_check: bool = True,
+        strict: bool = False,
     ):
         if x_y_theta is not None and data is not None:
             raise ValueError("Please provide only one of x_y_theta or data.")
         if x_y_theta is not None:
             dtype = x_y_theta.dtype
-        if data is not None and requires_check:
-            self._data_check(data)
-        super().__init__(data=data, name=name, dtype=dtype)
+        super().__init__(data=data, name=name, dtype=dtype, strict=strict)
         if x_y_theta is not None:
             self.update_from_x_y_theta(x_y_theta)
 
@@ -225,10 +223,12 @@ class SE2(LieGroup):
         return torch.stack((ux, uy, theta), dim=1)
 
     @staticmethod
-    def _data_check(matrix: torch.Tensor):
-        if matrix.ndim != 2 or matrix.shape[1] != 4:
-            raise ValueError("SE2 can only be 4D vectors.")
-        SO2._data_check(matrix.data[:, 2:])
+    def _data_check_impl(matrix: torch.Tensor):
+        with torch.no_grad():
+            if matrix.ndim != 2 or matrix.shape[1] != 4:
+                raise ValueError("SE2 data tensors can only be 4D vectors.")
+
+            return SO2._data_check_impl(matrix.data[:, 2:])
 
     @staticmethod
     def exp_map(
@@ -299,7 +299,7 @@ class SE2(LieGroup):
     @staticmethod
     def normalize(data: torch.Tensor) -> torch.Tensor:
         if data.ndim != 2 or data.shape[1] != 4:
-            raise ValueError("SE2 can only be 4D vectors.")
+            raise ValueError("SE2 data tensors can only be 4D vectors.")
 
         return torch.cat([data[:, :2], SO2.normalize(data[:, 2:])], dim=1)
 
@@ -325,7 +325,7 @@ class SE2(LieGroup):
         )
         return SE2(
             data=torch.cat([new_translation.data, new_rotation.data], dim=1),
-            requires_check=False,
+            strict=False,
         )
 
     def _inverse_impl(self) -> "SE2":

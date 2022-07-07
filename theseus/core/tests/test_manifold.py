@@ -46,6 +46,14 @@ class MockVarNoArgs(th.Manifold):
     def _init_data():
         return torch.ones(1, 1)
 
+    @staticmethod
+    def _data_check_impl(data: torch.Tensor) -> bool:
+        return True
+
+    @staticmethod
+    def normalize(data: torch.Tensor) -> torch.Tensor:
+        return data
+
     def dof(self):
         return 0
 

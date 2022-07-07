@@ -20,15 +20,13 @@ class SO2(LieGroup):
         data: Optional[torch.Tensor] = None,
         name: Optional[str] = None,
         dtype: Optional[torch.dtype] = None,
-        requires_check: bool = True,
+        strict: bool = False,
     ):
         if theta is not None and data is not None:
             raise ValueError("Please provide only one of theta or data.")
         if theta is not None:
             dtype = theta.dtype
-        if data is not None and requires_check:
-            self._data_check(data)
-        super().__init__(data=data, name=name, dtype=dtype)
+        super().__init__(data=data, name=name, dtype=dtype, strict=strict)
         if theta is not None:
             if theta.ndim == 1:
                 theta = theta.unsqueeze(1)
@@ -121,16 +119,20 @@ class SO2(LieGroup):
             return torch.einsum("...k,...k", euclidean_grad, temp).unsqueeze(-1)
 
     @staticmethod
-    def _data_check(matrix: torch.Tensor):
-        if matrix.ndim != 2 or matrix.shape[1] != 2:
-            raise ValueError("2D rotations can only be 2D vectors.")
+    def _data_check_impl(matrix: torch.Tensor) -> bool:
+        with torch.no_grad():
+            if matrix.ndim != 2 or matrix.shape[1] != 2:
+                raise ValueError("SO2 data tensors can only be 2D vectors.")
 
-        MATRIX_EPS = theseus.constants._SO2_MATRIX_EPS[matrix.dtype]
-        if matrix.dtype != torch.float64:
-            matrix = matrix.double()
+            MATRIX_EPS = theseus.constants._SO2_MATRIX_EPS[matrix.dtype]
+            if matrix.dtype != torch.float64:
+                matrix = matrix.double()
 
-        if (torch.linalg.norm(matrix, dim=1) - 1).abs().max().item() >= MATRIX_EPS:
-            raise ValueError("Not valid 2D rotations.")
+            _check = (
+                torch.linalg.norm(matrix, dim=1) - 1
+            ).abs().max().item() <= MATRIX_EPS
+
+        return _check
 
     @staticmethod
     def exp_map(
@@ -156,7 +158,7 @@ class SO2(LieGroup):
     @staticmethod
     def normalize(data: torch.Tensor) -> torch.Tensor:
         if data.ndim != 2 or data.shape[1] != 2:
-            raise ValueError("2D rotations can only be 2D vectors.")
+            raise ValueError("SO2 data tensors can only be 2D vectors.")
 
         data_norm = torch.norm(data, dim=1, keepdim=True)
         near_zero = data_norm < theseus.constants._SO2_NORMALIZATION_EPS[data.dtype]
@@ -194,11 +196,11 @@ class SO2(LieGroup):
         cos_2, sin_2 = so2_2.to_cos_sin()
         new_cos = cos_1 * cos_2 - sin_1 * sin_2
         new_sin = sin_1 * cos_2 + cos_1 * sin_2
-        return SO2(data=torch.stack([new_cos, new_sin], dim=1), requires_check=False)
+        return SO2(data=torch.stack([new_cos, new_sin], dim=1), strict=False)
 
     def _inverse_impl(self, get_jacobian: bool = False) -> "SO2":
         cosine, sine = self.to_cos_sin()
-        return SO2(data=torch.stack([cosine, -sine], dim=1), requires_check=False)
+        return SO2(data=torch.stack([cosine, -sine], dim=1), strict=False)
 
     def _rotate_shape_check(self, point: Union[Point2, torch.Tensor]):
         err_msg = (

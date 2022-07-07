@@ -58,10 +58,10 @@ class QuadraticFitCostFunction(th.CostFunction):
 
     # err = y - f(x:b), where b are the current variable values
     def error(self):
-        return self.error_from_tensors(self.optim_var_0.data)
+        return self.error_from_tensors(self.optim_var_0.tensor)
 
     def jacobians(self):
-        g1, g2 = model_grad(self.xs, self.optim_var_0.data)
+        g1, g2 = model_grad(self.xs, self.optim_var_0.tensor)
         return [-torch.stack([g1, g2], axis=2)], self.error()
 
     def dim(self):
@@ -101,8 +101,8 @@ def create_qf_theseus_layer(
             # note that this is a hybrid cost function since, part of the function
             # follows the structure of QuadraticFitCostFunction, only the error weight
             # factor (aux_vars[0]) is learned
-            return aux_vars[0].data * cost_function.error_from_tensors(
-                optim_vars[0].data
+            return aux_vars[0].tensor * cost_function.error_from_tensors(
+                optim_vars[0].tensor
             )
 
         if isinstance(cost_weight, th.ScaleCostWeight):
@@ -122,7 +122,7 @@ def create_qf_theseus_layer(
             error_fn,
             cost_function.dim(),
             aux_vars=[
-                th.Vector(cost_weight_dim, name="learnable_err_param", data=cw_data)
+                th.Vector(cost_weight_dim, name="learnable_err_param", tensor=cw_data)
             ],
             autograd_vectorize=True,
         )

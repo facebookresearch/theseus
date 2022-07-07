@@ -103,7 +103,7 @@ class SE2(LieGroup):
             )
 
     @staticmethod
-    def _init_data() -> torch.Tensor:  # type: ignore
+    def _init_tensor() -> torch.Tensor:  # type: ignore
         return torch.tensor([0.0, 0.0, 1.0, 0.0]).view(1, 4)
 
     def dof(self) -> int:

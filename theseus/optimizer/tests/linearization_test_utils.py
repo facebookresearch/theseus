@@ -12,7 +12,7 @@ class MockVector(th.Manifold):
     def __init__(self, value, length, name=None):
         super().__init__(value, length, name=name)
 
-    def _init_data(value, length):
+    def _init_tensor(value, length):
         return value * torch.ones(1, length)
 
     @staticmethod

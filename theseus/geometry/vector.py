@@ -35,7 +35,7 @@ class Vector(LieGroup):
 
     # Vector variables are of shape [batch_size, dof]
     @staticmethod
-    def _init_data(dof: int) -> torch.Tensor:  # type: ignore
+    def _init_tensor(dof: int) -> torch.Tensor:  # type: ignore
         return torch.zeros(1, dof)
 
     def dof(self) -> int:

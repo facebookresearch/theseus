@@ -16,7 +16,7 @@ OptionalJacobians = Optional[List[torch.Tensor]]
 
 # Abstract class to represent Manifold-type variables in the objective.
 # Concrete classes must implement the following methods:
-#   - `_init_data`: initializes the underlying tensor given constructor arguments.
+#   - `_init_tensor`: initializes the underlying tensor given constructor arguments.
 #       The provided tensor must have a batch dimension.
 #   -`_local`: given two close Manifolds gives distance in tangent space
 #   - `_retract`: returns Manifold close by delta to given Manifold
@@ -47,7 +47,7 @@ class Manifold(Variable, abc.ABC):
                 )
             dtype = tensor.dtype
 
-        super().__init__(self.__class__._init_data(*args).to(dtype=dtype), name=name)
+        super().__init__(self.__class__._init_tensor(*args).to(dtype=dtype), name=name)
         if tensor is not None:
             self.update(tensor)
 
@@ -55,7 +55,7 @@ class Manifold(Variable, abc.ABC):
     # as a function of the given args
     @staticmethod
     @abc.abstractmethod
-    def _init_data(*args: Any) -> torch.Tensor:
+    def _init_tensor(*args: Any) -> torch.Tensor:
         pass
 
     @abc.abstractmethod

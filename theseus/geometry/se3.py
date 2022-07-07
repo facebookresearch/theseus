@@ -95,7 +95,7 @@ class SE3(LieGroup):
         return ret
 
     @staticmethod
-    def _init_data() -> torch.Tensor:  # type: ignore
+    def _init_tensor() -> torch.Tensor:  # type: ignore
         return torch.eye(3, 4).view(1, 3, 4)
 
     def dof(self) -> int:

@@ -83,7 +83,7 @@ class SO2(LieGroup):
         )
 
     @staticmethod
-    def _init_data() -> torch.Tensor:  # type: ignore
+    def _init_tensor() -> torch.Tensor:  # type: ignore
         return torch.tensor([1.0, 0.0]).view(1, 2)
 
     def update_from_angle(self, theta: torch.Tensor):

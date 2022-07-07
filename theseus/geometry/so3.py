@@ -83,7 +83,7 @@ class SO3(LieGroup):
         )
 
     @staticmethod
-    def _init_data() -> torch.Tensor:  # type: ignore
+    def _init_tensor() -> torch.Tensor:  # type: ignore
         return torch.eye(3, 3).view(1, 3, 3)
 
     def update_from_unit_quaternion(self, quaternion: torch.Tensor):

@@ -38,7 +38,7 @@ class LieGroup(Manifold):
 
     @staticmethod
     @abc.abstractmethod
-    def _init_data(*args: Any) -> torch.Tensor:
+    def _init_tensor(*args: Any) -> torch.Tensor:
         pass
 
     @abc.abstractmethod

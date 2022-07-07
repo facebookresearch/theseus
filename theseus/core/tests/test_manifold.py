@@ -43,7 +43,7 @@ class MockVarNoArgs(th.Manifold):
         super().__init__(tensor=tensor, name=name)
 
     @staticmethod
-    def _init_data():
+    def _init_tensor():
         return torch.ones(1, 1)
 
     @staticmethod

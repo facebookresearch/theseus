@@ -15,7 +15,7 @@ class MockVar(th.Manifold):
         super().__init__(length, tensor=tensor, name=name)
 
     @staticmethod
-    def _init_data(length):
+    def _init_tensor(length):
         return torch.empty(1, length)
 
     @staticmethod
@@ -80,7 +80,7 @@ class NullCostWeight(th.CostWeight):
     def __init__(self):
         super().__init__(name="null_cost_weight")
 
-    def _init_data(self):
+    def _init_tensor(self):
         pass
 
     def weight_error(self, error):

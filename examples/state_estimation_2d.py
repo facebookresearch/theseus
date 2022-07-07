@@ -240,7 +240,7 @@ def run_learning(mode_, path_data_, gps_targets_, measurements_):
             th.Difference(
                 poses[i],
                 gps_cost_weights[i],
-                th.Point2(data=gps_targets_[i]),
+                th.Point2(tensor=gps_targets_[i]),
                 name=f"gps_{i}",
             )
         )
@@ -251,7 +251,7 @@ def run_learning(mode_, path_data_, gps_targets_, measurements_):
                         poses[i],
                         poses[i + 1],
                         between_cost_weights[i],
-                        th.Point2(data=measurements_[i]),
+                        th.Point2(tensor=measurements_[i]),
                         name=f"between_{i}",
                     )
                 )

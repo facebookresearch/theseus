@@ -191,7 +191,7 @@ class SE3(LieGroup):
         tangent_vector: torch.Tensor, jacobians: Optional[List[torch.Tensor]] = None
     ) -> "SE3":
         if tangent_vector.ndim != 2 or tangent_vector.shape[1] != 6:
-            raise ValueError("Tangent vectors of SE3 can only be 6-D vectors.")
+            raise ValueError("Tangent vectors of SE3 can only be 6D vectors.")
 
         ret = SE3(dtype=tangent_vector.dtype)
 

@@ -20,8 +20,8 @@ class MockVector(th.Manifold):
         return True
 
     @staticmethod
-    def normalize(data: torch.Tensor) -> torch.Tensor:
-        return data
+    def normalize(tensor: torch.Tensor) -> torch.Tensor:
+        return tensor
 
     def dof(self):
         return self.tensor.shape[1]

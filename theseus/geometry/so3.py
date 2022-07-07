@@ -231,13 +231,15 @@ class SO3(LieGroup):
         return ret
 
     @staticmethod
-    def normalize(data: torch.Tensor) -> torch.Tensor:
-        if data.ndim != 3 or data.shape[1:] != (3, 3):
+    def normalize(tensor: torch.Tensor) -> torch.Tensor:
+        if tensor.ndim != 3 or tensor.shape[1:] != (3, 3):
             raise ValueError("SO3 data tensors can only be 3x3 matrices.")
 
-        U, _, V = torch.svd(data)
+        U, _, V = torch.svd(tensor)
         Vtr = V.transpose(1, 2)
-        S = torch.diag(torch.tensor([1, 1, -1], dtype=data.dtype, device=data.device))
+        S = torch.diag(
+            torch.tensor([1, 1, -1], dtype=tensor.dtype, device=tensor.device)
+        )
         temp = (U @ Vtr, U @ S @ Vtr)
         sign = torch.det(temp[0]).reshape([-1, 1, 1]) > 0
 

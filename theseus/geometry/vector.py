@@ -220,11 +220,11 @@ class Vector(LieGroup):
         return True
 
     @staticmethod
-    def normalize(data: torch.Tensor) -> torch.Tensor:
-        if data.ndim != 2:
+    def normalize(tensor: torch.Tensor) -> torch.Tensor:
+        if tensor.ndim != 2:
             raise ValueError("Vector variables expect tensors with ndim=2.")
 
-        return data
+        return tensor
 
     @staticmethod
     def _exp_map_jacobian_impl(

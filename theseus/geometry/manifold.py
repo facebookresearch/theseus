@@ -85,7 +85,7 @@ class Manifold(Variable, abc.ABC):
 
     @staticmethod
     @abc.abstractmethod
-    def normalize(data: torch.Tensor) -> torch.Tensor:
+    def normalize(tensor: torch.Tensor) -> torch.Tensor:
         pass
 
     @staticmethod

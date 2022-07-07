@@ -17,16 +17,16 @@ class SO2(LieGroup):
     def __init__(
         self,
         theta: Optional[torch.Tensor] = None,
-        data: Optional[torch.Tensor] = None,
+        tensor: Optional[torch.Tensor] = None,
         name: Optional[str] = None,
         dtype: Optional[torch.dtype] = None,
         strict: bool = False,
     ):
-        if theta is not None and data is not None:
-            raise ValueError("Please provide only one of theta or data.")
+        if theta is not None and tensor is not None:
+            raise ValueError("Please provide only one of theta or tensor.")
         if theta is not None:
             dtype = theta.dtype
-        super().__init__(data=data, name=name, dtype=dtype, strict=strict)
+        super().__init__(tensor=tensor, name=name, dtype=dtype, strict=strict)
         if theta is not None:
             if theta.ndim == 1:
                 theta = theta.unsqueeze(1)
@@ -93,7 +93,7 @@ class SO2(LieGroup):
         return 1
 
     def __repr__(self) -> str:
-        return f"SO2(data={self.data}, name={self.name})"
+        return f"SO2(tensor={self.tensor}, name={self.name})"
 
     def __str__(self) -> str:
         with torch.no_grad():
@@ -196,7 +196,7 @@ class SO2(LieGroup):
         cos_2, sin_2 = so2_2.to_cos_sin()
         new_cos = cos_1 * cos_2 - sin_1 * sin_2
         new_sin = sin_1 * cos_2 + cos_1 * sin_2
-        return SO2(data=torch.stack([new_cos, new_sin], dim=1), strict=False)
+        return SO2(tensor=torch.stack([new_cos, new_sin], dim=1), strict=False)
 
     def _inverse_impl(self, get_jacobian: bool = False) -> "SO2":
         cosine, sine = self.to_cos_sin()
@@ -235,16 +235,16 @@ class SO2(LieGroup):
                     f"Point tensor must have shape batch_size x 2, "
                     f"but received {point.shape}."
                 )
-            point_data = point
+            point_tensor = point
         else:
-            point_data = point.data
-        px, py = point_data[:, 0], point_data[:, 1]
-        new_point_data = torch.empty(
+            point_tensor = point.tensor
+        px, py = point_tensor[:, 0], point_tensor[:, 1]
+        new_point_tensor = torch.empty(
             batch_size, 2, device=cosine.device, dtype=cosine.dtype
         )
-        new_point_data[:, 0] = cosine * px - sine * py
-        new_point_data[:, 1] = sine * px + cosine * py
-        return Point2(data=new_point_data)
+        new_point_tensor[:, 0] = cosine * px - sine * py
+        new_point_tensor[:, 1] = sine * px + cosine * py
+        return Point2(tensor=new_point_tensor)
 
     def rotate(
         self,
@@ -311,7 +311,7 @@ class SO2(LieGroup):
         return matrix[:, 1, 0].clone().view(-1, 1)
 
     def _copy_impl(self, new_name: Optional[str] = None) -> "SO2":
-        return SO2(data=self.data.clone(), name=new_name)
+        return SO2(tensor=self.tensor.clone(), name=new_name)
 
     # only added to avoid casting downstream
     def copy(self, new_name: Optional[str] = None) -> "SO2":

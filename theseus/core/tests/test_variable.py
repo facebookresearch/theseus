@@ -26,7 +26,7 @@ def test_variable_init():
             assert name == t.name
         else:
             assert t.name == f"Variable__{t._id}"
-        assert t.data.allclose(data)
+        assert t.tensor.allclose(data)
 
     assert len(set(all_ids)) == len(all_ids)
 
@@ -51,10 +51,10 @@ def test_update():
             # check update from torch tensor
             new_data_good = torch.rand(batch_size, length)
             var.update(new_data_good)
-            assert var.data is new_data_good
+            assert var.tensor is new_data_good
             # check update from variable
             new_data_good_wrapped = torch.rand(batch_size, length)
-            another_var = MockVar(length, data=new_data_good_wrapped)
+            another_var = MockVar(length, tensor=new_data_good_wrapped)
             var.update(another_var)
             # check raises error on shape
             new_data_bad = torch.rand(batch_size, length + 1)
@@ -69,7 +69,7 @@ def test_update():
             ignore_indices = np.random.choice(batch_size, size=how_many)
             ignore_mask = torch.zeros(batch_size).bool()
             ignore_mask[ignore_indices] = 1
-            old_data = var.data.clone()
+            old_data = var.tensor.clone()
             new_data_some_ignored = torch.randn(batch_size, length)
             if ignore_indices[0] % 2 == 0:  # randomly wrap into a variable to also test
                 new_data_some_ignored = MockVar(length, new_data_some_ignored)
@@ -79,5 +79,5 @@ def test_update():
                     assert torch.allclose(var[i], old_data[i])
                 else:
                     if isinstance(new_data_some_ignored, th.Variable):
-                        new_data_some_ignored = new_data_some_ignored.data
+                        new_data_some_ignored = new_data_some_ignored.tensor
                     assert torch.allclose(var[i], new_data_some_ignored[i])

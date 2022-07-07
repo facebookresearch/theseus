@@ -119,7 +119,7 @@ class TheseusLayer(nn.Module):
                 new_var = var.retract(
                     delta_samples[:, var_idx : var_idx + var.dof(), sidx]
                 )
-                x_samples[:, var_idx : var_idx + var.dof(), sidx] = new_var.data
+                x_samples[:, var_idx : var_idx + var.dof(), sidx] = new_var.tensor
                 var_idx = var_idx + var.dof()
 
         return x_samples
@@ -141,7 +141,7 @@ class TheseusLayer(nn.Module):
 def _forward(objective, optimizer, optimizer_kwargs, input_data):
     objective.update(input_data)
     info = optimizer.optimize(**optimizer_kwargs)
-    vars = [var.data for var in objective.optim_vars.values()]
+    vars = [var.tensor for var in objective.optim_vars.values()]
     return vars, info
 
 
@@ -277,20 +277,21 @@ class _DLMPerturbation(CostFunction):
 
     def error(self) -> torch.Tensor:
         err = (
-            self.epsilon.data.view((-1,) + (1,) * (self.var.ndim - 1)) * self.var.data
-            - 0.5 * self.grad.data
+            self.epsilon.tensor.view((-1,) + (1,) * (self.var.ndim - 1))
+            * self.var.tensor
+            - 0.5 * self.grad.tensor
         )
         return err.flatten(start_dim=1)
 
     def jacobians(self) -> Tuple[List[torch.Tensor], torch.Tensor]:
         d = self.dim()
         aux = torch.eye(d).unsqueeze(0).expand(self.var.shape[0], d, d)
-        euclidean_grad_flat = self.epsilon.data.view(-1, 1, 1) * aux
+        euclidean_grad_flat = self.epsilon.tensor.view(-1, 1, 1) * aux
         euclidean_grad = euclidean_grad_flat.unflatten(2, self.var.shape[1:])
         return [self.var.project(euclidean_grad, is_sparse=True)], self.error()
 
     def dim(self) -> int:
-        return np.prod(self.var.data.shape[1:])
+        return np.prod(self.var.tensor.shape[1:])
 
     def _copy_impl(self, new_name: Optional[str] = None) -> "CostFunction":
         return _DLMPerturbation(
@@ -312,7 +313,8 @@ def _instantiate_dlm_bwd_objective(objective: Objective):
     unit_weight.to(dtype=objective.dtype, device=objective.device)
     for name, var in bwd_objective.optim_vars.items():
         grad_var = Variable(
-            torch.zeros_like(var.data), name=name + TheseusLayerDLMForward._GRAD_SUFFIX
+            torch.zeros_like(var.tensor),
+            name=name + TheseusLayerDLMForward._GRAD_SUFFIX,
         )
         bwd_objective.add(
             _DLMPerturbation(

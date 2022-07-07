@@ -19,17 +19,17 @@ from theseus.geometry.manifold import Manifold
 #   _ `_compose`
 #   _ `_inverse`
 #
-# Constructor can optionally provide an initial data value as a keyword argument.
+# Constructor can optionally provide an initial tensor value as a keyword argument.
 class LieGroup(Manifold):
     def __init__(
         self,
         *args: Any,
-        data: Optional[torch.Tensor] = None,
+        tensor: Optional[torch.Tensor] = None,
         name: Optional[str] = None,
         dtype: torch.dtype = torch.float,
         strict: bool = False,
     ):
-        super().__init__(*args, data=data, name=name, dtype=dtype, strict=strict)
+        super().__init__(*args, tensor=tensor, name=name, dtype=dtype, strict=strict)
 
     @staticmethod
     def _check_jacobians_list(jacobians: List[torch.Tensor]):

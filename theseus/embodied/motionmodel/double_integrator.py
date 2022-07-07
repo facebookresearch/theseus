@@ -34,11 +34,11 @@ class DoubleIntegrator(CostFunction):
             self.dt = Variable(dt)
         else:
             self.dt = dt
-        if dt.data.squeeze().ndim > 1:
+        if self.dt.tensor.squeeze().ndim > 1:
             raise ValueError(
                 "dt data must be a 0-D or 1-D tensor with numel in {1, batch_size}."
             )
-        self.dt.data = self.dt.data.view(-1, 1)
+        self.dt.tensor = self.dt.tensor.view(-1, 1)
         self.pose1 = pose1
         self.vel1 = vel1
         self.pose2 = pose2
@@ -56,8 +56,8 @@ class DoubleIntegrator(CostFunction):
         return self.pose1.local(self.pose2, jacobians=jacobians)
 
     def _error_from_pose_diff(self, pose_diff: torch.Tensor) -> torch.Tensor:
-        pose_diff_err = pose_diff - self.dt.data.view(-1, 1) * self.vel1.data
-        vel_diff = self.vel2.data - self.vel1.data
+        pose_diff_err = pose_diff - self.dt.tensor.view(-1, 1) * self.vel1.tensor
+        vel_diff = self.vel2.tensor - self.vel1.tensor
         return torch.cat([pose_diff_err, vel_diff], dim=1)
 
     def error(self) -> torch.Tensor:
@@ -78,7 +78,7 @@ class DoubleIntegrator(CostFunction):
         error = self._error_from_pose_diff(self._new_pose_diff(Jlocal))
         Jerr_pose1[:, :dof, :] = Jlocal[0]
         identity = torch.eye(dof, dtype=dtype, device=device).repeat(batch_size, 1, 1)
-        Jerr_vel1[:, :dof, :] = -self.dt.data.view(-1, 1, 1) * identity
+        Jerr_vel1[:, :dof, :] = -self.dt.tensor.view(-1, 1, 1) * identity
         Jerr_vel1[:, dof:, :] = -identity
         Jerr_pose2[:, :dof, :] = Jlocal[1]
         Jerr_vel2[:, dof:, :] = identity
@@ -110,10 +110,10 @@ class GPCostWeight(CostWeight):
             if not isinstance(dt, torch.Tensor):
                 dt = torch.tensor(dt)
             dt = Variable(dt)
-        if dt.data.squeeze().ndim > 1:
+        if dt.tensor.squeeze().ndim > 1:
             raise ValueError("dt must be a 0-D or 1-D tensor.")
         self.dt = dt
-        self.dt.data = self.dt.data.view(-1, 1)
+        self.dt.tensor = self.dt.tensor.view(-1, 1)
 
         if not isinstance(Qc_inv, Variable):
             Qc_inv = Variable(Qc_inv)
@@ -122,7 +122,9 @@ class GPCostWeight(CostWeight):
         if not Qc_inv.shape[-2] == Qc_inv.shape[-1]:
             raise ValueError("Qc_inv must contain square matrices.")
         self.Qc_inv = Qc_inv
-        self.Qc_inv.data = Qc_inv.data if Qc_inv.ndim == 3 else Qc_inv.data.unsqueeze(0)
+        self.Qc_inv.tensor = (
+            Qc_inv.tensor if Qc_inv.ndim == 3 else Qc_inv.tensor.unsqueeze(0)
+        )
         self.register_aux_vars(["Qc_inv", "dt"])
 
     def _compute_cost_weight(self) -> torch.Tensor:
@@ -134,10 +136,10 @@ class GPCostWeight(CostWeight):
             dtype=self.Qc_inv.dtype,
             device=self.Qc_inv.device,
         )
-        dt_data = self.dt.data.view(-1, 1, 1)
-        Q11 = 12.0 * dt_data.pow(-3.0) * self.Qc_inv.data
-        Q12 = -6.0 * dt_data.pow(-2.0) * self.Qc_inv.data
-        Q22 = 4.0 * dt_data.reciprocal() * self.Qc_inv.data
+        dt_data = self.dt.tensor.view(-1, 1, 1)
+        Q11 = 12.0 * dt_data.pow(-3.0) * self.Qc_inv.tensor
+        Q12 = -6.0 * dt_data.pow(-2.0) * self.Qc_inv.tensor
+        Q22 = 4.0 * dt_data.reciprocal() * self.Qc_inv.tensor
         cost_weight[:, :dof, :dof] = Q11
         cost_weight[:, :dof:, dof:] = Q12
         cost_weight[:, dof:, :dof] = Q12
@@ -195,9 +197,9 @@ class GPMotionModel(DoubleIntegrator):
             self.dt = Variable(dt)
         else:
             self.dt = dt
-        if dt.data.squeeze().ndim > 1:
+        if self.dt.tensor.squeeze().ndim > 1:
             raise ValueError("dt must be a 0-D or 1-D tensor.")
-        self.dt.data = self.dt.data.view(-1, 1)
+        self.dt.tensor = self.dt.tensor.view(-1, 1)
         super().__init__(pose1, vel1, pose2, vel2, dt, cost_weight, name=name)
 
     def _copy_impl(self, new_name: Optional[str] = None) -> "GPMotionModel":

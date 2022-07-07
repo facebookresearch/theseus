@@ -24,7 +24,9 @@ from .common import (
 def test_copy():
     cost_weight = MockCostWeight(th.Variable(torch.ones(1)))
     data = torch.ones(1, 1)
-    cost_functions, *_ = create_mock_cost_functions(data=data, cost_weight=cost_weight)
+    cost_functions, *_ = create_mock_cost_functions(
+        tensor=data, cost_weight=cost_weight
+    )
 
     for cost_function in cost_functions:
         cost_function.weight = cost_weight
@@ -69,7 +71,7 @@ def test_autodiff_cost_function_error_and_jacobians_shape(autograd_loop_over_bat
             optim_vars.append(
                 MockVar(
                     idx + 1,
-                    data=torch.ones(batch_size, idx + 1) * variable_values[idx],
+                    tensor=torch.ones(batch_size, idx + 1) * variable_values[idx],
                     name=f"optim_var_{i}",
                 )
             )
@@ -78,7 +80,7 @@ def test_autodiff_cost_function_error_and_jacobians_shape(autograd_loop_over_bat
             aux_vars.append(
                 MockVar(
                     idx + 1,
-                    data=torch.ones(batch_size, idx + 1) * variable_values[idx],
+                    tensor=torch.ones(batch_size, idx + 1) * variable_values[idx],
                     name=f"aux_var_{i}",
                 )
             )
@@ -102,7 +104,9 @@ def test_autodiff_cost_function_error_and_jacobians_shape(autograd_loop_over_bat
             for i, arg in enumerate(all_vars):
                 assert isinstance(arg, th.Variable)
                 assert arg.shape == (batch_size, i + 1) or arg.shape == (1, i + 1)
-                assert arg.data.allclose(variable_values[i] * torch.ones_like(arg.data))
+                assert arg.tensor.allclose(
+                    variable_values[i] * torch.ones_like(arg.tensor)
+                )
                 vals.append(arg[0, 0])
             return ret_val + torch.Tensor(vals).sum()
 
@@ -148,14 +152,14 @@ def test_autodiff_cost_function_cost_weight(autograd_loop_over_batch):
         optim_vars.append(
             MockVar(
                 1,
-                data=torch.ones(batch_size, 1) * torch.randn(1),
+                tensor=torch.ones(batch_size, 1) * torch.randn(1),
                 name=f"optim_var_{i}",
             )
         )
         aux_vars.append(
             MockVar(
                 1,
-                data=torch.ones(batch_size, 1) * torch.randn(1),
+                tensor=torch.ones(batch_size, 1) * torch.randn(1),
                 name=f"aux_var_{i}",
             )
         )
@@ -173,7 +177,7 @@ def test_autodiff_cost_function_cost_weight(autograd_loop_over_batch):
         autograd_loop_over_batch=autograd_loop_over_batch,
     )
     assert isinstance(cost_function.weight, ScaleCostWeight)
-    assert torch.allclose(cost_function.weight.scale.data, torch.ones(1, 1))
+    assert torch.allclose(cost_function.weight.scale.tensor, torch.ones(1, 1))
     weighted_error = cost_function.weighted_error()
     assert torch.allclose(weighted_error, torch.ones(batch_size, 1))
 
@@ -189,7 +193,9 @@ def test_autodiff_cost_function_cost_weight(autograd_loop_over_batch):
             aux_vars=aux_vars,
         )
         assert cost_function.weight is cost_weight
-        assert torch.allclose(cost_function.weight.the_data.data, cost_weight_value)  # type: ignore
+        assert torch.allclose(
+            cost_function.weight.the_data.tensor, cost_weight_value
+        )  # type: ignore
         weighted_error = cost_function.weighted_error()
         direct_error_computation = cost_weight_value * torch.ones(batch_size, 1)
         assert torch.allclose(weighted_error, direct_error_computation)
@@ -205,14 +211,14 @@ def test_autodiff_cost_function_to(autograd_loop_over_batch):
         optim_vars.append(
             MockVar(
                 1,
-                data=torch.ones(batch_size, 1) * torch.randn(1),
+                tensor=torch.ones(batch_size, 1) * torch.randn(1),
                 name=f"optim_var_{i}",
             )
         )
         aux_vars.append(
             MockVar(
                 1,
-                data=torch.ones(batch_size, 1) * torch.randn(1),
+                tensor=torch.ones(batch_size, 1) * torch.randn(1),
                 name=f"aux_var_{i}",
             )
         )
@@ -220,7 +226,7 @@ def test_autodiff_cost_function_to(autograd_loop_over_batch):
     def error_fn(optim_vars, aux_vars):
         res = 0
         for var in optim_vars:
-            res += var.data
+            res += var.tensor
         return res
 
     # test verifying default CostWeight
@@ -271,7 +277,7 @@ def test_autodiff_cost_function_error_and_jacobians_shape_on_SO3(
             ret_val = torch.zeros(optim_vars[0].shape[0], err_dim)
 
             for optim_var, aux_var in zip(optim_vars, aux_vars):
-                ret_val += th.SO3(data=optim_var.data).rotate(aux_var).data
+                ret_val += th.SO3(tensor=optim_var.tensor).rotate(aux_var).tensor
 
             return ret_val
 
@@ -333,7 +339,7 @@ def test_autodiff_cost_function_error_and_jacobians_value_on_SO3(
             ret_val = torch.zeros(optim_vars[0].shape[0], err_dim, dtype=torch.float64)
 
             for optim_var, aux_var in zip(optim_vars, aux_vars):
-                ret_val += th.SO3(data=optim_var.data).rotate(aux_var).data
+                ret_val += th.SO3(tensor=optim_var.tensor).rotate(aux_var).tensor
 
             return ret_val
 
@@ -362,7 +368,7 @@ def test_autodiff_cost_function_error_and_jacobians_value_on_SO3(
             err_expected = torch.zeros(batch_size, 3, dtype=torch.float64)
             for n in torch.arange(num_vars):
                 jac = []  # type: ignore
-                err_expected += optim_vars[n].rotate(aux_vars[n], jacobians=jac).data
+                err_expected += optim_vars[n].rotate(aux_vars[n], jacobians=jac).tensor
                 assert torch.allclose(jac_actual[n], jac[0])
 
             assert torch.allclose(err_actual, err_expected)

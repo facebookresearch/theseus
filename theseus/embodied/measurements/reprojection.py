@@ -35,12 +35,12 @@ class Reprojection(th.CostFunction):
         batch_size = self.camera_pose.shape[0]
         if self.calib_k1 is None:
             self.calib_k1 = th.Vector(
-                data=torch.zeros((batch_size, 1), dtype=camera_pose.dtype),
+                tensor=torch.zeros((batch_size, 1), dtype=camera_pose.dtype),
                 name="calib_k1",
             )
         if self.calib_k2 is None:
             self.calib_k2 = th.Vector(
-                data=torch.zeros((batch_size, 1), dtype=camera_pose.dtype),
+                tensor=torch.zeros((batch_size, 1), dtype=camera_pose.dtype),
                 name="calib_k2",
             )
         self.world_point = world_point
@@ -55,12 +55,12 @@ class Reprojection(th.CostFunction):
         point_cam = self.camera_pose.transform_from(self.world_point)
         proj = -point_cam[:, :2] / point_cam[:, 2:3]
         proj_sqn = (proj * proj).sum(dim=1).unsqueeze(1)
-        proj_factor = self.focal_length.data * (
-            1.0 + proj_sqn * (self.calib_k1.data + proj_sqn * self.calib_k2.data)
+        proj_factor = self.focal_length.tensor * (
+            1.0 + proj_sqn * (self.calib_k1.tensor + proj_sqn * self.calib_k2.tensor)
         )
         point_projection = proj * proj_factor
 
-        err = point_projection - self.image_feature_point.data
+        err = point_projection - self.image_feature_point.tensor
         return err
 
     def jacobians(self) -> Tuple[List[torch.Tensor], torch.Tensor]:
@@ -70,11 +70,11 @@ class Reprojection(th.CostFunction):
 
         proj = -point_cam[:, :2] / point_cam[:, 2:3]
         proj_sqn = (proj * proj).sum(dim=1).unsqueeze(1)
-        proj_factor = self.focal_length.data * (
-            1.0 + proj_sqn * (self.calib_k1.data + proj_sqn * self.calib_k2.data)
+        proj_factor = self.focal_length.tensor * (
+            1.0 + proj_sqn * (self.calib_k1.tensor + proj_sqn * self.calib_k2.tensor)
         )
-        d_proj_factor = self.focal_length.data * (
-            self.calib_k1.data + 2.0 * proj_sqn * self.calib_k2.data
+        d_proj_factor = self.focal_length.tensor * (
+            self.calib_k1.tensor + 2.0 * proj_sqn * self.calib_k2.tensor
         )
         point_projection = proj * proj_factor
 
@@ -90,7 +90,7 @@ class Reprojection(th.CostFunction):
             2
         ) + proj_sqn_jac * d_proj_factor.unsqueeze(2)
 
-        err = point_projection - self.image_feature_point.data
+        err = point_projection - self.image_feature_point.tensor
         return [point_projection_jac[..., :6], point_projection_jac[..., 6:]], err
 
     def dim(self) -> int:

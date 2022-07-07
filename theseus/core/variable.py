@@ -12,19 +12,19 @@ import torch
 class Variable:
     _ids = count(0)
 
-    def __init__(self, data: torch.Tensor, name: Optional[str] = None):
+    def __init__(self, tensor: torch.Tensor, name: Optional[str] = None):
         self._id = next(Variable._ids)
         self._num_updates = 0
         if name:
             self.name = name
         else:
             self.name = f"{self.__class__.__name__}__{self._id}"
-        self.data = data
+        self.tensor = tensor
 
     def copy(self, new_name: Optional[str] = None) -> "Variable":
         if not new_name:
             new_name = f"{self.name}_copy"
-        return Variable(self.data.clone(), name=new_name)
+        return Variable(self.tensor.clone(), name=new_name)
 
     def __deepcopy__(self, memo):
         if id(self) in memo:
@@ -41,56 +41,60 @@ class Variable:
         batch_ignore_mask: Optional[torch.Tensor] = None,
     ):
         if isinstance(data, Variable):
-            data = data.data
+            tensor = data.tensor
+        else:
+            tensor = data
         if (
-            len(data.shape) != len(self.data.shape)
-            or data.shape[1:] != self.data.shape[1:]
+            len(tensor.shape) != len(self.tensor.shape)
+            or tensor.shape[1:] != self.tensor.shape[1:]
         ):
             raise ValueError(
                 f"Tried to update tensor {self.name} with data "
-                f"incompatible with original tensor shape. Given {data.shape[1:]}. "
-                f"Expected: {self.data.shape[1:]}"
+                f"incompatible with original tensor shape. Given {tensor.shape[1:]}. "
+                f"Expected: {self.tensor.shape[1:]}"
             )
-        if data.dtype != self.dtype:
+        if tensor.dtype != self.dtype:
             raise ValueError(
-                f"Tried to update used tensor of dtype {data.dtype} but Variable "
+                f"Tried to update used tensor of dtype {tensor.dtype} but Variable "
                 f"{self.name} has dtype {self.dtype}."
             )
         if batch_ignore_mask is not None and batch_ignore_mask.any():
-            mask_shape = (-1,) + (1,) * (data.ndim - 1)
-            self.data = torch.where(batch_ignore_mask.view(mask_shape), self.data, data)
+            mask_shape = (-1,) + (1,) * (tensor.ndim - 1)
+            self.tensor = torch.where(
+                batch_ignore_mask.view(mask_shape), self.tensor, tensor
+            )
         else:
-            self.data = data
+            self.tensor = tensor
         self._num_updates += 1
 
     def __repr__(self) -> str:
-        return f"{self.__class__.__name__}(data={self.data}, name={self.name})"
+        return f"{self.__class__.__name__}(tensor={self.tensor}, name={self.name})"
 
     def __str__(self) -> str:
         return repr(self)
 
     # calls to() on the internal tensors
     def to(self, *args, **kwargs):
-        self.data = self.data.to(*args, **kwargs)
+        self.tensor = self.tensor.to(*args, **kwargs)
 
     @property
     def shape(self) -> torch.Size:
-        return self.data.shape
+        return self.tensor.shape
 
     @property
     def device(self) -> torch.device:
-        return self.data.device
+        return self.tensor.device
 
     @property
     def dtype(self) -> torch.dtype:
-        return self.data.dtype
+        return self.tensor.dtype
 
     @property
     def ndim(self) -> int:
-        return self.data.ndim
+        return self.tensor.ndim
 
     def __getitem__(self, item):
-        return self.data[item]
+        return self.tensor[item]
 
     def __setitem__(self, item, value):
-        self.data[item] = value
+        self.tensor[item] = value

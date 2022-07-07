@@ -232,8 +232,8 @@ def get_tactile_initial_optim_vars(
     eff_captures = batch["eff_poses"].to(device)
     obj_captures = batch["obj_poses"].to(device)
     for step in range(time_steps):
-        inputs[f"obj_pose_{step}"] = th.SE2(x_y_theta=obj_captures[:, 0].clone()).data
-        inputs[f"eff_pose_{step}"] = th.SE2(x_y_theta=eff_captures[:, 0].clone()).data
+        inputs[f"obj_pose_{step}"] = th.SE2(x_y_theta=obj_captures[:, 0].clone()).tensor
+        inputs[f"eff_pose_{step}"] = th.SE2(x_y_theta=eff_captures[:, 0].clone()).tensor
 
     return inputs
 
@@ -251,7 +251,7 @@ def update_tactile_pushing_inputs(
     batch_size = batch["img_feats"].shape[0]
     time_steps = dataset.time_steps
     theseus_inputs["sdf_data"] = (
-        (dataset.sdf_data_tensor.data).repeat(batch_size, 1, 1).to(device)
+        (dataset.sdf_data_tensor).repeat(batch_size, 1, 1).to(device)
     )
     theseus_inputs["sdf_cell_size"] = dataset.sdf_cell_size.repeat(batch_size, 1).to(
         device

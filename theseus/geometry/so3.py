@@ -27,13 +27,7 @@ class SO3(LieGroup):
         if quaternion is not None:
             dtype = quaternion.dtype
         if data is not None:
-            if strict:
-                self._data_check(data)
-            elif not SO3._data_check_impl(data):
-                data = SO3.normalize(data)
-                raise Warning(
-                    "The input data is not valid for SO3 and has been normalized."
-                )
+            data = self._data_check(data, strict)
         super().__init__(data=data, name=name, dtype=dtype)
         if quaternion is not None:
             self.update_from_unit_quaternion(quaternion)
@@ -145,11 +139,6 @@ class SO3(LieGroup):
             _check &= (torch.linalg.det(matrix) - 1).abs().max().item() < MATRIX_EPS
 
         return _check
-
-    @staticmethod
-    def _data_check(matrix: torch.Tensor):
-        if not SO3._data_check_impl(matrix):
-            raise ValueError("Not valid 3D rotations.")
 
     @staticmethod
     def _unit_quaternion_check(quaternion: torch.Tensor):

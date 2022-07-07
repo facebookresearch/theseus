@@ -214,9 +214,11 @@ class Vector(LieGroup):
         return Vector(data=tangent_vector.clone())
 
     @staticmethod
-    def _data_check(data: torch.Tensor):
+    def _data_check_impl(data: torch.Tensor) -> bool:
         if data.ndim != 2:
             raise ValueError("The dimension of vectors should be 2.")
+
+        return True
 
     @staticmethod
     def normalize(data: torch.Tensor) -> torch.Tensor:

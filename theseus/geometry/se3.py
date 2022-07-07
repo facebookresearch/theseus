@@ -27,15 +27,7 @@ class SE3(LieGroup):
         if x_y_z_quaternion is not None and data is not None:
             raise ValueError("Please provide only one of x_y_z_quaternion or data.")
         if x_y_z_quaternion is not None:
-            dtype = x_y_z_quaternion.dtype
-        if data is not None:
-            if strict:
-                self._data_check(data)
-            elif not SE3._data_check_impl(data):
-                data = SE3.normalize(data)
-                raise Warning(
-                    "The input data is not valid for SE3 and has been normalized."
-                )
+            data = self._data_check(data, strict)
         super().__init__(data=data, name=name, dtype=dtype)
         if x_y_z_quaternion is not None:
             self.update_from_x_y_z_quaternion(x_y_z_quaternion=x_y_z_quaternion)
@@ -157,11 +149,6 @@ class SE3(LieGroup):
                 raise ValueError("SE3 can only be 3x4 matrices.")
 
             return SO3._data_check_impl(matrix[:, :3, :3])
-
-    @staticmethod
-    def _data_check(matrix: torch.Tensor):
-        if not SE3._data_check_impl(matrix):
-            raise ValueError("Not valid data for SE3.")
 
     @staticmethod
     def x_y_z_unit_quaternion_to_SE3(x_y_z_quaternion: torch.Tensor) -> "SE3":

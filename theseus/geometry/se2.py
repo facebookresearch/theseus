@@ -30,13 +30,7 @@ class SE2(LieGroup):
         if x_y_theta is not None:
             dtype = x_y_theta.dtype
         if data is not None:
-            if strict:
-                self._data_check(data)
-            elif not SE2._data_check_impl(data):
-                data = SE2.normalize(data)
-                raise Warning(
-                    "The input data is not valid for SE2 and has been normalized."
-                )
+            data = self._data_check(data, strict)
         super().__init__(data=data, name=name, dtype=dtype)
         if x_y_theta is not None:
             self.update_from_x_y_theta(x_y_theta)
@@ -237,11 +231,6 @@ class SE2(LieGroup):
                 raise ValueError("SE2 can only be 4D vectors.")
 
             return SO2._data_check_impl(matrix.data[:, 2:])
-
-    @staticmethod
-    def _data_check(matrix: torch.Tensor):
-        if not SE2._data_check_impl(matrix):
-            raise ValueError("SE2 can only be 4D vectors.")
 
     @staticmethod
     def exp_map(

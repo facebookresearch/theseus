@@ -82,12 +82,32 @@ class Manifold(Variable, abc.ABC):
         return self._project_impl(euclidean_grad, is_sparse)
 
     @staticmethod
+    @abc.abstractmethod
     def normalize(data: torch.Tensor) -> torch.Tensor:
-        return data
+        pass
 
     @staticmethod
-    def _data_check(data: torch.Tensor):
+    @abc.abstractmethod
+    def _data_check_impl(data: torch.Tensor) -> bool:
         pass
+
+    @classmethod
+    def _data_check(cls, data: torch.Tensor, strict: bool = True) -> torch.Tensor:
+        check = cls._data_check_impl(data)
+
+        if not check:
+            if strict:
+                raise ValueError(
+                    f"The input data is not valid for {cls.__class__.__name__}"
+                )
+            else:
+                data = cls.normalize(data)
+                warnings.warn(
+                    f"The input data is not valid for {cls.__class__.__name__} "
+                    f"and has been normalized."
+                )
+
+        return data
 
     def local(
         self,

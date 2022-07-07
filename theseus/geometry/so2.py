@@ -27,13 +27,7 @@ class SO2(LieGroup):
         if theta is not None:
             dtype = theta.dtype
         if data is not None:
-            if strict:
-                self._data_check(data)
-            elif not SO2._data_check_impl(data):
-                data = SO2.normalize(data)
-                raise Warning(
-                    "The input data is not valid for SO2 and has been normalized."
-                )
+            data = self._data_check(data, strict)
         super().__init__(data=data, name=name, dtype=dtype)
         if theta is not None:
             if theta.ndim == 1:
@@ -141,11 +135,6 @@ class SO2(LieGroup):
             ).abs().max().item() <= MATRIX_EPS
 
         return _check
-
-    @staticmethod
-    def _data_check(matrix: torch.Tensor):
-        if not SO2._data_check_impl(matrix):
-            raise ValueError("Not valid 2D rotations.")
 
     @staticmethod
     def exp_map(

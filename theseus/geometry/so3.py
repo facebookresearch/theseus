@@ -4,6 +4,7 @@
 # LICENSE file in the root directory of this source tree.
 
 from typing import List, Optional, Union, cast
+from xmlrpc.client import Boolean
 
 import torch
 
@@ -20,14 +21,18 @@ class SO3(LieGroup):
         data: Optional[torch.Tensor] = None,
         name: Optional[str] = None,
         dtype: Optional[torch.dtype] = None,
-        requires_check: bool = True,
+        strict: bool = True,
     ):
         if quaternion is not None and data is not None:
             raise ValueError("Please provide only one of quaternion or data.")
         if quaternion is not None:
             dtype = quaternion.dtype
-        if data is not None and requires_check:
-            self._data_check(data)
+        if data is not None:
+            if strict:
+                self._data_check(data)
+            elif not SO3._data_check_impl(data):
+                data = SO3.normalize(data)
+                # raise Warning("SO3 matrix check fails, and the input data is normalized.")
         super().__init__(data=data, name=name, dtype=dtype)
         if quaternion is not None:
             self.update_from_unit_quaternion(quaternion)
@@ -123,21 +128,26 @@ class SO3(LieGroup):
         return ret
 
     @staticmethod
+    def _data_check_impl(matrix: torch.Tensor) -> Boolean:
+        with torch.no_grad():
+            if matrix.ndim != 3 or matrix.shape[1:] != (3, 3):
+                raise ValueError("3D rotations can only be 3x3 matrices.")
+
+            MATRIX_EPS = theseus.constants._SO3_MATRIX_EPS[matrix.dtype]
+            if matrix.dtype != torch.float64:
+                matrix = matrix.double()
+
+            _check = (
+                torch.matmul(matrix, matrix.transpose(1, 2))
+                - torch.eye(3, 3, dtype=matrix.dtype, device=matrix.device)
+            ).abs().max().item() < MATRIX_EPS
+            _check &= (torch.linalg.det(matrix) - 1).abs().max().item() < MATRIX_EPS
+
+        return _check
+
+    @staticmethod
     def _data_check(matrix: torch.Tensor):
-        if matrix.ndim != 3 or matrix.shape[1:] != (3, 3):
-            raise ValueError("3D rotations can only be 3x3 matrices.")
-
-        MATRIX_EPS = theseus.constants._SO3_MATRIX_EPS[matrix.dtype]
-        if matrix.dtype != torch.float64:
-            matrix = matrix.double()
-
-        _check = (
-            torch.matmul(matrix, matrix.transpose(1, 2))
-            - torch.eye(3, 3, dtype=matrix.dtype, device=matrix.device)
-        ).abs().max().item() < MATRIX_EPS
-        _check &= (torch.linalg.det(matrix) - 1).abs().max().item() < MATRIX_EPS
-
-        if not _check:
+        if not SO3._data_check_impl(matrix):
             raise ValueError("Not valid 3D rotations.")
 
     @staticmethod
@@ -333,7 +343,7 @@ class SO3(LieGroup):
 
     def _inverse_impl(self, get_jacobian: bool = False) -> "SO3":
         # if self.data is a valid SO(3), then self.data.transpose(1, 2) must be valid as well
-        return SO3(data=self.data.transpose(1, 2).clone(), requires_check=False)
+        return SO3(data=self.data.transpose(1, 2).clone(), strict=False)
 
     def to_matrix(self) -> torch.Tensor:
         return self.data.clone()
@@ -453,7 +463,7 @@ class SO3(LieGroup):
 
     def _copy_impl(self, new_name: Optional[str] = None) -> "SO3":
         # if self.data is a valid SO(3), so is the copy
-        return SO3(data=self.data.clone(), name=new_name, requires_check=False)
+        return SO3(data=self.data.clone(), name=new_name, strict=False)
 
     # only added to avoid casting downstream
     def copy(self, new_name: Optional[str] = None) -> "SO3":

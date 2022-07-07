@@ -38,7 +38,7 @@ def test_eff_obj_interesect_jacobians():
                 cell_size,
                 eff_radius,
             )
-            return th.Vector(data=new_cost_function.error())
+            return th.Vector(tensor=new_cost_function.error())
 
         expected_jacs = numeric_jacobian(
             new_error_fn, [obj, eff], function_dim=1, delta_mag=1e-6
@@ -140,10 +140,10 @@ def test_eff_obj_interesect_errors():
             obj,
             eff,
             cost_weight,
-            origin.repeat(5, 1),
-            sdf_data.repeat(5, 1, 1),
-            cell_size.repeat(5, 1),
-            eff_radius,
+            th.Variable(origin.repeat(5, 1)),
+            th.Variable(sdf_data.repeat(5, 1, 1)),
+            th.Variable(cell_size.repeat(5, 1)),
+            th.Variable(eff_radius),
         )
 
         actual = cost_fn.error()
@@ -176,7 +176,7 @@ def test_eff_obj_variable_type():
         )
 
         assert isinstance(cost_function.eff_radius, th.Variable)
-        assert np.allclose(cost_function.eff_radius.data, eff_radius_t)
+        assert np.allclose(cost_function.eff_radius.tensor, eff_radius_t)
         assert len(cost_function.eff_radius.shape) == 2
 
         eff_radius_f = torch.rand(1)
@@ -186,5 +186,5 @@ def test_eff_obj_variable_type():
         )
 
         assert isinstance(cost_function.eff_radius, th.Variable)
-        assert np.allclose(cost_function.eff_radius.data.item(), eff_radius_f)
+        assert np.allclose(cost_function.eff_radius.tensor.item(), eff_radius_f)
         assert len(cost_function.eff_radius.shape) == 2

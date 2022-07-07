@@ -17,10 +17,12 @@ def test_sdf_2d_shapes():
         for field_width in [1, 10, 100]:
             for field_height in [1, 10, 100]:
                 for num_points in [1, 10, 100]:
-                    origin = torch.randn(batch_size, 2)
-                    sdf_data = torch.randn(batch_size, field_width, field_height)
-                    points = torch.randn(batch_size, 2, num_points)
-                    cell_size = torch.randn(batch_size, 1)
+                    origin = th.Variable(tensor=torch.randn(batch_size, 2))
+                    sdf_data = th.Variable(
+                        tensor=torch.randn(batch_size, field_width, field_height)
+                    )
+                    points = th.Variable(tensor=torch.randn(batch_size, 2, num_points))
+                    cell_size = th.Variable(tensor=torch.randn(batch_size, 1))
                     sdf = th.eb.SignedDistanceField2D(origin, cell_size, sdf_data)
                     dist, jac = sdf.signed_distance(points)
                     assert dist.shape == (batch_size, num_points)
@@ -38,7 +40,9 @@ def test_signed_distance_2d():
         ]
     ).view(1, 5, 5)
     sdf = th.eb.SignedDistanceField2D(
-        -0.2 * torch.ones(1, 2), 0.1 * torch.ones(1, 1), data
+        th.Variable(-0.2 * torch.ones(1, 2)),
+        th.Variable(0.1 * torch.ones(1, 1)),
+        th.Variable(data),
     )
 
     points = torch.tensor([[0, 0], [0.18, -0.17]])
@@ -78,7 +82,7 @@ def test_sdf_2d_creation():
             [1, -1, -1, 1, s2],
         ]
     )
-    if sdf_batch.sdf_data.data.dtype == torch.float32:
+    if sdf_batch.sdf_data.tensor.dtype == torch.float32:
         sdf_map1_verify = sdf_map1_verify.float()
     assert torch.allclose(
         sdf_batch.sdf_data[0], sdf_map1_verify
@@ -99,13 +103,13 @@ def test_signed_distance_2d_jacobian():
             _, jacobian = sdf.signed_distance(points)
 
             for p_index in range(num_points):
-                x = th.Vector(data=points[:, :1, p_index].double())
-                y = th.Vector(data=points[:, 1:, p_index].double())
+                x = th.Vector(tensor=points[:, :1, p_index].double())
+                y = th.Vector(tensor=points[:, 1:, p_index].double())
 
                 def new_distance_fn(vars):
-                    new_points = torch.stack([vars[0].data, vars[1].data], dim=1)
+                    new_points = torch.stack([vars[0].tensor, vars[1].tensor], dim=1)
                     new_dist = sdf.signed_distance(new_points)[0]
-                    return th.Vector(data=new_dist)
+                    return th.Vector(tensor=new_dist)
 
                 expected_jacs = numeric_jacobian(
                     new_distance_fn, [x, y], function_dim=1, delta_mag=1e-7

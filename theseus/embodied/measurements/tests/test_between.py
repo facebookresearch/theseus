@@ -28,7 +28,7 @@ def evaluate_numerical_jacobian_between(Group, tol):
             new_cost_function = th.Between(
                 groups[0], groups[1], cost_weight, measurement
             )
-            return th.Vector(data=new_cost_function.error())
+            return th.Vector(tensor=new_cost_function.error())
 
         expected_jacs = numeric_jacobian(new_error_fn, [v0, v1])
         jacobians, error_jac = cost_function.jacobians()
@@ -76,7 +76,7 @@ def test_error_between_point2():
         cost_function = th.Between(p1, p2, cost_weight, measurement)
         expected_error = (p2 - p1) - measurement
         error = cost_function.error()
-        assert torch.allclose(expected_error.data, error.data)
+        assert torch.allclose(expected_error.tensor, error)
 
 
 def test_error_between_so2():
@@ -150,7 +150,9 @@ def test_jacobian_between_se3():
             dist_cf.v1.update(g2)
             return dist_cf.error()
 
-        jac_raw = torch.autograd.functional.jacobian(test_fun, (se3_1.data, se3_2.data))
+        jac_raw = torch.autograd.functional.jacobian(
+            test_fun, (se3_1.tensor, se3_2.tensor)
+        )
         expected = [
             se3_1.project(jac_raw[0][aux_id, :, aux_id], is_sparse=True),
             se3_2.project(jac_raw[1][aux_id, :, aux_id], is_sparse=True),

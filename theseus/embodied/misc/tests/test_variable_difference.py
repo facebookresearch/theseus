@@ -25,7 +25,7 @@ def evaluate_numerical_jacobian_local_cost_fn(Group, tol):
 
         def new_error_fn(groups):
             new_cost_function = th.Difference(groups[0], cost_weight, target)
-            return th.Vector(data=new_cost_function.error())
+            return th.Vector(tensor=new_cost_function.error())
 
         expected_jacs = numeric_jacobian(new_error_fn, [v0])
         jacobians, error_jac = cost_function.jacobians()
@@ -35,8 +35,8 @@ def evaluate_numerical_jacobian_local_cost_fn(Group, tol):
 
 
 def test_copy_local_cost_fn():
-    v0 = th.Vector(data=torch.zeros(1, 1))
-    target = th.Vector(data=torch.ones(1, 1))
+    v0 = th.Vector(tensor=torch.zeros(1, 1))
+    target = th.Vector(tensor=torch.ones(1, 1))
     cost_function = th.Difference(v0, th.ScaleCostWeight(1.0), target, name="name")
     cost_function2 = cost_function.copy(new_name="new_name")
     check_another_theseus_function_is_copy(
@@ -69,7 +69,7 @@ def test_error_local_cost_fn_point2():
         cost_function = th.Difference(p0, cost_weight, target)
         expected_error = p0 - target
         error = cost_function.error()
-        assert torch.allclose(expected_error.data, error.data)
+        assert torch.allclose(expected_error.tensor, error)
 
 
 def test_error_local_cost_fn_so2():

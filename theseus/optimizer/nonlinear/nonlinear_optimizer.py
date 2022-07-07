@@ -107,7 +107,7 @@ class NonlinearOptimizer(Optimizer, abc.ABC):
             return None
         solution_dict = {}
         for var in self.linear_solver.linearization.ordering:
-            solution_dict[var.name] = var.data.detach().clone().cpu()
+            solution_dict[var.name] = var.tensor.detach().clone().cpu()
         return solution_dict
 
     def _init_info(
@@ -156,7 +156,7 @@ class NonlinearOptimizer(Optimizer, abc.ABC):
             info.best_iter[good_indices] = current_iter
             for var in self.linear_solver.linearization.ordering:
                 info.best_solution[var.name][good_indices] = (
-                    var.data.detach().clone()[good_indices].cpu()
+                    var.tensor.detach().clone()[good_indices].cpu()
                 )
 
             info.best_err = torch.minimum(info.best_err, err)

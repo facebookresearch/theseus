@@ -67,7 +67,7 @@ class LieGroupTensor(torch.Tensor):
 
     def add_(self, update, alpha=1):
         if _LieGroupContext.get_context():
-            group = self.group_cls(data=self.data)
+            group = self.group_cls(tensor=self.data)
             grad = group.project(update)
             self.set_(group.retract(alpha * grad).data)
         else:

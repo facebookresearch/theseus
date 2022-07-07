@@ -21,7 +21,7 @@ def test_default_variable_ordering():
             # generate all possible 2-variable cost functions, then shuffle their add order
             variables = []
             for i in range(num_variables):
-                variables.append(MockVar(1, data=None, name=f"var{i}"))
+                variables.append(MockVar(1, tensor=None, name=f"var{i}"))
             variable_pairs = [c for c in itertools.combinations(variables, 2)]
             random.shuffle(variable_pairs)
 
@@ -46,7 +46,7 @@ def test_default_variable_ordering():
 
 
 def test_variable_ordering_append_and_remove():
-    variables = [MockVar(1, data=None, name=f"var{i}") for i in range(50)]
+    variables = [MockVar(1, tensor=None, name=f"var{i}") for i in range(50)]
     mock_objective = th.Objective()
     mock_objective.optim_vars = dict([(var.name, var) for var in variables])
     # repeat a bunch of times with different order
@@ -69,7 +69,7 @@ def test_variable_ordering_append_and_remove():
 
 
 def test_variable_ordering_iterator():
-    variables = [MockVar(1, data=None, name=f"var{i}") for i in range(50)]
+    variables = [MockVar(1, tensor=None, name=f"var{i}") for i in range(50)]
     mock_objective = th.Objective()
     mock_objective.optim_vars = dict([(var.name, var) for var in variables])
     order = th.VariableOrdering(mock_objective, default_order=False)

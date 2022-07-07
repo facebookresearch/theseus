@@ -223,12 +223,12 @@ class SE2(LieGroup):
         return torch.stack((ux, uy, theta), dim=1)
 
     @staticmethod
-    def _data_check_impl(matrix: torch.Tensor):
+    def _check_tensor_impl(tensor: torch.Tensor):
         with torch.no_grad():
-            if matrix.ndim != 2 or matrix.shape[1] != 4:
+            if tensor.ndim != 2 or tensor.shape[1] != 4:
                 raise ValueError("SE2 data tensors can only be 4D vectors.")
 
-            return SO2._data_check_impl(matrix[:, 2:])
+            return SO2._check_tensor_impl(tensor[:, 2:])
 
     @staticmethod
     def exp_map(

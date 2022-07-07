@@ -119,17 +119,17 @@ class SO2(LieGroup):
             return torch.einsum("...k,...k", euclidean_grad, temp).unsqueeze(-1)
 
     @staticmethod
-    def _data_check_impl(matrix: torch.Tensor) -> bool:
+    def _check_tensor_impl(tensor: torch.Tensor) -> bool:
         with torch.no_grad():
-            if matrix.ndim != 2 or matrix.shape[1] != 2:
+            if tensor.ndim != 2 or tensor.shape[1] != 2:
                 raise ValueError("SO2 data tensors can only be 2D vectors.")
 
-            MATRIX_EPS = theseus.constants._SO2_MATRIX_EPS[matrix.dtype]
-            if matrix.dtype != torch.float64:
-                matrix = matrix.double()
+            MATRIX_EPS = theseus.constants._SO2_MATRIX_EPS[tensor.dtype]
+            if tensor.dtype != torch.float64:
+                tensor = tensor.double()
 
             _check = (
-                torch.linalg.norm(matrix, dim=1) - 1
+                torch.linalg.norm(tensor, dim=1) - 1
             ).abs().max().item() <= MATRIX_EPS
 
         return _check

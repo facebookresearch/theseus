@@ -79,9 +79,9 @@ class Point2(Vector):
         )
 
     @staticmethod
-    def _data_check_impl(data: torch.Tensor) -> bool:
-        if data.ndim != 2 or data.shape[1] != 2:
-            raise ValueError("Point2D data tensors can be 2D vectors.")
+    def _check_tensor_impl(tensor: torch.Tensor) -> bool:
+        if tensor.ndim != 2 or tensor.shape[1] != 2:
+            raise ValueError("Point2D data tensors can only be 2D vectors.")
 
         return True
 
@@ -181,8 +181,8 @@ class Point3(Vector):
         )
 
     @staticmethod
-    def _data_check_impl(data: torch.Tensor) -> bool:
-        if data.ndim != 2 or data.shape[1] != 3:
+    def _check_tensor_impl(tensor: torch.Tensor) -> bool:
+        if tensor.ndim != 2 or tensor.shape[1] != 3:
             raise ValueError("Point3 data tensors can only be 3D vectors.")
 
         return True

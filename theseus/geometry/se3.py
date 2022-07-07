@@ -143,12 +143,12 @@ class SE3(LieGroup):
         return ret
 
     @staticmethod
-    def _data_check_impl(matrix: torch.Tensor) -> bool:
+    def _check_tensor_impl(tensor: torch.Tensor) -> bool:
         with torch.no_grad():
-            if matrix.ndim != 3 or matrix.shape[1:] != (3, 4):
+            if tensor.ndim != 3 or tensor.shape[1:] != (3, 4):
                 raise ValueError("SE3 data tensors can only be 3x4 matrices.")
 
-            return SO3._data_check_impl(matrix[:, :3, :3])
+            return SO3._check_tensor_impl(tensor[:, :3, :3])
 
     @staticmethod
     def x_y_z_unit_quaternion_to_SE3(x_y_z_quaternion: torch.Tensor) -> "SE3":

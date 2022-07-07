@@ -19,7 +19,7 @@ class MockVar(th.Manifold):
         return torch.empty(1, length)
 
     @staticmethod
-    def _data_check_impl(data: torch.Tensor) -> bool:
+    def _check_tensor_impl(tensor: torch.Tensor) -> bool:
         return True
 
     @staticmethod

@@ -16,7 +16,7 @@ class MockVector(th.Manifold):
         return value * torch.ones(1, length)
 
     @staticmethod
-    def _data_check_impl(data: torch.Tensor) -> bool:
+    def _check_tensor_impl(tensor: torch.Tensor) -> bool:
         return True
 
     @staticmethod

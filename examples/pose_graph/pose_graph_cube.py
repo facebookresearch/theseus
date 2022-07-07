@@ -94,7 +94,7 @@ def run(
         log.info(f" ------------------- Batch {batch_idx} ------------------- ")
         pg_batch = pg.get_batch_dataset(batch_idx=batch_idx)
         theseus_inputs = get_batch_data(pg_batch, pose_indices)
-        objective.update(input_data=theseus_inputs)
+        objective.update(input_tensors=theseus_inputs)
 
         start_event = torch.cuda.Event(enable_timing=True)
         end_event = torch.cuda.Event(enable_timing=True)

@@ -248,25 +248,25 @@ def test_objective_error():
         else:
             assert error_.allclose(expected_error.norm(dim=1) ** 2)
 
-    def _check_variables(objective, input_data, v1_data, v2_data, also_update):
+    def _check_variables(objective, input_tensors, v1_data, v2_data, also_update):
 
         if also_update:
-            assert objective.optim_vars["v1"].tensor is input_data["v1"]
-            assert objective.optim_vars["v2"].tensor is input_data["v2"]
+            assert objective.optim_vars["v1"].tensor is input_tensors["v1"]
+            assert objective.optim_vars["v2"].tensor is input_tensors["v2"]
         else:
-            assert objective.optim_vars["v1"].tensor is not input_data["v1"]
-            assert objective.optim_vars["v2"].tensor is not input_data["v2"]
+            assert objective.optim_vars["v1"].tensor is not input_tensors["v1"]
+            assert objective.optim_vars["v2"].tensor is not input_tensors["v2"]
 
             assert objective.optim_vars["v1"].tensor is v1_data
             assert objective.optim_vars["v2"].tensor is v2_data
 
     def _check_error_and_variables(
-        v1_data_, v2_data_, error_, error_type, objective, input_data, also_update
+        v1_data_, v2_data_, error_, error_type, objective, input_tensors, also_update
     ):
 
         _check_error_for_data(v1_data_, v2_data_, error_, error_type)
 
-        _check_variables(objective, input_data, v1_data, v2_data, also_update)
+        _check_variables(objective, input_tensors, v1_data, v2_data, also_update)
 
     for _ in range(10):
         f1, f2 = np.random.random(), np.random.random()
@@ -299,9 +299,9 @@ def test_objective_error():
         v1_data_new = torch.ones(batch_size, dof) * f1 * 0.1
         v2_data_new = torch.ones(batch_size, dof) * f2 * 0.1
 
-        input_data = {"v1": v1_data_new, "v2": v2_data_new}
+        input_tensors = {"v1": v1_data_new, "v2": v2_data_new}
 
-        error = objective.error(input_data=input_data, also_update=False)
+        error = objective.error(input_tensors=input_tensors, also_update=False)
 
         _check_error_and_variables(
             v1_data_new,
@@ -309,17 +309,17 @@ def test_objective_error():
             error,
             "error",
             objective,
-            input_data,
+            input_tensors,
             also_update=False,
         )
 
         v1_data_new = torch.ones(batch_size, dof) * f1 * 0.3
         v2_data_new = torch.ones(batch_size, dof) * f2 * 0.3
 
-        input_data = {"v1": v1_data_new, "v2": v2_data_new}
+        input_tensors = {"v1": v1_data_new, "v2": v2_data_new}
 
         error_norm_2 = objective.error_squared_norm(
-            input_data=input_data, also_update=False
+            input_tensors=input_tensors, also_update=False
         )
 
         _check_error_and_variables(
@@ -328,16 +328,16 @@ def test_objective_error():
             error_norm_2,
             "error_norm_2",
             objective,
-            input_data,
+            input_tensors,
             also_update=False,
         )
 
         v1_data_new = torch.ones(batch_size, dof) * f1 * 0.4
         v2_data_new = torch.ones(batch_size, dof) * f2 * 0.4
 
-        input_data = {"v1": v1_data_new, "v2": v2_data_new}
+        input_tensors = {"v1": v1_data_new, "v2": v2_data_new}
 
-        error = objective.error(input_data=input_data, also_update=True)
+        error = objective.error(input_tensors=input_tensors, also_update=True)
 
         _check_error_and_variables(
             v1_data_new,
@@ -345,17 +345,17 @@ def test_objective_error():
             error,
             "error",
             objective,
-            input_data,
+            input_tensors,
             also_update=True,
         )
 
         v1_data_new = torch.ones(batch_size, dof) * f1 * 0.4
         v2_data_new = torch.ones(batch_size, dof) * f2 * 0.4
 
-        input_data = {"v1": v1_data_new, "v2": v2_data_new}
+        input_tensors = {"v1": v1_data_new, "v2": v2_data_new}
 
         error_norm_2 = objective.error_squared_norm(
-            input_data=input_data, also_update=True
+            input_tensors=input_tensors, also_update=True
         )
 
         _check_error_and_variables(
@@ -364,7 +364,7 @@ def test_objective_error():
             error_norm_2,
             "error_norm_2",
             objective,
-            input_data,
+            input_tensors,
             also_update=True,
         )
 
@@ -466,16 +466,16 @@ def test_update_updates_properly():
         MockCostWeight(th.Variable(torch.ones(1), name="cost_weight_aux")),
     )
 
-    input_data = {}
+    input_tensors = {}
     for var in var_to_cost_functions:
-        input_data[var.name] = 2 * var.tensor.clone()
+        input_tensors[var.name] = 2 * var.tensor.clone()
     for aux in aux_to_cost_functions:
-        input_data[aux.name] = 2 * aux.tensor.clone()
+        input_tensors[aux.name] = 2 * aux.tensor.clone()
 
-    objective.update(input_data=input_data)
+    objective.update(input_tensors=input_tensors)
     assert objective.batch_size == 1
 
-    for var_name, data in input_data.items():
+    for var_name, data in input_tensors.items():
         if var_name in [v.name for v in var_to_cost_functions]:
             var_ = objective.get_optim_var(var_name)
         if var_name in [aux.name for aux in aux_to_cost_functions]:
@@ -495,36 +495,36 @@ def test_update_raises_batch_size_error():
         MockCostWeight(th.Variable(torch.ones(1), name="cost_weight_aux")),
     )
 
-    input_data = {}
+    input_tensors = {}
     batch_size = 2
     # first check that we can change the current batch size (doubling the size)s
     for var in var_to_cost_functions:
         new_data = torch.ones(batch_size, 1)
-        input_data[var.name] = new_data
+        input_tensors[var.name] = new_data
     for aux in aux_to_cost_functions:
         new_data = torch.ones(batch_size, 1)
-        input_data[aux.name] = new_data
-    objective.update(input_data=input_data)
+        input_tensors[aux.name] = new_data
+    objective.update(input_tensors=input_tensors)
     assert objective.batch_size == batch_size
 
     # change one of the variables, no error since batch_size = 1 is broadcastable
-    input_data["var1"] = torch.ones(1, 1)
-    objective.update(input_data=input_data)
+    input_tensors["var1"] = torch.ones(1, 1)
+    objective.update(input_tensors=input_tensors)
     assert objective.batch_size == batch_size
 
     # change another variable, this time throws errors since found batch size 2 and 3
-    input_data["var2"] = torch.ones(batch_size + 1, 1)
+    input_tensors["var2"] = torch.ones(batch_size + 1, 1)
     with pytest.raises(ValueError):
-        objective.update(input_data=input_data)
+        objective.update(input_tensors=input_tensors)
 
     # change back before testing the aux. variable
-    input_data["var2"] = torch.ones(batch_size, 1)
-    objective.update(input_data=input_data)  # shouldn't throw error
+    input_tensors["var2"] = torch.ones(batch_size, 1)
+    objective.update(input_tensors=input_tensors)  # shouldn't throw error
 
     # auxiliary variables should also throw error
-    input_data["aux1"] = torch.ones(batch_size + 1, 1)
+    input_tensors["aux1"] = torch.ones(batch_size + 1, 1)
     with pytest.raises(ValueError):
-        objective.update(input_data=input_data)
+        objective.update(input_tensors=input_tensors)
 
 
 def test_iterator():

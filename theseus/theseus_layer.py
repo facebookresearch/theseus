@@ -37,7 +37,7 @@ class TheseusLayer(nn.Module):
 
     def forward(
         self,
-        input_data: Optional[Dict[str, torch.Tensor]] = None,
+        input_tensors: Optional[Dict[str, torch.Tensor]] = None,
         optimizer_kwargs: Optional[Dict[str, Any]] = None,
     ) -> Tuple[Dict[str, torch.Tensor], OptimizerInfo]:
         if self._objectives_version != self.objective.current_version:
@@ -64,7 +64,7 @@ class TheseusLayer(nn.Module):
                 self._dlm_bwd_optimizer = _opt
 
             # Tensors cannot be passed inside containers, else we run into memory leaks.
-            input_keys, input_vals = zip(*input_data.items())
+            input_keys, input_vals = zip(*input_tensors.items())
             differentiable_tensors = [t for t in input_vals if t.requires_grad]
 
             *vars, info = TheseusLayerDLMForward.apply(
@@ -81,7 +81,7 @@ class TheseusLayer(nn.Module):
             )
         else:
             vars, info = _forward(
-                self.objective, self.optimizer, optimizer_kwargs, input_data
+                self.objective, self.optimizer, optimizer_kwargs, input_tensors
             )
         values = dict(zip(self.objective.optim_vars.keys(), vars))
         return values, info
@@ -138,8 +138,8 @@ class TheseusLayer(nn.Module):
         return self.objective.dtype
 
 
-def _forward(objective, optimizer, optimizer_kwargs, input_data):
-    objective.update(input_data)
+def _forward(objective, optimizer, optimizer_kwargs, input_tensors):
+    objective.update(input_tensors)
     info = optimizer.optimize(**optimizer_kwargs)
     vars = [var.tensor for var in objective.optim_vars.values()]
     return vars, info
@@ -164,19 +164,19 @@ class TheseusLayerDLMForward(torch.autograd.Function):
         bwd_optimizer,
         epsilon,
         n,
-        *input_data,
+        *input_tensors,
     ):
-        input_keys = input_data[:n]
-        input_vals = input_data[n : 2 * n]
-        differentiable_tensors = input_data[2 * n :]
+        input_keys = input_tensors[:n]
+        input_vals = input_tensors[n : 2 * n]
+        differentiable_tensors = input_tensors[2 * n :]
         ctx.n = n
         ctx.k = len(differentiable_tensors)
 
-        input_data = dict(zip(input_keys, input_vals))
+        input_tensors = dict(zip(input_keys, input_vals))
         ctx.input_keys = input_keys
 
         optim_tensors, info = _forward(
-            objective, optimizer, optimizer_kwargs, input_data
+            objective, optimizer, optimizer_kwargs, input_tensors
         )
 
         # Skip computation if there are no differentiable inputs.

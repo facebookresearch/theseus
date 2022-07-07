@@ -359,32 +359,32 @@ class Objective:
 
     def error(
         self,
-        input_data: Optional[Dict[str, torch.Tensor]] = None,
+        input_tensors: Optional[Dict[str, torch.Tensor]] = None,
         also_update: bool = False,
     ) -> torch.Tensor:
-        old_data = {}
-        if input_data is not None:
+        old_tensors = {}
+        if input_tensors is not None:
             if not also_update:
                 for var in self.optim_vars:
-                    old_data[var] = self.optim_vars[var].tensor
-            self.update(input_data=input_data)
+                    old_tensors[var] = self.optim_vars[var].tensor
+            self.update(input_tensors=input_tensors)
 
         error_vector = torch.cat(
             [cf.weighted_error() for cf in self._get_iterator()], dim=1
         )
 
-        if input_data is not None and not also_update:
-            self.update(old_data)
+        if input_tensors is not None and not also_update:
+            self.update(old_tensors)
         return error_vector
 
     def error_squared_norm(
         self,
-        input_data: Optional[Dict[str, torch.Tensor]] = None,
+        input_tensors: Optional[Dict[str, torch.Tensor]] = None,
         also_update: bool = False,
     ) -> torch.Tensor:
-        return (self.error(input_data=input_data, also_update=also_update) ** 2).sum(
-            dim=1
-        )
+        return (
+            self.error(input_tensors=input_tensors, also_update=also_update) ** 2
+        ).sum(dim=1)
 
     def copy(self) -> "Objective":
         new_objective = Objective(dtype=self.dtype)
@@ -442,7 +442,7 @@ class Objective:
         memo[id(self)] = the_copy
         return the_copy
 
-    def update(self, input_data: Optional[Dict[str, torch.Tensor]] = None):
+    def update(self, input_tensors: Optional[Dict[str, torch.Tensor]] = None):
         self._batch_size = None
 
         def _get_batch_size(batch_sizes: Sequence[int]) -> int:
@@ -456,20 +456,20 @@ class Objective:
                     return max_bs
             raise ValueError("Provided tensors must be broadcastable.")
 
-        input_data = input_data or {}
-        for var_name, data in input_data.items():
-            if data.ndim < 2:
+        input_tensors = input_tensors or {}
+        for var_name, tensor in input_tensors.items():
+            if tensor.ndim < 2:
                 raise ValueError(
-                    f"Input data tensors must have a batch dimension and "
-                    f"one ore more data dimensions, but data.ndim={data.ndim} for "
+                    f"Input tensors must have a batch dimension and "
+                    f"one ore more data dimensions, but tensor.ndim={tensor.ndim} for "
                     f"tensor with name {var_name}."
                 )
             if var_name in self.optim_vars:
-                self.optim_vars[var_name].update(data)
+                self.optim_vars[var_name].update(tensor)
             elif var_name in self.aux_vars:
-                self.aux_vars[var_name].update(data)
+                self.aux_vars[var_name].update(tensor)
             elif var_name in self.cost_weight_optim_vars:
-                self.cost_weight_optim_vars[var_name].update(data)
+                self.cost_weight_optim_vars[var_name].update(tensor)
                 warnings.warn(
                     "Updated a variable declared as optimization, but it is "
                     "only associated to cost weights and not to any cost functions. "
@@ -482,7 +482,7 @@ class Objective:
                     "which is not associated to any variable in the objective."
                 )
 
-        # Check that the batch size of all data is consistent after update
+        # Check that the batch size of all tensors is consistent after update
         batch_sizes = [v.tensor.shape[0] for v in self.optim_vars.values()]
         batch_sizes.extend([v.tensor.shape[0] for v in self.aux_vars.values()])
         self._batch_size = _get_batch_size(batch_sizes)

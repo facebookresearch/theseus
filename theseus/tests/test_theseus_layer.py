@@ -558,7 +558,8 @@ def test_no_layer_kwargs():
     input_values = {"coefficients": torch.ones(batch_size, 2) * 0.5}
 
     # Trying a few variations of aux_vars. In general, no kwargs should be accepted
-    # beyong input_data and optimization_kwargs, but I'm not sure how to test for this
+    # beyond input_tensors and optimization_kwargs, but I'm not sure how to test for
+    # this
     with pytest.raises(TypeError):
         layer.forward(input_values, aux_vars=None)
 

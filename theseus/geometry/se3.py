@@ -22,14 +22,20 @@ class SE3(LieGroup):
         data: Optional[torch.Tensor] = None,
         name: Optional[str] = None,
         dtype: Optional[torch.dtype] = None,
-        requires_check: bool = True,
+        strict: bool = True,
     ):
         if x_y_z_quaternion is not None and data is not None:
             raise ValueError("Please provide only one of x_y_z_quaternion or data.")
         if x_y_z_quaternion is not None:
             dtype = x_y_z_quaternion.dtype
-        if data is not None and requires_check:
-            self._data_check(data)
+        if data is not None:
+            if strict:
+                self._data_check(data)
+            elif not SE3._data_check_impl(data):
+                data = SE3.normalize(data)
+                raise Warning(
+                    "The input data is not valid for SE3 and has been normalized."
+                )
         super().__init__(data=data, name=name, dtype=dtype)
         if x_y_z_quaternion is not None:
             self.update_from_x_y_z_quaternion(x_y_z_quaternion=x_y_z_quaternion)
@@ -145,10 +151,17 @@ class SE3(LieGroup):
         return ret
 
     @staticmethod
+    def _data_check_impl(matrix: torch.Tensor) -> bool:
+        with torch.no_grad():
+            if matrix.ndim != 3 or matrix.shape[1:] != (3, 4):
+                raise ValueError("SE3 can only be 3x4 matrices.")
+
+            return SO3._data_check_impl(matrix[:, :3, :3])
+
+    @staticmethod
     def _data_check(matrix: torch.Tensor):
-        if matrix.ndim != 3 or matrix.shape[1:] != (3, 4):
-            raise ValueError("SE(3) can only be 3x4 matrices.")
-        SO3._data_check(matrix.data[:, :3, :3])
+        if not SE3._data_check_impl(matrix):
+            raise ValueError("Not valid data for SE3.")
 
     @staticmethod
     def x_y_z_unit_quaternion_to_SE3(x_y_z_quaternion: torch.Tensor) -> "SE3":
@@ -174,16 +187,16 @@ class SE3(LieGroup):
         HAT_EPS = theseus.constants._SE3_HAT_EPS[matrix.dtype]
 
         if matrix.ndim != 3 or matrix.shape[1:] != (4, 4):
-            raise ValueError("Hat matrices of SE(3) can only be 4x4 matrices")
+            raise ValueError("Hat matrices of SE3 can only be 4x4 matrices")
 
         if matrix[:, 3].abs().max().item() > HAT_EPS:
-            raise ValueError("The last row of hat matrices of SE(3) can only be zero.")
+            raise ValueError("The last row of hat matrices of SE3 can only be zero.")
 
         if (
             matrix[:, :3, :3].transpose(1, 2) + matrix[:, :3, :3]
         ).abs().max().item() > HAT_EPS:
             raise ValueError(
-                "The 3x3 top-left corner of hat matrices of SE(3) can only be skew-symmetric."
+                "The 3x3 top-left corner of hat matrices of SE3 can only be skew-symmetric."
             )
 
     @staticmethod
@@ -191,7 +204,7 @@ class SE3(LieGroup):
         tangent_vector: torch.Tensor, jacobians: Optional[List[torch.Tensor]] = None
     ) -> "SE3":
         if tangent_vector.ndim != 2 or tangent_vector.shape[1] != 6:
-            raise ValueError("Tangent vectors of SE(3) can only be 6-D vectors.")
+            raise ValueError("Tangent vectors of SE3 can only be 6-D vectors.")
 
         ret = SE3(dtype=tangent_vector.dtype)
 
@@ -341,7 +354,7 @@ class SE3(LieGroup):
     @staticmethod
     def normalize(data: torch.Tensor) -> torch.Tensor:
         if data.ndim != 3 or data.shape[1:] != (3, 4):
-            raise ValueError("SE(3) can only be 3x4 matrices.")
+            raise ValueError("SE3 can only be 3x4 matrices.")
 
         return torch.cat([SO3.normalize(data[:, :, :3]), data[:, :, 3:]], dim=-1)
 
@@ -485,8 +498,8 @@ class SE3(LieGroup):
         rotT = self.data[:, :3, :3].transpose(1, 2)
         ret[:, :, :3] = rotT
         ret[:, :, 3] = -(rotT @ self.data[:, :3, 3].unsqueeze(2)).view(-1, 3)
-        # if self.data is a valid SE(3), so is the inverse
-        return SE3(data=ret, requires_check=False)
+        # if self.data is a valid SE3, so is the inverse
+        return SE3(data=ret, strict=False)
 
     def to_matrix(self) -> torch.Tensor:
         ret = torch.zeros(self.shape[0], 4, 4).to(dtype=self.dtype, device=self.device)
@@ -513,7 +526,7 @@ class SE3(LieGroup):
     def hat(tangent_vector: torch.Tensor) -> torch.Tensor:
         _check = tangent_vector.ndim == 2 and tangent_vector.shape[1] == 6
         if not _check:
-            raise ValueError("Invalid vee matrix for SE(3).")
+            raise ValueError("Invalid vee matrix for SE3.")
         matrix = torch.zeros(tangent_vector.shape[0], 4, 4).to(
             dtype=tangent_vector.dtype, device=tangent_vector.device
         )
@@ -528,8 +541,8 @@ class SE3(LieGroup):
         return torch.cat((matrix[:, :3, 3], SO3.vee(matrix[:, :3, :3])), dim=1)
 
     def _copy_impl(self, new_name: Optional[str] = None) -> "SE3":
-        # if self.data is a valid SE(3), so is the copy
-        return SE3(data=self.data.clone(), name=new_name, requires_check=False)
+        # if self.data is a valid SE3, so is the copy
+        return SE3(data=self.data.clone(), name=new_name, strict=False)
 
     # only added to avoid casting downstream
     def copy(self, new_name: Optional[str] = None) -> "SE3":
@@ -570,7 +583,7 @@ class SE3(LieGroup):
 
         if jacobians is not None:
             self._check_jacobians_list(jacobians)
-            # Right jacobians for SE(3) are computed
+            # Right jacobians for SE3 are computed
             Jg = torch.zeros(batch_size, 3, 6, dtype=self.dtype, device=self.device)
             Jg[:, :, :3] = self[:, :, :3]
             Jg[:, :, 3:] = -self[:, :, :3] @ SO3.hat(p)
@@ -598,7 +611,7 @@ class SE3(LieGroup):
 
         if jacobians is not None:
             self._check_jacobians_list(jacobians)
-            # Right jacobians for SE(3) are computed
+            # Right jacobians for SE3 are computed
             Jg = torch.zeros(batch_size, 3, 6, dtype=self.dtype, device=self.device)
             Jg[:, 0, 0] = -1
             Jg[:, 1, 1] = -1

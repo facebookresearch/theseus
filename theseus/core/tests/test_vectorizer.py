@@ -172,7 +172,7 @@ def test_vectorized_error():
         se3s = [
             th.SE3(
                 data=th.SE3.rand(batch_size, generator=generator).data,
-                requires_check=False,
+                strict=False,
             )
             for i in range(rng.choice([1, 10]))
         ]

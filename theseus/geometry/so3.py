@@ -4,7 +4,6 @@
 # LICENSE file in the root directory of this source tree.
 
 from typing import List, Optional, Union, cast
-from xmlrpc.client import Boolean
 
 import torch
 
@@ -32,7 +31,9 @@ class SO3(LieGroup):
                 self._data_check(data)
             elif not SO3._data_check_impl(data):
                 data = SO3.normalize(data)
-                # raise Warning("SO3 matrix check fails, and the input data is normalized.")
+                raise Warning(
+                    "The input data is not valid for SO3 and has been normalized."
+                )
         super().__init__(data=data, name=name, dtype=dtype)
         if quaternion is not None:
             self.update_from_unit_quaternion(quaternion)
@@ -128,7 +129,7 @@ class SO3(LieGroup):
         return ret
 
     @staticmethod
-    def _data_check_impl(matrix: torch.Tensor) -> Boolean:
+    def _data_check_impl(matrix: torch.Tensor) -> bool:
         with torch.no_grad():
             if matrix.ndim != 3 or matrix.shape[1:] != (3, 3):
                 raise ValueError("3D rotations can only be 3x3 matrices.")

@@ -29,7 +29,6 @@ from theseus.optimizer.nonlinear.nonlinear_optimizer import (
 """
 TODO
  - solving inverse problem to compute message mean
- - move vectorized indices compute to init
  - use schedule
  - random schedule not vectorized
  - factor inherits CF class
@@ -164,6 +163,9 @@ class Factor:
             ftov_msg.zero_message()
             self.vtof_msgs.append(vtof_msg)
             self.ftov_msgs.append(ftov_msg)
+
+        # for vectorized vtof message passing
+        self.vectorized_var_ixs: List[torch.Tensor] = [None] * cf.num_optim_vars()
 
     # Linearizes factors at current belief if beliefs have deviated
     # from the linearization point by more than the threshold.
@@ -616,34 +618,36 @@ class GaussianBeliefPropagation(Optimizer, abc.ABC):
                 )
 
                 receiver_var_type = (msg.mean[0].__class__, msg.mean[0].dof())
+                # get indices of the vectorized variables that receive each message
+                if factor.vectorized_var_ixs[i] is None:
+                    receiver_var_ixs = factor.var_ixs[
+                        :, i
+                    ]  # ixs of the receiver variables
+                    var_type_ixs = torch.tensor(
+                        var_info[receiver_var_type][2]
+                    )  # all ixs for variables of this type
+                    var_type_ixs = var_type_ixs[None, :].repeat(
+                        len(receiver_var_ixs), 1
+                    )
+                    is_receiver = (var_type_ixs - receiver_var_ixs[:, None]) == 0
+                    indices = is_receiver.nonzero()[:, 1]
+                    # expand indices for all batch variables when batch size > 1
+                    if self.objective.batch_size != 1:
+                        indices = indices[:, None].repeat(1, self.objective.batch_size)
+                        shift = (
+                            torch.arange(self.objective.batch_size)[None, :]
+                            .long()
+                            .to(indices.device)
+                        )
+                        indices = indices + shift
+                        indices = indices.flatten()
+                    factor.vectorized_var_ixs[i] = indices
 
                 #  add messages to correct variable using indices
                 eta_tp_acc = var_info[receiver_var_type][3][0]
                 lam_tp_acc = var_info[receiver_var_type][3][1]
-
-                # COULD MOVE THIS TO THE INIT
-                # get indices of the vectorized variables that receive each message
-                receiver_var_ixs = factor.var_ixs[:, i]  # ixs of the receiver variables
-                var_type_ixs = torch.tensor(
-                    var_info[receiver_var_type][2]
-                )  # all ixs for variables of this type
-                var_type_ixs = var_type_ixs[None, :].repeat(len(receiver_var_ixs), 1)
-                is_receiver = (var_type_ixs - receiver_var_ixs[:, None]) == 0
-                indices = is_receiver.nonzero()[:, 1]
-
-                # expand indices for all batch variables when batch size > 1
-                if self.objective.batch_size != 1:
-                    indices = indices[:, None].repeat(1, self.objective.batch_size)
-                    shift = (
-                        torch.arange(self.objective.batch_size)[None, :]
-                        .long()
-                        .to(indices.device)
-                    )
-                    indices = indices + shift
-                    indices = indices.flatten()
-
-                eta_tp_acc.index_add_(0, indices, eta_tp)
-                lam_tp_acc.index_add_(0, indices, lam_tp)
+                eta_tp_acc.index_add_(0, factor.vectorized_var_ixs[i], eta_tp)
+                lam_tp_acc.index_add_(0, factor.vectorized_var_ixs[i], lam_tp)
 
         # compute variable to factor messages, now all incoming messages are accumulated
         for factor in self.factors:
@@ -655,29 +659,25 @@ class GaussianBeliefPropagation(Optimizer, abc.ABC):
                     factor.cf.optim_var_at(i), ftov_msg, return_mean=False
                 )
 
+                # new outgoing message is belief - last incoming mesage (in log space parameters)
                 receiver_var_type = (msg.mean[0].__class__, msg.mean[0].dof())
                 eta_tp_acc = var_info[receiver_var_type][3][0]
                 lam_tp_acc = var_info[receiver_var_type][3][1]
-
-                # COULD MOVE THIS TO THE INIT
-                # get indices of the vectorized variables that receive each message
-                receiver_var_ixs = factor.var_ixs[:, i]  # ixs of the receiver variables
-                var_type_ixs = torch.tensor(
-                    var_info[receiver_var_type][2]
-                )  # all ixs for variables of this type
-                var_type_ixs = var_type_ixs[None, :].repeat(len(receiver_var_ixs), 1)
-                is_receiver = (var_type_ixs - receiver_var_ixs[:, None]) == 0
-                indices = is_receiver.nonzero()[:, 1]
-
-                # new outgoing message is belief - last incoming mesage (in log space parameters)
-                sum_etas = eta_tp_acc[indices] - eta_tp
-                lam_a = lam_tp_acc[indices] - lam_tp
+                sum_etas = eta_tp_acc[factor.vectorized_var_ixs[i]] - eta_tp
+                lam_a = lam_tp_acc[factor.vectorized_var_ixs[i]] - lam_tp
 
                 if lam_a.count_nonzero() == 0:
                     msg.zero_message()
                 else:
-                    print(lam_a.shape, lam_a)
+                    zero_lam = lam_a.count_nonzero(1, 2) == 0
+                    # add to zero precision matrices so inversion doesn't fail
+                    lam_a[zero_lam] += torch.eye(
+                        lam_a.shape[1], dtype=lam_a.dtype, device=lam_a.device
+                    )
                     inv_lam_a = torch.linalg.inv(lam_a)
+                    # restore zeros precision matrices
+                    lam_a[zero_lam] = 0.0
+                    inv_lam_a[zero_lam] = 0.0
                     mean_a = torch.matmul(inv_lam_a, sum_etas.unsqueeze(-1)).squeeze(-1)
                     new_mess = th.retract_gaussian(
                         factor.cf.optim_var_at(i), mean_a, lam_a

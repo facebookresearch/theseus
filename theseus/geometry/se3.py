@@ -22,7 +22,7 @@ class SE3(LieGroup):
         data: Optional[torch.Tensor] = None,
         name: Optional[str] = None,
         dtype: Optional[torch.dtype] = None,
-        strict: bool = True,
+        strict: bool = False,
     ):
         if x_y_z_quaternion is not None and data is not None:
             raise ValueError("Please provide only one of x_y_z_quaternion or data.")

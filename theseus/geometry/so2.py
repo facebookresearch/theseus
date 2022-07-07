@@ -20,7 +20,7 @@ class SO2(LieGroup):
         data: Optional[torch.Tensor] = None,
         name: Optional[str] = None,
         dtype: Optional[torch.dtype] = None,
-        strict: bool = True,
+        strict: bool = False,
     ):
         if theta is not None and data is not None:
             raise ValueError("Please provide only one of theta or data.")

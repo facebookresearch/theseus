@@ -27,8 +27,9 @@ class LieGroup(Manifold):
         data: Optional[torch.Tensor] = None,
         name: Optional[str] = None,
         dtype: torch.dtype = torch.float,
+        strict: bool = False,
     ):
-        super().__init__(*args, data=data, name=name, dtype=dtype)
+        super().__init__(*args, data=data, name=name, dtype=dtype, strict=strict)
 
     @staticmethod
     def _check_jacobians_list(jacobians: List[torch.Tensor]):

@@ -29,9 +29,7 @@ class SE2(LieGroup):
             raise ValueError("Please provide only one of x_y_theta or data.")
         if x_y_theta is not None:
             dtype = x_y_theta.dtype
-        if data is not None:
-            data = self._data_check(data, strict)
-        super().__init__(data=data, name=name, dtype=dtype)
+        super().__init__(data=data, name=name, dtype=dtype, strict=strict)
         if x_y_theta is not None:
             self.update_from_x_y_theta(x_y_theta)
 

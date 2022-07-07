@@ -26,9 +26,7 @@ class SO2(LieGroup):
             raise ValueError("Please provide only one of theta or data.")
         if theta is not None:
             dtype = theta.dtype
-        if data is not None:
-            data = self._data_check(data, strict)
-        super().__init__(data=data, name=name, dtype=dtype)
+        super().__init__(data=data, name=name, dtype=dtype, strict=strict)
         if theta is not None:
             if theta.ndim == 1:
                 theta = theta.unsqueeze(1)

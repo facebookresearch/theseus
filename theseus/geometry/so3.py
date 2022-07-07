@@ -26,9 +26,7 @@ class SO3(LieGroup):
             raise ValueError("Please provide only one of quaternion or data.")
         if quaternion is not None:
             dtype = quaternion.dtype
-        if data is not None:
-            data = self._data_check(data, strict)
-        super().__init__(data=data, name=name, dtype=dtype)
+        super().__init__(data=data, name=name, dtype=dtype, strict=strict)
         if quaternion is not None:
             self.update_from_unit_quaternion(quaternion)
 

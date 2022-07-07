@@ -32,12 +32,14 @@ class Manifold(Variable, abc.ABC):
         data: Optional[torch.Tensor] = None,
         name: Optional[str] = None,
         dtype: Optional[torch.dtype] = None,
+        strict: bool = False,
     ):
         # If nothing specified, use torch's default dtype
         # else data.dtype takes precedence
         if data is None and dtype is None:
             dtype = torch.get_default_dtype()
         if data is not None:
+            data = self._data_check(data, strict)
             if dtype is not None and data.dtype != dtype:
                 warnings.warn(
                     f"data.dtype {data.dtype} does not match given dtype {dtype}, "
@@ -97,13 +99,11 @@ class Manifold(Variable, abc.ABC):
 
         if not check:
             if strict:
-                raise ValueError(
-                    f"The input data is not valid for {cls.__class__.__name__}"
-                )
+                raise ValueError(f"The input data is not valid for {cls.__name__}.")
             else:
                 data = cls.normalize(data)
                 warnings.warn(
-                    f"The input data is not valid for {cls.__class__.__name__} "
+                    f"The input data is not valid for {cls.__name__} "
                     f"and has been normalized."
                 )
 

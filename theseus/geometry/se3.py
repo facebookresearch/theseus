@@ -28,9 +28,7 @@ class SE3(LieGroup):
             raise ValueError("Please provide only one of x_y_z_quaternion or data.")
         if x_y_z_quaternion is not None:
             dtype = x_y_z_quaternion.dtype
-        if data is not None:
-            data = self._data_check(data, strict)
-        super().__init__(data=data, name=name, dtype=dtype)
+        super().__init__(data=data, name=name, dtype=dtype, strict=strict)
         if x_y_z_quaternion is not None:
             self.update_from_x_y_z_quaternion(x_y_z_quaternion=x_y_z_quaternion)
 

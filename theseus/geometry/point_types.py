@@ -78,6 +78,13 @@ class Point2(Vector):
             )
         )
 
+    @staticmethod
+    def _data_check_impl(data: torch.Tensor) -> bool:
+        if data.ndim != 2 or data.shape[1] != 2:
+            raise ValueError("Point2D data tensors can be 2D vectors.")
+
+        return True
+
     def __add__(self, other: Vector) -> "Point2":
         return cast(Point2, super().__add__(other))
 
@@ -172,6 +179,13 @@ class Point3(Vector):
                 requires_grad=requires_grad,
             )
         )
+
+    @staticmethod
+    def _data_check_impl(data: torch.Tensor) -> bool:
+        if data.ndim != 2 or data.shape[1] != 3:
+            raise ValueError("Point3 data tensors can only be 3D vectors.")
+
+        return True
 
     def __add__(self, other: Vector) -> "Point3":
         return cast(Point3, super().__add__(other))

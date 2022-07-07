@@ -126,7 +126,7 @@ class SO3(LieGroup):
     def _data_check_impl(matrix: torch.Tensor) -> bool:
         with torch.no_grad():
             if matrix.ndim != 3 or matrix.shape[1:] != (3, 3):
-                raise ValueError("3D rotations can only be 3x3 matrices.")
+                raise ValueError("SO3 data tensors can only be 3x3 matrices.")
 
             MATRIX_EPS = theseus.constants._SO3_MATRIX_EPS[matrix.dtype]
             if matrix.dtype != torch.float64:
@@ -235,7 +235,7 @@ class SO3(LieGroup):
     @staticmethod
     def normalize(data: torch.Tensor) -> torch.Tensor:
         if data.ndim != 3 or data.shape[1:] != (3, 3):
-            raise ValueError("3D rotations can only be 3x3 matrices.")
+            raise ValueError("SO3 data tensors can only be 3x3 matrices.")
 
         U, _, V = torch.svd(data)
         Vtr = V.transpose(1, 2)

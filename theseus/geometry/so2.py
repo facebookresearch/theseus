@@ -124,7 +124,7 @@ class SO2(LieGroup):
     def _data_check_impl(matrix: torch.Tensor) -> bool:
         with torch.no_grad():
             if matrix.ndim != 2 or matrix.shape[1] != 2:
-                raise ValueError("2D rotations can only be 2D vectors.")
+                raise ValueError("SO2 data tensors can only be 2D vectors.")
 
             MATRIX_EPS = theseus.constants._SO2_MATRIX_EPS[matrix.dtype]
             if matrix.dtype != torch.float64:
@@ -160,7 +160,7 @@ class SO2(LieGroup):
     @staticmethod
     def normalize(data: torch.Tensor) -> torch.Tensor:
         if data.ndim != 2 or data.shape[1] != 2:
-            raise ValueError("2D rotations can only be 2D vectors.")
+            raise ValueError("SO2 data tensors can only be 2D vectors.")
 
         data_norm = torch.norm(data, dim=1, keepdim=True)
         near_zero = data_norm < theseus.constants._SO2_NORMALIZATION_EPS[data.dtype]

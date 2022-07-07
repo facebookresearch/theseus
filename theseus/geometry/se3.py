@@ -146,7 +146,7 @@ class SE3(LieGroup):
     def _data_check_impl(matrix: torch.Tensor) -> bool:
         with torch.no_grad():
             if matrix.ndim != 3 or matrix.shape[1:] != (3, 4):
-                raise ValueError("SE3 can only be 3x4 matrices.")
+                raise ValueError("SE3 data tensors can only be 3x4 matrices.")
 
             return SO3._data_check_impl(matrix[:, :3, :3])
 
@@ -341,7 +341,7 @@ class SE3(LieGroup):
     @staticmethod
     def normalize(data: torch.Tensor) -> torch.Tensor:
         if data.ndim != 3 or data.shape[1:] != (3, 4):
-            raise ValueError("SE3 can only be 3x4 matrices.")
+            raise ValueError("SE3 data tensors can only be 3x4 matrices.")
 
         return torch.cat([SO3.normalize(data[:, :, :3]), data[:, :, 3:]], dim=-1)
 

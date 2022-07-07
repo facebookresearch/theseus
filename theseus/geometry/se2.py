@@ -228,7 +228,7 @@ class SE2(LieGroup):
     def _data_check_impl(matrix: torch.Tensor):
         with torch.no_grad():
             if matrix.ndim != 2 or matrix.shape[1] != 4:
-                raise ValueError("SE2 can only be 4D vectors.")
+                raise ValueError("SE2 data tensors can only be 4D vectors.")
 
             return SO2._data_check_impl(matrix.data[:, 2:])
 
@@ -301,7 +301,7 @@ class SE2(LieGroup):
     @staticmethod
     def normalize(data: torch.Tensor) -> torch.Tensor:
         if data.ndim != 2 or data.shape[1] != 4:
-            raise ValueError("SE2 can only be 4D vectors.")
+            raise ValueError("SE2 data tensors can only be 4D vectors.")
 
         return torch.cat([data[:, :2], SO2.normalize(data[:, 2:])], dim=1)
 

@@ -156,9 +156,13 @@ def test_rotate_and_unrotate(dtype):
 
                 # Check the operation result
                 assert torch.allclose(
-                    expected_rotated_data.squeeze(2), rotated_point.data, atol=TEST_EPS
+                    expected_rotated_data.squeeze(2),
+                    rotated_point.tensor,
+                    atol=TEST_EPS,
                 )
-                assert torch.allclose(point_tensor, unrotated_point.data, atol=TEST_EPS)
+                assert torch.allclose(
+                    point_tensor, unrotated_point.tensor, atol=TEST_EPS
+                )
 
                 # Check the jacobians
                 # function_dim = 3 because rotate(so3, (x, y, z)) --> (x_new, y_new, z_new)
@@ -177,7 +181,7 @@ def test_rotate_and_unrotate(dtype):
                 )
                 expected_jac = numeric_jacobian(
                     lambda groups: groups[0].unrotate(groups[1]),
-                    [so3_double, th.Vector(data=rotated_point.data.double())],
+                    [so3_double, th.Vector(tensor=rotated_point.tensor.double())],
                     delta_mag=1e-5,
                     function_dim=3,
                 )

@@ -93,10 +93,10 @@ def check_projection_for_rotate_and_transform(
     point.to(dtype)
 
     def func(g, p):
-        return Func(Group(data=g), p).data
+        return Func(Group(tensor=g), p).tensor
 
     jac_raw = torch.autograd.functional.jacobian(
-        func, (group_double.data, point_double.data)
+        func, (group_double.tensor, point_double.tensor)
     )
 
     if dtype == torch.float32:
@@ -106,7 +106,9 @@ def check_projection_for_rotate_and_transform(
 
     # Check returns
     rets = Func(group, point, jac)
-    assert torch.allclose(rets.data.double(), func(group.data, point.data).double())
+    assert torch.allclose(
+        rets.tensor.double(), func(group.tensor, point.tensor).double()
+    )
 
     # Check dense jacobian matrices
     actual = [group.project(jac_raw[0]), point.project(jac_raw[1])]
@@ -149,14 +151,14 @@ def check_projection_for_compose(
     rets = group1.compose(group2, jacobians=jac)
 
     def func(g1, g2):
-        return Group(data=g1).compose(Group(data=g2)).to_matrix()
+        return Group(tensor=g1).compose(Group(tensor=g2)).to_matrix()
 
     jac_raw = torch.autograd.functional.jacobian(
-        func, (group1_double.data, group2_double.data)
+        func, (group1_double.tensor, group2_double.tensor)
     )
 
     # Check returns
-    assert torch.allclose(rets.to_matrix(), func(group1.data, group2.data))
+    assert torch.allclose(rets.to_matrix(), func(group1.tensor, group2.tensor))
 
     # Check for dense jacobian matrices
     if dtype == torch.float32:
@@ -221,15 +223,15 @@ def check_projection_for_inverse(
     rets = group.inverse(jacobian=jac)
 
     def func(g):
-        return Group(data=g).inverse().to_matrix()
+        return Group(tensor=g).inverse().to_matrix()
 
-    jac_raw = torch.autograd.functional.jacobian(func, (group_double.data))
+    jac_raw = torch.autograd.functional.jacobian(func, (group_double.tensor))
 
     if dtype == torch.float32:
         jac_raw = jac_raw.float()
 
     # Check returns
-    assert torch.allclose(rets.to_matrix(), func(group.data), atol=TEST_EPS)
+    assert torch.allclose(rets.to_matrix(), func(group.tensor), atol=TEST_EPS)
 
     # Check for dense jacobian matrices
     temp = group.project(jac_raw)
@@ -297,12 +299,12 @@ def check_projection_for_log_map(tangent_vector, Group, is_projected=True, atol=
     group_double = Group.exp_map(tangent_vector.double())
     group = group_double.copy()
     if tangent_vector.dtype == torch.float32:
-        group.data = group.data.float()
+        group.tensor = group.tensor.float()
 
     def log_func(group):
-        return Group(data=group).log_map()
+        return Group(tensor=group).log_map()
 
-    jac_raw = torch.autograd.functional.jacobian(log_func, (group_double.data))[
+    jac_raw = torch.autograd.functional.jacobian(log_func, (group_double.tensor))[
         aux_id, :, aux_id
     ]
 
@@ -327,10 +329,10 @@ def check_jacobian_for_local(group0, group1, Group, is_projected=True, atol=TEST
     group1_double.to(torch.float64)
 
     def local_func(group0, group1):
-        return Group(data=group0).local(Group(data=group1))
+        return Group(tensor=group0).local(Group(tensor=group1))
 
     jac_raw = torch.autograd.functional.jacobian(
-        local_func, (group0_double.data, group1_double.data)
+        local_func, (group0_double.tensor, group1_double.tensor)
     )
 
     if is_projected:
@@ -352,7 +354,7 @@ def check_normalize(group, batch_size, dtype):
     rng = torch.Generator()
     rng.manual_seed(0)
 
-    matrix = group.rand(batch_size, dtype=dtype, generator=rng).data
+    matrix = group.rand(batch_size, dtype=dtype, generator=rng).tensor
     group_mat = group.normalize(matrix)
     torch.allclose(group_mat, matrix)
 
@@ -367,7 +369,7 @@ def check_so3_se3_normalize(group, batch_size, dtype):
 
     check_normalize(group, batch_size, dtype)
 
-    matrix = group.rand(batch_size, dtype=dtype).data
+    matrix = group.rand(batch_size, dtype=dtype).tensor
     matrix[:, :, 2] *= -1
     group_mat = group.normalize(matrix)
     torch.allclose(

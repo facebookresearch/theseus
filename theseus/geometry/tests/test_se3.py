@@ -28,7 +28,7 @@ from .common import (
 
 def check_SE3_log_map(tangent_vector, atol=TEST_EPS):
     g = th.SE3.exp_map(tangent_vector)
-    assert torch.allclose(th.SE3.exp_map(g.log_map()).data, g.data, atol=atol)
+    assert torch.allclose(th.SE3.exp_map(g.log_map()).tensor, g.tensor, atol=atol)
 
 
 def _create_tangent_vector(batch_size, ang_factor, rng, dtype):
@@ -78,10 +78,10 @@ def test_batch_size_3_exp_map(dtype, ang_factor):
     g1 = th.SE3.exp_map(tangent_vector[:3], jac1)
     g2 = th.SE3.exp_map(tangent_vector[3:], jac2)
 
-    torch.allclose(g.data[:3], g1.data, atol=1e-6)
-    torch.allclose(g.data[3:], g2.data, atol=1e-6)
-    torch.allclose(jac[0].data[:3], jac1[0].data, atol=ATOL)
-    torch.allclose(jac[0].data[3:], jac2[0].data, atol=ATOL)
+    torch.allclose(g.tensor[:3], g1.tensor, atol=1e-6)
+    torch.allclose(g.tensor[3:], g2.tensor, atol=1e-6)
+    torch.allclose(jac[0][:3], jac1[0], atol=ATOL)
+    torch.allclose(jac[0][3:], jac2[0], atol=ATOL)
 
 
 @pytest.mark.parametrize("batch_size", [1, 20, 100])
@@ -121,18 +121,18 @@ def test_batch_size_3_log_map(dtype, ang_factor):
     tangent_vector = _create_tangent_vector(6, ang_factor, rng, dtype)
 
     g = th.SE3.exp_map(tangent_vector)
-    g1 = th.SE3(data=g.data[:3])
-    g2 = th.SE3(data=g.data[3:])
+    g1 = th.SE3(tensor=g.tensor[:3])
+    g2 = th.SE3(tensor=g.tensor[3:])
 
     jac, jac1, jac2 = [], [], []
     d = g.log_map(jac)
     d1 = g1.log_map(jac1)
     d2 = g2.log_map(jac2)
 
-    torch.allclose(d.data[:3], d1.data, atol=ATOL)
-    torch.allclose(d.data[3:], d2.data, atol=ATOL)
-    torch.allclose(jac[0].data[:3], jac1[0].data, atol=ATOL)
-    torch.allclose(jac[0].data[3:], jac2[0].data, atol=ATOL)
+    torch.allclose(d[:3], d1, atol=ATOL)
+    torch.allclose(d[3:], d2, atol=ATOL)
+    torch.allclose(jac[0][:3], jac1[0], atol=ATOL)
+    torch.allclose(jac[0][3:], jac2[0], atol=ATOL)
 
 
 @pytest.mark.parametrize("dtype", [torch.float32, torch.float64])
@@ -196,9 +196,9 @@ def test_transform_from_and_to(dtype):
 
                 # Check the operation result
                 assert torch.allclose(
-                    expected_to, point_to.data.double(), atol=TEST_EPS
+                    expected_to, point_to.tensor.double(), atol=TEST_EPS
                 )
-                assert torch.allclose(point_tensor, point_from.data, atol=5e-7)
+                assert torch.allclose(point_tensor, point_from.tensor, atol=5e-7)
 
                 # Check the jacobians
                 se3_double = se3.copy()
@@ -216,7 +216,7 @@ def test_transform_from_and_to(dtype):
                 )
                 expected_jac = numeric_jacobian(
                     lambda groups: groups[0].transform_from(groups[1]),
-                    [se3_double, th.Vector(data=point_to.data.double())],
+                    [se3_double, th.Vector(tensor=point_to.tensor.double())],
                     delta_mag=1e-5,
                     function_dim=3,
                 )

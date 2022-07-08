@@ -294,7 +294,7 @@ class Vectorize:
                 cf._cached_error = None
                 cf._cached_jacobians = None
 
-    def _vectorize(self, compute_caches=True):
+    def _vectorize(self):
         self._clear_wrapper_caches()
         for schema, cost_fn_wrappers in self._schema_dict.items():
             var_names = self._var_names[schema]
@@ -314,10 +314,9 @@ class Vectorize:
                 batch_size,
                 len(cost_fn_wrappers),
             )
-            if compute_caches:
-                Vectorize._compute_error_and_replace_wrapper_caches(
-                    vectorized_cost_fn, cost_fn_wrappers, batch_size
-                )
+            Vectorize._compute_error_and_replace_wrapper_caches(
+                vectorized_cost_fn, cost_fn_wrappers, batch_size
+            )
 
     @staticmethod
     def _vectorized_retract_optim_vars(

@@ -505,11 +505,11 @@ class Objective:
                 needs = True
         return needs
 
-    def update_vectorization_if_needed(self, compute_caches=True):
+    def update_vectorization_if_needed(self):
         if self.vectorized and self._vectorization_needs_update():
             if self._batch_size is None:
                 self.update()
-            self._vectorization_run(compute_caches=compute_caches)
+            self._vectorization_run()
             self._last_vectorization_has_grad = torch.is_grad_enabled()
 
     # iterates over cost functions

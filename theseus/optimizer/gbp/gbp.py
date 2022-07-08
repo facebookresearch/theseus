@@ -29,8 +29,6 @@ from theseus.optimizer.nonlinear.nonlinear_optimizer import (
 """
 TODO
  - solving inverse problem to compute message mean
- - use schedule
- - random schedule not vectorized
  - factor inherits CF class
 """
 
@@ -57,18 +55,19 @@ class GBPOptimizerParams:
 
 class GBPSchedule(Enum):
     SYNCHRONOUS = 0
-    RANDOM = 1
 
 
 def synchronous_schedule(max_iters, n_edges) -> torch.Tensor:
     return torch.full([max_iters, n_edges], True)
 
 
-def random_schedule(max_iters, n_edges) -> torch.Tensor:
-    schedule = torch.full([max_iters, n_edges], False)
-    ixs = torch.randint(0, n_edges, [max_iters])
-    schedule[torch.arange(max_iters), ixs] = True
-    return schedule
+# def random_schedule(max_iters, n_edges) -> torch.Tensor:
+#     schedule = torch.full([max_iters, n_edges], False)
+#     # on first step send messages along all edges
+#     schedule[0] = True
+#     ixs = torch.randint(0, n_edges, [max_iters])
+#     schedule[torch.arange(max_iters), ixs] = True
+#     return schedule
 
 
 # Initialises message precision to zero
@@ -144,7 +143,7 @@ class Factor:
         self.potential_lam = torch.zeros(self.batch_size, self.dof, self.dof).to(
             dtype=dtype, device=device
         )
-        self.lin_point = [
+        self.lin_point: List[Manifold] = [
             var.copy(new_name=f"{cf.name}_{var.name}_lp") for var in cf.optim_vars
         ]
 
@@ -217,6 +216,7 @@ class Factor:
     def comp_mess(
         self,
         damping,
+        schedule,
     ):
         num_optim_vars = self.cf.num_optim_vars()
         new_messages = []
@@ -301,9 +301,9 @@ class Factor:
                 # damping in tangent space at linearisation point as message
                 # is already in this tangent space. Could equally do damping
                 # in the tangent space of the new or old message mean.
-                # mean damping
+                # Damping is applied to the mean parameters.
                 do_damping = torch.logical_and(damping[v] > 0, self.steps_since_lin > 0)
-                if do_damping.sum() > 0:
+                if do_damping.sum() != 0:
                     damping_check = torch.logical_and(
                         new_mess_lam.count_nonzero(1, 2) != 0,
                         self.ftov_msgs[v].precision.count_nonzero(1, 2) != 0,
@@ -323,6 +323,16 @@ class Factor:
                         new_mess_eta = torch.bmm(
                             new_mess_lam, new_mess_mean.unsqueeze(-1)
                         ).squeeze(-1)
+
+                # don't send messages if schedule is False
+                if not schedule[v].all():
+                    # if any are False set these to prev message
+                    prev_mess_eta, prev_mess_lam = th.local_gaussian(
+                        self.lin_point[v], self.ftov_msgs[v], return_mean=False
+                    )
+                    no_update = ~schedule[v]
+                    new_mess_eta[no_update] = prev_mess_eta[no_update]
+                    new_mess_lam[no_update] = prev_mess_lam[no_update]
 
                 new_mess_lam = th.DenseSolver._apply_damping(
                     new_mess_lam,
@@ -508,10 +518,7 @@ class GaussianBeliefPropagation(Optimizer, abc.ABC):
     GBP functions
     """
 
-    def _pass_var_to_fac_messages_loop(
-        self,
-        update_belief=True,
-    ):
+    def _pass_var_to_fac_messages_loop(self, update_belief=True):
         for i, var in enumerate(self.ordering):
 
             # Collect all incoming messages in the tangent space at the current belief
@@ -560,10 +567,7 @@ class GaussianBeliefPropagation(Optimizer, abc.ABC):
                 new_belief = th.retract_gaussian(var, tau, lam_tau)
                 self.beliefs[i].update(new_belief.mean, new_belief.precision)
 
-    def _pass_var_to_fac_messages_vectorized(
-        self,
-        update_belief=True,
-    ):
+    def _pass_var_to_fac_messages_vectorized(self, update_belief=True):
         # Each (variable-type, dof) gets mapped to a tuple with:
         #   - the variable that will hold the vectorized data
         #   - all the variables of that type that will be vectorized together
@@ -669,15 +673,11 @@ class GaussianBeliefPropagation(Optimizer, abc.ABC):
                 if lam_a.count_nonzero() == 0:
                     msg.zero_message()
                 else:
-                    zero_lam = lam_a.count_nonzero(1, 2) == 0
-                    # add to zero precision matrices so inversion doesn't fail
-                    lam_a[zero_lam] += torch.eye(
-                        lam_a.shape[1], dtype=lam_a.dtype, device=lam_a.device
+                    valid_lam = lam_a.count_nonzero(1, 2) != 0
+                    inv_lam_a = torch.zeros_like(
+                        lam_a, dtype=lam_a.dtype, device=lam_a.device
                     )
-                    inv_lam_a = torch.linalg.inv(lam_a)
-                    # restore zeros precision matrices
-                    lam_a[zero_lam] = 0.0
-                    inv_lam_a[zero_lam] = 0.0
+                    inv_lam_a[valid_lam] = torch.linalg.inv(lam_a[valid_lam])
                     mean_a = torch.matmul(inv_lam_a, sum_etas.unsqueeze(-1)).squeeze(-1)
                     new_mess = th.retract_gaussian(
                         factor.cf.optim_var_at(i), mean_a, lam_a
@@ -713,23 +713,19 @@ class GaussianBeliefPropagation(Optimizer, abc.ABC):
             relins += int((factor.steps_since_lin == 0).sum().item())
         return relins
 
-    def _pass_fac_to_var_messages(
-        self,
-        schedule: torch.Tensor,
-        damping: torch.Tensor,
-    ):
-
-        # USE THE SCHEDULE!!!!!
-
+    def _pass_fac_to_var_messages(self, schedule: torch.Tensor, damping: torch.Tensor):
         start_d = 0
         for j, factor in enumerate(self.factors):
             num_optim_vars = factor.cf.num_optim_vars()
-            n_factors = num_optim_vars * factor.batch_size
-            damping_tsr = damping[start_d : start_d + n_factors]
+            n_edges = num_optim_vars * factor.batch_size
+            damping_tsr = damping[start_d : start_d + n_edges]
+            schedule_tsr = schedule[start_d : start_d + n_edges]
             damping_tsr = damping_tsr.reshape(num_optim_vars, factor.batch_size)
-            start_d += n_factors
+            schedule_tsr = schedule_tsr.reshape(num_optim_vars, factor.batch_size)
+            start_d += n_edges
 
-            factor.comp_mess(damping_tsr)
+            if schedule_tsr.sum() != 0:
+                factor.comp_mess(damping_tsr, schedule_tsr)
 
     """
     Optimization loop functions
@@ -757,6 +753,11 @@ class GaussianBeliefPropagation(Optimizer, abc.ABC):
             raise ValueError(
                 f"Dropout probability must be between 0 and 1. Got {dropout}."
             )
+        if dropout > 0.9:
+            print(
+                "Disabling vectorization due to dropout > 0.9 in GBP message schedule."
+            )
+            self.objective.disable_vectorization()
 
         # initialise beliefs
         for var in self.ordering:
@@ -812,9 +813,7 @@ class GaussianBeliefPropagation(Optimizer, abc.ABC):
         self.n_edges = sum(
             [factor.cf.num_optim_vars() * factor.batch_size for factor in self.factors]
         )
-        if schedule == GBPSchedule.RANDOM:
-            ftov_schedule = random_schedule(self.params.max_iterations, self.n_edges)
-        elif schedule == GBPSchedule.SYNCHRONOUS:
+        if schedule == GBPSchedule.SYNCHRONOUS:
             ftov_schedule = synchronous_schedule(
                 self.params.max_iterations, self.n_edges
             )
@@ -837,10 +836,10 @@ class GaussianBeliefPropagation(Optimizer, abc.ABC):
                 device=self.ordering[0].device,
                 dtype=self.ordering[0].dtype,
             )
-            # dropout can be implemented through damping
-            if dropout != 0.0:
+            # dropout is implemented by changing the schedule
+            if dropout != 0.0 and it_ != 0:
                 dropout_ixs = torch.rand(self.n_edges) < dropout
-                damping_arr[dropout_ixs] = 1.0
+                ftov_schedule[it_, dropout_ixs] = False
 
             t0 = time.time()
             relins = self._linearize_factors(relin_threshold)
@@ -857,7 +856,7 @@ class GaussianBeliefPropagation(Optimizer, abc.ABC):
             t_vec = 0.0
             if self.objective.vectorized:
                 t1 = time.time()
-                self.objective.update_vectorization_if_needed(compute_caches=False)
+                self.objective.update_vectorization_if_needed()
                 t_vec = time.time() - t1
 
             t_tot = time.time() - t0

@@ -20,14 +20,16 @@ def main(cfg):
     file_path = (
         f"/private/home/taoshaf/Documents/theseus/datasets/{dataset_name}_init.g2o"
     )
-    dtype = torch.float64
+    dtype = torch.float32
 
-    th.SO3.SO3_EPS = 1e-6
-
-    _, verts, edges = theg.pose_graph.read_3D_g2o_file(file_path, dtype=dtype)
+    _, verts, edges = theg.pose_graph.read_3D_g2o_file(file_path, dtype=torch.float64)
     d = 3
 
-    objective = th.Objective(dtype)
+    # _, verts_d, edges_d = theg.pose_graph.read_3D_g2o_file(file_path, dtype=torch.float64)
+    # d = 3
+    # verts_err = torch.cat([verts[i].data - verts_d[i].data for i in range(len(verts))], dim=0)
+
+    objective = th.Objective(torch.float64)
 
     for edge in edges:
         cost_func = th.Between(
@@ -41,14 +43,15 @@ def main(cfg):
     pose_prior = th.Difference(
         var=verts[0],
         target=verts[0].copy(new_name=verts[0].name + "PRIOR"),
-        cost_weight=th.ScaleCostWeight(torch.tensor(0 * 1e-6, dtype=dtype)),
+        cost_weight=th.ScaleCostWeight(torch.tensor(0 * 1e-6, dtype=torch.float64)),
     )
     objective.add(pose_prior)
 
+    objective.to(dtype)
     optimizer = th.GaussNewton(
         objective,
         max_iterations=10,
-        step_size=1.0,
+        step_size=1,
         linearization_cls=th.SparseLinearization,
         linear_solver_cls=th.CholmodSparseSolver,
         vectorize=True,

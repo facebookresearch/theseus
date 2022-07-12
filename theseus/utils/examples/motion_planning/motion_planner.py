@@ -115,24 +115,24 @@ class MotionPlanner:
         # which are hard constraints, and can be implemented via Difference cost
         # functions.
         objective.add(
-            th.Difference(poses[0], boundary_cost_weight, start_point, name="pose_0")
+            th.Difference(poses[0], start_point, boundary_cost_weight, name="pose_0")
         )
         objective.add(
             th.Difference(
                 velocities[0],
-                boundary_cost_weight,
                 th.Point2(tensor=torch.zeros(1, 2)),
+                boundary_cost_weight,
                 name="vel_0",
             )
         )
         objective.add(
-            th.Difference(poses[-1], boundary_cost_weight, goal_point, name="pose_N")
+            th.Difference(poses[-1], goal_point, boundary_cost_weight, name="pose_N")
         )
         objective.add(
             th.Difference(
                 velocities[-1],
-                boundary_cost_weight,
                 th.Point2(tensor=torch.zeros(1, 2)),
+                boundary_cost_weight,
                 name="vel_N",
             )
         )

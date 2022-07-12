@@ -22,7 +22,7 @@ def test_costs_vars_and_err_before_vectorization():
         adummy = th.Variable(tensor=torch.zeros(1, 1), name="adummy")
         cw1 = th.ScaleCostWeight(th.Variable(torch.zeros(1, 1), name="w1"))
         cw2 = th.ScaleCostWeight(th.Variable(torch.zeros(1, 1), name="w2"))
-        cf1 = th.Difference(v1, cw1, t1)
+        cf1 = th.Difference(v1, t1, cw1)
 
         # Also test with autodiff cost
         def err_fn(optim_vars, aux_vars):
@@ -88,8 +88,8 @@ def test_correct_schemas_and_shared_vars():
 
     objective = th.Objective()
     # these two can be grouped
-    cf1 = th.Difference(v1, w1, tv)
-    cf2 = th.Difference(v2, w1, tv)
+    cf1 = th.Difference(v1, tv, w1)
+    cf2 = th.Difference(v2, tv, w1)
     objective.add(cf1)
     objective.add(cf2)
 
@@ -99,20 +99,20 @@ def test_correct_schemas_and_shared_vars():
 
     # this one is the same cost function type, var type, and weight but different
     # dimension, so cannot be grouped either
-    cf4 = th.Difference(v3, w1, v4)
+    cf4 = th.Difference(v3, v4, w1)
     objective.add(cf4)
 
     # Now add another group with a different data-type (no-shared weight)
     w2 = th.ScaleCostWeight(1.0)
     w3 = th.ScaleCostWeight(2.0)
-    cf5 = th.Difference(s1, w2, ts)
-    cf6 = th.Difference(s2, w3, ts)
+    cf5 = th.Difference(s1, ts, w2)
+    cf6 = th.Difference(s2, ts, w3)
     objective.add(cf5)
     objective.add(cf6)
 
     # Not grouped with anything cf1 and cf2 because weight type is different
     w7 = th.DiagonalCostWeight([1.0])
-    cf7 = th.Difference(v1, w7, tv)
+    cf7 = th.Difference(v1, tv, w7)
     objective.add(cf7)
 
     vectorization = th.Vectorize(objective)
@@ -167,7 +167,7 @@ def test_vectorized_error():
         target = th.Vector(dim, name="target")
         w = th.ScaleCostWeight(torch.randn(1, generator=generator))
         for v in vectors:
-            objective.add(th.Difference(v, w, target))
+            objective.add(th.Difference(v, target, w))
 
         se3s = [
             th.SE3(
@@ -179,7 +179,7 @@ def test_vectorized_error():
         s_target = th.SE3.rand(1, generator=generator)
         ws = th.DiagonalCostWeight(torch.randn(6, generator=generator))
         for s in se3s:
-            objective.add(th.Difference(s, ws, s_target))
+            objective.add(th.Difference(s, s_target, ws))
 
         vectorization = th.Vectorize(objective)
         objective.update_vectorization_if_needed()

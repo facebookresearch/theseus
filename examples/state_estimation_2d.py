@@ -239,8 +239,8 @@ def run_learning(mode_, path_data_, gps_targets_, measurements_):
         cost_functions.append(
             th.Difference(
                 poses[i],
-                gps_cost_weights[i],
                 th.Point2(tensor=gps_targets_[i]),
+                gps_cost_weights[i],
                 name=f"gps_{i}",
             )
         )

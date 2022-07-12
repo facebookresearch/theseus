@@ -63,10 +63,10 @@ def run(
 
     pose_prior_cost = th.Difference(
         var=pg_batch.poses[0],
+        target=pg_batch.poses[0].copy(new_name=pg_batch.poses[0].name + "__PRIOR"),
         cost_weight=th.ScaleCostWeight(
             torch.tensor(cfg.inner_optim.reg_w, dtype=dtype, device=device)
         ),
-        target=pg_batch.poses[0].copy(new_name=pg_batch.poses[0].name + "__PRIOR"),
     )
 
     objective.add(pose_prior_cost)

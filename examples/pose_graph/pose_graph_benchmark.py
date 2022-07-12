@@ -40,8 +40,8 @@ def main(cfg):
 
     pose_prior = th.Difference(
         var=verts[0],
-        cost_weight=th.ScaleCostWeight(torch.tensor(0 * 1e-6, dtype=dtype)),
         target=verts[0].copy(new_name=verts[0].name + "PRIOR"),
+        cost_weight=th.ScaleCostWeight(torch.tensor(0 * 1e-6, dtype=dtype)),
     )
     objective.add(pose_prior)
 

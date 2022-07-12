@@ -150,7 +150,7 @@ def run(cfg: omegaconf.OmegaConf, results_path: pathlib.Path):
             else:
                 assert False
             objective.add(
-                th.Difference(var, damping_weight, target, name=f"reg_{name}")
+                th.Difference(var, target, damping_weight, name=f"reg_{name}")
             )
 
     camera_pose_vars: List[th.LieGroup] = [
@@ -165,8 +165,8 @@ def run(cfg: omegaconf.OmegaConf, results_path: pathlib.Path):
             objective.add(
                 th.Difference(
                     camera_pose_vars[i],
-                    camera_weight,
                     ba.gt_cameras[i].pose,
+                    camera_weight,
                     name=f"camera_diff_{i}",
                 )
             )

@@ -15,8 +15,8 @@ class Local(CostFunction):
     def __init__(
         self,
         var: LieGroup,
-        cost_weight: CostWeight,
         target: LieGroup,
+        cost_weight: CostWeight,
         name: Optional[str] = None,
     ):
         super().__init__(cost_weight, name=name)
@@ -46,5 +46,5 @@ class Local(CostFunction):
 
     def _copy_impl(self, new_name: Optional[str] = None) -> "Local":
         return Local(  # type: ignore
-            self.var.copy(), self.weight.copy(), self.target.copy(), name=new_name
+            self.var.copy(), self.target.copy(), self.weight.copy(), name=new_name
         )

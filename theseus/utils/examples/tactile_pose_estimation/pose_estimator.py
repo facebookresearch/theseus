@@ -156,11 +156,11 @@ class TactilePoseEstimator:
                 th.eb.EffectorObjectContactPlanar(
                     obj_poses[i],
                     eff_poses[i],
-                    intersect_weight,
                     sdf_origin,
                     sdf_data,
                     sdf_cell_size,
                     eff_radius,
+                    intersect_weight,
                     name=f"intersect_{i}",
                 )
             )

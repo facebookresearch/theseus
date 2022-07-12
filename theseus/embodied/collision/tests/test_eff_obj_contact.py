@@ -24,7 +24,7 @@ def test_eff_obj_interesect_jacobians():
         eff_radius = th.Variable(torch.rand(batch_size, 1).double())
         cost_weight = th.ScaleCostWeight(1.0)
         cost_function = th.eb.EffectorObjectContactPlanar(
-            obj, eff, cost_weight, origin, sdf_data, cell_size, eff_radius
+            obj, eff, origin, sdf_data, cell_size, eff_radius, cost_weight
         )
         jacobians, _ = cost_function.jacobians()
 
@@ -32,11 +32,11 @@ def test_eff_obj_interesect_jacobians():
             new_cost_function = th.eb.EffectorObjectContactPlanar(
                 groups[0],
                 groups[1],
-                cost_weight,
                 origin,
                 sdf_data,
                 cell_size,
                 eff_radius,
+                cost_weight,
             )
             return th.Vector(tensor=new_cost_function.error())
 
@@ -139,11 +139,11 @@ def test_eff_obj_interesect_errors():
         cost_fn = th.eb.EffectorObjectContactPlanar(
             obj,
             eff,
-            cost_weight,
             th.Variable(origin.repeat(5, 1)),
             th.Variable(sdf_data.repeat(5, 1, 1)),
             th.Variable(cell_size.repeat(5, 1)),
             th.Variable(eff_radius),
+            cost_weight,
         )
 
         actual = cost_fn.error()
@@ -163,7 +163,7 @@ def test_eff_obj_variable_type():
         eff_radius = th.Variable(torch.rand(batch_size, 1).double())
         cost_weight = th.ScaleCostWeight(1.0)
         cost_function = th.eb.EffectorObjectContactPlanar(
-            obj, eff, cost_weight, origin, sdf_data, cell_size, eff_radius
+            obj, eff, origin, sdf_data, cell_size, eff_radius, cost_weight
         )
 
         assert isinstance(cost_function.eff_radius, th.Variable)
@@ -172,7 +172,7 @@ def test_eff_obj_variable_type():
         eff_radius_t = torch.rand(batch_size, 1).double()
 
         cost_function = th.eb.EffectorObjectContactPlanar(
-            obj, eff, cost_weight, origin, sdf_data, cell_size, eff_radius_t
+            obj, eff, origin, sdf_data, cell_size, eff_radius_t, cost_weight
         )
 
         assert isinstance(cost_function.eff_radius, th.Variable)
@@ -182,7 +182,7 @@ def test_eff_obj_variable_type():
         eff_radius_f = torch.rand(1)
 
         cost_function = th.eb.EffectorObjectContactPlanar(
-            obj, eff, cost_weight, origin, sdf_data, cell_size, eff_radius_f
+            obj, eff, origin, sdf_data, cell_size, eff_radius_f, cost_weight
         )
 
         assert isinstance(cost_function.eff_radius, th.Variable)

@@ -19,11 +19,11 @@ class EffectorObjectContactPlanar(CostFunction):
         self,
         obj: SE2,
         eff: SE2,
-        cost_weight: CostWeight,
         sdf_origin: Variable,
         sdf_data: Variable,
         sdf_cell_size: Variable,
         eff_radius: Union[float, Variable, torch.Tensor],
+        cost_weight: CostWeight,
         name: Optional[str] = None,
         use_huber_loss: bool = False,
     ):
@@ -112,11 +112,11 @@ class EffectorObjectContactPlanar(CostFunction):
         return EffectorObjectContactPlanar(
             self.obj.copy(),
             self.eff.copy(),
-            self.weight.copy(),
             self.sdf_origin.copy(),
             self.sdf_data.copy(),
             self.sdf_cell_size.copy(),
             self.eff_radius.copy(),
+            self.weight.copy(),
             name=new_name,
         )
 

@@ -451,7 +451,7 @@ class SO3(LieGroup):
         return ret
 
     def _copy_impl(self, new_name: Optional[str] = None) -> "SO3":
-        # if self.data is a valid SO(3), so is the copy
+        # if self.tensor is a valid SO(3), so is the copy
         return SO3(tensor=self.tensor.clone(), name=new_name, strict=False)
 
     # only added to avoid casting downstream

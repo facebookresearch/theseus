@@ -386,9 +386,7 @@ class PoseGraphDataset:
                     file.write(line)
                 for i, pose in enumerate(self.poses):
                     pose_n = pose[n : n + 1]
-                    quat = th.SO3(
-                        tensor=pose_n.data[:, :, :3], strict=False
-                    ).to_quaternion()
+                    quat = th.SO3(tensor=pose_n[:, :, :3], strict=False).to_quaternion()
                     tran = pose_n[:, :, 3]
                     pose_data = torch.cat([tran, quat], dim=1).view(-1).numpy()
                     line = (

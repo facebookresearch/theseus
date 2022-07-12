@@ -8,6 +8,8 @@ from typing import Any
 
 import torch
 
+from .lie_group import LieGroup
+
 
 class _LieGroupContext(object):
     contexts = threading.local()
@@ -60,16 +62,16 @@ class LieGroupTensor(torch.Tensor):
     __torch_function__ = _disabled_torch_function_impl
 
     def __new__(cls, group):
-        return torch.Tensor._make_subclass(cls, group.data)
+        return torch.Tensor._make_subclass(cls, group.tensor)
 
-    def __init__(self, group):
+    def __init__(self, group: LieGroup):
         self.group_cls = type(group)
 
     def add_(self, update, alpha=1):
         if _LieGroupContext.get_context():
             group = self.group_cls(tensor=self.data)
             grad = group.project(update)
-            self.set_(group.retract(alpha * grad).data)
+            self.set_(group.retract(alpha * grad).tensor)
         else:
             self.add_(update, alpha=alpha)
 

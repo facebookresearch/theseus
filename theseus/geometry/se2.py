@@ -228,7 +228,7 @@ class SE2(LieGroup):
             if matrix.ndim != 2 or matrix.shape[1] != 4:
                 raise ValueError("SE2 data tensors can only be 4D vectors.")
 
-            return SO2._data_check_impl(matrix.data[:, 2:])
+            return SO2._data_check_impl(matrix[:, 2:])
 
     @staticmethod
     def exp_map(

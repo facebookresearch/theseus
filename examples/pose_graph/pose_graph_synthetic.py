@@ -86,9 +86,9 @@ def pose_loss(
     loss: torch.Tensor = torch.zeros(
         1, dtype=pose_vars[0].dtype, device=pose_vars[0].device
     )
-    poses_batch = th.SE3(tensor=torch.cat([pose.data for pose in pose_vars]))
+    poses_batch = th.SE3(tensor=torch.cat([pose.tensor for pose in pose_vars]))
     gt_poses_batch = th.SE3(
-        tensor=torch.cat([gt_pose.data for gt_pose in gt_pose_vars])
+        tensor=torch.cat([gt_pose.tensor for gt_pose in gt_pose_vars])
     )
     pose_loss = th.local(poses_batch, gt_poses_batch).norm(dim=1)
     loss += pose_loss.sum()

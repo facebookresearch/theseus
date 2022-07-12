@@ -44,9 +44,6 @@ LINEAR_SOLVER_MODE: Dict[str, Type[LinearSolver]] = {
     "dense": th.CholeskyDenseSolver,
 }
 
-# Smaller values} result in error
-th.SO3.SO3_EPS = 1e-6
-
 # Logger
 log = logging.getLogger(__name__)
 
@@ -56,9 +53,7 @@ def print_histogram(
 ):
     log.info(msg)
     with torch.no_grad():
-        poses = [
-            th.SE3(data=var_dict[pose.name], requires_check=False) for pose in pg.poses
-        ]
+        poses = [th.SE3(data=var_dict[pose.name]) for pose in pg.poses]
         histogram = theg.pg_histogram(poses=poses, edges=pg.edges)
     for line in histogram.split("\n"):
         log.info(line)
@@ -90,12 +85,8 @@ def pose_loss(
     loss: torch.Tensor = torch.zeros(
         1, dtype=pose_vars[0].dtype, device=pose_vars[0].device
     )
-    poses_batch = th.SE3(
-        data=torch.cat([pose.data for pose in pose_vars]), requires_check=False
-    )
-    gt_poses_batch = th.SE3(
-        data=torch.cat([gt_pose.data for gt_pose in gt_pose_vars]), requires_check=False
-    )
+    poses_batch = th.SE3(data=torch.cat([pose.data for pose in pose_vars]))
+    gt_poses_batch = th.SE3(data=torch.cat([gt_pose.data for gt_pose in gt_pose_vars]))
     pose_loss = th.local(poses_batch, gt_poses_batch).norm(dim=1)
     loss += pose_loss.sum()
     return loss

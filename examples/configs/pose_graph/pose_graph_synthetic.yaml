@@ -33,4 +33,4 @@ hydra:
   run:
     dir: examples/outputs/pose_graph
   sweep:
-    dir: examples/outputs/pose_graph/${now:%Y.%m.%d}/${now:%H.%M.%S}
+    dir: examples/outputs/pose_graph/pose_graph_synthetic/${now:%Y.%m.%d}/${now:%H.%M.%S}

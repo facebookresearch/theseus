@@ -250,8 +250,8 @@ def run_learning(mode_, path_data_, gps_targets_, measurements_):
                     th.Between(
                         poses[i],
                         poses[i + 1],
-                        between_cost_weights[i],
                         th.Point2(tensor=measurements_[i]),
+                        between_cost_weights[i],
                         name=f"between_{i}",
                     )
                 )

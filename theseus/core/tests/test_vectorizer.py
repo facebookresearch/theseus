@@ -94,7 +94,7 @@ def test_correct_schemas_and_shared_vars():
     objective.add(cf2)
 
     # this one uses the same weight and v1, v2, but cannot be grouped
-    cf3 = th.Between(v1, v2, w1, mv)
+    cf3 = th.Between(v1, v2, mv, w1)
     objective.add(cf3)
 
     # this one is the same cost function type, var type, and weight but different

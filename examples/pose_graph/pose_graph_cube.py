@@ -56,8 +56,8 @@ def run(
         relative_pose_cost = th.Between(
             pg_batch.poses[edge.i],
             pg_batch.poses[edge.j],
-            edge.weight,
             edge.relative_pose,
+            edge.weight,
         )
         objective.add(relative_pose_cost)
 

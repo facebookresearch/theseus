@@ -22,11 +22,11 @@ def evaluate_numerical_jacobian_between(Group, tol):
         v0 = Group.rand(batch_size, dtype=torch.float64, generator=rng)
         v1 = Group.rand(batch_size, dtype=torch.float64, generator=rng)
         measurement = Group.rand(batch_size, dtype=torch.float64, generator=rng)
-        cost_function = th.Between(v0, v1, cost_weight, measurement)
+        cost_function = th.Between(v0, v1, measurement, cost_weight)
 
         def new_error_fn(groups):
             new_cost_function = th.Between(
-                groups[0], groups[1], cost_weight, measurement
+                groups[0], groups[1], measurement, cost_weight
             )
             return th.Vector(tensor=new_cost_function.error())
 
@@ -42,7 +42,7 @@ def test_copy_between():
     v0 = th.SE2()
     v1 = th.SE2()
     meas = th.SE2()
-    cost_function = th.Between(v0, v1, th.ScaleCostWeight(1.0), meas, name="name")
+    cost_function = th.Between(v0, v1, meas, th.ScaleCostWeight(1.0), name="name")
     cost_function2 = cost_function.copy(new_name="new_name")
     check_another_theseus_function_is_copy(
         cost_function, cost_function2, new_name="new_name"
@@ -73,7 +73,7 @@ def test_error_between_point2():
         p1 = th.Point2(torch.randn(batch_size, 2, generator=rng))
         p2 = th.Point2(torch.randn(batch_size, 2, generator=rng))
         measurement = th.Point2(torch.randn(batch_size, 2, generator=rng))
-        cost_function = th.Between(p1, p2, cost_weight, measurement)
+        cost_function = th.Between(p1, p2, measurement, cost_weight)
         expected_error = (p2 - p1) - measurement
         error = cost_function.error()
         assert torch.allclose(expected_error.tensor, error)
@@ -96,9 +96,7 @@ def test_error_between_so2():
                 meas = th.SO2(theta=so2_data[i, :1])
                 so2_1 = th.SO2(theta=so2_data[j, :1])
                 so2_2 = th.SO2(theta=so2_data[k, :1])
-                dist_cf = th.Between(
-                    so2_1, so2_2, th.ScaleCostWeight(1.0), measurement=meas
-                )
+                dist_cf = th.Between(so2_1, so2_2, meas, th.ScaleCostWeight(1.0))
                 assert np.allclose(dist_cf.error().item(), between_errors[z])
                 z += 1
 
@@ -125,9 +123,7 @@ def test_error_between_se2():
                 meas = th.SE2(x_y_theta=se2_data[i, :].unsqueeze(0))
                 se2_1 = th.SE2(x_y_theta=se2_data[j, :].unsqueeze(0))
                 se2_2 = th.SE2(x_y_theta=se2_data[k, :].unsqueeze(0))
-                dist_cf = th.Between(
-                    se2_1, se2_2, th.ScaleCostWeight(1.0), measurement=meas
-                )
+                dist_cf = th.Between(se2_1, se2_2, meas, th.ScaleCostWeight(1.0))
                 error = dist_cf.error()
                 assert np.allclose(error.squeeze().numpy(), between_errors[z])
                 z += 1
@@ -139,9 +135,7 @@ def test_jacobian_between_se3():
         se3_1 = th.SE3.rand(batch_size, dtype=torch.float64)
         se3_2 = th.SE3.rand(batch_size, dtype=torch.float64)
         measurement = th.SE3.rand(batch_size, dtype=torch.float64)
-        dist_cf = th.Between(
-            se3_1, se3_2, th.ScaleCostWeight(1.0), measurement=measurement
-        )
+        dist_cf = th.Between(se3_1, se3_2, measurement, th.ScaleCostWeight(1.0))
 
         actual = dist_cf.jacobians()[0]
 

@@ -33,8 +33,8 @@ def main(cfg):
         cost_func = th.Between(
             verts[edge.i],
             verts[edge.j],
-            edge.weight,
             edge.relative_pose,
+            edge.weight,
         )
         objective.add(cost_func)
 

@@ -149,8 +149,8 @@ def run(
         relative_pose_cost = th.Between(
             pg_batch.poses[edge.i],
             pg_batch.poses[edge.j],
-            edge.weight,
             edge.relative_pose,
+            edge.weight,
         )
         robust_relative_pose_cost = th.RobustCostFunction(
             cost_function=relative_pose_cost,

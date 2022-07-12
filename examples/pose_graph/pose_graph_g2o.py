@@ -27,8 +27,8 @@ for edge in edges:
     cost_func = th.Between(
         verts[edge.i],
         verts[edge.j],
-        edge.weight,
         edge.relative_pose,
+        edge.weight,
     )
     robust_cost_func = th.RobustCostFunction(
         cost_func, loss_cls=loss_cls, log_loss_radius=log_loss_radius

@@ -13,14 +13,14 @@ class CholmodSolveFunction(torch.autograd.Function):
     @staticmethod
     def forward(ctx, *args, **kwargs):
         dtype_original = args[0].dtype
-        At_val: torch.Tensor = args[0].double()
-        b: torch.Tensor = args[1].double()
+        At_val: torch.Tensor = args[0]
+        b: torch.Tensor = args[1]
         sparse_structure: SparseStructure = args[2]
         symbolic_decomposition: CholeskyDecomposition = args[3]
         damping: float = args[4]
 
-        At_val_cpu = At_val.cpu()
-        b_cpu = b.cpu()
+        At_val_cpu = At_val.cpu().double()
+        b_cpu = b.cpu().double()
         batch_size = At_val.shape[0]
         targs = {"dtype": At_val.dtype, "device": "cpu"}
         x_cpu = torch.empty(size=(batch_size, sparse_structure.num_cols), **targs)

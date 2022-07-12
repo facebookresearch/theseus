@@ -4,7 +4,7 @@
 # LICENSE file in the root directory of this source tree.
 
 import abc
-from typing import Any, Callable, List, Optional, Sequence, Tuple, cast
+from typing import Callable, List, Optional, Sequence, Tuple, cast
 
 import torch
 import torch.autograd.functional as autogradF
@@ -27,9 +27,7 @@ class CostFunction(TheseusFunction, abc.ABC):
     def __init__(
         self,
         cost_weight: CostWeight,
-        *args: Any,
         name: Optional[str] = None,
-        **kwargs: Any,
     ):
         super().__init__(name=name)
         self._weight = cost_weight

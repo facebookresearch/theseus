@@ -18,11 +18,11 @@ class Collision2D(CostFunction):
     def __init__(
         self,
         pose: Point2,
-        cost_weight: CostWeight,
         sdf_origin: Variable,
         sdf_data: Variable,
         sdf_cell_size: Variable,
         cost_eps: Union[float, Variable, torch.Tensor],
+        cost_weight: CostWeight,
         name: Optional[str] = None,
     ):
         if not isinstance(pose, Point2):
@@ -67,11 +67,11 @@ class Collision2D(CostFunction):
     def _copy_impl(self, new_name: Optional[str] = None) -> "Collision2D":
         return Collision2D(
             self.pose.copy(),
-            self.weight.copy(),
             self.sdf_origin.copy(),
             self.sdf_data.copy(),
             self.sdf_cell_size.copy(),
             self.cost_eps.copy(),
+            self.weight.copy(),
             name=new_name,
         )
 

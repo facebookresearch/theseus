@@ -144,13 +144,13 @@ class MotionPlanner:
             objective.add(
                 th.eb.Collision2D(
                     poses[i],
-                    collision_cost_weights[0]
-                    if use_single_collision_weight
-                    else collision_cost_weights[i - 1],
                     sdf_origin,
                     sdf_data_tensor,
                     cell_size_tensor,
                     cost_eps,
+                    collision_cost_weights[0]
+                    if use_single_collision_weight
+                    else collision_cost_weights[i - 1],
                     name=f"collision_{i}",
                 )
             )

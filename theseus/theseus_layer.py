@@ -164,20 +164,18 @@ class TheseusLayerDLMForward(torch.autograd.Function):
         bwd_optimizer,
         epsilon,
         n,
-        *input_tensors,
+        *inputs,
     ):
-        input_keys = input_tensors[:n]
-        input_vals = input_tensors[n : 2 * n]
-        differentiable_tensors = input_tensors[2 * n :]
+        input_keys = inputs[:n]
+        input_vals = inputs[n : 2 * n]
+        differentiable_tensors = inputs[2 * n :]
         ctx.n = n
         ctx.k = len(differentiable_tensors)
 
-        input_tensors = dict(zip(input_keys, input_vals))
+        inputs = dict(zip(input_keys, input_vals))
         ctx.input_keys = input_keys
 
-        optim_tensors, info = _forward(
-            objective, optimizer, optimizer_kwargs, input_tensors
-        )
+        optim_tensors, info = _forward(objective, optimizer, optimizer_kwargs, inputs)
 
         # Skip computation if there are no differentiable inputs.
         if ctx.k > 0:

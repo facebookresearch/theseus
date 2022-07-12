@@ -12,8 +12,9 @@ from ..linear_system import SparseStructure
 class CholmodSolveFunction(torch.autograd.Function):
     @staticmethod
     def forward(ctx, *args, **kwargs):
-        At_val: torch.Tensor = args[0]
-        b: torch.Tensor = args[1]
+        dtype_original = args[0].dtype
+        At_val: torch.Tensor = args[0].double()
+        b: torch.Tensor = args[1].double()
         sparse_structure: SparseStructure = args[2]
         symbolic_decomposition: CholeskyDecomposition = args[3]
         damping: float = args[4]
@@ -42,7 +43,7 @@ class CholmodSolveFunction(torch.autograd.Function):
         ctx.sparse_structure = sparse_structure
         ctx.cholesky_decompositions = cholesky_decompositions
 
-        return x_cpu.to(device=At_val.device)
+        return x_cpu.to(device=At_val.device, dtype=dtype_original)
 
     # Let v row vector, and w column vector of dimension n, m, and
     # A an nxm matrix. Then

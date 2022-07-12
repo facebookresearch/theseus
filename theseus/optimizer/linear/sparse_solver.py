@@ -54,12 +54,10 @@ class CholmodSparseSolver(LinearSolver):
                 "CholmodSparseSolver only works with theseus.optimizer.SparseLinearization."
             )
 
-        dtype = self.linearization.A_val.dtype
-
         return CholmodSolveFunction.apply(
-            self.linearization.A_val.double(),
-            self.linearization.b.double(),
+            self.linearization.A_val,
+            self.linearization.b,
             self.linearization.structure(),
             self._symbolic_cholesky_decomposition,
             damping,
-        ).to(dtype)
+        )

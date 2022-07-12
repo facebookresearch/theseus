@@ -77,7 +77,7 @@ def test_error_quasi_static_pushing_planar_se2():
         eff2 = thgeom.SE2(x_y_theta=(inputs["eff2"][i, :]).unsqueeze(0))
 
         cost_fn = thembod.QuasiStaticPushingPlanar(
-            obj1, obj2, eff1, eff2, cost_weight, c_square
+            obj1, obj2, eff1, eff2, c_square, cost_weight
         )
 
         actual = cost_fn.error()
@@ -104,13 +104,13 @@ def test_quasi_static_pushing_planar_jacobians():
             cost_weight = thcore.ScaleCostWeight(1)
 
             cost_fn = thembod.QuasiStaticPushingPlanar(
-                obj1, obj2, eff1, eff2, cost_weight, c_square
+                obj1, obj2, eff1, eff2, c_square, cost_weight
             )
             jacobians, _ = cost_fn.jacobians()
 
             def new_error_fn(groups):
                 new_cost_fn = thembod.QuasiStaticPushingPlanar(
-                    groups[0], groups[1], groups[2], groups[3], cost_weight, c_square
+                    groups[0], groups[1], groups[2], groups[3], c_square, cost_weight
                 )
                 return thgeom.Vector(tensor=new_cost_fn.error())
 

@@ -128,8 +128,8 @@ class TactilePoseEstimator:
                         obj_poses[i + 1],
                         eff_poses[i],
                         eff_poses[i + 1],
-                        qsp_weight,
                         c_square,
+                        qsp_weight,
                         name=f"qsp_{i}",
                     )
                 )

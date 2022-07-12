@@ -15,7 +15,7 @@ def _original_dlm_perturbation(optim_vars, aux_vars):
     v = optim_vars[0]
     g = aux_vars[0]
     epsilon = aux_vars[1]
-    return epsilon.data * v.data - 0.5 * g.data
+    return epsilon.tensor * v.tensor - 0.5 * g.tensor
 
 
 def test_dlm_perturbation_jacobian():
@@ -27,7 +27,7 @@ def test_dlm_perturbation_jacobian():
         group_cls = rng.choice([th.Vector, th.SE3, th.SE2, th.SO2, th.SO3])
         for batch_size in [1, 10, 100]:
             epsilon = th.Variable(
-                data=torch.randn(batch_size, 1, dtype=dtype, generator=generator)
+                tensor=torch.randn(batch_size, 1, dtype=dtype, generator=generator)
             )
 
             if group_cls == th.Vector:
@@ -45,7 +45,7 @@ def test_dlm_perturbation_jacobian():
 
             def new_error_fn(vars):
                 new_cost_function = _DLMPerturbation(vars[0], epsilon, grad, w)
-                return th.Vector(data=new_cost_function.error())
+                return th.Vector(tensor=new_cost_function.error())
 
             expected_jacs = numeric_jacobian(
                 new_error_fn,
@@ -87,7 +87,7 @@ def test_backward_pass_se3_runs():
     optimizer = th.GaussNewton(objective)
     layer = th.TheseusLayer(optimizer)
 
-    target_data = torch.nn.Parameter(th.rand_se3(batch_size, dtype=dtype).data)
+    target_data = torch.nn.Parameter(th.rand_se3(batch_size, dtype=dtype).tensor)
     adam = torch.optim.Adam([target_data], lr=0.01)
     loss0 = None
     for _ in range(5):

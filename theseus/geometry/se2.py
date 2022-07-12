@@ -14,29 +14,29 @@ from .point_types import Point2
 from .so2 import SO2
 
 
-# If data is passed, must be x, y, cos, sin
+# If tensor is passed, must be x, y, cos, sin
 # If x_y_theta is passed, must be tensor with shape batch_size x 3
 class SE2(LieGroup):
     def __init__(
         self,
         x_y_theta: Optional[torch.Tensor] = None,
-        data: Optional[torch.Tensor] = None,
+        tensor: Optional[torch.Tensor] = None,
         name: Optional[str] = None,
         dtype: Optional[torch.dtype] = None,
         strict: bool = False,
     ):
-        if x_y_theta is not None and data is not None:
-            raise ValueError("Please provide only one of x_y_theta or data.")
+        if x_y_theta is not None and tensor is not None:
+            raise ValueError("Please provide only one of x_y_theta or tensor.")
         if x_y_theta is not None:
             dtype = x_y_theta.dtype
-        super().__init__(data=data, name=name, dtype=dtype, strict=strict)
+        super().__init__(tensor=tensor, name=name, dtype=dtype, strict=strict)
         if x_y_theta is not None:
             self.update_from_x_y_theta(x_y_theta)
 
         self._resolve_eps()
 
     def _resolve_eps(self):
-        self._NEAR_ZERO_EPS = theseus.constants._SE2_NEAR_ZERO_EPS[self.data.dtype]
+        self._NEAR_ZERO_EPS = theseus.constants._SE2_NEAR_ZERO_EPS[self.tensor.dtype]
 
     @staticmethod
     def rand(
@@ -110,7 +110,7 @@ class SE2(LieGroup):
         return 3
 
     def __repr__(self) -> str:
-        return f"SE2(data={self.data}, name={self.name})"
+        return f"SE2(tensor={self.tensor}, name={self.name})"
 
     def __str__(self) -> str:
         with torch.no_grad():
@@ -120,7 +120,7 @@ class SE2(LieGroup):
 
     @property
     def rotation(self) -> SO2:
-        return SO2(data=self[:, 2:])
+        return SO2(tensor=self[:, 2:])
 
     def theta(self, jacobians: Optional[List[torch.Tensor]] = None) -> torch.Tensor:
         if jacobians is not None:
@@ -134,7 +134,7 @@ class SE2(LieGroup):
 
     @property
     def translation(self) -> Point2:
-        return Point2(data=self[:, :2])
+        return Point2(tensor=self[:, :2])
 
     def xy(self, jacobians: Optional[List[torch.Tensor]] = None) -> torch.Tensor:
         if jacobians is not None:
@@ -145,19 +145,19 @@ class SE2(LieGroup):
             )
             J_out[:, :2, :2] = rotation.to_matrix()
             jacobians.append(J_out)
-        return self.translation.data
+        return self.translation.tensor
 
     def update_from_x_y_theta(self, x_y_theta: torch.Tensor):
         rotation = SO2(theta=x_y_theta[:, 2:])
-        translation = Point2(data=x_y_theta[:, :2])
+        translation = Point2(tensor=x_y_theta[:, :2])
         self.update_from_rot_and_trans(rotation, translation)
 
     def update_from_rot_and_trans(self, rotation: SO2, translation: Point2):
         batch_size = rotation.shape[0]
-        self.data = torch.empty(batch_size, 4).to(
+        self.tensor = torch.empty(batch_size, 4).to(
             device=rotation.device, dtype=rotation.dtype
         )
-        self[:, :2] = translation.data
+        self[:, :2] = translation.tensor
         cosine, sine = rotation.to_cos_sin()
         self[:, 2] = cosine
         self[:, 3] = sine
@@ -228,7 +228,7 @@ class SE2(LieGroup):
             if matrix.ndim != 2 or matrix.shape[1] != 4:
                 raise ValueError("SE2 data tensors can only be 4D vectors.")
 
-            return SO2._data_check_impl(matrix.data[:, 2:])
+            return SO2._data_check_impl(matrix[:, 2:])
 
     @staticmethod
     def exp_map(
@@ -258,7 +258,7 @@ class SE2(LieGroup):
         # Compute the translation
         x = sine_by_theta * u[:, 0] + cosine_minus_one_by_theta * u[:, 1]
         y = sine_by_theta * u[:, 1] - cosine_minus_one_by_theta * u[:, 0]
-        translation = Point2(data=torch.stack((x, y), dim=1))
+        translation = Point2(tensor=torch.stack((x, y), dim=1))
 
         se2 = SE2(dtype=tangent_vector.dtype)
         se2.update_from_rot_and_trans(rotation, translation)
@@ -324,7 +324,7 @@ class SE2(LieGroup):
             translation_1.compose(rotation_1.rotate(translation_2)),
         )
         return SE2(
-            data=torch.cat([new_translation.data, new_rotation.data], dim=1),
+            tensor=torch.cat([new_translation.tensor, new_rotation.tensor], dim=1),
             strict=False,
         )
 
@@ -413,7 +413,7 @@ class SE2(LieGroup):
         if isinstance(point, torch.Tensor):
             p = point
         else:
-            p = point.data
+            p = point.tensor
 
         cosine = self[:, 2]
         sine = self[:, 3]
@@ -449,7 +449,7 @@ class SE2(LieGroup):
         cosine = self[:, 2]
         sine = self[:, 3]
         temp = SO2._rotate_from_cos_sin(point, cosine, sine)
-        ret = Point2(data=temp.data + self[:, :2])
+        ret = Point2(tensor=temp.tensor + self[:, :2])
 
         if jacobians is not None:
             self._check_jacobians_list(jacobians)
@@ -472,7 +472,7 @@ class SE2(LieGroup):
         return ret
 
     def _copy_impl(self, new_name: Optional[str] = None) -> "SE2":
-        return SE2(data=self.data.clone(), name=new_name)
+        return SE2(tensor=self.tensor.clone(), name=new_name)
 
     # only added to avoid casting downstream
     def copy(self, new_name: Optional[str] = None) -> "SE2":

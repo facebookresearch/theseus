@@ -57,7 +57,7 @@ def main(cfg):
     start_event = torch.cuda.Event(enable_timing=True)
     end_event = torch.cuda.Event(enable_timing=True)
 
-    inputs = {var.name: var.data for var in verts}
+    inputs = {var.name: var.tensor for var in verts}
     optimizer.objective.update(inputs)
 
     start_event.record()
@@ -76,10 +76,10 @@ def main(cfg):
         objective.error_squared_norm().detach().cpu().numpy().sum() / 2
     )
     results["R"] = torch.cat(
-        [pose.data[:, :, :d].detach().cpu() for pose in verts]
+        [pose.tensor[:, :, :d].detach().cpu() for pose in verts]
     ).numpy()
     results["t"] = torch.cat(
-        [pose.data[:, :, d].detach().cpu() for pose in verts]
+        [pose.tensor[:, :, d].detach().cpu() for pose in verts]
     ).numpy()
 
     savemat(dataset_name + ".mat", results)

@@ -26,29 +26,35 @@ def test_residual():
     cam_pose = th.SE3(cam_pose_data, name="cam_pose")
 
     focal_length = th.Vector(
-        data=torch.tensor([1000], dtype=torch.float64).repeat(batch_size).unsqueeze(1),
+        tensor=torch.tensor([1000], dtype=torch.float64)
+        .repeat(batch_size)
+        .unsqueeze(1),
         name="focal_length",
     )
     calib_k1 = th.Vector(
-        data=torch.tensor([-0.1], dtype=torch.float64).repeat(batch_size).unsqueeze(1),
+        tensor=torch.tensor([-0.1], dtype=torch.float64)
+        .repeat(batch_size)
+        .unsqueeze(1),
         name="calib_k1",
     )
     calib_k2 = th.Vector(
-        data=torch.tensor([0.01], dtype=torch.float64).repeat(batch_size).unsqueeze(1),
+        tensor=torch.tensor([0.01], dtype=torch.float64)
+        .repeat(batch_size)
+        .unsqueeze(1),
         name="calib_k2",
     )
     world_point = th.Vector(
-        data=torch.rand((batch_size, 3), dtype=torch.float64), name="worldPoint"
+        tensor=torch.rand((batch_size, 3), dtype=torch.float64), name="worldPoint"
     )
-    point_cam = cam_pose.transform_from(world_point).data
+    point_cam = cam_pose.transform_from(world_point).tensor
     proj = -point_cam[:, :2] / point_cam[:, 2:3]
     proj_sqn = (proj * proj).sum(dim=1).unsqueeze(1)
-    proj_factor = focal_length.data * (
-        1.0 + proj_sqn * (calib_k1.data + proj_sqn * calib_k2.data)
+    proj_factor = focal_length.tensor * (
+        1.0 + proj_sqn * (calib_k1.tensor + proj_sqn * calib_k2.tensor)
     )
     point_projection = proj * proj_factor
     image_feature_point = th.Vector(
-        data=point_projection.data + (torch.rand((batch_size, 2)) - 0.5) * 50,
+        tensor=point_projection + (torch.rand((batch_size, 2)) - 0.5) * 50,
         name="image_feature_point",
     )
     r = th.eb.Reprojection(

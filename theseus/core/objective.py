@@ -108,8 +108,8 @@ class Objective:
                 )
             if variable.dtype != self.dtype:
                 raise ValueError(
-                    f"Tried to add variable {variable.name} with data type "
-                    f"{variable.dtype} but objective's data type is {self.dtype}."
+                    f"Tried to add variable {variable.name} with dtype "
+                    f"{variable.dtype} but objective's dtype is {self.dtype}."
                 )
             # Check that names are unique
             if variable.name in self._all_variables:
@@ -366,7 +366,7 @@ class Objective:
         if input_data is not None:
             if not also_update:
                 for var in self.optim_vars:
-                    old_data[var] = self.optim_vars[var].data
+                    old_data[var] = self.optim_vars[var].tensor
             self.update(input_data=input_data)
 
         error_vector = torch.cat(
@@ -454,7 +454,7 @@ class Objective:
                 max_bs = max(unique_batch_sizes)
                 if min_bs == 1:
                     return max_bs
-            raise ValueError("Provided data tensors must be broadcastable.")
+            raise ValueError("Provided tensors must be broadcastable.")
 
         input_data = input_data or {}
         for var_name, data in input_data.items():
@@ -483,8 +483,8 @@ class Objective:
                 )
 
         # Check that the batch size of all data is consistent after update
-        batch_sizes = [v.data.shape[0] for v in self.optim_vars.values()]
-        batch_sizes.extend([v.data.shape[0] for v in self.aux_vars.values()])
+        batch_sizes = [v.tensor.shape[0] for v in self.optim_vars.values()]
+        batch_sizes.extend([v.tensor.shape[0] for v in self.aux_vars.values()])
         self._batch_size = _get_batch_size(batch_sizes)
 
     def _vectorization_needs_update(self):
@@ -539,9 +539,9 @@ class Objective:
         for var in ordering:
             new_var = var.retract(delta[:, var_idx : var_idx + var.dof()])
             if ignore_mask is None or force_update:
-                var.update(new_var.data)
+                var.update(new_var.tensor)
             else:
-                var.update(new_var.data, batch_ignore_mask=ignore_mask)
+                var.update(new_var.tensor, batch_ignore_mask=ignore_mask)
             var_idx += var.dof()
 
     def retract_optim_vars(

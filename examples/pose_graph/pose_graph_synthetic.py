@@ -53,7 +53,7 @@ def print_histogram(
 ):
     log.info(msg)
     with torch.no_grad():
-        poses = [th.SE3(data=var_dict[pose.name]) for pose in pg.poses]
+        poses = [th.SE3(tensor=var_dict[pose.name]) for pose in pg.poses]
         histogram = theg.pg_histogram(poses=poses, edges=pg.edges)
     for line in histogram.split("\n"):
         log.info(line)
@@ -63,17 +63,18 @@ def get_batch_data(
     pg_batch: theg.PoseGraphDataset, pose_indices: List[int], gt_pose_indices: List[int]
 ):
     batch = {
-        pg_batch.poses[index].name: pg_batch.poses[index].data for index in pose_indices
+        pg_batch.poses[index].name: pg_batch.poses[index].tensor
+        for index in pose_indices
     }
-    batch.update({pg_batch.poses[0].name + "__PRIOR": pg_batch.poses[0].data.clone()})
+    batch.update({pg_batch.poses[0].name + "__PRIOR": pg_batch.poses[0].tensor.clone()})
     batch.update(
         {
-            pg_batch.gt_poses[index].name: pg_batch.gt_poses[index].data
+            pg_batch.gt_poses[index].name: pg_batch.gt_poses[index].tensor
             for index in gt_pose_indices
         }
     )
     batch.update(
-        {edge.relative_pose.name: edge.relative_pose.data for edge in pg_batch.edges}
+        {edge.relative_pose.name: edge.relative_pose.tensor for edge in pg_batch.edges}
     )
     return batch
 
@@ -85,8 +86,10 @@ def pose_loss(
     loss: torch.Tensor = torch.zeros(
         1, dtype=pose_vars[0].dtype, device=pose_vars[0].device
     )
-    poses_batch = th.SE3(data=torch.cat([pose.data for pose in pose_vars]))
-    gt_poses_batch = th.SE3(data=torch.cat([gt_pose.data for gt_pose in gt_pose_vars]))
+    poses_batch = th.SE3(tensor=torch.cat([pose.tensor for pose in pose_vars]))
+    gt_poses_batch = th.SE3(
+        tensor=torch.cat([gt_pose.tensor for gt_pose in gt_pose_vars])
+    )
     pose_loss = th.local(poses_batch, gt_poses_batch).norm(dim=1)
     loss += pose_loss.sum()
     return loss

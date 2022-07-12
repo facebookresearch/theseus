@@ -122,10 +122,10 @@ def test_transform_from_and_to(dtype):
 
                 # Check the operation result
                 assert torch.allclose(
-                    expected_to.squeeze(2), point_to.data.double(), atol=TEST_EPS
+                    expected_to.squeeze(2), point_to.tensor.double(), atol=TEST_EPS
                 )
                 assert torch.allclose(
-                    point_tensor.double(), point_from.data.double(), atol=TEST_EPS
+                    point_tensor.double(), point_from.tensor.double(), atol=TEST_EPS
                 )
 
                 # Check the jacobians
@@ -148,7 +148,7 @@ def test_transform_from_and_to(dtype):
 
                 expected_jac = numeric_jacobian(
                     lambda groups: groups[0].transform_from(groups[1]),
-                    [se2_double, th.Point2(point_to.data.double())],
+                    [se2_double, th.Point2(point_to.tensor.double())],
                     function_dim=2,
                 )
                 assert jacobians_from[0].shape == expected_jac[0].shape
@@ -184,7 +184,7 @@ def test_theta_jacobian(dtype):
         jacobian = []
         se2.theta(jacobians=jacobian)
         expected_jac = numeric_jacobian(
-            lambda groups: th.Vector(data=groups[0].theta()), [se2], function_dim=1
+            lambda groups: th.Vector(tensor=groups[0].theta()), [se2], function_dim=1
         )
         torch.allclose(jacobian[0], expected_jac[0])
 

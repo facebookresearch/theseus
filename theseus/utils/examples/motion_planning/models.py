@@ -178,7 +178,9 @@ class InitialTrajectoryModel(nn.Module):
         angle = th.SO2(
             theta=torch.ones(dist_vec.shape[0], 1).to(device=device) * np.pi / 2
         )
-        normal_vector = angle.rotate(th.Point2(data=dist_vec)).data.to(device=device)
+        normal_vector = angle.rotate(th.Point2(tensor=dist_vec)).tensor.to(
+            device=device
+        )
         normal_vector /= normal_vector.norm(dim=1, keepdim=True)
         for t_step in range(1, trajectory_len):
             idx = 4 * t_step

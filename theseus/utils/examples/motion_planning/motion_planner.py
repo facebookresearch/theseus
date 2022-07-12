@@ -121,7 +121,7 @@ class MotionPlanner:
             th.Difference(
                 velocities[0],
                 boundary_cost_weight,
-                th.Point2(data=torch.zeros(1, 2)),
+                th.Point2(tensor=torch.zeros(1, 2)),
                 name="vel_0",
             )
         )
@@ -132,7 +132,7 @@ class MotionPlanner:
             th.Difference(
                 velocities[-1],
                 boundary_cost_weight,
-                th.Point2(data=torch.zeros(1, 2)),
+                th.Point2(tensor=torch.zeros(1, 2)),
                 name="vel_N",
             )
         )
@@ -289,8 +289,8 @@ class MotionPlanner:
         variables = self.objective.optim_vars
         for i in range(self.trajectory_len):
             if values_dict is None:
-                trajectory[:, :2, i] = variables[f"pose_{i}"].data.clone()
-                trajectory[:, 2:, i] = variables[f"vel_{i}"].data.clone()
+                trajectory[:, :2, i] = variables[f"pose_{i}"].tensor.clone()
+                trajectory[:, 2:, i] = variables[f"vel_{i}"].tensor.clone()
             else:
                 trajectory[:, :2, i] = values_dict[f"pose_{i}"]
                 trajectory[:, 2:, i] = values_dict[f"vel_{i}"]

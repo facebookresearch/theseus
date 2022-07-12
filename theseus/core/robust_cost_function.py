@@ -81,7 +81,7 @@ class RobustCostFunction(CostFunction):
     def weighted_error(self) -> torch.Tensor:
         weighted_error = self.cost_function.weighted_error()
         squared_norm = torch.sum(weighted_error**2, dim=1, keepdim=True)
-        error_loss = self.loss.evaluate(squared_norm, self.log_loss_radius.data)
+        error_loss = self.loss.evaluate(squared_norm, self.log_loss_radius.tensor)
 
         # The return value is a hacky way to make it so that
         # ||weighted_error||^2 = error_loss
@@ -109,7 +109,7 @@ class RobustCostFunction(CostFunction):
         ) = self.cost_function.weighted_jacobians_error()
         squared_norm = torch.sum(weighted_error**2, dim=1, keepdim=True)
         rescale = (
-            self.loss.linearize(squared_norm, self.log_loss_radius.data)
+            self.loss.linearize(squared_norm, self.log_loss_radius.tensor)
             + RobustCostFunction._EPS
         ).sqrt()
 

@@ -11,8 +11,8 @@ import theseus as th
 
 
 class MockVar(th.Manifold):
-    def __init__(self, length, data=None, name=None):
-        super().__init__(length, data=data, name=name)
+    def __init__(self, length, tensor=None, name=None):
+        super().__init__(length, tensor=tensor, name=name)
 
     @staticmethod
     def _init_data(length):
@@ -39,7 +39,7 @@ class MockVar(th.Manifold):
         pass
 
     def _copy_impl(self, new_name=None):
-        return MockVar(self.data.shape[1], data=self.data.clone(), name=new_name)
+        return MockVar(self.tensor.shape[1], tensor=self.tensor.clone(), name=new_name)
 
     def _project_impl(
         self, euclidean_grad: torch.Tensor, is_sparse: bool = False
@@ -65,7 +65,7 @@ class MockCostWeight(th.CostWeight):
             self.register_optim_var(add_optim_var.name)
 
     def weight_error(self, error):
-        return self.the_data.data * error
+        return self.the_data.tensor * error
 
     def weight_jacobians_and_error(self, jacobians, error):
         raise NotImplementedError(
@@ -110,7 +110,7 @@ class MockCostFunction(th.CostFunction):
         self._no_copy_vars = no_copy_vars
 
     def error(self):
-        mu = torch.stack([v.data for v in self.optim_vars]).sum()
+        mu = torch.stack([v.tensor for v in self.optim_vars]).sum()
         return mu * torch.ones(1, self._dim)
 
     def jacobians(self):
@@ -134,13 +134,13 @@ class MockCostFunction(th.CostFunction):
         )
 
 
-def create_mock_cost_functions(data=None, cost_weight=NullCostWeight()):
-    len_data = 1 if data is None else data.shape[1]
-    var1 = MockVar(len_data, data=data, name="var1")
-    var2 = MockVar(len_data, data=data, name="var2")
-    var3 = MockVar(len_data, data=data, name="var3")
-    aux1 = MockVar(len_data, data=data, name="aux1")
-    aux2 = MockVar(len_data, data=data, name="aux2")
+def create_mock_cost_functions(tensor=None, cost_weight=NullCostWeight()):
+    len_data = 1 if tensor is None else tensor.shape[1]
+    var1 = MockVar(len_data, tensor=tensor, name="var1")
+    var2 = MockVar(len_data, tensor=tensor, name="var2")
+    var3 = MockVar(len_data, tensor=tensor, name="var3")
+    aux1 = MockVar(len_data, tensor=tensor, name="aux1")
+    aux2 = MockVar(len_data, tensor=tensor, name="aux2")
     names = [
         "MockCostFunction.var1.var2",
         "MockCostFunction.var1.var3",
@@ -173,13 +173,15 @@ def create_mock_cost_functions(data=None, cost_weight=NullCostWeight()):
     )
 
 
-def create_objective_with_mock_cost_functions(data=None, cost_weight=NullCostWeight()):
+def create_objective_with_mock_cost_functions(
+    tensor=None, cost_weight=NullCostWeight()
+):
     (
         cost_functions,
         names,
         var_to_cost_functions,
         aux_to_cost_functions,
-    ) = create_mock_cost_functions(data=data, cost_weight=cost_weight)
+    ) = create_mock_cost_functions(tensor=tensor, cost_weight=cost_weight)
 
     objective = th.Objective()
     for cost_function in cost_functions:
@@ -194,12 +196,12 @@ def create_objective_with_mock_cost_functions(data=None, cost_weight=NullCostWei
     )
 
 
-def check_copy_var(var):
+def check_copy_var(var: th.Variable):
     var.name = "old"
     new_var = var.copy(new_name="new")
     assert var is not new_var
-    assert var.data is not new_var.data
-    assert torch.allclose(var.data, new_var.data)
+    assert var.tensor is not new_var.tensor
+    assert torch.allclose(var.tensor, new_var.tensor)
     assert new_var.name == "new"
     new_var_no_name = copy.deepcopy(var)
     assert new_var_no_name.name == f"{var.name}_copy"
@@ -208,7 +210,7 @@ def check_copy_var(var):
 def check_another_theseus_tensor_is_copy(var, other_var):
     assert isinstance(var, other_var.__class__)
     assert var is not other_var
-    check_another_torch_tensor_is_copy(var.data, other_var.data)
+    check_another_torch_tensor_is_copy(var.tensor, other_var.tensor)
 
 
 def check_another_torch_tensor_is_copy(tensor, other_tensor):

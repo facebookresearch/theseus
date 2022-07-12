@@ -16,23 +16,22 @@ class Vector(LieGroup):
     def __init__(
         self,
         dof: Optional[int] = None,
-        data: Optional[torch.Tensor] = None,
+        tensor: Optional[torch.Tensor] = None,
         name: Optional[str] = None,
         dtype: Optional[torch.dtype] = None,
     ):
-        if dof is not None and data is not None:
-            raise ValueError("Please provide only one of dof or data.")
+        if dof is not None and tensor is not None:
+            raise ValueError("Please provide only one of dof or tensor.")
         if dof is None:
-            if data is not None and data.ndim == 1:
-                data = data.view(1, -1)
-            if data is None or data.ndim != 2:
+            if tensor is not None and tensor.ndim == 1:
+                tensor = tensor.view(1, -1)
+            if tensor is None or tensor.ndim != 2:
                 raise ValueError(
-                    "If dof not provided, data must "
-                    "be a tensor of shape (batch_size, dof)"
+                    "If dof not provided, tensor must " "have shape (batch_size, dof)"
                 )
-            dof = data.shape[1]
+            dof = tensor.shape[1]
 
-        super().__init__(dof, data=data, name=name, dtype=dtype)
+        super().__init__(dof, tensor=tensor, name=name, dtype=dtype)
 
     # Vector variables are of shape [batch_size, dof]
     @staticmethod
@@ -40,7 +39,7 @@ class Vector(LieGroup):
         return torch.zeros(1, dof)
 
     def dof(self) -> int:
-        return self.data.shape[1]
+        return self.tensor.shape[1]
 
     @staticmethod
     def rand(
@@ -53,7 +52,7 @@ class Vector(LieGroup):
         if len(size) != 2:
             raise ValueError("The size should be 2D.")
         return Vector(
-            data=torch.rand(
+            tensor=torch.rand(
                 size,
                 generator=generator,
                 dtype=dtype,
@@ -73,7 +72,7 @@ class Vector(LieGroup):
         if len(size) != 2:
             raise ValueError("The size should be 2D.")
         return Vector(
-            data=torch.randn(
+            tensor=torch.randn(
                 size,
                 generator=generator,
                 dtype=dtype,
@@ -85,26 +84,26 @@ class Vector(LieGroup):
     def __repr__(self) -> str:
         return (
             f"{self.__class__.__name__}"
-            f"(dof={self.data.shape[1]}, data={self.data}, name={self.name})"
+            f"(dof={self.tensor.shape[1]}, tensor={self.tensor}, name={self.name})"
         )
 
     def allclose(self, other: "Vector", *args, **kwargs) -> bool:
-        return torch.allclose(self.data, other.data, *args, **kwargs)
+        return torch.allclose(self.tensor, other.tensor, *args, **kwargs)
 
     def __add__(self, other: "Vector") -> "Vector":
         return self.__class__._compose_impl(self, other)
 
     def __sub__(self, other: "Vector") -> "Vector":
-        return self.__class__(data=torch.sub(self.data, other.data))
+        return self.__class__(tensor=torch.sub(self.tensor, other.tensor))
 
     def __neg__(self) -> "Vector":
         return self.__class__._inverse_impl(self)
 
     def __mul__(self, other: Union["Vector", torch.Tensor]) -> "Vector":
         if isinstance(other, Vector):
-            return self.__class__(data=torch.mul(self.data, other.data))
+            return self.__class__(tensor=torch.mul(self.tensor, other.tensor))
         elif isinstance(other, torch.Tensor):
-            return self.__class__(data=torch.mul(self.data, other))
+            return self.__class__(tensor=torch.mul(self.tensor, other))
         else:
             raise ValueError(
                 f"expected type 'Vector' or 'Tensor', got {type(other).__name__}"
@@ -120,7 +119,7 @@ class Vector(LieGroup):
                 f"Vector matmul only accepts tensors with ndim=3 "
                 f"but tensor has ndim={other.ndim}."
             )
-        return torch.bmm(self.data.unsqueeze(1), other.data).squeeze(1)
+        return torch.bmm(self.tensor.unsqueeze(1), other).squeeze(1)
 
     def __rmatmul__(self, other: torch.Tensor) -> torch.Tensor:
         if isinstance(other, Vector):
@@ -130,41 +129,41 @@ class Vector(LieGroup):
                 f"Vector matmul only accepts tensors with ndim=3 but "
                 f"tensor has ndim={other.ndim}."
             )
-        return torch.bmm(other.data, self.data.unsqueeze(2)).squeeze(2)
+        return torch.bmm(other, self.tensor.unsqueeze(2)).squeeze(2)
 
     def __truediv__(self, other: Union["Vector", torch.Tensor]) -> "Vector":
         if isinstance(other, Vector):
-            return self.__class__(data=torch.div(self.data, other.data))
+            return self.__class__(tensor=torch.div(self.tensor, other.tensor))
         elif isinstance(other, torch.Tensor):
-            return self.__class__(data=torch.div(self.data, other))
+            return self.__class__(tensor=torch.div(self.tensor, other))
         else:
             raise ValueError(
                 f"expected type 'Vector' or 'Tensor', got {type(other).__name__}"
             )
 
     def dot(self, other: "Vector") -> torch.Tensor:
-        return torch.mul(self.data, other.data).sum(-1)
+        return torch.mul(self.tensor, other.tensor).sum(-1)
 
     inner = dot
 
     def abs(self) -> "Vector":
-        return self.__class__(data=torch.abs(self.data))
+        return self.__class__(tensor=torch.abs(self.tensor))
 
     def outer(self, other: "Vector") -> torch.Tensor:
-        return torch.matmul(self.data.unsqueeze(2), other.data.unsqueeze(1))
+        return torch.matmul(self.tensor.unsqueeze(2), other.tensor.unsqueeze(1))
 
     def norm(self, *args, **kwargs) -> torch.Tensor:
-        return torch.norm(self.data, *args, **kwargs)
+        return torch.norm(self.tensor, *args, **kwargs)
 
     def cat(self, vecs: Union["Vector", Tuple["Vector"], List["Vector"]]) -> "Vector":
         if isinstance(vecs, Vector):
-            result = torch.cat([self.data, vecs.data], 1)
+            result = torch.cat([self.tensor, vecs.tensor], 1)
         else:
-            result = torch.cat([self.data] + [vec.data for vec in vecs], 1)
-        return Vector(data=result)
+            result = torch.cat([self.tensor] + [vec.tensor for vec in vecs], 1)
+        return Vector(tensor=result)
 
     def to_matrix(self) -> torch.Tensor:
-        return self.data.clone()
+        return self.tensor.clone()
 
     def _local_impl(
         self, vec2: Manifold, jacobians: List[torch.Tensor] = None
@@ -175,10 +174,10 @@ class Vector(LieGroup):
             return LieGroup._local_impl(self, vec2, jacobians)
 
     def _retract_impl(self, delta: torch.Tensor) -> "Vector":
-        return self.__class__(data=torch.add(self.data, delta))
+        return self.__class__(tensor=torch.add(self.tensor, delta))
 
     def _compose_impl(self, vec2: LieGroup) -> "Vector":
-        return self.__class__(data=torch.add(self.data, vec2.data))
+        return self.__class__(tensor=torch.add(self.tensor, vec2.tensor))
 
     def _compose_jacobian(self, _: LieGroup) -> Tuple[torch.Tensor, torch.Tensor]:
         identity = torch.eye(self.dof(), dtype=self.dtype, device=self.device).repeat(
@@ -187,7 +186,7 @@ class Vector(LieGroup):
         return (identity, identity.clone())
 
     def _inverse_impl(self) -> "Vector":
-        return self.__class__(data=-self.data)
+        return self.__class__(tensor=-self.tensor)
 
     def _adjoint_impl(self) -> torch.Tensor:
         return (
@@ -211,7 +210,7 @@ class Vector(LieGroup):
 
         Vector._exp_map_jacobian_impl(tangent_vector, jacobians)
 
-        return Vector(data=tangent_vector.clone())
+        return Vector(tensor=tangent_vector.clone())
 
     @staticmethod
     def _data_check_impl(data: torch.Tensor) -> bool:
@@ -244,7 +243,7 @@ class Vector(LieGroup):
         self, jacobians: Optional[List[torch.Tensor]] = None
     ) -> torch.Tensor:
         self._log_map_jacobian_impl(jacobians)
-        return self.data.clone()
+        return self.tensor.clone()
 
     def _log_map_jacobian_impl(self, jacobians: Optional[List[torch.Tensor]] = None):
         if jacobians is not None:
@@ -260,7 +259,7 @@ class Vector(LieGroup):
         return id(self)
 
     def _copy_impl(self, new_name: Optional[str] = None) -> "Vector":
-        return self.__class__(data=self.data.clone(), name=new_name)
+        return self.__class__(tensor=self.tensor.clone(), name=new_name)
 
     # added to avoid casting downstream
     def copy(self, new_name: Optional[str] = None) -> "Vector":

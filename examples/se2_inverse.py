@@ -24,10 +24,10 @@ x2 = create_random_se2(1, rng)
 
 
 def run(x1: LieGroup, x2: LieGroup, num_iters=10, use_lie_tangent=True):
-    x1.data = LieGroupTensor(x1)
-    x1.data.requires_grad = True
+    x1.tensor = LieGroupTensor(x1)
+    x1.tensor.requires_grad = True
 
-    optim = torch.optim.Adam([x1.data], lr=1e-1)
+    optim = torch.optim.Adam([x1.tensor], lr=1e-1)
     scheduler = torch.optim.lr_scheduler.MultiStepLR(
         optim, milestones=[250, 600], gamma=0.01
     )

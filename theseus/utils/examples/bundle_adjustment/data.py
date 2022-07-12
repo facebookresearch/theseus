@@ -27,10 +27,10 @@ class Camera:
         self.calib_k2 = calib_k2
 
     def to_params(self) -> List[float]:
-        batch_size = self.pose.data.shape[0]
+        batch_size = self.pose.tensor.shape[0]
         assert batch_size == 1
-        R = th.SO3(data=self.pose.data[:, :, :3]).log_map().squeeze(0)
-        t = self.pose.data[:, :, 3].squeeze(0)
+        R = th.SO3(tensor=self.pose.tensor[:, :, :3]).log_map().squeeze(0)
+        t = self.pose.tensor[:, :, 3].squeeze(0)
         return [
             *R.numpy(),
             *t.numpy(),
@@ -43,27 +43,27 @@ class Camera:
     def from_params(params: List[float], name: str = "Cam") -> "Camera":
         r = th.SO3.exp_map(torch.tensor(params[:3], dtype=torch.float64).unsqueeze(0))
         t = torch.tensor([params[3:6]], dtype=torch.float64).unsqueeze(2)
-        pose = th.SE3(data=torch.cat([r.data, t], dim=2), name=name + "_pose")
+        pose = th.SE3(tensor=torch.cat([r.tensor, t], dim=2), name=name + "_pose")
         focal_length = th.Vector(
-            data=torch.tensor([params[6:7]], dtype=torch.float64),
+            tensor=torch.tensor([params[6:7]], dtype=torch.float64),
             name=name + "_focal_length",
         )
         calib_k1 = th.Vector(
-            data=torch.tensor([params[7:8]], dtype=torch.float64),
+            tensor=torch.tensor([params[7:8]], dtype=torch.float64),
             name=name + "_calib_k1",
         )
         calib_k2 = th.Vector(
-            data=torch.tensor([params[8:9]], dtype=torch.float64),
+            tensor=torch.tensor([params[8:9]], dtype=torch.float64),
             name=name + "_calib_k2",
         )
         return Camera(pose, focal_length, calib_k1, calib_k2)
 
     def project_point(self, point: th.Point3) -> torch.Tensor:
         point_cam = self.pose.transform_from(point)
-        proj = -point_cam.data[:, :2] / point_cam.data[:, 2:3]
+        proj = -point_cam.tensor[:, :2] / point_cam.tensor[:, 2:3]
         proj_sqn = (proj * proj).sum(dim=1).unsqueeze(1)
-        proj_factor = self.focal_length.data * (
-            1.0 + proj_sqn * (self.calib_k1.data + proj_sqn * self.calib_k2.data)
+        proj_factor = self.focal_length.tensor * (
+            1.0 + proj_sqn * (self.calib_k1.tensor + proj_sqn * self.calib_k2.tensor)
         )
         return proj * proj_factor
 
@@ -119,19 +119,19 @@ class Camera:
         cam_pose = th.SE3(cam_pose_data, name=name + "_pose")
 
         focal_length = th.Vector(
-            data=(torch.rand((batch_size, 1), dtype=torch.float64) * 2 - 1.0)
+            tensor=(torch.rand((batch_size, 1), dtype=torch.float64) * 2 - 1.0)
             * fl_random
             + fl_base,
             name=name + "_focal_length",
         )
         calib_k1 = th.Vector(
-            data=(torch.rand((batch_size, 1), dtype=torch.float64) * 2 - 1.0)
+            tensor=(torch.rand((batch_size, 1), dtype=torch.float64) * 2 - 1.0)
             * k1_random
             + k1_base,
             name=name + "_calib_k1",
         )
         calib_k2 = th.Vector(
-            data=(torch.rand((batch_size, 1), dtype=torch.float64) * 2 - 1.0)
+            tensor=(torch.rand((batch_size, 1), dtype=torch.float64) * 2 - 1.0)
             * k2_random
             + k2_base,
             name=name + "_calib_k2",
@@ -175,7 +175,7 @@ class BundleAdjustmentDataset:
             for i in range(num_observations):
                 fields = out.readline().rstrip().split()
                 feat = th.Point2(
-                    data=torch.tensor(
+                    tensor=torch.tensor(
                         [float(fields[2]), float(fields[3])], dtype=torch.float64
                     ).unsqueeze(0),
                     name=f"Feat{i}",
@@ -200,7 +200,7 @@ class BundleAdjustmentDataset:
                     params.append(float(out.readline().rstrip()))
                 points.append(
                     th.Point3(
-                        data=torch.tensor(params, dtype=torch.float64).unsqueeze(0),
+                        tensor=torch.tensor(params, dtype=torch.float64).unsqueeze(0),
                         name=f"Pt{i}",
                     )
                 )
@@ -216,14 +216,14 @@ class BundleAdjustmentDataset:
         with open(path, "wt") as out:
             print(f"{len(cameras)} {len(points)} {len(observations)}", file=out)
             for obs in observations:
-                f = obs.image_feature_point.data.squeeze(0).numpy()
+                f = obs.image_feature_point.tensor.squeeze(0).numpy()
                 print(f"{obs.camera_index} {obs.point_index} {f[0]} {f[1]}", file=out)
             for cam in cameras:
                 params = cam.to_params()
                 for p in params:
                     print(f"{p}", file=out)
             for pt in points:
-                params = pt.data.squeeze(0).numpy()
+                params = pt.tensor.squeeze(0).numpy()
                 for p in params:
                     print(f"{p}", file=out)
 
@@ -257,7 +257,7 @@ class BundleAdjustmentDataset:
             proj_pt = self.cameras[obs.camera_index].project_point(
                 self.points[obs.point_index]
             )
-            error = float((obs.image_feature_point.data - proj_pt).norm())
+            error = float((obs.image_feature_point.tensor - proj_pt).norm())
             idx = min(int(error), len(buckets) - 1)
             buckets[idx] += 1
         max_buckets = max(buckets)
@@ -295,7 +295,7 @@ class BundleAdjustmentDataset:
         # add points
         gt_points = [
             th.Point3(
-                data=(torch.rand((1, 3), dtype=torch.float64) * 2 - 1) * 20
+                tensor=(torch.rand((1, 3), dtype=torch.float64) * 2 - 1) * 20
                 + torch.tensor([i * 100.0 / (num_points), 0, 0], dtype=torch.float64),
                 name=f"Pt{i}",
             )
@@ -303,7 +303,7 @@ class BundleAdjustmentDataset:
         ]
         points = [
             th.Point3(
-                data=gt_points[i].data + (torch.rand((1, 3)) * 2 - 1) * 0.2,
+                tensor=gt_points[i].tensor + (torch.rand((1, 3)) * 2 - 1) * 0.2,
                 name=gt_points[i].name + "_copy",
             )
             for i in range(num_points)
@@ -328,7 +328,9 @@ class BundleAdjustmentDataset:
                     Observation(
                         camera_index=i,
                         point_index=j,
-                        image_feature_point=th.Point2(data=feat, name=f"Feat{obs_num}"),
+                        image_feature_point=th.Point2(
+                            tensor=feat, name=f"Feat{obs_num}"
+                        ),
                     )
                 )
                 obs_num += 1

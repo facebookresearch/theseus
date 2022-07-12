@@ -210,7 +210,7 @@ class Vectorize:
                 # If the variable is shared and batch_size == 1, only need data for
                 # one of the cost functions and we can just extend later to complete
                 # the vectorized batch, so here we can do `continue`
-                var_batch_size = var.data.shape[0]
+                var_batch_size = var.tensor.shape[0]
                 if (
                     name in names_to_data
                     and Vectorize._SHARED_TOKEN in name
@@ -226,9 +226,9 @@ class Vectorize:
                 # For shared variables, just append, we will handle the expansion
                 # when updating the vectorized variable containers.
                 data = (
-                    var.data
+                    var.tensor
                     if (var_batch_size > 1 or Vectorize._SHARED_TOKEN in name)
-                    else Vectorize._expand(var.data, objective_batch_size)
+                    else Vectorize._expand(var.tensor, objective_batch_size)
                 )
                 names_to_data[name].append(data)
                 seen_vars.add(name)
@@ -371,7 +371,7 @@ class Vectorize:
             # Get the vectorized tensor that has the current variable data.
             # The resulting shape is (N * b, M), b is batch size, N is the number of
             # variables in the group, and M is the data shape for this class
-            vectorized_data = torch.cat([v.data for v in var_list], dim=0)
+            vectorized_data = torch.cat([v.tensor for v in var_list], dim=0)
             assert (
                 vectorized_data.shape
                 == (n_vars * batch_size,) + vectorized_data.shape[1:]

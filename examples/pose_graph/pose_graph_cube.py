@@ -31,11 +31,12 @@ dtype = torch.float64
 
 def get_batch_data(pg_batch: theg.PoseGraphDataset, pose_indices: List[int]):
     batch = {
-        pg_batch.poses[index].name: pg_batch.poses[index].data for index in pose_indices
+        pg_batch.poses[index].name: pg_batch.poses[index].tensor
+        for index in pose_indices
     }
-    batch.update({pg_batch.poses[0].name + "__PRIOR": pg_batch.poses[0].data.clone()})
+    batch.update({pg_batch.poses[0].name + "__PRIOR": pg_batch.poses[0].tensor.clone()})
     batch.update(
-        {edge.relative_pose.name: edge.relative_pose.data for edge in pg_batch.edges}
+        {edge.relative_pose.name: edge.relative_pose.tensor for edge in pg_batch.edges}
     )
     return batch
 
@@ -153,11 +154,11 @@ def main(cfg):
             edges = edges_n
         else:
             for pose, pose_n in zip(poses, poses_n):
-                pose.data = torch.cat((pose.data, pose_n.data))
+                pose.tensor = torch.cat((pose.tensor, pose_n.tensor))
 
             for edge, edge_n in zip(edges, edges_n):
-                edge.relative_pose.data = torch.cat(
-                    (edge.relative_pose.data, edge_n.relative_pose.data)
+                edge.relative_pose.tensor = torch.cat(
+                    (edge.relative_pose.tensor, edge_n.relative_pose.tensor)
                 )
 
     # create (or load) dataset

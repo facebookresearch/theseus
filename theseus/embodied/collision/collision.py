@@ -38,7 +38,7 @@ class Collision2D(CostFunction):
             self.cost_eps = Variable(cost_eps)
         else:
             self.cost_eps = cost_eps
-        self.cost_eps.data = self.cost_eps.data.view(-1, 1)
+        self.cost_eps.tensor = self.cost_eps.tensor.view(-1, 1)
         self.register_optim_vars(["pose"])
         self.register_aux_vars(["sdf_origin", "sdf_data", "sdf_cell_size", "cost_eps"])
         self.robot: KinematicsModel = IdentityModel()
@@ -48,10 +48,10 @@ class Collision2D(CostFunction):
         self,
     ) -> Tuple[torch.Tensor, torch.Tensor]:
         robot_state = cast(Point2, self.robot.forward_kinematics(self.pose)["state"])
-        return self.sdf.signed_distance(robot_state.data.view(-1, 2, 1))
+        return self.sdf.signed_distance(robot_state.tensor.view(-1, 2, 1))
 
     def _error_from_distances(self, distances: torch.Tensor):
-        return (self.cost_eps.data - distances).clamp(min=0)
+        return (self.cost_eps.tensor - distances).clamp(min=0)
 
     def error(self) -> torch.Tensor:
         distances, _ = self._compute_distances_and_jacobians()
@@ -60,7 +60,7 @@ class Collision2D(CostFunction):
     def jacobians(self) -> Tuple[List[torch.Tensor], torch.Tensor]:
         distances, jacobian = self._compute_distances_and_jacobians()
         error = self._error_from_distances(distances)
-        faraway_idx = distances > self.cost_eps.data
+        faraway_idx = distances > self.cost_eps.tensor
         jacobian[faraway_idx] = 0.0
         return [-jacobian], error
 

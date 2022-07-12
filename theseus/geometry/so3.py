@@ -17,24 +17,24 @@ class SO3(LieGroup):
     def __init__(
         self,
         quaternion: Optional[torch.Tensor] = None,
-        data: Optional[torch.Tensor] = None,
+        tensor: Optional[torch.Tensor] = None,
         name: Optional[str] = None,
         dtype: Optional[torch.dtype] = None,
         strict: bool = False,
     ):
-        if quaternion is not None and data is not None:
-            raise ValueError("Please provide only one of quaternion or data.")
+        if quaternion is not None and tensor is not None:
+            raise ValueError("Please provide only one of quaternion or tensor.")
         if quaternion is not None:
             dtype = quaternion.dtype
-        super().__init__(data=data, name=name, dtype=dtype, strict=strict)
+        super().__init__(tensor=tensor, name=name, dtype=dtype, strict=strict)
         if quaternion is not None:
             self.update_from_unit_quaternion(quaternion)
 
         self._resolve_eps()
 
     def _resolve_eps(self):
-        self._NEAR_ZERO_EPS = theseus.constants._SO3_NEAR_ZERO_EPS[self.data.dtype]
-        self._NEAR_PI_EPS = theseus.constants._SO3_NEAR_PI_EPS[self.data.dtype]
+        self._NEAR_ZERO_EPS = theseus.constants._SO3_NEAR_ZERO_EPS[self.tensor.dtype]
+        self._NEAR_PI_EPS = theseus.constants._SO3_NEAR_PI_EPS[self.tensor.dtype]
 
     @staticmethod
     def rand(
@@ -93,14 +93,14 @@ class SO3(LieGroup):
         return 3
 
     def __repr__(self) -> str:
-        return f"SO3(data={self.data}, name={self.name})"
+        return f"SO3(tensor={self.tensor}, name={self.name})"
 
     def __str__(self) -> str:
         with torch.no_grad():
-            return f"SO3(matrix={self.data}), name={self.name})"
+            return f"SO3(matrix={self.tensor}), name={self.name})"
 
     def _adjoint_impl(self) -> torch.Tensor:
-        return self.data.clone()
+        return self.tensor.clone()
 
     def _project_impl(
         self, euclidean_grad: torch.Tensor, is_sparse: bool = False
@@ -110,9 +110,9 @@ class SO3(LieGroup):
             euclidean_grad.shape[:-1], dtype=self.dtype, device=self.device
         )
         if is_sparse:
-            temp = torch.einsum("i...jk,i...jl->i...lk", euclidean_grad, self.data)
+            temp = torch.einsum("i...jk,i...jl->i...lk", euclidean_grad, self.tensor)
         else:
-            temp = torch.einsum("...jk,...ji->...ik", euclidean_grad, self.data)
+            temp = torch.einsum("...jk,...ji->...ik", euclidean_grad, self.tensor)
 
         ret[..., 0] = temp[..., 2, 1] - temp[..., 1, 2]
         ret[..., 1] = temp[..., 0, 2] - temp[..., 2, 0]
@@ -186,7 +186,7 @@ class SO3(LieGroup):
         one_minus_cosie_by_theta2 = torch.where(
             near_zero, 0.5 * sine_by_theta, (1 - cosine) / theta2_nz
         )
-        ret.data = (
+        ret.tensor = (
             one_minus_cosie_by_theta2
             * tangent_vector.view(-1, 3, 1)
             @ tangent_vector.view(-1, 1, 3)
@@ -286,7 +286,7 @@ class SO3(LieGroup):
 
         if jacobians is not None:
             SO3._check_jacobians_list(jacobians)
-            jac = torch.zeros_like(self.data)
+            jac = torch.zeros_like(self.tensor)
 
             theta2 = theta**2
             sine_theta = sine * theta
@@ -326,15 +326,16 @@ class SO3(LieGroup):
     def _compose_impl(self, so3_2: LieGroup) -> "SO3":
         so3_2 = cast(SO3, so3_2)
         ret = SO3()
-        ret.data = self.data @ so3_2.data
+        ret.tensor = self.tensor @ so3_2.tensor
         return ret
 
     def _inverse_impl(self, get_jacobian: bool = False) -> "SO3":
-        # if self.data is a valid SO(3), then self.data.transpose(1, 2) must be valid as well
-        return SO3(data=self.data.transpose(1, 2).clone(), strict=False)
+        # if self.tensor is a valid SO(3), then self.tensor.transpose(1, 2)
+        # must be valid as well
+        return SO3(tensor=self.tensor.transpose(1, 2).clone(), strict=False)
 
     def to_matrix(self) -> torch.Tensor:
-        return self.data.clone()
+        return self.tensor.clone()
 
     def to_quaternion(self) -> torch.Tensor:
         ret = torch.zeros(self.shape[0], 4, dtype=self.dtype, device=self.device)
@@ -435,7 +436,7 @@ class SO3(LieGroup):
         q33 = q3 * q3
 
         ret = SO3()
-        ret.data = torch.zeros(quaternion.shape[0], 3, 3).to(
+        ret.tensor = torch.zeros(quaternion.shape[0], 3, 3).to(
             dtype=quaternion.dtype, device=quaternion.device
         )
         ret[:, 0, 0] = 2 * (q00 + q11) - 1
@@ -450,8 +451,8 @@ class SO3(LieGroup):
         return ret
 
     def _copy_impl(self, new_name: Optional[str] = None) -> "SO3":
-        # if self.data is a valid SO(3), so is the copy
-        return SO3(data=self.data.clone(), name=new_name, strict=False)
+        # if self.tensor is a valid SO(3), so is the copy
+        return SO3(tensor=self.tensor.clone(), name=new_name, strict=False)
 
     # only added to avoid casting downstream
     def copy(self, new_name: Optional[str] = None) -> "SO3":
@@ -467,13 +468,13 @@ class SO3(LieGroup):
         if isinstance(point, torch.Tensor):
             p = point.view(-1, 3, 1)
         else:
-            p = point.data.view(-1, 3, 1)
+            p = point.tensor.view(-1, 3, 1)
 
-        ret = Point3(data=(self.data @ p).view(-1, 3))
+        ret = Point3(tensor=(self.tensor @ p).view(-1, 3))
         if jacobians is not None:
             self._check_jacobians_list(jacobians)
             # Right jacobians for SO(3) are computed
-            Jrot = -self.data @ SO3.hat(p)
+            Jrot = -self.tensor @ SO3.hat(p)
             # Jacobians for point
             Jpnt = self.to_matrix().expand(batch_size, 3, 3)
 
@@ -491,9 +492,9 @@ class SO3(LieGroup):
         if isinstance(point, torch.Tensor):
             p = point.view(-1, 3, 1)
         else:
-            p = point.data.view(-1, 3, 1)
+            p = point.tensor.view(-1, 3, 1)
 
-        ret = Point3(data=(self.data.transpose(1, 2) @ p).view(-1, 3))
+        ret = Point3(tensor=(self.tensor.transpose(1, 2) @ p).view(-1, 3))
         if jacobians is not None:
             self._check_jacobians_list(jacobians)
             # Left jacobians for SO3 are computed

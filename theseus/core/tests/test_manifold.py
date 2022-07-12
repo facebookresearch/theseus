@@ -15,14 +15,14 @@ def test_copy():
     for i in range(100):
         size = torch.randint(low=1, high=21, size=(1,)).item()
         data = torch.rand(size=(1,) + (size,))
-        var = MockVar(size, data=data, name="var")
+        var = MockVar(size, tensor=data, name="var")
         check_copy_var(var)
 
 
 def test_var_shape():
     for sz in range(100):
         data = torch.ones(1, sz)
-        var = MockVar(sz, data=data)
+        var = MockVar(sz, tensor=data)
         assert data.shape == var.shape
 
 
@@ -35,12 +35,12 @@ def test_update_shape_check():
         with pytest.raises(ValueError):
             var.update(data.view(-1, 1))  # wrong dimension
         var.update(data.view(1, -1))
-        assert torch.isclose(var.data.squeeze(), data).all()
+        assert torch.isclose(var.tensor.squeeze(), data).all()
 
 
 class MockVarNoArgs(th.Manifold):
-    def __init__(self, data=None, name=None):
-        super().__init__(data=data, name=name)
+    def __init__(self, tensor=None, name=None):
+        super().__init__(tensor=tensor, name=name)
 
     @staticmethod
     def _init_data():
@@ -77,9 +77,9 @@ class MockVarNoArgs(th.Manifold):
 
 def test_variable_no_args_init():
     var = MockVarNoArgs(name="mock")
-    assert var.data.allclose(torch.ones(1, 1))
+    assert var.tensor.allclose(torch.ones(1, 1))
     assert var.name == "mock"
-    var = MockVarNoArgs(data=torch.ones(2, 1))
-    assert var.data.allclose(torch.ones(2, 1))
+    var = MockVarNoArgs(tensor=torch.ones(2, 1))
+    assert var.tensor.allclose(torch.ones(2, 1))
     var.update(torch.ones(3, 1))
-    assert var.data.allclose(torch.ones(3, 1))
+    assert var.tensor.allclose(torch.ones(3, 1))

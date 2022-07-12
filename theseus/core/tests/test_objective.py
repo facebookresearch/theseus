@@ -146,11 +146,11 @@ def test_has_cost_function_and_has_var():
 
 
 def test_add_and_erase_step_by_step():
-    var1 = MockVar(1, data=None, name="var1")
-    var2 = MockVar(1, data=None, name="var2")
-    var3 = MockVar(1, data=None, name="var3")
-    aux1 = MockVar(1, data=None, name="aux1")
-    aux2 = MockVar(1, data=None, name="aux2")
+    var1 = MockVar(1, tensor=None, name="var1")
+    var2 = MockVar(1, tensor=None, name="var2")
+    var3 = MockVar(1, tensor=None, name="var3")
+    aux1 = MockVar(1, tensor=None, name="aux1")
+    aux2 = MockVar(1, tensor=None, name="aux2")
     cw1 = MockCostWeight(
         aux1, name="cw1"
     )  # , add_dummy_var_with_name="ignored_optim_var")
@@ -251,14 +251,14 @@ def test_objective_error():
     def _check_variables(objective, input_data, v1_data, v2_data, also_update):
 
         if also_update:
-            assert objective.optim_vars["v1"].data is input_data["v1"]
-            assert objective.optim_vars["v2"].data is input_data["v2"]
+            assert objective.optim_vars["v1"].tensor is input_data["v1"]
+            assert objective.optim_vars["v2"].tensor is input_data["v2"]
         else:
-            assert objective.optim_vars["v1"].data is not input_data["v1"]
-            assert objective.optim_vars["v2"].data is not input_data["v2"]
+            assert objective.optim_vars["v1"].tensor is not input_data["v1"]
+            assert objective.optim_vars["v2"].tensor is not input_data["v2"]
 
-            assert objective.optim_vars["v1"].data is v1_data
-            assert objective.optim_vars["v2"].data is v2_data
+            assert objective.optim_vars["v1"].tensor is v1_data
+            assert objective.optim_vars["v2"].tensor is v2_data
 
     def _check_error_and_variables(
         v1_data_, v2_data_, error_, error_type, objective, input_data, also_update
@@ -274,7 +274,7 @@ def test_objective_error():
         batch_size = np.random.randint(2, 10)
         v1 = th.Vector(dof=dof, name="v1")
         v2 = th.Vector(dof=dof, name="v2")
-        z = th.Vector(data=torch.zeros(batch_size, dof), name="z")
+        z = th.Vector(tensor=torch.zeros(batch_size, dof), name="z")
 
         w = np.random.random()
         # This cost functions will just compute the norm of each vector, scaled by w
@@ -447,7 +447,7 @@ def test_copy_no_duplicate_cost_weights():
             set_to_add = seen_cw2
 
         assert isinstance(cf.weight, th.ScaleCostWeight)
-        assert cf.weight.scale.data.item() == scale
+        assert cf.weight.scale.tensor.item() == scale
         assert cf.weight is not original_weight
         set_to_add.add(cf.weight)
     assert len(seen_cw1) == 1
@@ -468,9 +468,9 @@ def test_update_updates_properly():
 
     input_data = {}
     for var in var_to_cost_functions:
-        input_data[var.name] = 2 * var.data.clone()
+        input_data[var.name] = 2 * var.tensor.clone()
     for aux in aux_to_cost_functions:
-        input_data[aux.name] = 2 * aux.data.clone()
+        input_data[aux.name] = 2 * aux.tensor.clone()
 
     objective.update(input_data=input_data)
     assert objective.batch_size == 1
@@ -480,7 +480,7 @@ def test_update_updates_properly():
             var_ = objective.get_optim_var(var_name)
         if var_name in [aux.name for aux in aux_to_cost_functions]:
             var_ = objective.get_aux_var(var_name)
-        assert data is var_.data
+        assert data is var_.tensor
 
 
 def test_update_raises_batch_size_error():

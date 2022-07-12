@@ -112,7 +112,7 @@ def test_quasi_static_pushing_planar_jacobians():
                 new_cost_fn = thembod.QuasiStaticPushingPlanar(
                     groups[0], groups[1], groups[2], groups[3], cost_weight, c_square
                 )
-                return thgeom.Vector(data=new_cost_fn.error())
+                return thgeom.Vector(tensor=new_cost_fn.error())
 
             expected_jacs = numeric_jacobian(
                 new_error_fn, [obj1, obj2, eff1, eff2], delta_mag=1e-6

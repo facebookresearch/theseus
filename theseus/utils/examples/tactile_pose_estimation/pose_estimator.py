@@ -213,5 +213,5 @@ class TactilePoseEstimator:
         tensor_dict = {}
         var_names = [self.obj_start_pose.name] + [v.name for v in self.motion_captures]
         for name in var_names:
-            tensor_dict[name] = th.SE2(x_y_theta=batch[name]).data
+            tensor_dict[name] = th.SE2(x_y_theta=batch[name]).tensor
         return tensor_dict

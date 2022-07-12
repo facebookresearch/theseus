@@ -84,9 +84,9 @@ def test_rotate_and_unrotate():
 
                 # Check the operation result
                 assert torch.allclose(
-                    expected_rotated_data.squeeze(2), rotated_point.data, atol=EPS
+                    expected_rotated_data.squeeze(2), rotated_point.tensor, atol=EPS
                 )
-                assert torch.allclose(point_tensor, unrotated_point.data, atol=EPS)
+                assert torch.allclose(point_tensor, unrotated_point.tensor, atol=EPS)
 
                 # Check the jacobians
                 # function_dim = 2 because rotate(theta, (x, y)) --> (x_new, y_new)

@@ -13,14 +13,13 @@ torch.manual_seed(1)
 file_path = "datasets/tinyGrid3D.g2o"
 dtype = torch.float64
 
-th.SO3.SO3_EPS = 1e-6
 
 num_verts, verts, edges = theg.pose_graph.read_3D_g2o_file(file_path, dtype=dtype)
 
 objective = th.Objective(dtype)
 
 log_loss_radius = th.Vector(
-    data=torch.tensor([[0]], dtype=dtype), name="log_loss_radius"
+    tensor=torch.tensor([[0]], dtype=dtype), name="log_loss_radius"
 )
 loss_cls = th.HuberLoss
 
@@ -53,5 +52,5 @@ optimizer = th.LevenbergMarquardt(
 
 theseus_optim = th.TheseusLayer(optimizer)
 
-inputs = {var.name: var.data for var in verts}
+inputs = {var.name: var.tensor for var in verts}
 theseus_optim.forward(inputs, optimizer_kwargs={"verbose": True})

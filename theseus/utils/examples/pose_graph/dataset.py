@@ -254,13 +254,13 @@ class PoseGraphDataset:
 
         poses.append(
             th.SE3(
-                data=torch.tile(torch.eye(3, 4, dtype=dtype), [dataset_size, 1, 1]),
+                tensor=torch.tile(torch.eye(3, 4, dtype=dtype), [dataset_size, 1, 1]),
                 name="VERTEX_SE3__0",
             )
         )
         gt_poses.append(
             th.SE3(
-                data=torch.tile(torch.eye(3, 4, dtype=dtype), [dataset_size, 1, 1]),
+                tensor=torch.tile(torch.eye(3, 4, dtype=dtype), [dataset_size, 1, 1]),
                 name="VERTEX_SE3_GT__0",
             )
         )
@@ -360,7 +360,7 @@ class PoseGraphDataset:
                     dim=1,
                 )
             )
-            poses[i].data = gt_poses[i].compose(noise_pose).data
+            poses[i].tensor = gt_poses[i].compose(noise_pose).tensor
 
         return PoseGraphDataset(poses, edges, gt_poses, batch_size=batch_size), inliers
 
@@ -368,13 +368,13 @@ class PoseGraphDataset:
         for n in range(self.dataset_size):
             with open(filename + f"_{n}.g2o", "w") as file:
                 for edge in self.edges:
-                    measurement = edge.relative_pose.data[n : n + 1]
+                    measurement = edge.relative_pose.tensor[n : n + 1]
                     quat = th.SO3(
-                        data=measurement[:, :, :3], strict=False
+                        tensor=measurement[:, :, :3], strict=False
                     ).to_quaternion()
                     tran = measurement[:, :, 3]
                     measurement = torch.cat([tran, quat], dim=1).view(-1).numpy()
-                    weight = edge.weight.diagonal.data**2
+                    weight = edge.weight.diagonal.tensor**2
                     line = (
                         f"EDGE_SE3:QUAT {edge.i} {edge.j} {measurement[0]} {measurement[1]} "
                         f"{measurement[2]} "
@@ -386,10 +386,8 @@ class PoseGraphDataset:
                     file.write(line)
                 for i, pose in enumerate(self.poses):
                     pose_n = pose[n : n + 1]
-                    quat = th.SO3(
-                        data=pose_n.data[:, :, :3], strict=False
-                    ).to_quaternion()
-                    tran = pose_n.data[:, :, 3]
+                    quat = th.SO3(tensor=pose_n[:, :, :3], strict=False).to_quaternion()
+                    tran = pose_n[:, :, 3]
                     pose_data = torch.cat([tran, quat], dim=1).view(-1).numpy()
                     line = (
                         f"VERTEX_SE3:QUAT {i} {pose_data[0]} {pose_data[1]} {pose_data[2]} "
@@ -407,7 +405,7 @@ class PoseGraphDataset:
         poses = cast(
             Union[List[th.SE2], List[th.SE3]],
             [
-                group_cls(data=pose[start:end].clone(), name=pose.name + "__batch")
+                group_cls(tensor=pose[start:end].clone(), name=pose.name + "__batch")
                 for pose in self.poses
             ],
         )
@@ -416,7 +414,7 @@ class PoseGraphDataset:
                 Union[List[th.SE2], List[th.SE3]],
                 [
                     group_cls(
-                        data=gt_pose[start:end].clone(), name=gt_pose.name + "__batch"
+                        tensor=gt_pose[start:end].clone(), name=gt_pose.name + "__batch"
                     )
                     for gt_pose in self.gt_poses
                 ],
@@ -428,7 +426,7 @@ class PoseGraphDataset:
                 edge.i,
                 edge.j,
                 relative_pose=group_cls(
-                    data=edge.relative_pose[start:end].clone(),
+                    tensor=edge.relative_pose[start:end].clone(),
                     name=edge.relative_pose.name + "__batch",
                 ),
                 weight=edge.weight,

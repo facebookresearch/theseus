@@ -8,26 +8,24 @@ import theseus as th
 import theseus.utils.examples as theg
 import logging
 import hydra
+import pathlib
 from scipy.io import savemat
 
 # Logger
 log = logging.getLogger(__name__)
 
 
+DATASET_DIR = pathlib.Path.cwd() / "datasets"
+
+
 @hydra.main(config_path="../configs/pose_graph", config_name="pose_graph_benchmark")
 def main(cfg):
     dataset_name = cfg.dataset
-    file_path = (
-        f"/private/home/taoshaf/Documents/theseus/datasets/{dataset_name}_init.g2o"
-    )
-    dtype = torch.float32
+    file_path = f"{DATASET_DIR}/{dataset_name}_init.g2o"
+    dtype = eval(f"torch.{cfg.dtype}")
 
     _, verts, edges = theg.pose_graph.read_3D_g2o_file(file_path, dtype=torch.float64)
     d = 3
-
-    # _, verts_d, edges_d = theg.pose_graph.read_3D_g2o_file(file_path, dtype=torch.float64)
-    # d = 3
-    # verts_err = torch.cat([verts[i].data - verts_d[i].data for i in range(len(verts))], dim=0)
 
     objective = th.Objective(torch.float64)
 

@@ -49,6 +49,7 @@ class NonlinearOptimizerInfo(OptimizerInfo):
     err_history: Optional[torch.Tensor]
     last_err: torch.Tensor
     best_err: torch.Tensor
+    state_history: Optional[Dict[str, torch.Tensor]]  # variable name to state history
 
 
 class BackwardMode(Enum):
@@ -111,7 +112,10 @@ class NonlinearOptimizer(Optimizer, abc.ABC):
         return solution_dict
 
     def _init_info(
-        self, track_best_solution: bool, track_err_history: bool, verbose: bool
+        self,
+        track_best_solution: bool,
+        track_err_history: bool,
+        track_state_history: bool,
     ) -> NonlinearOptimizerInfo:
         with torch.no_grad():
             last_err = self.objective.error_squared_norm() / 2
@@ -125,6 +129,22 @@ class NonlinearOptimizer(Optimizer, abc.ABC):
             err_history[:, 0] = last_err.clone().cpu()
         else:
             err_history = None
+
+        if track_state_history:
+            state_history = {}
+            for var in self.objective.optim_vars.values():
+                state_history[var.name] = (
+                    torch.ones(
+                        self.objective.batch_size,
+                        var.dof(),
+                        self.params.max_iterations + 1,
+                    )
+                    * math.inf
+                )
+                state_history[var.name][..., 0] = var.tensor.detach().clone().cpu()
+        else:
+            state_history = None
+
         return NonlinearOptimizerInfo(
             best_solution=self._maybe_init_best_solution(do_init=track_best_solution),
             last_err=last_err,
@@ -135,7 +155,14 @@ class NonlinearOptimizer(Optimizer, abc.ABC):
             converged_iter=torch.zeros_like(last_err, dtype=torch.long),
             best_iter=torch.zeros_like(last_err, dtype=torch.long),
             err_history=err_history,
+            state_history=state_history,
         )
+
+    def _update_state_history(self, iter_idx: int, info: NonlinearOptimizerInfo):
+        for var in self.objective.optim_vars.values():
+            info.state_history[var.name][..., iter_idx + 1] = (
+                var.tensor.detach().clone().cpu()
+            )
 
     def _update_info(
         self,
@@ -148,6 +175,8 @@ class NonlinearOptimizer(Optimizer, abc.ABC):
         if info.err_history is not None:
             assert err.grad_fn is None
             info.err_history[:, current_iter + 1] = err.clone().cpu()
+        if info.state_history is not None:
+            self._update_state_history(current_iter, info)
 
         if info.best_solution is not None:
             # Only copy best solution if needed (None means track_best_solution=False)
@@ -170,15 +199,23 @@ class NonlinearOptimizer(Optimizer, abc.ABC):
     def _merge_infos(
         self,
         grad_loop_info: NonlinearOptimizerInfo,
-        num_no_grad_iter: int,
-        backward_num_iterations: int,
+        num_no_grad_iters: int,
+        num_grad_iters: int,
         info: NonlinearOptimizerInfo,
     ):
+        total_iters = num_no_grad_iters + num_grad_iters
+        # we add + 1 to all indices to account for the initial values
+        info_idx = slice(num_no_grad_iters + 1, total_iters + 1)
+        grad_info_idx = slice(1, num_grad_iters + 1)
         # Concatenate error histories
         if info.err_history is not None:
-            info.err_history[:, num_no_grad_iter:] = grad_loop_info.err_history[
-                :, : backward_num_iterations + 1
-            ]
+            info.err_history[:, info_idx] = grad_loop_info.err_history[:, grad_info_idx]
+        if info.state_history is not None:
+            for var in self.objective.optim_vars.values():
+                info.state_history[var.name][
+                    ..., info_idx
+                ] = grad_loop_info.state_history[var.name][..., grad_info_idx]
+
         # Merge best solution and best error
         if info.best_solution is not None:
             best_solution = {}
@@ -213,15 +250,16 @@ class NonlinearOptimizer(Optimizer, abc.ABC):
     # loop for the iterative optimizer
     def _optimize_loop(
         self,
-        start_iter: int,
         num_iter: int,
         info: NonlinearOptimizerInfo,
         verbose: bool,
         truncated_grad_loop: bool,
         **kwargs,
-    ) -> NonlinearOptimizerInfo:
+    ) -> int:
         converged_indices = torch.zeros_like(info.last_err).bool()
-        for it_ in range(start_iter, start_iter + num_iter):
+        iters_done = 0
+        for it_ in range(num_iter):
+            iters_done += 1
             # do optimizer step
             self.linear_solver.linearization.linearize()
             try:
@@ -248,7 +286,7 @@ class NonlinearOptimizer(Optimizer, abc.ABC):
                 else:
                     warnings.warn(msg, RuntimeWarning)
                     info.status[:] = NonlinearOptimizerStatus.FAIL
-                    return info
+                    return iters_done
 
             if truncated_grad_loop:
                 # This is a "secret" option that is currently being tested in the
@@ -290,7 +328,7 @@ class NonlinearOptimizer(Optimizer, abc.ABC):
         info.status[
             info.status == NonlinearOptimizerStatus.START
         ] = NonlinearOptimizerStatus.MAX_ITERATIONS
-        return info
+        return iters_done
 
     # `track_best_solution` keeps a **detached** copy (as in no gradient info)
     # of the best variables found, but it is optional to avoid unnecessary copying
@@ -299,12 +337,15 @@ class NonlinearOptimizer(Optimizer, abc.ABC):
         self,
         track_best_solution: bool = False,
         track_err_history: bool = False,
+        track_state_history: bool = False,
         verbose: bool = False,
         backward_mode: BackwardMode = BackwardMode.FULL,
         **kwargs,
     ) -> OptimizerInfo:
         with torch.no_grad():
-            info = self._init_info(track_best_solution, track_err_history, verbose)
+            info = self._init_info(
+                track_best_solution, track_err_history, track_state_history
+            )
 
         if verbose:
             print(
@@ -313,7 +354,7 @@ class NonlinearOptimizer(Optimizer, abc.ABC):
             )
 
         if backward_mode in [BackwardMode.FULL, BackwardMode.DLM]:
-            info = self._optimize_loop(
+            self._optimize_loop(
                 start_iter=0,
                 num_iter=self.params.max_iterations,
                 info=info,
@@ -347,8 +388,8 @@ class NonlinearOptimizer(Optimizer, abc.ABC):
 
             num_no_grad_iter = self.params.max_iterations - backward_num_iterations
             with torch.no_grad():
-                self._optimize_loop(
-                    start_iter=0,
+                # actual_num_iters could be < num_iter due to early convergence
+                no_grad_iters_done = self._optimize_loop(
                     num_iter=num_no_grad_iter,
                     info=info,
                     verbose=verbose,
@@ -357,10 +398,9 @@ class NonlinearOptimizer(Optimizer, abc.ABC):
                 )
 
             grad_loop_info = self._init_info(
-                track_best_solution, track_err_history, verbose
+                track_best_solution, track_err_history, track_state_history
             )
-            self._optimize_loop(
-                start_iter=0,
+            grad_iters_done = self._optimize_loop(
                 num_iter=backward_num_iterations,
                 info=grad_loop_info,
                 verbose=verbose,
@@ -369,9 +409,7 @@ class NonlinearOptimizer(Optimizer, abc.ABC):
             )
 
             # Adds grad_loop_info results to original info
-            self._merge_infos(
-                grad_loop_info, num_no_grad_iter, backward_num_iterations, info
-            )
+            self._merge_infos(grad_loop_info, no_grad_iters_done, grad_iters_done, info)
 
             return info
         else:

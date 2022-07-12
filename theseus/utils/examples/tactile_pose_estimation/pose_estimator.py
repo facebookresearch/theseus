@@ -145,8 +145,8 @@ class TactilePoseEstimator:
                             obj_poses[i],
                             eff_poses[i - offset],
                             eff_poses[i],
-                            mf_between_weight,
                             nn_measurements[nn_meas_idx],
+                            mf_between_weight,
                             name=f"mf_between_{i - offset}_{i}",
                         )
                     )

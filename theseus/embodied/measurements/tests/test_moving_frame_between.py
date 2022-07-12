@@ -24,7 +24,7 @@ def test_copy_moving_frame_between():
     p2 = thgeom.SE2()
     meas = thgeom.SE2()
     cost_function = thembod.MovingFrameBetween(
-        f1, f2, p1, p2, thcore.ScaleCostWeight(1.0), meas, name="name"
+        f1, f2, p1, p2, meas, thcore.ScaleCostWeight(1.0), name="name"
     )
     cost_function2 = cost_function.copy(new_name="new_name")
     check_another_theseus_function_is_copy(
@@ -54,12 +54,12 @@ def test_jacobian_moving_frame_between():
         p2 = create_random_se2(batch_size, rng)
         measurement = create_random_se2(batch_size, rng)
         cost_function = thembod.MovingFrameBetween(
-            f1, f2, p1, p2, cost_weight, measurement
+            f1, f2, p1, p2, measurement, cost_weight
         )
 
         def new_error_fn(groups):
             new_cost_function = thembod.MovingFrameBetween(
-                groups[0], groups[1], groups[2], groups[3], cost_weight, measurement
+                groups[0], groups[1], groups[2], groups[3], measurement, cost_weight
             )
             return new_cost_function.measurement.retract(new_cost_function.error())
 
@@ -135,7 +135,7 @@ def test_error_moving_frame_between_se2():
         p1 = thgeom.SE2(x_y_theta=(inputs["p1"][i, :]).unsqueeze(0))
         p2 = thgeom.SE2(x_y_theta=(inputs["p2"][i, :]).unsqueeze(0))
 
-        cost_fn = thembod.MovingFrameBetween(f1, f2, p1, p2, cost_weight, measurement)
+        cost_fn = thembod.MovingFrameBetween(f1, f2, p1, p2, measurement, cost_weight)
 
         actual = cost_fn.error()
         expected = outputs["error"][i, :]

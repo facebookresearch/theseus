@@ -208,7 +208,7 @@ def run(cfg: omegaconf.OmegaConf, results_path: pathlib.Path):
         theseus_inputs["log_loss_radius"] = loss_radius_tensor.unsqueeze(1).clone()
 
         theseus_outputs, info = theseus_optim.forward(
-            input_data=theseus_inputs,
+            input_tensors=theseus_inputs,
             optimizer_kwargs={
                 "verbose": cfg.inner_optim.verbose,
                 "track_err_history": cfg.inner_optim.track_err_history,

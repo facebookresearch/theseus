@@ -35,7 +35,7 @@ class Vector(LieGroup):
 
     # Vector variables are of shape [batch_size, dof]
     @staticmethod
-    def _init_data(dof: int) -> torch.Tensor:  # type: ignore
+    def _init_tensor(dof: int) -> torch.Tensor:  # type: ignore
         return torch.zeros(1, dof)
 
     def dof(self) -> int:
@@ -213,18 +213,18 @@ class Vector(LieGroup):
         return Vector(tensor=tangent_vector.clone())
 
     @staticmethod
-    def _data_check_impl(data: torch.Tensor) -> bool:
-        if data.ndim != 2:
-            raise ValueError("The dimension of vectors should be 2.")
+    def _check_tensor_impl(tensor: torch.Tensor) -> bool:
+        if tensor.ndim != 2:
+            raise ValueError("Vector variables expect tensors with ndim=2.")
 
         return True
 
     @staticmethod
-    def normalize(data: torch.Tensor) -> torch.Tensor:
-        if data.ndim != 2:
-            raise ValueError("The dimension of vectors should be 2.")
+    def normalize(tensor: torch.Tensor) -> torch.Tensor:
+        if tensor.ndim != 2:
+            raise ValueError("Vector variables expect tensors with ndim=2.")
 
-        return data
+        return tensor
 
     @staticmethod
     def _exp_map_jacobian_impl(

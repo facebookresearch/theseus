@@ -16,7 +16,7 @@ OptionalJacobians = Optional[List[torch.Tensor]]
 
 # Abstract class to represent Manifold-type variables in the objective.
 # Concrete classes must implement the following methods:
-#   - `_init_data`: initializes the underlying tensor given constructor arguments.
+#   - `_init_tensor`: initializes the underlying tensor given constructor arguments.
 #       The provided tensor must have a batch dimension.
 #   -`_local`: given two close Manifolds gives distance in tangent space
 #   - `_retract`: returns Manifold close by delta to given Manifold
@@ -39,7 +39,7 @@ class Manifold(Variable, abc.ABC):
         if tensor is None and dtype is None:
             dtype = torch.get_default_dtype()
         if tensor is not None:
-            tensor = self._data_check(tensor, strict)
+            tensor = self._check_tensor(tensor, strict)
             if dtype is not None and tensor.dtype != dtype:
                 warnings.warn(
                     f"tensor.dtype {tensor.dtype} does not match given dtype {dtype}, "
@@ -47,7 +47,7 @@ class Manifold(Variable, abc.ABC):
                 )
             dtype = tensor.dtype
 
-        super().__init__(self.__class__._init_data(*args).to(dtype=dtype), name=name)
+        super().__init__(self.__class__._init_tensor(*args).to(dtype=dtype), name=name)
         if tensor is not None:
             self.update(tensor)
 
@@ -55,7 +55,7 @@ class Manifold(Variable, abc.ABC):
     # as a function of the given args
     @staticmethod
     @abc.abstractmethod
-    def _init_data(*args: Any) -> torch.Tensor:
+    def _init_tensor(*args: Any) -> torch.Tensor:
         pass
 
     @abc.abstractmethod
@@ -85,29 +85,29 @@ class Manifold(Variable, abc.ABC):
 
     @staticmethod
     @abc.abstractmethod
-    def normalize(data: torch.Tensor) -> torch.Tensor:
+    def normalize(tensor: torch.Tensor) -> torch.Tensor:
         pass
 
     @staticmethod
     @abc.abstractmethod
-    def _data_check_impl(data: torch.Tensor) -> bool:
+    def _check_tensor_impl(tensor: torch.Tensor) -> bool:
         pass
 
     @classmethod
-    def _data_check(cls, data: torch.Tensor, strict: bool = True) -> torch.Tensor:
-        check = cls._data_check_impl(data)
+    def _check_tensor(cls, tensor: torch.Tensor, strict: bool = True) -> torch.Tensor:
+        check = cls._check_tensor_impl(tensor)
 
         if not check:
             if strict:
-                raise ValueError(f"The input data is not valid for {cls.__name__}.")
+                raise ValueError(f"The input tensor is not valid for {cls.__name__}.")
             else:
-                data = cls.normalize(data)
+                tensor = cls.normalize(tensor)
                 warnings.warn(
-                    f"The input data is not valid for {cls.__name__} "
+                    f"The input tensor is not valid for {cls.__name__} "
                     f"and has been normalized."
                 )
 
-        return data
+        return tensor
 
     def local(
         self,

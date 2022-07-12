@@ -360,7 +360,7 @@ def check_normalize(group, batch_size, dtype):
 
     matrix = torch.rand(matrix.shape, dtype=dtype)
     group_mat = group.normalize(matrix)
-    group._data_check(group_mat)
+    group._check_tensor(group_mat)
 
 
 def check_so3_se3_normalize(group, batch_size, dtype):

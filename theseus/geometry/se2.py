@@ -103,7 +103,7 @@ class SE2(LieGroup):
             )
 
     @staticmethod
-    def _init_data() -> torch.Tensor:  # type: ignore
+    def _init_tensor() -> torch.Tensor:  # type: ignore
         return torch.tensor([0.0, 0.0, 1.0, 0.0]).view(1, 4)
 
     def dof(self) -> int:
@@ -223,12 +223,12 @@ class SE2(LieGroup):
         return torch.stack((ux, uy, theta), dim=1)
 
     @staticmethod
-    def _data_check_impl(matrix: torch.Tensor):
+    def _check_tensor_impl(tensor: torch.Tensor):
         with torch.no_grad():
-            if matrix.ndim != 2 or matrix.shape[1] != 4:
+            if tensor.ndim != 2 or tensor.shape[1] != 4:
                 raise ValueError("SE2 data tensors can only be 4D vectors.")
 
-            return SO2._data_check_impl(matrix[:, 2:])
+            return SO2._check_tensor_impl(tensor[:, 2:])
 
     @staticmethod
     def exp_map(
@@ -297,11 +297,11 @@ class SE2(LieGroup):
         return se2
 
     @staticmethod
-    def normalize(data: torch.Tensor) -> torch.Tensor:
-        if data.ndim != 2 or data.shape[1] != 4:
+    def normalize(tensor: torch.Tensor) -> torch.Tensor:
+        if tensor.ndim != 2 or tensor.shape[1] != 4:
             raise ValueError("SE2 data tensors can only be 4D vectors.")
 
-        return torch.cat([data[:, :2], SO2.normalize(data[:, 2:])], dim=1)
+        return torch.cat([tensor[:, :2], SO2.normalize(tensor[:, 2:])], dim=1)
 
     def _adjoint_impl(self) -> torch.Tensor:
         ret = torch.zeros(self.shape[0], 3, 3).to(device=self.device, dtype=self.dtype)

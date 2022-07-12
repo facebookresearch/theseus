@@ -176,25 +176,25 @@ class Vectorize:
     def _expand(tensor: torch.Tensor, size: int) -> torch.Tensor:
         return tensor.expand((size,) + ((-1,) * (len(tensor.shape) - 1)))
 
-    # Populates names_to_data with a list with one element per vectorized variable,
-    # and which holds the concatenated data of its corresponding variables in all
+    # Populates names_to_tensors with a list with one element per vectorized variable,
+    # and which holds the concatenated tensors of its corresponding variables in all
     # cost functions in the list (which are assumed to have the same schema).
     # Inputs:
     #   - vars_names; The names for all variables in the cost_fns' schema. Shared
     #       variables must be prefixed with `_SHARED_TOKEN`.`
-    #   - batch_size: the Objectve's batch size. Whenever a cost function's var data
+    #   - batch_size: the Objectve's batch size. Whenever a cost function's var tensor
     #       is batch_size 1, it expands it to this value, unless the variable is
     #       shared by all cost functions.
-    #   - names_to_data: A dictionary mapping variable names to the list of tensors.
-    #       will be modified in place.
+    #   - names_to_tensors: A dictionary mapping variable names to the list of tensors.
+    #       It will be modified in place.
     @staticmethod
-    def _update_all_cost_fns_var_data(
+    def _update_all_cost_fns_var_tensors(
         cf_wrappers: List[_CostFunctionWrapper],
         var_names: List[str],
         objective_batch_size: int,
-        names_to_data: Dict[str, List[torch.Tensor]],
+        names_to_tensors: Dict[str, List[torch.Tensor]],
     ):
-        # Get all the data from individual variables
+        # Get all the tensors from individual variables
         for wrapper in cf_wrappers:
             cost_fn = wrapper.cost_fn
             cost_fn_vars = Vectorize._get_all_vars(cost_fn)
@@ -207,39 +207,40 @@ class Vectorize:
                 if name in seen_vars:
                     continue
 
-                # If the variable is shared and batch_size == 1, only need data for
+                # If the variable is shared and batch_size == 1, only need a tensor for
                 # one of the cost functions and we can just extend later to complete
                 # the vectorized batch, so here we can do `continue`
                 var_batch_size = var.tensor.shape[0]
                 if (
-                    name in names_to_data
+                    name in names_to_tensors
                     and Vectorize._SHARED_TOKEN in name
                     and var_batch_size == 1
                 ):
                     continue
 
-                # Otherwise, we need to append to the list of data tensors. since
+                # Otherwise, we need to append to the list of tensors. since
                 # we cannot extend to a full batch w/o copying.
 
                 # If not a shared variable, expand to batch size if needed, because
                 # those we will copy, no matter what.
                 # For shared variables, just append, we will handle the expansion
                 # when updating the vectorized variable containers.
-                data = (
+                tensor = (
                     var.tensor
                     if (var_batch_size > 1 or Vectorize._SHARED_TOKEN in name)
                     else Vectorize._expand(var.tensor, objective_batch_size)
                 )
-                names_to_data[name].append(data)
+                names_to_tensors[name].append(tensor)
                 seen_vars.add(name)
 
-    # Goes through the list of vectorized variables and updates their data with the
-    # concatenation of all data tensors in their corresponding entry in `names_to_data`.
-    # Shared variables are expanded to shape batch_size * num_cost_fns
+    # Goes through the list of vectorized variables and updates them with the
+    # concatenation of all tensors in their corresponding entry in
+    # `names_to_tensors`. Shared variables are expanded to shape
+    # batch_size * num_cost_fns
     @staticmethod
     def _update_vectorized_vars(
         all_vectorized_vars: List[Variable],
-        names_to_data: Dict[str, List[torch.Tensor]],
+        names_to_tensors: Dict[str, List[torch.Tensor]],
         var_names: List[str],
         batch_size: int,
         num_cost_fns: int,
@@ -248,19 +249,19 @@ class Vectorize:
             name = var_names[var_idx]
 
             if num_cost_fns == 1:
-                var.update(names_to_data[name][0])
+                var.update(names_to_tensors[name][0])
                 continue
 
-            all_var_data = names_to_data[name]
-            if Vectorize._SHARED_TOKEN in name and all_var_data[0].shape[0] == 1:
-                # In this case this is a shared variable, so all_var_data[i] is
+            all_var_tensors = names_to_tensors[name]
+            if Vectorize._SHARED_TOKEN in name and all_var_tensors[0].shape[0] == 1:
+                # In this case this is a shared variable, so all_var_tensors[i] is
                 # the same for any value of i. So, we can just expand to the full
                 # vectorized size. Sadly, this doesn't work if batch_size > 1
                 var_tensor = Vectorize._expand(
-                    all_var_data[0], batch_size * num_cost_fns
+                    all_var_tensors[0], batch_size * num_cost_fns
                 )
             else:
-                var_tensor = torch.cat(all_var_data, dim=0)
+                var_tensor = torch.cat(all_var_tensors, dim=0)
             var.update(var_tensor)
 
     # Computes the error of the vectorized cost function and distributes the error
@@ -306,15 +307,15 @@ class Vectorize:
         vectorized_cost_fn = self._vectorized_cost_fns[schema]
         all_vectorized_vars = Vectorize._get_all_vars(vectorized_cost_fn)
         assert len(all_vectorized_vars) == len(var_names)
-        names_to_data: Dict[str, List[torch.Tensor]] = defaultdict(list)
+        names_to_tensors: Dict[str, List[torch.Tensor]] = defaultdict(list)
         batch_size = self._objective.batch_size
 
-        Vectorize._update_all_cost_fns_var_data(
-            cost_fn_wrappers, var_names, batch_size, names_to_data
+        Vectorize._update_all_cost_fns_var_tensors(
+            cost_fn_wrappers, var_names, batch_size, names_to_tensors
         )
         Vectorize._update_vectorized_vars(
             all_vectorized_vars,
-            names_to_data,
+            names_to_tensors,
             var_names,
             batch_size,
             len(cost_fn_wrappers),
@@ -339,7 +340,7 @@ class Vectorize:
         force_update: bool = False,
     ):
         # Each (variable-type, dof) gets mapped to a tuple with:
-        #   - the variable that will hold the vectorized data
+        #   - the variable that will hold the vectorized tensor
         #   - all the variables of that type that will be vectorized together
         #   - the delta slices that go into the batch
         var_info: Dict[
@@ -368,29 +369,29 @@ class Vectorize:
         for _, (vectorized_var, var_list, delta_list) in var_info.items():
             n_vars, dof = len(var_list), vectorized_var.dof()
 
-            # Get the vectorized tensor that has the current variable data.
+            # Get the vectorized tensor that holds all the current variable tensors.
             # The resulting shape is (N * b, M), b is batch size, N is the number of
             # variables in the group, and M is the data shape for this class
-            vectorized_data = torch.cat([v.tensor for v in var_list], dim=0)
+            vectorized_tensor = torch.cat([v.tensor for v in var_list], dim=0)
             assert (
-                vectorized_data.shape
-                == (n_vars * batch_size,) + vectorized_data.shape[1:]
+                vectorized_tensor.shape
+                == (n_vars * batch_size,) + vectorized_tensor.shape[1:]
             )
             # delta_list is a list of N tensors of shape (b, d), where
             # d is var.dof(). After vectorization, we get tensor of shape (N * b, d)
             vectorized_delta = torch.cat(delta_list, dim=0)
             assert vectorized_delta.shape == (n_vars * batch_size, dof)
 
-            # Retract the vectorized data, then redistribute to the variables
-            vectorized_var.update(vectorized_data)
+            # Retract the vectorized tensor, then redistribute to the variables
+            vectorized_var.update(vectorized_tensor)
             new_var = vectorized_var.retract(vectorized_delta)
             start_idx = 0
             for var in var_list:
-                retracted_data_slice = new_var[start_idx : start_idx + batch_size, :]
+                retracted_tensor_slice = new_var[start_idx : start_idx + batch_size, :]
                 if ignore_mask is None or force_update:
-                    var.update(retracted_data_slice)
+                    var.update(retracted_tensor_slice)
                 else:
-                    var.update(retracted_data_slice, batch_ignore_mask=ignore_mask)
+                    var.update(retracted_tensor_slice, batch_ignore_mask=ignore_mask)
                 start_idx += batch_size
 
     # Applies to() with given args to all vectorized cost functions in the objective

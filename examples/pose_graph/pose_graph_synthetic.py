@@ -231,7 +231,7 @@ def run(
         torch.cuda.reset_peak_memory_stats()
         pr.enable()
         theseus_outputs, _ = theseus_optim.forward(
-            input_data=theseus_inputs,
+            input_tensors=theseus_inputs,
             optimizer_kwargs={
                 "verbose": cfg.inner_optim.verbose,
                 "track_err_history": cfg.inner_optim.track_err_history,

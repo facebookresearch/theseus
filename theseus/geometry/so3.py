@@ -83,7 +83,7 @@ class SO3(LieGroup):
         )
 
     @staticmethod
-    def _init_data() -> torch.Tensor:  # type: ignore
+    def _init_tensor() -> torch.Tensor:  # type: ignore
         return torch.eye(3, 3).view(1, 3, 3)
 
     def update_from_unit_quaternion(self, quaternion: torch.Tensor):
@@ -121,20 +121,20 @@ class SO3(LieGroup):
         return ret
 
     @staticmethod
-    def _data_check_impl(matrix: torch.Tensor) -> bool:
+    def _check_tensor_impl(tensor: torch.Tensor) -> bool:
         with torch.no_grad():
-            if matrix.ndim != 3 or matrix.shape[1:] != (3, 3):
+            if tensor.ndim != 3 or tensor.shape[1:] != (3, 3):
                 raise ValueError("SO3 data tensors can only be 3x3 matrices.")
 
-            MATRIX_EPS = theseus.constants._SO3_MATRIX_EPS[matrix.dtype]
-            if matrix.dtype != torch.float64:
-                matrix = matrix.double()
+            MATRIX_EPS = theseus.constants._SO3_MATRIX_EPS[tensor.dtype]
+            if tensor.dtype != torch.float64:
+                tensor = tensor.double()
 
             _check = (
-                torch.matmul(matrix, matrix.transpose(1, 2))
-                - torch.eye(3, 3, dtype=matrix.dtype, device=matrix.device)
+                torch.matmul(tensor, tensor.transpose(1, 2))
+                - torch.eye(3, 3, dtype=tensor.dtype, device=tensor.device)
             ).abs().max().item() < MATRIX_EPS
-            _check &= (torch.linalg.det(matrix) - 1).abs().max().item() < MATRIX_EPS
+            _check &= (torch.linalg.det(tensor) - 1).abs().max().item() < MATRIX_EPS
 
         return _check
 
@@ -231,13 +231,15 @@ class SO3(LieGroup):
         return ret
 
     @staticmethod
-    def normalize(data: torch.Tensor) -> torch.Tensor:
-        if data.ndim != 3 or data.shape[1:] != (3, 3):
+    def normalize(tensor: torch.Tensor) -> torch.Tensor:
+        if tensor.ndim != 3 or tensor.shape[1:] != (3, 3):
             raise ValueError("SO3 data tensors can only be 3x3 matrices.")
 
-        U, _, V = torch.svd(data)
+        U, _, V = torch.svd(tensor)
         Vtr = V.transpose(1, 2)
-        S = torch.diag(torch.tensor([1, 1, -1], dtype=data.dtype, device=data.device))
+        S = torch.diag(
+            torch.tensor([1, 1, -1], dtype=tensor.dtype, device=tensor.device)
+        )
         temp = (U @ Vtr, U @ S @ Vtr)
         sign = torch.det(temp[0]).reshape([-1, 1, 1]) > 0
 

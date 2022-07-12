@@ -83,7 +83,7 @@ class SO2(LieGroup):
         )
 
     @staticmethod
-    def _init_data() -> torch.Tensor:  # type: ignore
+    def _init_tensor() -> torch.Tensor:  # type: ignore
         return torch.tensor([1.0, 0.0]).view(1, 2)
 
     def update_from_angle(self, theta: torch.Tensor):
@@ -119,17 +119,17 @@ class SO2(LieGroup):
             return torch.einsum("...k,...k", euclidean_grad, temp).unsqueeze(-1)
 
     @staticmethod
-    def _data_check_impl(matrix: torch.Tensor) -> bool:
+    def _check_tensor_impl(tensor: torch.Tensor) -> bool:
         with torch.no_grad():
-            if matrix.ndim != 2 or matrix.shape[1] != 2:
+            if tensor.ndim != 2 or tensor.shape[1] != 2:
                 raise ValueError("SO2 data tensors can only be 2D vectors.")
 
-            MATRIX_EPS = theseus.constants._SO2_MATRIX_EPS[matrix.dtype]
-            if matrix.dtype != torch.float64:
-                matrix = matrix.double()
+            MATRIX_EPS = theseus.constants._SO2_MATRIX_EPS[tensor.dtype]
+            if tensor.dtype != torch.float64:
+                tensor = tensor.double()
 
             _check = (
-                torch.linalg.norm(matrix, dim=1) - 1
+                torch.linalg.norm(tensor, dim=1) - 1
             ).abs().max().item() <= MATRIX_EPS
 
         return _check
@@ -156,21 +156,21 @@ class SO2(LieGroup):
         return so2
 
     @staticmethod
-    def normalize(data: torch.Tensor) -> torch.Tensor:
-        if data.ndim != 2 or data.shape[1] != 2:
+    def normalize(tensor: torch.Tensor) -> torch.Tensor:
+        if tensor.ndim != 2 or tensor.shape[1] != 2:
             raise ValueError("SO2 data tensors can only be 2D vectors.")
 
-        data_norm = torch.norm(data, dim=1, keepdim=True)
-        near_zero = data_norm < theseus.constants._SO2_NORMALIZATION_EPS[data.dtype]
+        data_norm = torch.norm(tensor, dim=1, keepdim=True)
+        near_zero = data_norm < theseus.constants._SO2_NORMALIZATION_EPS[tensor.dtype]
         data_norm_nz = torch.where(
             near_zero,
-            torch.tensor(1.0, dtype=data.dtype, device=data.device),
+            torch.tensor(1.0, dtype=tensor.dtype, device=tensor.device),
             data_norm,
         )
         default_data = torch.tensor(
-            [1, 0], dtype=data.dtype, device=data.device
-        ).expand([data.shape[0], 2])
-        return torch.where(near_zero, default_data, data / data_norm_nz)
+            [1, 0], dtype=tensor.dtype, device=tensor.device
+        ).expand([tensor.shape[0], 2])
+        return torch.where(near_zero, default_data, tensor / data_norm_nz)
 
     def _log_map_impl(
         self, jacobians: Optional[List[torch.Tensor]] = None

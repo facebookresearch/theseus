@@ -12,16 +12,16 @@ class MockVector(th.Manifold):
     def __init__(self, value, length, name=None):
         super().__init__(value, length, name=name)
 
-    def _init_data(value, length):
+    def _init_tensor(value, length):
         return value * torch.ones(1, length)
 
     @staticmethod
-    def _data_check_impl(data: torch.Tensor) -> bool:
+    def _check_tensor_impl(tensor: torch.Tensor) -> bool:
         return True
 
     @staticmethod
-    def normalize(data: torch.Tensor) -> torch.Tensor:
-        return data
+    def normalize(tensor: torch.Tensor) -> torch.Tensor:
+        return tensor
 
     def dof(self):
         return self.tensor.shape[1]

@@ -43,16 +43,16 @@ class MockVarNoArgs(th.Manifold):
         super().__init__(tensor=tensor, name=name)
 
     @staticmethod
-    def _init_data():
+    def _init_tensor():
         return torch.ones(1, 1)
 
     @staticmethod
-    def _data_check_impl(data: torch.Tensor) -> bool:
+    def _check_tensor_impl(tensor: torch.Tensor) -> bool:
         return True
 
     @staticmethod
-    def normalize(data: torch.Tensor) -> torch.Tensor:
-        return data
+    def normalize(tensor: torch.Tensor) -> torch.Tensor:
+        return tensor
 
     def dof(self):
         return 0

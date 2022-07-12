@@ -95,7 +95,7 @@ class SE3(LieGroup):
         return ret
 
     @staticmethod
-    def _init_data() -> torch.Tensor:  # type: ignore
+    def _init_tensor() -> torch.Tensor:  # type: ignore
         return torch.eye(3, 4).view(1, 3, 4)
 
     def dof(self) -> int:
@@ -143,12 +143,12 @@ class SE3(LieGroup):
         return ret
 
     @staticmethod
-    def _data_check_impl(matrix: torch.Tensor) -> bool:
+    def _check_tensor_impl(tensor: torch.Tensor) -> bool:
         with torch.no_grad():
-            if matrix.ndim != 3 or matrix.shape[1:] != (3, 4):
+            if tensor.ndim != 3 or tensor.shape[1:] != (3, 4):
                 raise ValueError("SE3 data tensors can only be 3x4 matrices.")
 
-            return SO3._data_check_impl(matrix[:, :3, :3])
+            return SO3._check_tensor_impl(tensor[:, :3, :3])
 
     @staticmethod
     def x_y_z_unit_quaternion_to_SE3(x_y_z_quaternion: torch.Tensor) -> "SE3":
@@ -339,11 +339,11 @@ class SE3(LieGroup):
         return ret
 
     @staticmethod
-    def normalize(data: torch.Tensor) -> torch.Tensor:
-        if data.ndim != 3 or data.shape[1:] != (3, 4):
+    def normalize(tensor: torch.Tensor) -> torch.Tensor:
+        if tensor.ndim != 3 or tensor.shape[1:] != (3, 4):
             raise ValueError("SE3 data tensors can only be 3x4 matrices.")
 
-        return torch.cat([SO3.normalize(data[:, :, :3]), data[:, :, 3:]], dim=-1)
+        return torch.cat([SO3.normalize(tensor[:, :, :3]), tensor[:, :, 3:]], dim=-1)
 
     def _log_map_impl(
         self, jacobians: Optional[List[torch.Tensor]] = None

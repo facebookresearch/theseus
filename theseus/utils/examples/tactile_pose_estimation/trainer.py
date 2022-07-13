@@ -207,10 +207,11 @@ class TactilePushingTrainer:
         )
 
         # Set different number of max iterations for validation loop
+        inner_opt_cfg = self.cfg.inner_optim
         self.pose_estimator.theseus_layer.optimizer.set_params(  # type: ignore
-            max_iterations=self.cfg.inner_optim.max_iters
-            if update or self.cfg.inner_optim.val_iters < 1
-            else self.cfg.inner_optim.val_iters
+            max_iterations=inner_opt_cfg.max_iters
+            if update or inner_opt_cfg.val_iters < 1
+            else inner_opt_cfg.val_iters
         )
         for batch_idx in range(dataset.num_batches):
             # ---------- Read data from batch ----------- #
@@ -230,7 +231,9 @@ class TactilePushingTrainer:
                     "verbose": True,
                     "track_err_history": True,
                     "backward_mode": self._resolve_backward_mode(epoch),
-                    "__keep_final_step_size__": self.cfg.inner_optim.keep_step_size,
+                    "backward_num_iterations": inner_opt_cfg.backward_num_iterations,
+                    "dlm_epsilon": inner_opt_cfg.dlm_epsilon,
+                    "__keep_final_step_size__": inner_opt_cfg.keep_step_size,
                 },
             )
             end_event.record()

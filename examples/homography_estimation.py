@@ -252,12 +252,16 @@ def write_gif_batch(log_dir, img1, img2, H_hist, Hgt_1_2, err_hist=None):
     anim_dir = f"{log_dir}/animation"
     os.makedirs(anim_dir, exist_ok=True)
     subsample_anim = 1
-    for it in H_hist:
+    H8_1_2_hist = H_hist["H8_1_2"]
+    num_iters = H8_1_2_hist.shape[-1]
+    for it in range(num_iters):
         if it % subsample_anim != 0:
             continue
         # Visualize only first element in batch.
-        H8_1_2 = H_hist[it]["H8_1_2"].data
-        H_1_2 = torch.cat([H8_1_2, H8_1_2.new_ones(H8_1_2.shape[0], 1)], dim=-1)
+        H8_1_2 = H8_1_2_hist[..., it]
+        H_1_2 = torch.cat([H8_1_2, H8_1_2.new_ones(H8_1_2.shape[0], 1)], dim=-1).to(
+            Hgt_1_2.device
+        )
         H_1_2_mat = H_1_2[0].reshape(1, 3, 3)
         Hgt_1_2_mat = Hgt_1_2[0].reshape(1, 3, 3)
         imgH, imgW = img1.shape[-2], img1.shape[-1]

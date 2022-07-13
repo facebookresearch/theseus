@@ -4,8 +4,8 @@
 # LICENSE file in the root directory of this source tree.
 
 import torch
-import theseus as th
 
+import theseus as th
 import theseus.utils.examples as theg
 
 torch.manual_seed(1)

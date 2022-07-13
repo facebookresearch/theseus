@@ -8,10 +8,10 @@
 # where x1 and x2 are SE2 objects
 
 import torch
+
 import theseus as th
 from theseus import LieGroupTensor
 from theseus.geometry.lie_group import LieGroup
-
 from theseus.geometry.tests.test_se2 import create_random_se2
 
 # Create two random SE2

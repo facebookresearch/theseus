@@ -4,22 +4,20 @@
 # LICENSE file in the root directory of this source tree.
 
 import logging
-
-import theseus as th
-import torch
-from theseus.optimizer.linear.linear_solver import LinearSolver
-import theseus.utils.examples as theg
-import omegaconf
+import os
 import pathlib
+import subprocess
+from typing import List, Type, cast
 
 import hydra
-
-import subprocess
-import os
-
-from theseus.utils.examples.pose_graph.dataset import PoseGraphEdge
-from typing import List, cast, Type
+import omegaconf
+import torch
 from scipy.io import savemat
+
+import theseus as th
+import theseus.utils.examples as theg
+from theseus.optimizer.linear.linear_solver import LinearSolver
+from theseus.utils.examples.pose_graph.dataset import PoseGraphEdge
 
 # Logger
 log = logging.getLogger(__name__)

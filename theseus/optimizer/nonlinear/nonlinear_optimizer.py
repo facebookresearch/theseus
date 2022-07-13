@@ -136,7 +136,7 @@ class NonlinearOptimizer(Optimizer, abc.ABC):
                 state_history[var.name] = (
                     torch.ones(
                         self.objective.batch_size,
-                        var.dof(),
+                        *var.shape[1:],
                         self.params.max_iterations + 1,
                     )
                     * math.inf

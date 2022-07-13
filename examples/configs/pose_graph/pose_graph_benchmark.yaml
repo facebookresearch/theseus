@@ -1,4 +1,5 @@
-dataset: sphere2500
+dataset: cubicle
+dtype: float64 
 hydra:
   run:
     dir: examples/outputs/pgo/benchmark

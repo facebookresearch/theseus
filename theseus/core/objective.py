@@ -19,6 +19,8 @@ from .variable import Variable
 
 # If dtype is None, uses torch.get_default_dtype()
 class Objective:
+    """An objective function to optimize."""
+
     def __init__(self, dtype: Optional[torch.dtype] = None):
         # maps variable names to the variable objects
         self.optim_vars: OrderedDict[str, Manifold] = OrderedDict()

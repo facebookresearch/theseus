@@ -542,7 +542,7 @@ def test_iterator():
 
 def test_to_dtype():
     objective, *_ = create_objective_with_mock_cost_functions()
-    for dtype in [torch.float32, torch.float64, torch.long]:
+    for dtype in [torch.float32, torch.float64]:
         objective.to(dtype=dtype)
         for _, cf in objective.cost_functions.items():
             for var in cf.optim_vars:

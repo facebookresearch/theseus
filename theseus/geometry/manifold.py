@@ -9,6 +9,7 @@ from typing import Any, List, Optional
 
 import torch
 
+from theseus.constants import _CHECK_DTYPE_SUPPORTED
 from theseus.core.variable import Variable
 
 OptionalJacobians = Optional[List[torch.Tensor]]
@@ -47,6 +48,7 @@ class Manifold(Variable, abc.ABC):
                 )
             dtype = tensor.dtype
 
+        _CHECK_DTYPE_SUPPORTED(dtype)
         super().__init__(self.__class__._init_tensor(*args).to(dtype=dtype), name=name)
         if tensor is not None:
             self.update(tensor)
@@ -137,6 +139,13 @@ class Manifold(Variable, abc.ABC):
         the_copy = self.copy()
         memo[id(self)] = the_copy
         return the_copy
+
+    # calls to() on the internal tensors
+    def to(self, *args, **kwargs):
+        _, dtype, *_ = torch._C._nn._parse_to(*args, **kwargs)
+        if dtype is not None:
+            _CHECK_DTYPE_SUPPORTED(dtype)
+        super().to(*args, **kwargs)
 
 
 # Alias for Manifold.local()

@@ -23,7 +23,8 @@ from theseus.utils.examples.pose_graph.dataset import PoseGraphEdge
 log = logging.getLogger(__name__)
 
 use_batches = True
-device = "cpu"
+DATASET_DIR = pathlib.Path.cwd() / "datasets" / "cube"
+
 dtype = torch.float64
 
 
@@ -45,6 +46,7 @@ def run(
     results_path: pathlib.Path,
     batch_size: int,
 ):
+    pg.to(cfg.device)
     objective = th.Objective(dtype=dtype)
 
     pg_batch = pg.get_batch_dataset(0)
@@ -61,15 +63,15 @@ def run(
 
     pose_prior_cost = th.Difference(
         var=pg_batch.poses[0],
-        target=pg_batch.poses[0].copy(new_name=pg_batch.poses[0].name + "__PRIOR"),
         cost_weight=th.ScaleCostWeight(
-            torch.tensor(cfg.inner_optim.reg_w, dtype=dtype, device=device)
+            torch.tensor(cfg.inner_optim.reg_w, dtype=dtype, device=cfg.device)
         ),
+        target=pg_batch.poses[0].copy(new_name=pg_batch.poses[0].name + "__PRIOR"),
     )
 
     objective.add(pose_prior_cost)
 
-    objective.to(device)
+    objective.to(cfg.device)
 
     linear_solver_cls: Type[LinearSolver] = cast(
         Type[LinearSolver],
@@ -126,7 +128,7 @@ def run(
         results["forward_mem"] = forward_mems
         file = (
             f"pgo_cube_{cfg.solver_device}_{cfg.inner_optim.solver}_{cfg.num_poses}_"
-            f"{cfg.dataset_size}_{batch_size}_{device}.mat"
+            f"{cfg.dataset_size}_{batch_size}_{cfg.device}.mat"
         )
         savemat(file, results)
 
@@ -142,10 +144,7 @@ def main(cfg):
 
     for n in range(cfg.dataset_size):
         num_poses, poses_n, edges_n = theg.pose_graph.read_3D_g2o_file(
-            (
-                f"/private/home/taoshaf/Documents/theseus/debug/datasets/"
-                f"{num_poses}_poses_0.2_cube_{n}.g2o"
-            ),
+            (f"{DATASET_DIR}/{num_poses}_poses_0.2_cube_{n}.g2o"),
         )
         if len(poses) == 0:
             poses = poses_n
@@ -162,9 +161,8 @@ def main(cfg):
     # create (or load) dataset
     results_path = pathlib.Path(os.getcwd())
 
-    for batch_size in [8, 16]:
+    for batch_size in [16, 256]:
         pg = theg.PoseGraphDataset(poses=poses, edges=edges, batch_size=batch_size)
-        pg.to(device)
         run(cfg, pg, results_path, batch_size)
 
 

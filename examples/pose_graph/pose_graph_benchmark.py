@@ -4,6 +4,7 @@
 # LICENSE file in the root directory of this source tree.
 
 import logging
+import pathlib
 
 import hydra
 import torch
@@ -16,20 +17,19 @@ import theseus.utils.examples as theg
 log = logging.getLogger(__name__)
 
 
+DATASET_DIR = pathlib.Path.cwd() / "datasets"
+
+
 @hydra.main(config_path="../configs/pose_graph", config_name="pose_graph_benchmark")
 def main(cfg):
     dataset_name = cfg.dataset
-    file_path = (
-        f"/private/home/taoshaf/Documents/theseus/datasets/{dataset_name}_init.g2o"
-    )
-    dtype = torch.float64
+    file_path = f"{DATASET_DIR}/{dataset_name}_init.g2o"
+    dtype = eval(f"torch.{cfg.dtype}")
 
-    th.SO3.SO3_EPS = 1e-6
-
-    _, verts, edges = theg.pose_graph.read_3D_g2o_file(file_path, dtype=dtype)
+    _, verts, edges = theg.pose_graph.read_3D_g2o_file(file_path, dtype=torch.float64)
     d = 3
 
-    objective = th.Objective(dtype)
+    objective = th.Objective(torch.float64)
 
     for edge in edges:
         cost_func = th.Between(
@@ -42,15 +42,16 @@ def main(cfg):
 
     pose_prior = th.Difference(
         var=verts[0],
+        cost_weight=th.ScaleCostWeight(torch.tensor(1e-6, dtype=torch.float64)),
         target=verts[0].copy(new_name=verts[0].name + "PRIOR"),
-        cost_weight=th.ScaleCostWeight(torch.tensor(0 * 1e-6, dtype=dtype)),
     )
     objective.add(pose_prior)
 
+    objective.to(dtype)
     optimizer = th.GaussNewton(
         objective,
         max_iterations=10,
-        step_size=1.0,
+        step_size=1,
         linearization_cls=th.SparseLinearization,
         linear_solver_cls=th.CholmodSparseSolver,
         vectorize=True,

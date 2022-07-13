@@ -25,6 +25,8 @@ from scipy.io import savemat
 log = logging.getLogger(__name__)
 
 use_batches = True
+DATASET_DIR = pathlib.Path.cwd() / "datasets" / "cube"
+
 dtype = torch.float64
 
 
@@ -63,10 +65,10 @@ def run(
 
     pose_prior_cost = th.Difference(
         var=pg_batch.poses[0],
-        target=pg_batch.poses[0].copy(new_name=pg_batch.poses[0].name + "__PRIOR"),
         cost_weight=th.ScaleCostWeight(
             torch.tensor(cfg.inner_optim.reg_w, dtype=dtype, device=cfg.device)
         ),
+        target=pg_batch.poses[0].copy(new_name=pg_batch.poses[0].name + "__PRIOR"),
     )
 
     objective.add(pose_prior_cost)
@@ -144,10 +146,7 @@ def main(cfg):
 
     for n in range(cfg.dataset_size):
         num_poses, poses_n, edges_n = theg.pose_graph.read_3D_g2o_file(
-            (
-                f"/private/home/taoshaf/Documents/theseus/debug/datasets/"
-                f"{num_poses}_poses_0.2_cube_{n}.g2o"
-            ),
+            (f"{DATASET_DIR}/{num_poses}_poses_0.2_cube_{n}.g2o"),
         )
         if len(poses) == 0:
             poses = poses_n
@@ -164,7 +163,7 @@ def main(cfg):
     # create (or load) dataset
     results_path = pathlib.Path(os.getcwd())
 
-    for batch_size in [1, 2, 4, 8, 16, 32, 64, 128, 256]:
+    for batch_size in [16, 256]:
         pg = theg.PoseGraphDataset(poses=poses, edges=edges, batch_size=batch_size)
         run(cfg, pg, results_path, batch_size)
 

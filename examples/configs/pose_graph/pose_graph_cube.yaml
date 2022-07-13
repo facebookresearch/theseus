@@ -1,8 +1,8 @@
 seed: 1
 solver_device: "cpu"
-device: "cpu"
+device: "cuda"
 
-num_poses: 1024
+num_poses: 256
 dataset_size: 256 
 
 inner_optim:

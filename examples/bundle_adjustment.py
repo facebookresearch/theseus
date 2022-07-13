@@ -17,7 +17,6 @@ import torch
 import theseus as th
 import theseus.utils.examples as theg
 
-
 BACKWARD_MODE = {
     "implicit": th.BackwardMode.IMPLICIT,
     "full": th.BackwardMode.FULL,

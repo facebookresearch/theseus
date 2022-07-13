@@ -11,6 +11,7 @@ import hydra
 import matplotlib.pyplot as plt
 import numpy as np
 import torch
+
 import theseus.utils.examples as theg
 
 # Logger

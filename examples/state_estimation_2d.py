@@ -5,12 +5,12 @@
 
 from typing import List
 
+import matplotlib.pyplot as plt
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
 
 import theseus as th
-import matplotlib.pyplot as plt
 
 device = "cpu"
 torch.manual_seed(0)

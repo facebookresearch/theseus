@@ -191,14 +191,14 @@ def warp_perspective_norm(H, img):
 
 
 def homography_error_fn(optim_vars: List[th.Manifold], aux_vars: List[th.Variable]):
-    H8_1_2 = optim_vars[0].data.reshape(-1, 8)
+    H8_1_2 = optim_vars[0].tensor.reshape(-1, 8)
     # Force the last element H[2,2] to be 1.
     H_1_2 = torch.cat([H8_1_2, H8_1_2.new_ones(H8_1_2.shape[0], 1)], dim=-1)  # type: ignore
     img1, img2 = aux_vars
-    img1_dst = warp_perspective_norm(H_1_2.reshape(-1, 3, 3), img1.data)
-    loss = torch.nn.functional.mse_loss(img1_dst, img2.data, reduction="none")
+    img1_dst = warp_perspective_norm(H_1_2.reshape(-1, 3, 3), img1.tensor)
+    loss = torch.nn.functional.mse_loss(img1_dst, img2.tensor, reduction="none")
     ones = warp_perspective_norm(
-        H_1_2.data.reshape(-1, 3, 3), torch.ones_like(img1.data)
+        H_1_2.data.reshape(-1, 3, 3), torch.ones_like(img1.tensor)
     )
     mask = ones > 0.9
     loss = loss.view(loss.shape[0], -1)
@@ -360,7 +360,7 @@ def run():
             objective = th.Objective()
 
             H8_init = torch.eye(3).reshape(1, 9)[:, :-1].repeat(batch_size, 1)
-            H8_1_2 = th.Vector(data=H8_init, name="H8_1_2")
+            H8_1_2 = th.Vector(tensor=H8_init, name="H8_1_2")
 
             if use_cnn:  # Use cnn features.
                 feat1 = cnn_model.forward(img1)
@@ -369,8 +369,8 @@ def run():
                 feat1 = img1
                 feat2 = img2
 
-            feat1 = th.Variable(data=feat1, name="feat1")
-            feat2 = th.Variable(data=feat2, name="feat2")
+            feat1 = th.Variable(tensor=feat1, name="feat1")
+            feat2 = th.Variable(tensor=feat2, name="feat2")
 
             # Set up inner loop optimization.
             homography_cf = th.AutoDiffCostFunction(
@@ -386,8 +386,10 @@ def run():
             reg_w = th.ScaleCostWeight(np.sqrt(reg_w))
             reg_w.to(dtype=H8_init.dtype)
             vals = torch.tensor([[1.0, 0.0, 0.0, 0.0, 1.0, 0.0, 0.0, 0.0]])
-            H8_1_2_id = th.Vector(data=vals, name="identity")
-            reg_cf = th.Difference(H8_1_2, reg_w, H8_1_2_id, name="reg_homography")
+            H8_1_2_id = th.Vector(tensor=vals, name="identity")
+            reg_cf = th.Difference(
+                H8_1_2, target=H8_1_2_id, cost_weight=reg_w, name="reg_homography"
+            )
             objective.add(reg_cf)
 
             inner_optim = th.LevenbergMarquardt(
@@ -399,9 +401,9 @@ def run():
             theseus_layer.to(device)
 
             inputs = {
-                "H8_1_2": H8_1_2.data,
-                "feat1": feat1.data,
-                "feat2": feat2.data,
+                "H8_1_2": H8_1_2.tensor,
+                "feat1": feat1.tensor,
+                "feat2": feat2.tensor,
             }
             if itr % disp_every == 0:
                 verbose2 = verbose
@@ -412,16 +414,18 @@ def run():
                 optimizer_kwargs={
                     "verbose": verbose2,
                     "track_err_history": True,
-                    # "backward_mode": BACKWARD_MODE["full"]})
+                    "track_state_history": True,
                     "backward_mode": BACKWARD_MODE["implicit"],
                 },
             )
             err_hist = info[1].err_history
-            H_hist = theseus_layer.optimizer.state_history
+            H_hist = info[1].state_history
             # print("Finished inner loop in %d iters" % len(H_hist))
 
             Hgt_1_2 = Hgt_1_2.reshape(-1, 9)
-            H8_1_2 = theseus_layer.objective.get_optim_var("H8_1_2").data.reshape(-1, 8)
+            H8_1_2 = theseus_layer.objective.get_optim_var("H8_1_2").tensor.reshape(
+                -1, 8
+            )
             H_1_2 = torch.cat([H8_1_2, H8_1_2.new_ones(H8_1_2.shape[0], 1)], dim=-1)
             # Loss is on four corner error.
             fc_dist = four_corner_dist(

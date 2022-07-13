@@ -22,3 +22,5 @@ repos:
     hooks:
       - id: isort
         files: 'theseus/.*'
+        files: 'examples/.*'
+ 

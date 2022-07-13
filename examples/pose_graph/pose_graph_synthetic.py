@@ -3,30 +3,26 @@
 # This source code is licensed under the MIT license found in the
 # LICENSE file in the root directory of this source tree.
 
+import cProfile
+import io
 import logging
-
 import os
 import pathlib
 import pstats
-
 import random
-from typing import Union, Dict, List, Type, cast
+import subprocess
+from typing import Dict, List, Type, Union, cast
 
 import hydra
 import numpy as np
 import omegaconf
 import torch
+from scipy.io import savemat
 
 import theseus as th
 import theseus.utils.examples as theg
-from theseus.optimizer.linearization import Linearization
 from theseus.optimizer.linear import LinearSolver
-
-import cProfile
-import io
-import subprocess
-
-from scipy.io import savemat
+from theseus.optimizer.linearization import Linearization
 
 BACKWARD_MODE = {
     "implicit": th.BackwardMode.IMPLICIT,

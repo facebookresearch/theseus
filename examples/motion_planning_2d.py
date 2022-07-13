@@ -17,7 +17,6 @@ import torch.utils.data
 import theseus as th
 import theseus.utils.examples as theg
 
-
 # To run this example, you will need a motion planning dataset available at
 # https://dl.fbaipublicfiles.com/theseus/motion_planning_dataset.tar.gz
 #

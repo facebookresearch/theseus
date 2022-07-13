@@ -1,18 +1,19 @@
-import kornia
-from typing import List
 import glob
-import theseus as th
+import os
+import shutil
+from typing import List
+
+import cv2
+import kornia
+import numpy as np
 import torch
 import torch.nn as nn
+from libs.easyaug import GeoAugParam, RandomGeoAug, RandomPhotoAug
 from PIL import Image
-import cv2
-import numpy as np
-import os
 from torch.utils.data import DataLoader, Dataset
-import shutil
 from torch.utils.tensorboard import SummaryWriter
 
-from libs.easyaug import RandomGeoAug, GeoAugParam, RandomPhotoAug
+import theseus as th
 
 FONT = cv2.FONT_HERSHEY_DUPLEX
 FONT_SZ = 0.5

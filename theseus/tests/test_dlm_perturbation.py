@@ -82,7 +82,7 @@ def test_backward_pass_se3_runs():
     target.name = "target"
 
     objective = th.Objective()
-    objective.add(th.Difference(var, th.ScaleCostWeight(1.0), target))
+    objective.add(th.Difference(var, target, th.ScaleCostWeight(1.0)))
     objective.to(dtype=dtype)
     optimizer = th.GaussNewton(objective)
     layer = th.TheseusLayer(optimizer)

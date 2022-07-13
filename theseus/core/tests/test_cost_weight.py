@@ -44,7 +44,7 @@ def test_scale_cost_weight():
             )
 
             def _check(cw):
-                cf1 = th.Difference(v1, cw, z)
+                cf1 = th.Difference(v1, z, cw)
                 jacobians, error = cf1.weighted_jacobians_error()
                 assert error.allclose(expected_err)
                 assert jacobians[0].allclose(expected_jac)
@@ -62,7 +62,7 @@ def test_scale_cost_weight():
                 batch_size, dim, dim
             ) * batched_scale.view(-1, 1, 1)
 
-            cf1 = th.Difference(v1, th.ScaleCostWeight(batched_scale), z)
+            cf1 = th.Difference(v1, z, th.ScaleCostWeight(batched_scale))
             jacobians, error = cf1.weighted_jacobians_error()
             assert error.allclose(expected_err)
             assert jacobians[0].allclose(expected_jac)
@@ -83,7 +83,7 @@ def test_diagonal_cost_weight():
             )
 
             def _check(cw):
-                cf1 = th.Difference(v1, cw, z)
+                cf1 = th.Difference(v1, z, cw)
                 jacobians, error = cf1.weighted_jacobians_error()
                 assert error.allclose(expected_err)
                 assert jacobians[0].allclose(expected_jac)
@@ -102,7 +102,7 @@ def test_diagonal_cost_weight():
                 batch_size, dim, dim
             )
 
-            cf1 = th.Difference(v1, th.DiagonalCostWeight(batched_diagonal), z)
+            cf1 = th.Difference(v1, z, th.DiagonalCostWeight(batched_diagonal))
             jacobians, error = cf1.weighted_jacobians_error()
             assert error.allclose(expected_err)
             assert jacobians[0].allclose(expected_jac)

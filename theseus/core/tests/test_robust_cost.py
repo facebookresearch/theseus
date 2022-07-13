@@ -12,7 +12,7 @@ def _new_robust_cf(batch_size, loss_cls, generator) -> th.RobustCostFunction:
     v1 = th.rand_se3(batch_size, generator=generator)
     v2 = th.rand_se3(batch_size, generator=generator)
     w = th.ScaleCostWeight(torch.randn(1, generator=generator))
-    cf = th.Local(v1, w, v2)
+    cf = th.Local(v1, v2, w)
     ll_radius = th.Variable(tensor=torch.randn(1, 1, generator=generator))
     return th.RobustCostFunction(cf, loss_cls, ll_radius)
 
@@ -77,7 +77,7 @@ def test_robust_cost_jacobians():
                 def test_fn(v_data):
                     v_aux.update(v_data)
                     new_robust_cf = th.RobustCostFunction(
-                        th.Local(v_aux, w, v2), loss_cls, ll_radius
+                        th.Local(v_aux, v2, w), loss_cls, ll_radius
                     )
                     e = new_robust_cf.cost_function.weighted_error()
                     e_norm = (e * e).sum(1, keepdim=True)

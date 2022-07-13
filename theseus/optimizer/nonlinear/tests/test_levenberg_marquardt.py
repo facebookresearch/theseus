@@ -16,7 +16,7 @@ def mock_objective():
     objective = th.Objective()
     v1 = th.Vector(1, name="v1")
     v2 = th.Vector(1, name="v2")
-    objective.add(th.Difference(v1, th.ScaleCostWeight(1.0), v2))
+    objective.add(th.Difference(v1, v2, th.ScaleCostWeight(1.0)))
     return objective
 
 

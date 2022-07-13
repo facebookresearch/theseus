@@ -23,8 +23,8 @@ class QuasiStaticPushingPlanar(CostFunction):
         obj2: SE2,
         eff1: SE2,
         eff2: SE2,
-        cost_weight: CostWeight,
         c_square: Union[Variable, torch.Tensor, float],
+        cost_weight: CostWeight,
         name: Optional[str] = None,
     ):
         super().__init__(cost_weight, name=name)
@@ -292,7 +292,7 @@ class QuasiStaticPushingPlanar(CostFunction):
             self.obj2.copy(),
             self.eff1.copy(),
             self.eff2.copy(),
-            self.weight.copy(),
             self.c_square.copy(),
+            self.weight.copy(),
             name=new_name,
         )

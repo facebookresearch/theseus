@@ -279,8 +279,8 @@ def test_objective_error():
         w = np.random.random()
         # This cost functions will just compute the norm of each vector, scaled by w
         weight = th.ScaleCostWeight(w)
-        d1 = th.Difference(v1, weight, z, name="d1")
-        d2 = th.Difference(v2, weight, z, name="d2")
+        d1 = th.Difference(v1, z, weight, name="d1")
+        d2 = th.Difference(v2, z, weight, name="d2")
 
         objective = th.Objective()
         objective.add(d1)

@@ -28,11 +28,11 @@ def test_collision2d_error_shapes():
                 cell_size = torch.randn(batch_size, 1)
                 cost_function = th.eb.Collision2D(
                     pose,
-                    cost_weight,
                     th.Variable(origin),
                     th.Variable(sdf_data),
                     th.Variable(cell_size),
                     th.Variable(torch.ones(1)),
+                    cost_weight,
                     name="cost_function",
                 )
                 error = cost_function.error()
@@ -51,11 +51,11 @@ def test_collision2d_copy():
     cell_size = torch.ones(batch_size, 1)
     cost_function = th.eb.Collision2D(
         pose,
-        cost_weight,
         th.Variable(origin),
         th.Variable(sdf_data),
         th.Variable(cell_size),
         th.Variable(torch.ones(1)),
+        cost_weight,
         name="name",
     )
     cost_function2 = cost_function.copy(new_name="new_name")
@@ -91,12 +91,12 @@ def test_collision2d_jacobians():
             cell_size = th.Variable(torch.rand(batch_size, 1, generator=rng).double())
             cost_eps = th.Variable(torch.rand(1, generator=rng).double())
             cost_function = th.eb.Collision2D(
-                pose, cost_weight, origin, sdf_data, cell_size, cost_eps
+                pose, origin, sdf_data, cell_size, cost_eps, cost_weight
             )
 
             def new_error_fn(vars):
                 new_cost_function = th.eb.Collision2D(
-                    vars[0], cost_weight, origin, sdf_data, cell_size, cost_eps
+                    vars[0], origin, sdf_data, cell_size, cost_eps, cost_weight
                 )
                 return th.Vector(tensor=new_cost_function.error())
 

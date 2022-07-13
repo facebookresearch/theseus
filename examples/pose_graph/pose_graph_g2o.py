@@ -27,8 +27,8 @@ for edge in edges:
     cost_func = th.Between(
         verts[edge.i],
         verts[edge.j],
-        edge.weight,
         edge.relative_pose,
+        edge.weight,
     )
     robust_cost_func = th.RobustCostFunction(
         cost_func, loss_cls=loss_cls, log_loss_radius=log_loss_radius
@@ -37,8 +37,8 @@ for edge in edges:
 
 pose_prior = th.Difference(
     var=verts[0],
-    cost_weight=th.ScaleCostWeight(torch.tensor(1e-6, dtype=dtype)),
     target=verts[0].copy(new_name=verts[0].name + "PRIOR"),
+    cost_weight=th.ScaleCostWeight(torch.tensor(1e-6, dtype=dtype)),
 )
 objective.add(pose_prior)
 

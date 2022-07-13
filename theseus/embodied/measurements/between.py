@@ -16,8 +16,8 @@ class Between(CostFunction):
         self,
         v0: LieGroup,
         v1: LieGroup,
-        cost_weight: CostWeight,
         measurement: LieGroup,
+        cost_weight: CostWeight,
         name: Optional[str] = None,
     ):
         super().__init__(cost_weight, name=name)
@@ -51,7 +51,7 @@ class Between(CostFunction):
         return Between(
             self.v0.copy(),
             self.v1.copy(),
-            self.weight.copy(),
             self.measurement.copy(),
+            self.weight.copy(),
             name=new_name,
         )

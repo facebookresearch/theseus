@@ -56,17 +56,17 @@ def run(
         relative_pose_cost = th.Between(
             pg_batch.poses[edge.i],
             pg_batch.poses[edge.j],
-            edge.weight,
             edge.relative_pose,
+            edge.weight,
         )
         objective.add(relative_pose_cost)
 
     pose_prior_cost = th.Difference(
         var=pg_batch.poses[0],
+        target=pg_batch.poses[0].copy(new_name=pg_batch.poses[0].name + "__PRIOR"),
         cost_weight=th.ScaleCostWeight(
             torch.tensor(cfg.inner_optim.reg_w, dtype=dtype, device=device)
         ),
-        target=pg_batch.poses[0].copy(new_name=pg_batch.poses[0].name + "__PRIOR"),
     )
 
     objective.add(pose_prior_cost)

@@ -33,15 +33,15 @@ def main(cfg):
         cost_func = th.Between(
             verts[edge.i],
             verts[edge.j],
-            edge.weight,
             edge.relative_pose,
+            edge.weight,
         )
         objective.add(cost_func)
 
     pose_prior = th.Difference(
         var=verts[0],
-        cost_weight=th.ScaleCostWeight(torch.tensor(0 * 1e-6, dtype=dtype)),
         target=verts[0].copy(new_name=verts[0].name + "PRIOR"),
+        cost_weight=th.ScaleCostWeight(torch.tensor(0 * 1e-6, dtype=dtype)),
     )
     objective.add(pose_prior)
 

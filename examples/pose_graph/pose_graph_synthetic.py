@@ -149,8 +149,8 @@ def run(
         relative_pose_cost = th.Between(
             pg_batch.poses[edge.i],
             pg_batch.poses[edge.j],
-            edge.weight,
             edge.relative_pose,
+            edge.weight,
         )
         robust_relative_pose_cost = th.RobustCostFunction(
             cost_function=relative_pose_cost,
@@ -162,10 +162,10 @@ def run(
     if cfg.inner_optim.regularize:
         pose_prior_cost = th.Difference(
             var=pg_batch.poses[0],
+            target=pg_batch.poses[0].copy(new_name=pg_batch.poses[0].name + "__PRIOR"),
             cost_weight=th.ScaleCostWeight(
                 torch.tensor(cfg.inner_optim.reg_w, dtype=dtype)
             ),
-            target=pg_batch.poses[0].copy(new_name=pg_batch.poses[0].name + "__PRIOR"),
         )
         objective.add(pose_prior_cost)
 
@@ -177,8 +177,8 @@ def run(
             objective.add(
                 th.Difference(
                     pg_batch.poses[i],
-                    pose_prior_weight,
                     pg_batch.gt_poses[i],
+                    pose_prior_weight,
                     name=f"pose_diff_{i}",
                 )
             )

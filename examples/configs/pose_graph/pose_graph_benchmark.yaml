@@ -1,4 +1,4 @@
-dataset: cubicle
+dataset: sphere2500
 dtype: float64 
 hydra:
   run:

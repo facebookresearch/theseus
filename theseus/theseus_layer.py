@@ -47,15 +47,15 @@ class TheseusLayer(nn.Module):
             )
         optimizer_kwargs = optimizer_kwargs or {}
         backward_mode = optimizer_kwargs.get("backward_mode", None)
-        dlm_epsilon = optimizer_kwargs.get(
-            TheseusLayerDLMForward._DLM_EPSILON_STR, 1e-2
-        )
-        if not isinstance(dlm_epsilon, float):
-            raise ValueError(
-                f"{TheseusLayerDLMForward._DLM_EPSILON_STR} must be a float "
-                f"but {type(dlm_epsilon)} was given."
-            )
         if backward_mode == BackwardMode.DLM:
+            dlm_epsilon = optimizer_kwargs.get(
+                TheseusLayerDLMForward._DLM_EPSILON_STR, 1e-2
+            )
+            if not isinstance(dlm_epsilon, float):
+                raise ValueError(
+                    f"{TheseusLayerDLMForward._DLM_EPSILON_STR} must be a float "
+                    f"but {type(dlm_epsilon)} was given."
+                )
 
             if self._dlm_bwd_objective is None:
                 _obj, _opt = _instantiate_dlm_bwd_objective(self.objective)
@@ -283,7 +283,11 @@ class _DLMPerturbation(CostFunction):
 
     def jacobians(self) -> Tuple[List[torch.Tensor], torch.Tensor]:
         d = self.dim()
-        aux = torch.eye(d).unsqueeze(0).expand(self.var.shape[0], d, d)
+        aux = (
+            torch.eye(d, dtype=self.epsilon.dtype, device=self.epsilon.device)
+            .unsqueeze(0)
+            .expand(self.var.shape[0], d, d)
+        )
         euclidean_grad_flat = self.epsilon.tensor.view(-1, 1, 1) * aux
         euclidean_grad = euclidean_grad_flat.unflatten(2, self.var.shape[1:])
         return [self.var.project(euclidean_grad, is_sparse=True)], self.error()

@@ -21,7 +21,6 @@ inner_optim:
   keep_step_size: true
   force_max_iters: false
   val_iters: 50
-  use_batches: true
 
 train:
   # options: "weights_only" or "weights_and_measurement_nn"

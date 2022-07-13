@@ -22,7 +22,6 @@ from theseus.utils.examples.pose_graph.dataset import PoseGraphEdge
 # Logger
 log = logging.getLogger(__name__)
 
-use_batches = True
 DATASET_DIR = pathlib.Path.cwd() / "datasets" / "cube"
 
 dtype = torch.float64

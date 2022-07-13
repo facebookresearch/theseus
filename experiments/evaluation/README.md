@@ -1,5 +1,11 @@
 This folder contains scripts for evaluating `theseus`'s components.
-These scripts should be run from the root folder of the repository.
+These scripts should be run from the root folder of the repository. The following
+scripts are available, with reference to corresponding figure in our white paper:
+
+ - `vectorization_ablation.sh`: Runs pose graph optimization with synthetic data with or without cost function vectorization (Fig. 1).
+ - `pose_graph_synthetic.sh`: Same as above, but can change linear solver and problem size (Fig. 2).
+ - `pose_graph_cube.sh`: Same as above, but using the cube data for Ceres comparison (Fig. 3). 
+ - `backward_modes_tactile.sh`: Runs tactile state estimation with different backward modes (Fig. 4).
 
 Some other relevant files to look at:
 

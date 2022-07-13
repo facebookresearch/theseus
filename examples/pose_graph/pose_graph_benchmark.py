@@ -3,13 +3,15 @@
 # This source code is licensed under the MIT license found in the
 # LICENSE file in the root directory of this source tree.
 
+import logging
+import pathlib
+
+import hydra
 import torch
+from scipy.io import savemat
+
 import theseus as th
 import theseus.utils.examples as theg
-import logging
-import hydra
-import pathlib
-from scipy.io import savemat
 
 # Logger
 log = logging.getLogger(__name__)

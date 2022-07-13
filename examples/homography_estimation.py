@@ -189,8 +189,6 @@ def warp_perspective_norm(H, img):
     )
     Hinv = torch.inverse(H)
     warped_grid = kornia.geometry.transform.homography_warper.warp_grid(grid, Hinv)
-    # grid_sample = torch.nn.functional.grid_sample
-    # img2 = grid_sample(img, warped_grid, mode="bilinear", align_corners=True)
     # Using custom implementation, above will throw error with outer loop optim.
     img2 = grid_sample(img, warped_grid)
     return img2

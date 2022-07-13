@@ -18,8 +18,8 @@ class CholmodSolveFunction(torch.autograd.Function):
         symbolic_decomposition: CholeskyDecomposition = args[3]
         damping: float = args[4]
 
-        At_val_cpu = At_val.cpu()
-        b_cpu = b.cpu()
+        At_val_cpu = At_val.cpu().double()
+        b_cpu = b.cpu().double()
         batch_size = At_val.shape[0]
         targs = {"dtype": At_val.dtype, "device": "cpu"}
         x_cpu = torch.empty(size=(batch_size, sparse_structure.num_cols), **targs)
@@ -42,7 +42,7 @@ class CholmodSolveFunction(torch.autograd.Function):
         ctx.sparse_structure = sparse_structure
         ctx.cholesky_decompositions = cholesky_decompositions
 
-        return x_cpu.to(device=At_val.device)
+        return x_cpu.to(device=At_val.device, dtype=At_val.dtype)
 
     # Let v row vector, and w column vector of dimension n, m, and
     # A an nxm matrix. Then

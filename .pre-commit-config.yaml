@@ -23,4 +23,3 @@ repos:
       - id: isort
         files: 'theseus/.*'
         files: 'examples/.*'
- 

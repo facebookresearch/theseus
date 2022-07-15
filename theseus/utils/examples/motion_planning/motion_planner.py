@@ -115,24 +115,24 @@ class MotionPlanner:
         # which are hard constraints, and can be implemented via Difference cost
         # functions.
         objective.add(
-            th.Difference(poses[0], boundary_cost_weight, start_point, name="pose_0")
+            th.Difference(poses[0], start_point, boundary_cost_weight, name="pose_0")
         )
         objective.add(
             th.Difference(
                 velocities[0],
+                th.Point2(tensor=torch.zeros(1, 2)),
                 boundary_cost_weight,
-                th.Point2(data=torch.zeros(1, 2)),
                 name="vel_0",
             )
         )
         objective.add(
-            th.Difference(poses[-1], boundary_cost_weight, goal_point, name="pose_N")
+            th.Difference(poses[-1], goal_point, boundary_cost_weight, name="pose_N")
         )
         objective.add(
             th.Difference(
                 velocities[-1],
+                th.Point2(tensor=torch.zeros(1, 2)),
                 boundary_cost_weight,
-                th.Point2(data=torch.zeros(1, 2)),
                 name="vel_N",
             )
         )
@@ -144,13 +144,13 @@ class MotionPlanner:
             objective.add(
                 th.eb.Collision2D(
                     poses[i],
-                    collision_cost_weights[0]
-                    if use_single_collision_weight
-                    else collision_cost_weights[i - 1],
                     sdf_origin,
                     sdf_data_tensor,
                     cell_size_tensor,
                     cost_eps,
+                    collision_cost_weights[0]
+                    if use_single_collision_weight
+                    else collision_cost_weights[i - 1],
                     name=f"collision_{i}",
                 )
             )
@@ -289,8 +289,8 @@ class MotionPlanner:
         variables = self.objective.optim_vars
         for i in range(self.trajectory_len):
             if values_dict is None:
-                trajectory[:, :2, i] = variables[f"pose_{i}"].data.clone()
-                trajectory[:, 2:, i] = variables[f"vel_{i}"].data.clone()
+                trajectory[:, :2, i] = variables[f"pose_{i}"].tensor.clone()
+                trajectory[:, 2:, i] = variables[f"vel_{i}"].tensor.clone()
             else:
                 trajectory[:, :2, i] = values_dict[f"pose_{i}"]
                 trajectory[:, 2:, i] = values_dict[f"vel_{i}"]

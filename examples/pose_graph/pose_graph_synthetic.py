@@ -3,30 +3,26 @@
 # This source code is licensed under the MIT license found in the
 # LICENSE file in the root directory of this source tree.
 
+import cProfile
+import io
 import logging
-
 import os
 import pathlib
 import pstats
-
 import random
-from typing import Union, Dict, List, Type, cast
+import subprocess
+from typing import Dict, List, Type, Union, cast
 
 import hydra
 import numpy as np
 import omegaconf
 import torch
+from scipy.io import savemat
 
 import theseus as th
 import theseus.utils.examples as theg
-from theseus.optimizer.linearization import Linearization
 from theseus.optimizer.linear import LinearSolver
-
-import cProfile
-import io
-import subprocess
-
-from scipy.io import savemat
+from theseus.optimizer.linearization import Linearization
 
 BACKWARD_MODE = {
     "implicit": th.BackwardMode.IMPLICIT,
@@ -44,9 +40,6 @@ LINEAR_SOLVER_MODE: Dict[str, Type[LinearSolver]] = {
     "dense": th.CholeskyDenseSolver,
 }
 
-# Smaller values} result in error
-th.SO3.SO3_EPS = 1e-6
-
 # Logger
 log = logging.getLogger(__name__)
 
@@ -56,9 +49,7 @@ def print_histogram(
 ):
     log.info(msg)
     with torch.no_grad():
-        poses = [
-            th.SE3(data=var_dict[pose.name], requires_check=False) for pose in pg.poses
-        ]
+        poses = [th.SE3(tensor=var_dict[pose.name]) for pose in pg.poses]
         histogram = theg.pg_histogram(poses=poses, edges=pg.edges)
     for line in histogram.split("\n"):
         log.info(line)
@@ -68,17 +59,18 @@ def get_batch_data(
     pg_batch: theg.PoseGraphDataset, pose_indices: List[int], gt_pose_indices: List[int]
 ):
     batch = {
-        pg_batch.poses[index].name: pg_batch.poses[index].data for index in pose_indices
+        pg_batch.poses[index].name: pg_batch.poses[index].tensor
+        for index in pose_indices
     }
-    batch.update({pg_batch.poses[0].name + "__PRIOR": pg_batch.poses[0].data.clone()})
+    batch.update({pg_batch.poses[0].name + "__PRIOR": pg_batch.poses[0].tensor.clone()})
     batch.update(
         {
-            pg_batch.gt_poses[index].name: pg_batch.gt_poses[index].data
+            pg_batch.gt_poses[index].name: pg_batch.gt_poses[index].tensor
             for index in gt_pose_indices
         }
     )
     batch.update(
-        {edge.relative_pose.name: edge.relative_pose.data for edge in pg_batch.edges}
+        {edge.relative_pose.name: edge.relative_pose.tensor for edge in pg_batch.edges}
     )
     return batch
 
@@ -90,11 +82,9 @@ def pose_loss(
     loss: torch.Tensor = torch.zeros(
         1, dtype=pose_vars[0].dtype, device=pose_vars[0].device
     )
-    poses_batch = th.SE3(
-        data=torch.cat([pose.data for pose in pose_vars]), requires_check=False
-    )
+    poses_batch = th.SE3(tensor=torch.cat([pose.tensor for pose in pose_vars]))
     gt_poses_batch = th.SE3(
-        data=torch.cat([gt_pose.data for gt_pose in gt_pose_vars]), requires_check=False
+        tensor=torch.cat([gt_pose.tensor for gt_pose in gt_pose_vars])
     )
     pose_loss = th.local(poses_batch, gt_poses_batch).norm(dim=1)
     loss += pose_loss.sum()
@@ -155,8 +145,8 @@ def run(
         relative_pose_cost = th.Between(
             pg_batch.poses[edge.i],
             pg_batch.poses[edge.j],
-            edge.weight,
             edge.relative_pose,
+            edge.weight,
         )
         robust_relative_pose_cost = th.RobustCostFunction(
             cost_function=relative_pose_cost,
@@ -168,10 +158,10 @@ def run(
     if cfg.inner_optim.regularize:
         pose_prior_cost = th.Difference(
             var=pg_batch.poses[0],
+            target=pg_batch.poses[0].copy(new_name=pg_batch.poses[0].name + "__PRIOR"),
             cost_weight=th.ScaleCostWeight(
                 torch.tensor(cfg.inner_optim.reg_w, dtype=dtype)
             ),
-            target=pg_batch.poses[0].copy(new_name=pg_batch.poses[0].name + "__PRIOR"),
         )
         objective.add(pose_prior_cost)
 
@@ -183,8 +173,8 @@ def run(
             objective.add(
                 th.Difference(
                     pg_batch.poses[i],
-                    pose_prior_weight,
                     pg_batch.gt_poses[i],
+                    pose_prior_weight,
                     name=f"pose_diff_{i}",
                 )
             )
@@ -237,7 +227,7 @@ def run(
         torch.cuda.reset_peak_memory_stats()
         pr.enable()
         theseus_outputs, _ = theseus_optim.forward(
-            input_data=theseus_inputs,
+            input_tensors=theseus_inputs,
             optimizer_kwargs={
                 "verbose": cfg.inner_optim.verbose,
                 "track_err_history": cfg.inner_optim.track_err_history,

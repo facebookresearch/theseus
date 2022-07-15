@@ -173,7 +173,7 @@ def generate_trajectory_figs(
         map_data = map_tensor[map_idx].clone().cpu().numpy()
         map_data = np.tile(map_data, (3, 1, 1)).transpose((1, 2, 0))
         axs.imshow(map_data)
-        cell_size = sdf.cell_size.data
+        cell_size = sdf.cell_size.tensor
         patches = []
         for t_idx, trajectory in enumerate(trajectories):
             row = traj_rows[t_idx][map_idx]

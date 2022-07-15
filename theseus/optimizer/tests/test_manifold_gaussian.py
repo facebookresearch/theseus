@@ -72,7 +72,7 @@ def test_to():
     for i in range(10):
         mean, precision = random_manifold_gaussian_params()
         t = th.ManifoldGaussian(mean, precision=precision)
-        dtype = torch.float64 if np.random.random() < 0.5 else torch.long
+        dtype = torch.float64 if np.random.random() < 0.5 else torch.float32
         t.to(dtype)
 
         for var in t.mean:
@@ -118,7 +118,7 @@ def test_update():
 
         assert var.precision is new_precision_good
         for j in range(n_vars):
-            assert torch.allclose(var.mean[j].data, new_mean_good[j].data)
+            assert torch.allclose(var.mean[j].tensor, new_mean_good[j].tensor)
 
         # check raises error on shape for precision
         new_precision_bad = torch.eye(dof + 1)[None, ...].repeat(batch_size, 1, 1)
@@ -196,4 +196,4 @@ def test_retract_gaussian():
         lam_tp = torch.eye(variable.dof())[None, ...].repeat(batch_size, 1, 1)
 
         gaussian = th.retract_gaussian(variable, mean_tp, lam_tp)
-        assert torch.allclose(gaussian.mean[0].data, variable.retract(mean_tp).data)
+        assert torch.allclose(gaussian.mean[0].tensor, variable.retract(mean_tp).tensor)

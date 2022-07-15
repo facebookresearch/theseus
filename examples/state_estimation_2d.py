@@ -5,12 +5,12 @@
 
 from typing import List
 
+import matplotlib.pyplot as plt
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
 
 import theseus as th
-import matplotlib.pyplot as plt
 
 device = "cpu"
 torch.manual_seed(0)
@@ -239,8 +239,8 @@ def run_learning(mode_, path_data_, gps_targets_, measurements_):
         cost_functions.append(
             th.Difference(
                 poses[i],
+                th.Point2(tensor=gps_targets_[i]),
                 gps_cost_weights[i],
-                th.Point2(data=gps_targets_[i]),
                 name=f"gps_{i}",
             )
         )
@@ -250,8 +250,8 @@ def run_learning(mode_, path_data_, gps_targets_, measurements_):
                     th.Between(
                         poses[i],
                         poses[i + 1],
+                        th.Point2(tensor=measurements_[i]),
                         between_cost_weights[i],
-                        th.Point2(data=measurements_[i]),
                         name=f"between_{i}",
                     )
                 )

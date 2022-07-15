@@ -18,8 +18,8 @@ class MovingFrameBetween(CostFunction):
         frame2: LieGroup,
         pose1: LieGroup,
         pose2: LieGroup,
-        cost_weight: CostWeight,
         measurement: LieGroup,
+        cost_weight: CostWeight,
         name: Optional[str] = None,
     ):
         seen_classes = set(
@@ -71,7 +71,7 @@ class MovingFrameBetween(CostFunction):
             self.frame2.copy(),
             self.pose1.copy(),
             self.pose2.copy(),
-            self.weight.copy(),
             self.measurement.copy(),
+            self.weight.copy(),
             name=new_name,
         )

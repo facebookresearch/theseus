@@ -6,8 +6,6 @@ import torch
 import trimesh
 import trimesh.viewer
 
-import theseus as th
-
 
 def draw_camera(
     transform, fov, resolution, color=(0.0, 1.0, 0.0, 0.8), marker_height=12.0
@@ -24,7 +22,7 @@ def draw_camera(
 class BAViewer(trimesh.viewer.SceneViewer):
     def __init__(
         self,
-        belief_history,
+        state_history,
         msg_history=None,
         cam_to_world=False,
         flip_z=True,
@@ -32,22 +30,24 @@ class BAViewer(trimesh.viewer.SceneViewer):
         gt_points=None,
     ):
         self._it = 0
-        self.belief_history = belief_history
+        self.state_history = state_history
         self.msg_history = msg_history
         self.cam_to_world = cam_to_world
         self.flip_z = flip_z
         self.lock = threading.Lock()
+
+        self.num_iters = list(state_history.values())[0].shape[-1]
 
         scene = trimesh.Scene()
         self.scene = scene
 
         if gt_cameras is not None:
             for i, cam in enumerate(gt_cameras):
-                camera = self.make_cam(cam.pose.data[0])
+                camera = self.make_cam(cam.pose.tensor[0])
                 self.scene.add_geometry(camera[1], geom_name=f"gt_cam_{i}")
 
         if gt_points is not None:
-            pts = torch.cat([pt.data for pt in gt_points])
+            pts = torch.cat([pt.tensor for pt in gt_points])
             pc = trimesh.PointCloud(pts, [0, 255, 0, 200])
             self.scene.add_geometry(pc, geom_name="gt_points")
 
@@ -79,7 +79,7 @@ class BAViewer(trimesh.viewer.SceneViewer):
         elif symbol == pyglet.window.key.P:
             print(self.scene.camera_transform)
         elif symbol == pyglet.window.key.N:
-            if self._it + 1 in self.belief_history:
+            if self._it + 1 < self.num_iters:
                 self._it += 1
                 print("Iteration", self._it)
                 self.next_iteration()
@@ -126,17 +126,15 @@ class BAViewer(trimesh.viewer.SceneViewer):
         with self.lock:
             points = []
             n_cams, n_pts = 0, 0
-            for belief in self.belief_history[self._it]:
-                if isinstance(belief.mean[0], th.SE3):
-                    camera = self.make_cam(
-                        belief.mean[0].data[0], color=(0.0, 0.0, 1.0, 0.8)
-                    )
+            for state in self.state_history.values():
+                state = state[..., self._it]
+                if state.ndim == 3:
+                    camera = self.make_cam(state[0], color=(0.0, 0.0, 1.0, 0.8))
                     self.scene.delete_geometry(f"cam_{n_cams}")
                     self.scene.add_geometry(camera[1], geom_name=f"cam_{n_cams}")
                     n_cams += 1
-                elif isinstance(belief.mean[0], th.Point3):
-                    point = belief.mean[0].data
-                    points.append(point)
+                elif state.shape[1] == 3:
+                    points.append(state)
 
                     # cov = torch.linalg.inv(belief.precision[0])
                     # ellipse = make_ellipse(point[0], cov)

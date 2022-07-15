@@ -115,8 +115,8 @@ class TactilePoseEstimator:
                 objective.add(
                     th.Difference(
                         obj_poses[i],
-                        motion_capture_weight,
                         obj_start_pose,
+                        motion_capture_weight,
                         name=f"obj_priors_{i}",
                     )
                 )
@@ -128,8 +128,8 @@ class TactilePoseEstimator:
                         obj_poses[i + 1],
                         eff_poses[i],
                         eff_poses[i + 1],
-                        qsp_weight,
                         c_square,
+                        qsp_weight,
                         name=f"qsp_{i}",
                     )
                 )
@@ -145,8 +145,8 @@ class TactilePoseEstimator:
                             obj_poses[i],
                             eff_poses[i - offset],
                             eff_poses[i],
-                            mf_between_weight,
                             nn_measurements[nn_meas_idx],
+                            mf_between_weight,
                             name=f"mf_between_{i - offset}_{i}",
                         )
                     )
@@ -156,11 +156,11 @@ class TactilePoseEstimator:
                 th.eb.EffectorObjectContactPlanar(
                     obj_poses[i],
                     eff_poses[i],
-                    intersect_weight,
                     sdf_origin,
                     sdf_data,
                     sdf_cell_size,
                     eff_radius,
+                    intersect_weight,
                     name=f"intersect_{i}",
                 )
             )
@@ -168,8 +168,8 @@ class TactilePoseEstimator:
             objective.add(
                 th.Difference(
                     eff_poses[i],
-                    motion_capture_weight,
                     motion_captures[i],
+                    motion_capture_weight,
                     name=f"eff_priors_{i}",
                 )
             )
@@ -182,7 +182,7 @@ class TactilePoseEstimator:
                 for pose in pose_list:
                     objective.add(
                         th.Difference(
-                            pose, reg_w, identity_se2, name=f"reg_{pose.name}"
+                            pose, identity_se2, reg_w, name=f"reg_{pose.name}"
                         )
                     )
 
@@ -213,5 +213,5 @@ class TactilePoseEstimator:
         tensor_dict = {}
         var_names = [self.obj_start_pose.name] + [v.name for v in self.motion_captures]
         for name in var_names:
-            tensor_dict[name] = th.SE2(x_y_theta=batch[name]).data
+            tensor_dict[name] = th.SE2(x_y_theta=batch[name]).tensor
         return tensor_dict

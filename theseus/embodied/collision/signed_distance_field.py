@@ -45,7 +45,7 @@ class SignedDistanceField2D:
             raise ValueError(
                 "Argument occupancy_map to SignedDistanceField2D must be a batch of matrices."
             )
-        num_maps = occupancy_map_batch.data.size(0)
+        num_maps = occupancy_map_batch.tensor.size(0)
         all_sdf_data = []
 
         for i in range(num_maps):
@@ -107,14 +107,14 @@ class SignedDistanceField2D:
         self, points: torch.Tensor
     ) -> Tuple[torch.Tensor, torch.Tensor, torch.Tensor]:
         origin = (
-            self.origin.data.unsqueeze(-1)
+            self.origin.tensor.unsqueeze(-1)
             if self.origin.ndim == 2
-            else self.origin.data
+            else self.origin.tensor
         )
         cell_size = (
-            self.cell_size.data
+            self.cell_size.tensor
             if self.cell_size.ndim == 2
-            else self.cell_size.data.unsqueeze(-1)
+            else self.cell_size.tensor.unsqueeze(-1)
         )
         px = points[:, 0]
         py = points[:, 1]
@@ -148,7 +148,7 @@ class SignedDistanceField2D:
         hci = hc.long().clamp(0, self._num_cols - 1)
 
         def gather_sdf(r_, c_):
-            return gather_from_rows_cols(self.sdf_data.data, r_, c_)
+            return gather_from_rows_cols(self.sdf_data.tensor, r_, c_)
 
         # Compute the distance
         hrdiff = hr - rows
@@ -166,9 +166,9 @@ class SignedDistanceField2D:
         # Compute the jacobians
 
         cell_size = (
-            self.cell_size.data
+            self.cell_size.tensor
             if self.cell_size.ndim == 2
-            else self.cell_size.data.unsqueeze(-1)
+            else self.cell_size.tensor.unsqueeze(-1)
         )
 
         jac1 = (

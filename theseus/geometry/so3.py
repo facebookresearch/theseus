@@ -14,25 +14,27 @@ from .point_types import Point3
 
 
 class SO3(LieGroup):
-    SO3_EPS = 5e-7
-
     def __init__(
         self,
         quaternion: Optional[torch.Tensor] = None,
-        data: Optional[torch.Tensor] = None,
+        tensor: Optional[torch.Tensor] = None,
         name: Optional[str] = None,
         dtype: Optional[torch.dtype] = None,
-        requires_check: bool = True,
+        strict: bool = False,
     ):
-        if quaternion is not None and data is not None:
-            raise ValueError("Please provide only one of quaternion or data.")
+        if quaternion is not None and tensor is not None:
+            raise ValueError("Please provide only one of quaternion or tensor.")
         if quaternion is not None:
             dtype = quaternion.dtype
-        if data is not None and requires_check:
-            self._SO3_matrix_check(data)
-        super().__init__(data=data, name=name, dtype=dtype)
+        super().__init__(tensor=tensor, name=name, dtype=dtype, strict=strict)
         if quaternion is not None:
             self.update_from_unit_quaternion(quaternion)
+
+        self._resolve_eps()
+
+    def _resolve_eps(self):
+        self._NEAR_ZERO_EPS = theseus.constants._SO3_NEAR_ZERO_EPS[self.tensor.dtype]
+        self._NEAR_PI_EPS = theseus.constants._SO3_NEAR_PI_EPS[self.tensor.dtype]
 
     @staticmethod
     def rand(
@@ -81,7 +83,7 @@ class SO3(LieGroup):
         )
 
     @staticmethod
-    def _init_data() -> torch.Tensor:  # type: ignore
+    def _init_tensor() -> torch.Tensor:  # type: ignore
         return torch.eye(3, 3).view(1, 3, 3)
 
     def update_from_unit_quaternion(self, quaternion: torch.Tensor):
@@ -91,14 +93,14 @@ class SO3(LieGroup):
         return 3
 
     def __repr__(self) -> str:
-        return f"SO3(data={self.data}, name={self.name})"
+        return f"SO3(tensor={self.tensor}, name={self.name})"
 
     def __str__(self) -> str:
         with torch.no_grad():
-            return f"SO3(matrix={self.data}), name={self.name})"
+            return f"SO3(matrix={self.tensor}), name={self.name})"
 
     def _adjoint_impl(self) -> torch.Tensor:
-        return self.data.clone()
+        return self.tensor.clone()
 
     def _project_impl(
         self, euclidean_grad: torch.Tensor, is_sparse: bool = False
@@ -108,9 +110,9 @@ class SO3(LieGroup):
             euclidean_grad.shape[:-1], dtype=self.dtype, device=self.device
         )
         if is_sparse:
-            temp = torch.einsum("i...jk,i...jl->i...lk", euclidean_grad, self.data)
+            temp = torch.einsum("i...jk,i...jl->i...lk", euclidean_grad, self.tensor)
         else:
-            temp = torch.einsum("...jk,...ji->...ik", euclidean_grad, self.data)
+            temp = torch.einsum("...jk,...ji->...ik", euclidean_grad, self.tensor)
 
         ret[..., 0] = temp[..., 2, 1] - temp[..., 1, 2]
         ret[..., 1] = temp[..., 0, 2] - temp[..., 2, 0]
@@ -119,24 +121,36 @@ class SO3(LieGroup):
         return ret
 
     @staticmethod
-    def _SO3_matrix_check(matrix: torch.Tensor):
-        if matrix.ndim != 3 or matrix.shape[1:] != (3, 3):
-            raise ValueError("3D rotations can only be 3x3 matrices.")
-        _check = (
-            torch.matmul(matrix, matrix.transpose(1, 2))
-            - torch.eye(3, 3, dtype=matrix.dtype, device=matrix.device)
-        ).abs().max().item() < SO3.SO3_EPS
-        _check &= (torch.linalg.det(matrix) - 1).abs().max().item() < SO3.SO3_EPS
+    def _check_tensor_impl(tensor: torch.Tensor) -> bool:
+        with torch.no_grad():
+            if tensor.ndim != 3 or tensor.shape[1:] != (3, 3):
+                raise ValueError("SO3 data tensors can only be 3x3 matrices.")
 
-        if not _check:
-            raise ValueError("Not valid 3D rotations.")
+            MATRIX_EPS = theseus.constants._SO3_MATRIX_EPS[tensor.dtype]
+            if tensor.dtype != torch.float64:
+                tensor = tensor.double()
+
+            _check = (
+                torch.matmul(tensor, tensor.transpose(1, 2))
+                - torch.eye(3, 3, dtype=tensor.dtype, device=tensor.device)
+            ).abs().max().item() < MATRIX_EPS
+            _check &= (torch.linalg.det(tensor) - 1).abs().max().item() < MATRIX_EPS
+
+        return _check
 
     @staticmethod
     def _unit_quaternion_check(quaternion: torch.Tensor):
         if quaternion.ndim != 2 or quaternion.shape[1] != 4:
             raise ValueError("Quaternions can only be 4-D vectors.")
 
-        if (torch.linalg.norm(quaternion, dim=1) - 1).abs().max().item() >= SO3.SO3_EPS:
+        QUANTERNION_EPS = theseus.constants._SO3_QUATERNION_EPS[quaternion.dtype]
+
+        if quaternion.dtype != torch.float64:
+            quaternion = quaternion.double()
+
+        if (
+            torch.linalg.norm(quaternion, dim=1) - 1
+        ).abs().max().item() >= QUANTERNION_EPS:
             raise ValueError("Not unit quaternions.")
 
     @staticmethod
@@ -144,7 +158,9 @@ class SO3(LieGroup):
         if matrix.ndim != 3 or matrix.shape[1:] != (3, 3):
             raise ValueError("Hat matrices of SO(3) can only be 3x3 matrices")
 
-        if (matrix.transpose(1, 2) + matrix).abs().max().item() > theseus.constants.EPS:
+        if (
+            matrix.transpose(1, 2) + matrix
+        ).abs().max().item() > theseus.constants._SO3_HAT_EPS[matrix.dtype]:
             raise ValueError("Hat matrices of SO(3) can only be skew-symmetric.")
 
     @staticmethod
@@ -157,23 +173,25 @@ class SO3(LieGroup):
         theta = torch.linalg.norm(tangent_vector, dim=1, keepdim=True).unsqueeze(1)
         theta2 = theta**2
         # Compute the approximations when theta ~ 0
-        near_zero = theta < 0.005
+        near_zero = theta < theseus.constants._SO3_NEAR_ZERO_EPS[tangent_vector.dtype]
         non_zero = torch.ones(
             1, dtype=tangent_vector.dtype, device=tangent_vector.device
         )
         theta_nz = torch.where(near_zero, non_zero, theta)
         theta2_nz = torch.where(near_zero, non_zero, theta2)
+
         cosine = torch.where(near_zero, 8 / (4 + theta2) - 1, theta.cos())
         sine = theta.sin()
         sine_by_theta = torch.where(near_zero, 0.5 * cosine + 0.5, sine / theta_nz)
         one_minus_cosie_by_theta2 = torch.where(
             near_zero, 0.5 * sine_by_theta, (1 - cosine) / theta2_nz
         )
-        ret.data = (
+        ret.tensor = (
             one_minus_cosie_by_theta2
             * tangent_vector.view(-1, 3, 1)
             @ tangent_vector.view(-1, 1, 3)
         )
+
         ret[:, 0, 0] += cosine.view(-1)
         ret[:, 1, 1] += cosine.view(-1)
         ret[:, 2, 2] += cosine.view(-1)
@@ -212,6 +230,21 @@ class SO3(LieGroup):
 
         return ret
 
+    @staticmethod
+    def normalize(tensor: torch.Tensor) -> torch.Tensor:
+        if tensor.ndim != 3 or tensor.shape[1:] != (3, 3):
+            raise ValueError("SO3 data tensors can only be 3x3 matrices.")
+
+        U, _, V = torch.svd(tensor)
+        Vtr = V.transpose(1, 2)
+        S = torch.diag(
+            torch.tensor([1, 1, -1], dtype=tensor.dtype, device=tensor.device)
+        )
+        temp = (U @ Vtr, U @ S @ Vtr)
+        sign = torch.det(temp[0]).reshape([-1, 1, 1]) > 0
+
+        return torch.where(sign, temp[0], temp[1])
+
     def _log_map_impl(
         self, jacobians: Optional[List[torch.Tensor]] = None
     ) -> torch.Tensor:
@@ -223,9 +256,9 @@ class SO3(LieGroup):
         sine = sine_axis.norm(dim=1)
         theta = torch.atan2(sine, cosine)
 
-        near_zero = theta < 5e-3
+        near_zero = theta < self._NEAR_ZERO_EPS
 
-        not_near_pi = 1 + cosine > 1e-7
+        not_near_pi = 1 + cosine > self._NEAR_PI_EPS
         # theta != pi
         near_zero_not_near_pi = near_zero[not_near_pi]
         # Compute the approximation of theta / sin(theta) when theta is near to 0
@@ -249,13 +282,13 @@ class SO3(LieGroup):
         aux = torch.ones(sel_rows.shape[0], dtype=torch.bool)
         sel_rows[aux, major] -= cosine[near_pi]
         axis = sel_rows / sel_rows.norm(dim=1, keepdim=True)
-        ret[near_pi] = axis * (theta[near_pi] * sine_axis[near_pi, major].sign()).view(
-            -1, 1
-        )
+        sign_tmp = sine_axis[near_pi, major].sign()
+        sign = torch.where(sign_tmp != 0, sign_tmp, torch.ones_like(sign_tmp))
+        ret[near_pi] = axis * (theta[near_pi] * sign).view(-1, 1)
 
         if jacobians is not None:
             SO3._check_jacobians_list(jacobians)
-            jac = torch.zeros_like(self.data)
+            jac = torch.zeros_like(self.tensor)
 
             theta2 = theta**2
             sine_theta = sine * theta
@@ -295,15 +328,16 @@ class SO3(LieGroup):
     def _compose_impl(self, so3_2: LieGroup) -> "SO3":
         so3_2 = cast(SO3, so3_2)
         ret = SO3()
-        ret.data = self.data @ so3_2.data
+        ret.tensor = self.tensor @ so3_2.tensor
         return ret
 
     def _inverse_impl(self, get_jacobian: bool = False) -> "SO3":
-        # if self.data is a valid SO(3), then self.data.transpose(1, 2) must be valid as well
-        return SO3(data=self.data.transpose(1, 2).clone(), requires_check=False)
+        # if self.tensor is a valid SO(3), then self.tensor.transpose(1, 2)
+        # must be valid as well
+        return SO3(tensor=self.tensor.transpose(1, 2).clone(), strict=False)
 
     def to_matrix(self) -> torch.Tensor:
-        return self.data.clone()
+        return self.tensor.clone()
 
     def to_quaternion(self) -> torch.Tensor:
         ret = torch.zeros(self.shape[0], 4, dtype=self.dtype, device=self.device)
@@ -317,7 +351,7 @@ class SO3(LieGroup):
         ret[:, 0] = w
 
         # theta != pi
-        not_near_pi = ret[:, 0] > 1e-5
+        not_near_pi = ret[:, 0] > self._NEAR_PI_EPS
         ret[:, 1:] = 0.5 * sine_axis / w.view(-1, 1)
 
         # theta ~ pi
@@ -404,7 +438,7 @@ class SO3(LieGroup):
         q33 = q3 * q3
 
         ret = SO3()
-        ret.data = torch.zeros(quaternion.shape[0], 3, 3).to(
+        ret.tensor = torch.zeros(quaternion.shape[0], 3, 3).to(
             dtype=quaternion.dtype, device=quaternion.device
         )
         ret[:, 0, 0] = 2 * (q00 + q11) - 1
@@ -419,8 +453,8 @@ class SO3(LieGroup):
         return ret
 
     def _copy_impl(self, new_name: Optional[str] = None) -> "SO3":
-        # if self.data is a valid SO(3), so is the copy
-        return SO3(data=self.data.clone(), name=new_name, requires_check=False)
+        # if self.tensor is a valid SO(3), so is the copy
+        return SO3(tensor=self.tensor.clone(), name=new_name, strict=False)
 
     # only added to avoid casting downstream
     def copy(self, new_name: Optional[str] = None) -> "SO3":
@@ -436,13 +470,13 @@ class SO3(LieGroup):
         if isinstance(point, torch.Tensor):
             p = point.view(-1, 3, 1)
         else:
-            p = point.data.view(-1, 3, 1)
+            p = point.tensor.view(-1, 3, 1)
 
-        ret = Point3(data=(self.data @ p).view(-1, 3))
+        ret = Point3(tensor=(self.tensor @ p).view(-1, 3))
         if jacobians is not None:
             self._check_jacobians_list(jacobians)
             # Right jacobians for SO(3) are computed
-            Jrot = -self.data @ SO3.hat(p)
+            Jrot = -self.tensor @ SO3.hat(p)
             # Jacobians for point
             Jpnt = self.to_matrix().expand(batch_size, 3, 3)
 
@@ -460,9 +494,9 @@ class SO3(LieGroup):
         if isinstance(point, torch.Tensor):
             p = point.view(-1, 3, 1)
         else:
-            p = point.data.view(-1, 3, 1)
+            p = point.tensor.view(-1, 3, 1)
 
-        ret = Point3(data=(self.data.transpose(1, 2) @ p).view(-1, 3))
+        ret = Point3(tensor=(self.tensor.transpose(1, 2) @ p).view(-1, 3))
         if jacobians is not None:
             self._check_jacobians_list(jacobians)
             # Left jacobians for SO3 are computed

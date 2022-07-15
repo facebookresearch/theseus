@@ -72,8 +72,8 @@ def test_gp_motion_model_variable_type():
 
             assert isinstance(cost_weight.Qc_inv, Variable)
             assert isinstance(cost_weight.dt, Variable)
-            assert torch.allclose(cost_weight.Qc_inv.data, q_inv)
-            assert torch.allclose(cost_weight.dt.data, dt)
+            assert torch.allclose(cost_weight.Qc_inv.tensor, q_inv)
+            assert torch.allclose(cost_weight.dt.tensor, dt)
 
             q_inv_v = Variable(q_inv)
             dt_v = Variable(dt)
@@ -86,7 +86,7 @@ def test_gp_motion_model_variable_type():
             dt_f = torch.rand(1)
             cost_weight = th.eb.GPCostWeight(q_inv_v, dt_f)
             assert isinstance(cost_weight.dt, Variable)
-            assert np.allclose(cost_weight.dt.data.item(), dt_f)
+            assert np.allclose(cost_weight.dt.tensor.item(), dt_f)
             assert len(cost_weight.dt.shape) == 2
 
 
@@ -94,7 +94,8 @@ def test_gp_motion_model_cost_function_error_vector_vars():
     for batch_size in [1, 10, 100]:
         for dof in range(1, 10):
             vars = [
-                th.Vector(data=torch.randn(batch_size, dof).double()) for _ in range(4)
+                th.Vector(tensor=torch.randn(batch_size, dof).double())
+                for _ in range(4)
             ]
             dt = th.Variable(torch.rand(1).double())
 
@@ -107,15 +108,16 @@ def test_gp_motion_model_cost_function_error_vector_vars():
 
             error = cost_function.error()
             assert torch.allclose(
-                error[:, :dof], vars[2].data - (vars[0].data + vars[1].data * dt.data)
+                error[:, :dof],
+                vars[2].tensor - (vars[0].tensor + vars[1].tensor * dt.tensor),
             )
-            assert torch.allclose(error[:, dof:], vars[3].data - vars[1].data)
+            assert torch.allclose(error[:, dof:], vars[3].tensor - vars[1].tensor)
 
             def new_error_fn(new_vars):
                 new_cost_function = th.eb.GPMotionModel(
                     new_vars[0], new_vars[1], new_vars[2], new_vars[3], dt, cost_weight
                 )
-                return th.Vector(data=new_cost_function.error())
+                return th.Vector(tensor=new_cost_function.error())
 
             expected_jacs = numeric_jacobian(new_error_fn, vars, function_dim=2 * dof)
             jacobians, error_jac = cost_function.jacobians()

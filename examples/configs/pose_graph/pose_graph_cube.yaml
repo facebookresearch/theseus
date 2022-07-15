@@ -1,7 +1,8 @@
 seed: 1
 solver_device: "cpu"
+device: "cuda"
 
-num_poses: 1024
+num_poses: 256
 dataset_size: 256 
 
 inner_optim:
@@ -14,6 +15,6 @@ inner_optim:
 
 hydra:
   run:
-    dir: examples/outputs/pgo/pose_graph_cube
+    dir: examples/outputs/pose_graph_cube
   sweep:
-    dir: examples/outputs/pgo/pose_graph_cube
+    dir: examples/outputs/pose_graph/pose_graph_cube/${now:%Y.%m.%d}/${now:%H.%M.%S}

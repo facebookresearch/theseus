@@ -58,10 +58,10 @@ class QuadraticFitCostFunction(th.CostFunction):
 
     # err = y - f(x:b), where b are the current variable values
     def error(self):
-        return self.error_from_tensors(self.optim_var_0.data)
+        return self.error_from_tensors(self.optim_var_0.tensor)
 
     def jacobians(self):
-        g1, g2 = model_grad(self.xs, self.optim_var_0.data)
+        g1, g2 = model_grad(self.xs, self.optim_var_0.tensor)
         return [-torch.stack([g1, g2], axis=2)], self.error()
 
     def dim(self):
@@ -86,6 +86,7 @@ def create_qf_theseus_layer(
     linear_solver_cls=th.CholeskyDenseSolver,
     max_iterations=10,
     use_learnable_error=False,
+    force_vectorization=False,
 ):
     variables = [th.Vector(2, name="coefficients")]
     objective = th.Objective()
@@ -100,8 +101,8 @@ def create_qf_theseus_layer(
             # note that this is a hybrid cost function since, part of the function
             # follows the structure of QuadraticFitCostFunction, only the error weight
             # factor (aux_vars[0]) is learned
-            return aux_vars[0].data * cost_function.error_from_tensors(
-                optim_vars[0].data
+            return aux_vars[0].tensor * cost_function.error_from_tensors(
+                optim_vars[0].tensor
             )
 
         if isinstance(cost_weight, th.ScaleCostWeight):
@@ -121,7 +122,7 @@ def create_qf_theseus_layer(
             error_fn,
             cost_function.dim(),
             aux_vars=[
-                th.Vector(cost_weight_dim, name="learnable_err_param", data=cw_data)
+                th.Vector(cost_weight_dim, name="learnable_err_param", tensor=cw_data)
             ],
             autograd_vectorize=True,
         )
@@ -137,8 +138,15 @@ def create_qf_theseus_layer(
     )
     assert isinstance(optimizer.linear_solver, linear_solver_cls)
     assert not objective.vectorized
+
+    if force_vectorization:
+        th.Vectorize._handle_singleton_wrapper = (
+            th.Vectorize._handle_schema_vectorization
+        )
+
     theseus_layer = th.TheseusLayer(optimizer, vectorize=True)
     assert objective.vectorized
+
     return theseus_layer
 
 
@@ -183,6 +191,7 @@ def _run_optimizer_test(
     use_learnable_error=False,
     verbose=True,
     learning_method="default",
+    force_vectorization=False,
 ):
     device = "cuda:0" if torch.cuda.is_available() else "cpu"
     print(f"_run_test_for: {device}")
@@ -217,6 +226,7 @@ def _run_optimizer_test(
         nonlinear_optimizer_cls=nonlinear_optimizer_cls,
         linear_solver_cls=linear_solver_cls,
         use_learnable_error=use_learnable_error,
+        force_vectorization=force_vectorization,
     )
     layer_ref.to(device)
     with torch.no_grad():
@@ -267,6 +277,7 @@ def _run_optimizer_test(
         nonlinear_optimizer_cls=nonlinear_optimizer_cls,
         linear_solver_cls=linear_solver_cls,
         use_learnable_error=use_learnable_error,
+        force_vectorization=force_vectorization,
     )
     layer_to_learn.to(device)
 
@@ -365,6 +376,7 @@ def test_backward_gauss_newton():
                     {},
                     cost_weight_model,
                     use_learnable_error=use_learnable_error,
+                    force_vectorization=True,
                 )
 
 
@@ -402,6 +414,7 @@ def test_backward_levenberg_marquardt_choleskysparse():
                 {"damping": 0.01, "ellipsoidal_damping": False},
                 cost_weight_model,
                 use_learnable_error=use_learnable_error,
+                force_vectorization=True,
             )
 
 
@@ -545,7 +558,8 @@ def test_no_layer_kwargs():
     input_values = {"coefficients": torch.ones(batch_size, 2) * 0.5}
 
     # Trying a few variations of aux_vars. In general, no kwargs should be accepted
-    # beyong input_data and optimization_kwargs, but I'm not sure how to test for this
+    # beyond input_tensors and optimization_kwargs, but I'm not sure how to test for
+    # this
     with pytest.raises(TypeError):
         layer.forward(input_values, aux_vars=None)
 

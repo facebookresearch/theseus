@@ -12,8 +12,8 @@ def _new_robust_cf(batch_size, loss_cls, generator) -> th.RobustCostFunction:
     v1 = th.rand_se3(batch_size, generator=generator)
     v2 = th.rand_se3(batch_size, generator=generator)
     w = th.ScaleCostWeight(torch.randn(1, generator=generator))
-    cf = th.Local(v1, w, v2)
-    ll_radius = th.Variable(data=torch.randn(1, 1, generator=generator))
+    cf = th.Local(v1, v2, w)
+    ll_radius = th.Variable(tensor=torch.randn(1, 1, generator=generator))
     return th.RobustCostFunction(cf, loss_cls, ll_radius)
 
 
@@ -35,7 +35,7 @@ def test_robust_cost_weighted_error():
                 # `RobustCostFunction.weighted_error` is written so that
                 # ||we||2 == rho(||e||2)
                 expected_rho2 = loss_cls.evaluate(
-                    (e * e).sum(dim=1, keepdim=True), robust_cf.log_loss_radius.data
+                    (e * e).sum(dim=1, keepdim=True), robust_cf.log_loss_radius.tensor
                 )
                 assert rho2.allclose(expected_rho2)
 
@@ -51,7 +51,7 @@ def test_robust_cost_grad_form():
                 jacs, e = cf.weighted_jacobians_error()
                 cf_grad = _grad(jacs[0], e)
                 e_norm = (e * e).sum(1, keepdim=True)
-                rho_prime = loss_cls.linearize(e_norm, robust_cf.log_loss_radius.data)
+                rho_prime = loss_cls.linearize(e_norm, robust_cf.log_loss_radius.tensor)
                 # `weighted_jacobians_error()` is written so that it results in a
                 # gradient equal to drho_de2 * J^T * e, which in the code is
                 # `rho_prime * cf_grad`.
@@ -77,15 +77,15 @@ def test_robust_cost_jacobians():
                 def test_fn(v_data):
                     v_aux.update(v_data)
                     new_robust_cf = th.RobustCostFunction(
-                        th.Local(v_aux, w, v2), loss_cls, ll_radius
+                        th.Local(v_aux, v2, w), loss_cls, ll_radius
                     )
                     e = new_robust_cf.cost_function.weighted_error()
                     e_norm = (e * e).sum(1, keepdim=True)
-                    return loss_cls.evaluate(e_norm, ll_radius.data) / 2.0
+                    return loss_cls.evaluate(e_norm, ll_radius.tensor) / 2.0
 
                 aux_id = torch.arange(batch_size)
                 grad_raw_dense = torch.autograd.functional.jacobian(
-                    test_fn, (v1.data,)
+                    test_fn, (v1.tensor,)
                 )[0]
                 grad_raw_sparse = grad_raw_dense[aux_id, :, aux_id]
                 expected_grad = v1.project(grad_raw_sparse, is_sparse=True)

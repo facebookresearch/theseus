@@ -96,7 +96,7 @@ class Message(th.ManifoldGaussian):
                 new_mean_i = var.__class__()
             repeats = torch.ones(var.ndim, dtype=int)
             repeats[0] = batch_size
-            new_mean_i = new_mean_i.data.repeat(repeats.tolist())
+            new_mean_i = new_mean_i.tensor.repeat(repeats.tolist())
             new_mean_i = new_mean_i.to(dtype=self.dtype, device=self.device)
             new_mean.append(new_mean_i)
         new_precision = torch.zeros(batch_size, self.dof, self.dof).to(
@@ -200,7 +200,9 @@ class Factor:
             lam = torch.bmm(J_stk.transpose(-2, -1), J_stk)
             eta = -torch.matmul(J_stk.transpose(-2, -1), error.unsqueeze(-1))
             if lie is False:
-                optim_vars_stk = torch.cat([v.data for v in self.cf.optim_vars], dim=-1)
+                optim_vars_stk = torch.cat(
+                    [v.tensor for v in self.cf.optim_vars], dim=-1
+                )
                 eta = eta + torch.matmul(lam, optim_vars_stk.unsqueeze(-1))
             eta = eta.squeeze(-1)
 
@@ -208,7 +210,7 @@ class Factor:
             self.potential_lam[do_lin] = lam[do_lin]
 
             for j, var in enumerate(self.cf.optim_vars):
-                self.lin_point[j].update(var.data, batch_ignore_mask=~do_lin)
+                self.lin_point[j].update(var.tensor, batch_ignore_mask=~do_lin)
 
             self.steps_since_lin[do_lin] = 0
 
@@ -411,11 +413,14 @@ class GaussianBeliefPropagation(Optimizer, abc.ABC):
             return None
         solution_dict = {}
         for var in self.ordering:
-            solution_dict[var.name] = var.data.detach().clone().cpu()
+            solution_dict[var.name] = var.tensor.detach().clone().cpu()
         return solution_dict
 
     def _init_info(
-        self, track_best_solution: bool, track_err_history: bool, verbose: bool
+        self,
+        track_best_solution: bool,
+        track_err_history: bool,
+        track_state_history: bool,
     ) -> NonlinearOptimizerInfo:
         with torch.no_grad():
             last_err = self.objective.error_squared_norm() / 2
@@ -429,6 +434,22 @@ class GaussianBeliefPropagation(Optimizer, abc.ABC):
             err_history[:, 0] = last_err.clone().cpu()
         else:
             err_history = None
+
+        if track_state_history:
+            state_history = {}
+            for var in self.objective.optim_vars.values():
+                state_history[var.name] = (
+                    torch.ones(
+                        self.objective.batch_size,
+                        *var.shape[1:],
+                        self.params.max_iterations + 1,
+                    )
+                    * math.inf
+                )
+                state_history[var.name][..., 0] = var.tensor.detach().clone().cpu()
+        else:
+            state_history = None
+
         return NonlinearOptimizerInfo(
             best_solution=self._maybe_init_best_solution(do_init=track_best_solution),
             last_err=last_err,
@@ -439,7 +460,14 @@ class GaussianBeliefPropagation(Optimizer, abc.ABC):
             converged_iter=torch.zeros_like(last_err, dtype=torch.long),
             best_iter=torch.zeros_like(last_err, dtype=torch.long),
             err_history=err_history,
+            state_history=state_history,
         )
+
+    def _update_state_history(self, iter_idx: int, info: NonlinearOptimizerInfo):
+        for var in self.objective.optim_vars.values():
+            info.state_history[var.name][..., iter_idx + 1] = (
+                var.tensor.detach().clone().cpu()
+            )
 
     def _update_info(
         self,
@@ -452,6 +480,8 @@ class GaussianBeliefPropagation(Optimizer, abc.ABC):
         if info.err_history is not None:
             assert err.grad_fn is None
             info.err_history[:, current_iter + 1] = err.clone().cpu()
+        if info.state_history is not None:
+            self._update_state_history(current_iter, info)
 
         if info.best_solution is not None:
             # Only copy best solution if needed (None means track_best_solution=False)
@@ -460,7 +490,7 @@ class GaussianBeliefPropagation(Optimizer, abc.ABC):
             info.best_iter[good_indices] = current_iter
             for var in self.ordering:
                 info.best_solution[var.name][good_indices] = (
-                    var.data.detach().clone()[good_indices].cpu()
+                    var.tensor.detach().clone()[good_indices].cpu()
                 )
 
             info.best_err = torch.minimum(info.best_err, err)
@@ -474,21 +504,29 @@ class GaussianBeliefPropagation(Optimizer, abc.ABC):
     def _merge_infos(
         self,
         grad_loop_info: NonlinearOptimizerInfo,
-        num_no_grad_iter: int,
-        backward_num_iterations: int,
+        num_no_grad_iters: int,
+        num_grad_iters: int,
         info: NonlinearOptimizerInfo,
     ):
+        total_iters = num_no_grad_iters + num_grad_iters
+        # we add + 1 to all indices to account for the initial values
+        info_idx = slice(num_no_grad_iters + 1, total_iters + 1)
+        grad_info_idx = slice(1, num_grad_iters + 1)
         # Concatenate error histories
         if info.err_history is not None:
-            info.err_history[:, num_no_grad_iter:] = grad_loop_info.err_history[
-                :, : backward_num_iterations + 1
-            ]
+            info.err_history[:, info_idx] = grad_loop_info.err_history[:, grad_info_idx]
+        if info.state_history is not None:
+            for var in self.objective.optim_vars.values():
+                info.state_history[var.name][
+                    ..., info_idx
+                ] = grad_loop_info.state_history[var.name][..., grad_info_idx]
+
         # Merge best solution and best error
         if info.best_solution is not None:
             best_solution = {}
             best_err_no_grad = info.best_err
             best_err_grad = grad_loop_info.best_err
-            idx_no_grad = best_err_no_grad < best_err_grad
+            idx_no_grad = (best_err_no_grad < best_err_grad).cpu().view(-1, 1)
             best_err = torch.minimum(best_err_no_grad, best_err_grad)
             for var_name in info.best_solution:
                 sol_no_grad = info.best_solution[var_name]
@@ -599,7 +637,7 @@ class GaussianBeliefPropagation(Optimizer, abc.ABC):
             # Get the vectorized tensor that has the current variable data.
             # The resulting shape is (N * b, M), b is batch size, N is the number of
             # variables in the group, and M is the data shape for this class
-            vectorized_data = torch.cat([v.data for v in var_list], dim=0)
+            vectorized_data = torch.cat([v.tensor for v in var_list], dim=0)
             assert (
                 vectorized_data.shape
                 == (n_vars * batch_size,) + vectorized_data.shape[1:]
@@ -734,7 +772,6 @@ class GaussianBeliefPropagation(Optimizer, abc.ABC):
     # loop for the iterative optimizer
     def _optimize_loop(
         self,
-        start_iter: int,
         num_iter: int,
         info: NonlinearOptimizerInfo,
         verbose: bool,
@@ -818,16 +855,16 @@ class GaussianBeliefPropagation(Optimizer, abc.ABC):
                 self.params.max_iterations, self.n_edges
             )
 
-        self.belief_history = {}
         self.ftov_msgs_history = {}
 
         converged_indices = torch.zeros_like(info.last_err).bool()
-        for it_ in range(start_iter, start_iter + num_iter):
+        iters_done = 0
+        for it_ in range(num_iter):
+            iters_done += 1
             curr_ftov_msgs = []
             for factor in self.factors:
                 curr_ftov_msgs.extend([msg.copy() for msg in factor.ftov_msgs])
             self.ftov_msgs_history[it_] = curr_ftov_msgs
-            self.belief_history[it_] = [belief.copy() for belief in self.beliefs]
 
             # damping
             damping_arr = torch.full(
@@ -887,7 +924,7 @@ class GaussianBeliefPropagation(Optimizer, abc.ABC):
         info.status[
             info.status == NonlinearOptimizerStatus.START
         ] = NonlinearOptimizerStatus.MAX_ITERATIONS
-        return info
+        return iters_done
 
     # `track_best_solution` keeps a **detached** copy (as in no gradient info)
     # of the best variables found, but it is optional to avoid unnecessary copying
@@ -896,6 +933,7 @@ class GaussianBeliefPropagation(Optimizer, abc.ABC):
         self,
         track_best_solution: bool = False,
         track_err_history: bool = False,
+        track_state_history: bool = False,
         verbose: bool = False,
         backward_mode: BackwardMode = BackwardMode.FULL,
         relin_threshold: float = 0.1,
@@ -906,7 +944,9 @@ class GaussianBeliefPropagation(Optimizer, abc.ABC):
         **kwargs,
     ) -> NonlinearOptimizerInfo:
         with torch.no_grad():
-            info = self._init_info(track_best_solution, track_err_history, verbose)
+            info = self._init_info(
+                track_best_solution, track_err_history, track_state_history
+            )
 
         if verbose:
             print(
@@ -914,8 +954,7 @@ class GaussianBeliefPropagation(Optimizer, abc.ABC):
             )
 
         if backward_mode == BackwardMode.FULL:
-            info = self._optimize_loop(
-                start_iter=0,
+            self._optimize_loop(
                 num_iter=self.params.max_iterations,
                 info=info,
                 verbose=verbose,
@@ -955,8 +994,8 @@ class GaussianBeliefPropagation(Optimizer, abc.ABC):
 
             num_no_grad_iter = self.params.max_iterations - backward_num_iterations
             with torch.no_grad():
-                self._optimize_loop(
-                    start_iter=0,
+                # actual_num_iters could be < num_iter due to early convergence
+                no_grad_iters_done = self._optimize_loop(
                     num_iter=num_no_grad_iter,
                     info=info,
                     verbose=verbose,
@@ -970,10 +1009,9 @@ class GaussianBeliefPropagation(Optimizer, abc.ABC):
                 )
 
             grad_loop_info = self._init_info(
-                track_best_solution, track_err_history, verbose
+                track_best_solution, track_err_history, track_state_history
             )
-            self._optimize_loop(
-                start_iter=0,
+            grad_iters_done = self._optimize_loop(
                 num_iter=backward_num_iterations,
                 info=grad_loop_info,
                 verbose=verbose,
@@ -988,9 +1026,7 @@ class GaussianBeliefPropagation(Optimizer, abc.ABC):
             )
 
             # Adds grad_loop_info results to original info
-            self._merge_infos(
-                grad_loop_info, num_no_grad_iter, backward_num_iterations, info
-            )
+            self._merge_infos(grad_loop_info, no_grad_iters_done, grad_iters_done, info)
 
             return info
         else:

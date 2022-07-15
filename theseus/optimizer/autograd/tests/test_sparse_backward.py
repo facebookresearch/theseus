@@ -59,3 +59,18 @@ def test_sparse_backward_step():
     )
 
     assert gradcheck(CholmodSolveFunction.apply, inputs, eps=3e-4, atol=1e-3)
+
+
+def test_float64_used():
+    data = torch.load("theseus/optimizer/autograd/tests/bad_sparse_matrix.pth")
+    decomp = analyze_AAt(data["struct"].mock_csc_transpose())
+    delta = CholmodSolveFunction.apply(
+        data["a"],
+        data["b"],
+        data["struct"],
+        decomp,
+        1e-06,
+    )
+
+    # With this matrix, if CHOLMOD is not casted to 64-bits, this value is > 100.0
+    assert delta.abs().max() < 1.0

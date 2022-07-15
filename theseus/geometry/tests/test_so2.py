@@ -19,6 +19,7 @@ from .common import (
     check_inverse,
     check_jacobian_for_local,
     check_log_map,
+    check_normalize,
     check_projection_for_compose,
     check_projection_for_exp_map,
     check_projection_for_inverse,
@@ -30,14 +31,14 @@ from .common import (
 def test_exp_map():
     for batch_size in [1, 20, 100]:
         theta = torch.from_numpy(np.linspace(-np.pi, np.pi, batch_size)).view(-1, 1)
-        check_exp_map(theta, th.SO2)
+        check_exp_map(theta, th.SO2, EPS)
         check_projection_for_exp_map(theta, th.SO2)
 
 
 def test_log_map():
     for batch_size in [1, 2, 100]:
         theta = torch.from_numpy(np.linspace(-np.pi, np.pi, batch_size)).view(-1, 1)
-        check_log_map(theta, th.SO2)
+        check_log_map(theta, th.SO2, EPS)
         check_projection_for_log_map(theta, th.SO2)
 
 
@@ -83,9 +84,9 @@ def test_rotate_and_unrotate():
 
                 # Check the operation result
                 assert torch.allclose(
-                    expected_rotated_data.squeeze(2), rotated_point.data, atol=EPS
+                    expected_rotated_data.squeeze(2), rotated_point.tensor, atol=EPS
                 )
-                assert torch.allclose(point_tensor, unrotated_point.data, atol=EPS)
+                assert torch.allclose(point_tensor, unrotated_point.tensor, atol=EPS)
 
                 # Check the jacobians
                 # function_dim = 2 because rotate(theta, (x, y)) --> (x_new, y_new)
@@ -158,3 +159,9 @@ def test_local_map():
         group1 = th.SO2.rand(batch_size)
 
         check_jacobian_for_local(group0, group1, Group=th.SO2, is_projected=True)
+
+
+@pytest.mark.parametrize("batch_size", [1, 20, 100])
+@pytest.mark.parametrize("dtype", [torch.float32, torch.float64])
+def test_normalization(batch_size, dtype):
+    check_normalize(th.SO2, batch_size, dtype)

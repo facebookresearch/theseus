@@ -4,6 +4,7 @@
 # LICENSE file in the root directory of this source tree.
 
 import numpy as np
+import pytest  # noqa: F401
 import torch
 
 import theseus as th
@@ -14,18 +15,18 @@ def test_costs_vars_and_err_before_vectorization():
     for _ in range(20):
         objective = th.Objective()
         batch_size = torch.randint(low=1, high=10, size=(1,)).item()
-        v1 = th.Vector(data=torch.randn(batch_size, 1), name="v1")
-        v2 = th.Vector(data=torch.randn(batch_size, 1), name="v2")
+        v1 = th.Vector(tensor=torch.randn(batch_size, 1), name="v1")
+        v2 = th.Vector(tensor=torch.randn(batch_size, 1), name="v2")
         odummy = th.Vector(1, name="odummy")
-        t1 = th.Vector(data=torch.zeros(1, 1), name="t1")
-        adummy = th.Variable(data=torch.zeros(1, 1), name="adummy")
+        t1 = th.Vector(tensor=torch.zeros(1, 1), name="t1")
+        adummy = th.Variable(tensor=torch.zeros(1, 1), name="adummy")
         cw1 = th.ScaleCostWeight(th.Variable(torch.zeros(1, 1), name="w1"))
         cw2 = th.ScaleCostWeight(th.Variable(torch.zeros(1, 1), name="w2"))
-        cf1 = th.Difference(v1, cw1, t1)
+        cf1 = th.Difference(v1, t1, cw1)
 
         # Also test with autodiff cost
         def err_fn(optim_vars, aux_vars):
-            return optim_vars[0] - aux_vars[0]
+            return optim_vars[0].tensor - aux_vars[0].tensor
 
         cf2 = th.AutoDiffCostFunction([v2, odummy], err_fn, 1, cw2, [t1, adummy])
 
@@ -57,14 +58,14 @@ def test_costs_vars_and_err_before_vectorization():
             w_err = cf.weighted_error()
             if cf.cost_fn is cf1:
                 assert v1 in optim_vars
-                assert w_err.allclose((v1.data - t1.data) * w1)
+                assert w_err.allclose((v1.tensor - t1.tensor) * w1)
                 assert _check_attr(cf, v1)
                 saw_cf1 = True
             elif cf.cost_fn is cf2:
                 assert v2 in optim_vars and odummy in optim_vars
                 assert adummy in aux_vars
                 assert _check_attr(cf, v2) and _check_attr(cf, odummy)
-                assert w_err.allclose((v2.data - t1.data) * w2)
+                assert w_err.allclose((v2.tensor - t1.tensor) * w2)
                 saw_cf2 = True
             else:
                 assert False
@@ -87,31 +88,31 @@ def test_correct_schemas_and_shared_vars():
 
     objective = th.Objective()
     # these two can be grouped
-    cf1 = th.Difference(v1, w1, tv)
-    cf2 = th.Difference(v2, w1, tv)
+    cf1 = th.Difference(v1, tv, w1)
+    cf2 = th.Difference(v2, tv, w1)
     objective.add(cf1)
     objective.add(cf2)
 
     # this one uses the same weight and v1, v2, but cannot be grouped
-    cf3 = th.Between(v1, v2, w1, mv)
+    cf3 = th.Between(v1, v2, mv, w1)
     objective.add(cf3)
 
     # this one is the same cost function type, var type, and weight but different
     # dimension, so cannot be grouped either
-    cf4 = th.Difference(v3, w1, v4)
+    cf4 = th.Difference(v3, v4, w1)
     objective.add(cf4)
 
     # Now add another group with a different data-type (no-shared weight)
     w2 = th.ScaleCostWeight(1.0)
     w3 = th.ScaleCostWeight(2.0)
-    cf5 = th.Difference(s1, w2, ts)
-    cf6 = th.Difference(s2, w3, ts)
+    cf5 = th.Difference(s1, ts, w2)
+    cf6 = th.Difference(s2, ts, w3)
     objective.add(cf5)
     objective.add(cf6)
 
     # Not grouped with anything cf1 and cf2 because weight type is different
     w7 = th.DiagonalCostWeight([1.0])
-    cf7 = th.Difference(v1, w7, tv)
+    cf7 = th.Difference(v1, tv, w7)
     objective.add(cf7)
 
     vectorization = th.Vectorize(objective)
@@ -159,26 +160,26 @@ def test_vectorized_error():
 
         vectors = [
             th.Vector(
-                data=torch.randn(batch_size, dim, generator=generator), name=f"v{i}"
+                tensor=torch.randn(batch_size, dim, generator=generator), name=f"v{i}"
             )
             for i in range(rng.choice([1, 10]))
         ]
         target = th.Vector(dim, name="target")
         w = th.ScaleCostWeight(torch.randn(1, generator=generator))
         for v in vectors:
-            objective.add(th.Difference(v, w, target))
+            objective.add(th.Difference(v, target, w))
 
         se3s = [
             th.SE3(
-                data=th.SE3.rand(batch_size, generator=generator).data,
-                requires_check=False,
+                tensor=th.SE3.rand(batch_size, generator=generator).tensor,
+                strict=False,
             )
             for i in range(rng.choice([1, 10]))
         ]
         s_target = th.SE3.rand(1, generator=generator)
         ws = th.DiagonalCostWeight(torch.randn(6, generator=generator))
         for s in se3s:
-            objective.add(th.Difference(s, ws, s_target))
+            objective.add(th.Difference(s, s_target, ws))
 
         vectorization = th.Vectorize(objective)
         objective.update_vectorization_if_needed()
@@ -234,4 +235,4 @@ def test_vectorized_retract():
         )
 
         for v1, v2 in zip(variables, variables_vectorized):
-            assert v1.data.allclose(v2.data)
+            assert v1.tensor.allclose(v2.tensor)

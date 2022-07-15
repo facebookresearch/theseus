@@ -27,7 +27,7 @@ class ResidualCostFunction(th.CostFunction):
 
         if isinstance(true_coeffs, torch.Tensor):
             assert true_coeffs.ndim == 1 and true_coeffs.numel() == len_vars
-            self.true_coeffs = th.Variable(data=true_coeffs.unsqueeze(0))
+            self.true_coeffs = th.Variable(tensor=true_coeffs.unsqueeze(0))
         else:
             self.true_coeffs = true_coeffs
 
@@ -37,7 +37,7 @@ class ResidualCostFunction(th.CostFunction):
                 point = point.unsqueeze(0)
             assert point.ndim == 2 and point.shape[1] == len_vars - 1
             self.point = th.Variable(
-                data=torch.cat([point, torch.ones(batch_size, 1)], dim=1)
+                tensor=torch.cat([point, torch.ones(batch_size, 1)], dim=1)
             )
         else:
             self.point = point
@@ -49,12 +49,12 @@ class ResidualCostFunction(th.CostFunction):
         self.register_aux_var("point")
 
         if target is None:
-            target_data = (self.point.data * self.true_coeffs.data).sum(
+            target_data = (self.point.tensor * self.true_coeffs.tensor).sum(
                 1, keepdim=True
             ) ** 2
             if noise_mag:
                 target_data += noise_mag * torch.randn(size=target_data.shape)
-            self.target = th.Variable(data=target_data)
+            self.target = th.Variable(tensor=target_data)
         else:
             self.target = target
         self.register_aux_var("target")
@@ -64,18 +64,18 @@ class ResidualCostFunction(th.CostFunction):
 
     def _eval_coeffs(self):
         if self.multivar:
-            coeffs = torch.cat([v.data for v in self.optim_vars], axis=1)
+            coeffs = torch.cat([v.tensor for v in self.optim_vars], axis=1)
         else:
-            coeffs = self.optim_var_0.data
-        return (self.point.data * coeffs).sum(1, keepdim=True)
+            coeffs = self.optim_var_0.tensor
+        return (self.point.tensor * coeffs).sum(1, keepdim=True)
 
     def error(self):
         # h(B * x) - h(Btrue * x)
-        return self._eval_coeffs() ** 2 - self.target.data
+        return self._eval_coeffs() ** 2 - self.target.tensor
 
     def jacobians(self):
         dhdz = 2 * self._eval_coeffs()
-        grad = self.point.data * dhdz
+        grad = self.point.tensor * dhdz
         return [grad.unsqueeze(1)], self.error()
 
     def dim(self):
@@ -150,7 +150,7 @@ def _check_nonlinear_least_squares_fit(
         track_best_solution=True, track_err_history=True, **optimize_kwargs
     )
     # Solution must now match the true coefficients
-    assert variables[0].data.allclose(true_coeffs.repeat(batch_size, 1), atol=1e-6)
+    assert variables[0].tensor.allclose(true_coeffs.repeat(batch_size, 1), atol=1e-6)
     _check_info(info, batch_size, max_iterations, initial_error, objective)
 
 
@@ -194,7 +194,7 @@ def _check_nonlinear_least_squares_fit_multivar(
 
     # Solution must now match the true coefficients
     for i in range(nvars):
-        assert variables[i].data.allclose(true_coeffs[i].repeat(batch_size, 1))
+        assert variables[i].tensor.allclose(true_coeffs[i].repeat(batch_size, 1))
 
     _check_info(info, batch_size, max_iterations, initial_error, objective)
 

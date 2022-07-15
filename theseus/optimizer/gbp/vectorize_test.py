@@ -32,8 +32,8 @@ data_batches = generate_learning_data(100, num_models)
 def quad_error_fn2(optim_vars, aux_vars):
     [a, b] = optim_vars
     x, y = aux_vars
-    est = a.data * x.data.square() + b.data
-    err = y.data - est
+    est = a.tensor * x.tensor.square() + b.tensor
+    err = y.tensor - est
     return err
 
 
@@ -61,10 +61,10 @@ x = th.Variable(data_x, name="x")
 y = th.Variable(data_y, name="y")
 
 # construct a as before
-a = th.Vector(data=torch.rand(num_models, 1), name="a")
+a = th.Vector(tensor=torch.rand(num_models, 1), name="a")
 
 # construct one variable b, now of shape [num_models, 1]
-b = th.Vector(data=torch.rand(num_models, 1), name="b")
+b = th.Vector(tensor=torch.rand(num_models, 1), name="b")
 
 # Again, 'b' is the only optim_var, and 'a' is part of aux_vars along with x, y
 aux_vars = [x, y]
@@ -75,8 +75,8 @@ cost_function = th.AutoDiffCostFunction(
 )
 
 prior_weight = th.ScaleCostWeight(torch.ones(1))
-prior_a = th.Difference(a, prior_weight, th.Vector(1))
-prior_b = th.Difference(b, prior_weight, th.Vector(1))
+prior_a = th.Difference(a, th.Vector(1), prior_weight)
+prior_b = th.Difference(b, th.Vector(1), prior_weight)
 
 # objective, optimizer and theseus layer constructed as before
 objective = th.Objective()

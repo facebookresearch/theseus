@@ -4,38 +4,38 @@
 # LICENSE file in the root directory of this source tree.
 
 import logging
-
-import theseus as th
-import torch
-from theseus.optimizer.linear.linear_solver import LinearSolver
-import theseus.utils.examples as theg
-import omegaconf
+import os
 import pathlib
+import subprocess
+from typing import List, Type, cast
 
 import hydra
-
-import subprocess
-import os
-
-from theseus.utils.examples.pose_graph.dataset import PoseGraphEdge
-from typing import List, cast, Type
+import omegaconf
+import torch
 from scipy.io import savemat
+
+import theseus as th
+import theseus.utils.examples as theg
+from theseus.optimizer.linear.linear_solver import LinearSolver
+from theseus.utils.examples.pose_graph.dataset import PoseGraphEdge
 
 # Logger
 log = logging.getLogger(__name__)
 
 use_batches = True
-device = "cpu"
+DATASET_DIR = pathlib.Path.cwd() / "datasets" / "cube"
+
 dtype = torch.float64
 
 
 def get_batch_data(pg_batch: theg.PoseGraphDataset, pose_indices: List[int]):
     batch = {
-        pg_batch.poses[index].name: pg_batch.poses[index].data for index in pose_indices
+        pg_batch.poses[index].name: pg_batch.poses[index].tensor
+        for index in pose_indices
     }
-    batch.update({pg_batch.poses[0].name + "__PRIOR": pg_batch.poses[0].data.clone()})
+    batch.update({pg_batch.poses[0].name + "__PRIOR": pg_batch.poses[0].tensor.clone()})
     batch.update(
-        {edge.relative_pose.name: edge.relative_pose.data for edge in pg_batch.edges}
+        {edge.relative_pose.name: edge.relative_pose.tensor for edge in pg_batch.edges}
     )
     return batch
 
@@ -46,6 +46,7 @@ def run(
     results_path: pathlib.Path,
     batch_size: int,
 ):
+    pg.to(cfg.device)
     objective = th.Objective(dtype=dtype)
 
     pg_batch = pg.get_batch_dataset(0)
@@ -55,22 +56,22 @@ def run(
         relative_pose_cost = th.Between(
             pg_batch.poses[edge.i],
             pg_batch.poses[edge.j],
-            edge.weight,
             edge.relative_pose,
+            edge.weight,
         )
         objective.add(relative_pose_cost)
 
     pose_prior_cost = th.Difference(
         var=pg_batch.poses[0],
         cost_weight=th.ScaleCostWeight(
-            torch.tensor(cfg.inner_optim.reg_w, dtype=dtype, device=device)
+            torch.tensor(cfg.inner_optim.reg_w, dtype=dtype, device=cfg.device)
         ),
         target=pg_batch.poses[0].copy(new_name=pg_batch.poses[0].name + "__PRIOR"),
     )
 
     objective.add(pose_prior_cost)
 
-    objective.to(device)
+    objective.to(cfg.device)
 
     linear_solver_cls: Type[LinearSolver] = cast(
         Type[LinearSolver],
@@ -93,7 +94,7 @@ def run(
         log.info(f" ------------------- Batch {batch_idx} ------------------- ")
         pg_batch = pg.get_batch_dataset(batch_idx=batch_idx)
         theseus_inputs = get_batch_data(pg_batch, pose_indices)
-        objective.update(input_data=theseus_inputs)
+        objective.update(input_tensors=theseus_inputs)
 
         start_event = torch.cuda.Event(enable_timing=True)
         end_event = torch.cuda.Event(enable_timing=True)
@@ -127,7 +128,7 @@ def run(
         results["forward_mem"] = forward_mems
         file = (
             f"pgo_cube_{cfg.solver_device}_{cfg.inner_optim.solver}_{cfg.num_poses}_"
-            f"{cfg.dataset_size}_{batch_size}_{device}.mat"
+            f"{cfg.dataset_size}_{batch_size}_{cfg.device}.mat"
         )
         savemat(file, results)
 
@@ -143,29 +144,25 @@ def main(cfg):
 
     for n in range(cfg.dataset_size):
         num_poses, poses_n, edges_n = theg.pose_graph.read_3D_g2o_file(
-            (
-                f"/private/home/taoshaf/Documents/theseus/debug/datasets/"
-                f"{num_poses}_poses_0.2_cube_{n}.g2o"
-            ),
+            (f"{DATASET_DIR}/{num_poses}_poses_0.2_cube_{n}.g2o"),
         )
         if len(poses) == 0:
             poses = poses_n
             edges = edges_n
         else:
             for pose, pose_n in zip(poses, poses_n):
-                pose.data = torch.cat((pose.data, pose_n.data))
+                pose.tensor = torch.cat((pose.tensor, pose_n.tensor))
 
             for edge, edge_n in zip(edges, edges_n):
-                edge.relative_pose.data = torch.cat(
-                    (edge.relative_pose.data, edge_n.relative_pose.data)
+                edge.relative_pose.tensor = torch.cat(
+                    (edge.relative_pose.tensor, edge_n.relative_pose.tensor)
                 )
 
     # create (or load) dataset
     results_path = pathlib.Path(os.getcwd())
 
-    for batch_size in [8, 16]:
+    for batch_size in [16, 256]:
         pg = theg.PoseGraphDataset(poses=poses, edges=edges, batch_size=batch_size)
-        pg.to(device)
         run(cfg, pg, results_path, batch_size)
 
 

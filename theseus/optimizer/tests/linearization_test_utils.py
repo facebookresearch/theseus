@@ -12,11 +12,19 @@ class MockVector(th.Manifold):
     def __init__(self, value, length, name=None):
         super().__init__(value, length, name=name)
 
-    def _init_data(value, length):
+    def _init_tensor(value, length):
         return value * torch.ones(1, length)
 
+    @staticmethod
+    def _check_tensor_impl(tensor: torch.Tensor) -> bool:
+        return True
+
+    @staticmethod
+    def normalize(tensor: torch.Tensor) -> torch.Tensor:
+        return tensor
+
     def dof(self):
-        return self.data.shape[1]
+        return self.tensor.shape[1]
 
     def _local_impl(self, variable2):
         return torch.zeros(1)
@@ -48,7 +56,7 @@ class MockCostFunction(th.CostFunction):
     # Error function for this cost function is (for each batch element)
     #       ei = (i + 1) * sum_j (j + 1) * sum_k [var_j]_k
     def error(self):
-        batch_size = self.optim_var_0.data.shape[0]
+        batch_size = self.optim_var_0.tensor.shape[0]
         error = torch.zeros(batch_size, self.the_dim)
         for batch_idx in range(batch_size):
             value = torch.sum(
@@ -67,7 +75,7 @@ class MockCostFunction(th.CostFunction):
     # where jv is a matrix with self.the_dim rows such that:
     #   jv[j,k] = (j + 1) * [1, 1, 1, ..., 1] (#vars times, i.e., v.dim())
     def jacobians(self):
-        batch_size = self.optim_var_0.data.shape[0]
+        batch_size = self.optim_var_0.tensor.shape[0]
         jacs = []
         for i, v in enumerate(self.optim_vars):
             jv = torch.ones(batch_size, self.the_dim, v.dof())
@@ -94,10 +102,10 @@ class MockCostWeight(th.CostWeight):
 
     def weight_jacobians_and_error(self, jacobians, error):
         batch_size = error.shape[0]
-        sqrt = self.sqrt.data.repeat((batch_size, 1, 1))
+        sqrt = self.sqrt.tensor.repeat((batch_size, 1, 1))
         wjs = []
         for jac in jacobians:
-            wjs.append(torch.matmul(self.sqrt.data, jac))
+            wjs.append(torch.matmul(self.sqrt.tensor, jac))
         werr = torch.matmul(sqrt, error.unsqueeze(2)).squeeze(2)
         return wjs, werr
 

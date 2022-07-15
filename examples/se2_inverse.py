@@ -8,10 +8,10 @@
 # where x1 and x2 are SE2 objects
 
 import torch
+
 import theseus as th
 from theseus import LieGroupTensor
 from theseus.geometry.lie_group import LieGroup
-
 from theseus.geometry.tests.test_se2 import create_random_se2
 
 # Create two random SE2
@@ -24,16 +24,16 @@ x2 = create_random_se2(1, rng)
 
 
 def run(x1: LieGroup, x2: LieGroup, num_iters=10, use_lie_tangent=True):
-    x1.data = LieGroupTensor(x1)
-    x1.data.requires_grad = True
+    x1.tensor = LieGroupTensor(x1)
+    x1.tensor.requires_grad = True
 
-    optim = torch.optim.Adam([x1.data], lr=1e-1)
+    optim = torch.optim.Adam([x1.tensor], lr=1e-1)
     scheduler = torch.optim.lr_scheduler.MultiStepLR(
         optim, milestones=[250, 600], gamma=0.01
     )
     for i in range(num_iters):
         optim.zero_grad()
-        cf = th.Difference(x1.inverse(), th.ScaleCostWeight(1.0), x2)
+        cf = th.Difference(x1.inverse(), x2, th.ScaleCostWeight(1.0))
         loss = cf.error().norm()
         if i % 100 == 0:
             print(
@@ -49,7 +49,7 @@ def run(x1: LieGroup, x2: LieGroup, num_iters=10, use_lie_tangent=True):
 
         scheduler.step()
 
-    cf = th.Difference(x1.inverse(), th.ScaleCostWeight(1.0), x2)
+    cf = th.Difference(x1.inverse(), x2, th.ScaleCostWeight(1.0))
     loss = cf.error().norm()
     print(
         "iter {}: loss is {:.10f}, cos(theta)^2 + sin(theta)^2 is {:.10f}".format(

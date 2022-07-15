@@ -11,10 +11,9 @@ import torch
 
 import theseus as th
 import theseus.utils.examples as theg
-from theseus.optimizer.gbp import BAViewer, GaussianBeliefPropagation, GBPSchedule
+from theseus.optimizer.gbp import GaussianBeliefPropagation, GBPSchedule
 
-# Smaller values result in error
-th.SO3.SO3_EPS = 1e-6
+# from theseus.optimizer.gbp import BAViewer
 
 
 def print_histogram(
@@ -24,14 +23,14 @@ def print_histogram(
     histogram = theg.ba_histogram(
         cameras=[
             theg.Camera(
-                th.SE3(data=var_dict[c.pose.name]),
+                th.SE3(tensor=var_dict[c.pose.name]),
                 c.focal_length,
                 c.calib_k1,
                 c.calib_k2,
             )
             for c in ba.cameras
         ],
-        points=[th.Point3(data=var_dict[pt.name]) for pt in ba.points],
+        points=[th.Point3(tensor=var_dict[pt.name]) for pt in ba.points],
         observations=ba.observations,
     )
     for line in histogram.split("\n"):
@@ -84,7 +83,7 @@ def run(cfg: omegaconf.OmegaConf):
 
     # param that control transition from squared loss to huber
     radius_tensor = torch.tensor([1.0], dtype=torch.float64)
-    log_loss_radius = th.Vector(data=radius_tensor, name="log_loss_radius")
+    log_loss_radius = th.Vector(tensor=radius_tensor, name="log_loss_radius")
 
     # Set up objective
     print("Setting up objective")
@@ -129,7 +128,7 @@ def run(cfg: omegaconf.OmegaConf):
             else:
                 assert False
             objective.add(
-                th.Difference(var, damping_weight, target, name=f"reg_{name}")
+                th.Difference(var, target, damping_weight, name=f"reg_{name}")
             )
 
     camera_pose_vars: List[th.LieGroup] = [
@@ -145,8 +144,8 @@ def run(cfg: omegaconf.OmegaConf):
             objective.add(
                 th.Difference(
                     camera_pose_vars[i],
-                    camera_weight,
                     ba.gt_cameras[i].pose,
+                    camera_weight,
                     name=f"camera_diff_{i}",
                 )
             )
@@ -168,6 +167,7 @@ def run(cfg: omegaconf.OmegaConf):
     optim_arg = {
         "track_best_solution": True,
         "track_err_history": True,
+        "track_state_history": True,
         "verbose": True,
         "backward_mode": th.BackwardMode.FULL,
     }
@@ -183,9 +183,9 @@ def run(cfg: omegaconf.OmegaConf):
 
     theseus_inputs = {}
     for cam in ba.cameras:
-        theseus_inputs[cam.pose.name] = cam.pose.data.clone()
+        theseus_inputs[cam.pose.name] = cam.pose.tensor.clone()
     for pt in ba.points:
-        theseus_inputs[pt.name] = pt.data.clone()
+        theseus_inputs[pt.name] = pt.tensor.clone()
 
     with torch.no_grad():
         camera_loss_ref = camera_loss(ba, camera_pose_vars).item()
@@ -196,7 +196,7 @@ def run(cfg: omegaconf.OmegaConf):
     print("squred err:", objective.error_squared_norm().item())
 
     theseus_outputs, info = theseus_optim.forward(
-        input_data=theseus_inputs,
+        input_tensors=theseus_inputs,
         optimizer_kwargs=optim_arg,
     )
 
@@ -211,9 +211,9 @@ def run(cfg: omegaconf.OmegaConf):
     print(f"CAMERA LOSS:  {camera_loss_ref: .3f}")
     print_histogram(ba, theseus_inputs, "Final histogram:")
 
-    BAViewer(
-        optimizer.belief_history, gt_cameras=ba.gt_cameras, gt_points=ba.gt_points
-    )  # , msg_history=optimizer.ftov_msgs_history)
+    # BAViewer(
+    #     info.state_history, gt_cameras=ba.gt_cameras, gt_points=ba.gt_points
+    # )  # , msg_history=optimizer.ftov_msgs_history)
 
 
 if __name__ == "__main__":

@@ -17,15 +17,12 @@ import torch
 import theseus as th
 import theseus.utils.examples as theg
 
-
 BACKWARD_MODE = {
     "implicit": th.BackwardMode.IMPLICIT,
     "full": th.BackwardMode.FULL,
     "truncated": th.BackwardMode.TRUNCATED,
 }
 
-# Smaller values} result in error
-th.SO3.SO3_EPS = 1e-6
 
 # Logger
 log = logging.getLogger(__name__)
@@ -38,14 +35,14 @@ def print_histogram(
     histogram = theg.ba_histogram(
         cameras=[
             theg.Camera(
-                th.SE3(data=var_dict[c.pose.name]),
+                th.SE3(tensor=var_dict[c.pose.name]),
                 c.focal_length,
                 c.calib_k1,
                 c.calib_k2,
             )
             for c in ba.cameras
         ],
-        points=[th.Point3(data=var_dict[pt.name]) for pt in ba.points],
+        points=[th.Point3(tensor=var_dict[pt.name]) for pt in ba.points],
         observations=ba.observations,
     )
     for line in histogram.split("\n"):
@@ -79,7 +76,7 @@ def save_epoch(
         return t_.detach().cpu().clone()
 
     results = {
-        "log_loss_radius": _clone(log_loss_radius.data),
+        "log_loss_radius": _clone(log_loss_radius.tensor),
         "theseus_outputs": dict((s, _clone(t)) for s, t in theseus_outputs.items()),
         "err_history": info.err_history,  # type: ignore
         "loss": loss_value,
@@ -152,7 +149,7 @@ def run(cfg: omegaconf.OmegaConf, results_path: pathlib.Path):
             else:
                 assert False
             objective.add(
-                th.Difference(var, damping_weight, target, name=f"reg_{name}")
+                th.Difference(var, target, damping_weight, name=f"reg_{name}")
             )
 
     camera_pose_vars: List[th.LieGroup] = [
@@ -167,8 +164,8 @@ def run(cfg: omegaconf.OmegaConf, results_path: pathlib.Path):
             objective.add(
                 th.Difference(
                     camera_pose_vars[i],
-                    camera_weight,
                     ba.gt_cameras[i].pose,
+                    camera_weight,
                     name=f"camera_diff_{i}",
                 )
             )
@@ -187,8 +184,8 @@ def run(cfg: omegaconf.OmegaConf, results_path: pathlib.Path):
     theseus_optim = th.TheseusLayer(optimizer)
 
     # copy the poses/pts to feed them to each outer iteration
-    orig_poses = {cam.pose.name: cam.pose.data.clone() for cam in ba.cameras}
-    orig_points = {pt.name: pt.data.clone() for pt in ba.points}
+    orig_poses = {cam.pose.name: cam.pose.tensor.clone() for cam in ba.cameras}
+    orig_points = {pt.name: pt.tensor.clone() for pt in ba.points}
 
     # Outer optimization loop
     loss_radius_tensor = torch.nn.Parameter(torch.tensor([3.0], dtype=torch.float64))
@@ -210,7 +207,7 @@ def run(cfg: omegaconf.OmegaConf, results_path: pathlib.Path):
         theseus_inputs["log_loss_radius"] = loss_radius_tensor.unsqueeze(1).clone()
 
         theseus_outputs, info = theseus_optim.forward(
-            input_data=theseus_inputs,
+            input_tensors=theseus_inputs,
             optimizer_kwargs={
                 "verbose": cfg.inner_optim.verbose,
                 "track_err_history": cfg.inner_optim.track_err_history,

@@ -23,8 +23,8 @@ class QuasiStaticPushingPlanar(CostFunction):
         obj2: SE2,
         eff1: SE2,
         eff2: SE2,
-        cost_weight: CostWeight,
         c_square: Union[Variable, torch.Tensor, float],
+        cost_weight: CostWeight,
         name: Optional[str] = None,
     ):
         super().__init__(cost_weight, name=name)
@@ -38,7 +38,7 @@ class QuasiStaticPushingPlanar(CostFunction):
             if isinstance(c_square, float):
                 c_square = torch.tensor(c_square, dtype=self.obj1.dtype).view(1, 1)
             c_square = Variable(c_square, name=f"csquare_{name}")
-        if c_square.data.squeeze().ndim > 1:
+        if c_square.tensor.squeeze().ndim > 1:
             raise ValueError("dt must be a 0-D or 1-D tensor.")
         self.c_square = c_square
         self.register_aux_vars(["c_square"])
@@ -60,8 +60,8 @@ class QuasiStaticPushingPlanar(CostFunction):
 
         # Current contact point in object frame
         contact_point_2__obj = self.obj2.transform_to(contact_point_2, jacobians=J_cp2o)
-        px = contact_point_2__obj.data[:, 0]
-        py = contact_point_2__obj.data[:, 1]
+        px = contact_point_2__obj.tensor[:, 0]
+        py = contact_point_2__obj.tensor[:, 1]
 
         # Putting D together
         D = (
@@ -71,7 +71,7 @@ class QuasiStaticPushingPlanar(CostFunction):
         )
         D[:, 0, 2] = D[:, 2, 0] = -py
         D[:, 1, 2] = D[:, 2, 1] = px
-        D[:, 2, 2] = -self.c_square.data.view(-1)
+        D[:, 2, 2] = -self.c_square.tensor.view(-1)
 
         if not get_jacobians:
             return D, None
@@ -119,8 +119,8 @@ class QuasiStaticPushingPlanar(CostFunction):
 
         # Putting V together
         obj_diff__world = cast(SE2, self.obj1.between(self.obj2, jacobians=J_odw))
-        vx = vel_xy_obj__obj.data[:, 0]
-        vy = vel_xy_obj__obj.data[:, 1]
+        vx = vel_xy_obj__obj.tensor[:, 0]
+        vy = vel_xy_obj__obj.tensor[:, 1]
         omega = obj_diff__world.theta(jacobians=J_omega_odw)
         V = torch.stack([vx, vy, omega.squeeze(1)], dim=1)
 
@@ -182,8 +182,8 @@ class QuasiStaticPushingPlanar(CostFunction):
         )
 
         # Putting Vp together
-        v_px = vel_xy_contact__obj.data[:, 0]
-        v_py = vel_xy_contact__obj.data[:, 1]
+        v_px = vel_xy_contact__obj.tensor[:, 0]
+        v_py = vel_xy_contact__obj.tensor[:, 1]
         Vp = torch.stack([v_px, v_py, torch.zeros_like(v_px)], dim=1)
 
         if not get_jacobians:
@@ -292,7 +292,7 @@ class QuasiStaticPushingPlanar(CostFunction):
             self.obj2.copy(),
             self.eff1.copy(),
             self.eff2.copy(),
-            self.weight.copy(),
             self.c_square.copy(),
+            self.weight.copy(),
             name=new_name,
         )

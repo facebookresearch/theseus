@@ -17,7 +17,6 @@ import torch.utils.data
 import theseus as th
 import theseus.utils.examples as theg
 
-
 # To run this example, you will need a motion planning dataset available at
 # https://dl.fbaipublicfiles.com/theseus/motion_planning_dataset.tar.gz
 #
@@ -218,9 +217,9 @@ def run_learning_loop(cfg):
                 )
 
         collision_w = (
-            motion_planner.objective.aux_vars["collision_w"].data.mean().item()
+            motion_planner.objective.aux_vars["collision_w"].tensor.mean().item()
         )
-        cost_eps = motion_planner.objective.aux_vars["cost_eps"].data.mean().item()
+        cost_eps = motion_planner.objective.aux_vars["cost_eps"].tensor.mean().item()
         print("collision weight", collision_w)
         print("cost_eps", cost_eps)
         print("OBJECTIVE MEAN LOSS", epoch_mean_objective_loss)

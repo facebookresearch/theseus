@@ -19,11 +19,11 @@ class EffectorObjectContactPlanar(CostFunction):
         self,
         obj: SE2,
         eff: SE2,
-        cost_weight: CostWeight,
         sdf_origin: Variable,
         sdf_data: Variable,
         sdf_cell_size: Variable,
         eff_radius: Union[float, Variable, torch.Tensor],
+        cost_weight: CostWeight,
         name: Optional[str] = None,
         use_huber_loss: bool = False,
     ):
@@ -39,9 +39,9 @@ class EffectorObjectContactPlanar(CostFunction):
             self.eff_radius = Variable(eff_radius)
         else:
             self.eff_radius = eff_radius
-        if eff_radius.data.squeeze().ndim > 1:
+        if self.eff_radius.tensor.squeeze().ndim > 1:
             raise ValueError("eff_radius must be a 0-D or 1-D tensor.")
-        self.eff_radius.data = self.eff_radius.data.view(-1, 1)
+        self.eff_radius.tensor = self.eff_radius.tensor.view(-1, 1)
         self.register_optim_vars(["obj", "eff"])
         self.register_aux_vars(
             ["sdf_origin", "sdf_data", "sdf_cell_size", "eff_radius"]
@@ -66,13 +66,13 @@ class EffectorObjectContactPlanar(CostFunction):
         J_transf_obj = J_transf[0]
         J_transf_eff = J_transf[1].matmul(J_xy[0])
         robot_state = cast(Point2, self.robot.forward_kinematics(eff__obj)["state"])
-        dist, J_dist = self.sdf.signed_distance(robot_state.data.view(-1, 2, 1))
+        dist, J_dist = self.sdf.signed_distance(robot_state.tensor.view(-1, 2, 1))
         J_out = (J_dist.matmul(J_transf_obj), J_dist.matmul(J_transf_eff))
         return dist, J_out
 
     def _error_from_distances(self, distances: torch.Tensor):
         if self._use_huber:
-            eff_rad = self.eff_radius.data
+            eff_rad = self.eff_radius.tensor
             err = distances.clone()
             # linear (two-sided, otherwise this would be 0)
             gt_r_idx = distances >= 2 * eff_rad
@@ -87,7 +87,7 @@ class EffectorObjectContactPlanar(CostFunction):
             err[neg_idx] = -distances[neg_idx] + 0.5 * eff_rad
             return err
         else:
-            return (distances - self.eff_radius.data).abs()
+            return (distances - self.eff_radius.tensor).abs()
 
     def error(self) -> torch.Tensor:
         distances, _ = self._compute_distances_and_jacobians()
@@ -101,7 +101,7 @@ class EffectorObjectContactPlanar(CostFunction):
                 "Jacobians for huber loss are not yet implemented."
             )
         else:
-            lt_idx = distances < self.eff_radius.data
+            lt_idx = distances < self.eff_radius.tensor
             jacobians[0][lt_idx] *= -1.0
             jacobians[1][lt_idx] *= -1.0
         return [jacobians[0], jacobians[1]], error
@@ -112,11 +112,11 @@ class EffectorObjectContactPlanar(CostFunction):
         return EffectorObjectContactPlanar(
             self.obj.copy(),
             self.eff.copy(),
-            self.weight.copy(),
             self.sdf_origin.copy(),
             self.sdf_data.copy(),
             self.sdf_cell_size.copy(),
             self.eff_radius.copy(),
+            self.weight.copy(),
             name=new_name,
         )
 

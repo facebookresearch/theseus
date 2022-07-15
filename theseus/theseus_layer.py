@@ -3,13 +3,22 @@
 # This source code is licensed under the MIT license found in the
 # LICENSE file in the root directory of this source tree.
 
-from typing import Any, Dict, Optional, Tuple
+from typing import Any, Dict, List, Optional, Tuple
 
+import numpy as np
 import torch
 import torch.nn as nn
 from torch.autograd.function import once_differentiable
 
-from theseus.core import AutoDiffCostFunction, Variable, Vectorize
+from theseus.core import (
+    CostFunction,
+    CostWeight,
+    Objective,
+    ScaleCostWeight,
+    Variable,
+    Vectorize,
+)
+from theseus.geometry import LieGroup, Manifold
 from theseus.optimizer import Optimizer, OptimizerInfo
 from theseus.optimizer.linear import LinearSolver
 from theseus.optimizer.nonlinear import BackwardMode, GaussNewton
@@ -28,7 +37,7 @@ class TheseusLayer(nn.Module):
 
     def forward(
         self,
-        input_data: Optional[Dict[str, torch.Tensor]] = None,
+        input_tensors: Optional[Dict[str, torch.Tensor]] = None,
         optimizer_kwargs: Optional[Dict[str, Any]] = None,
     ) -> Tuple[Dict[str, torch.Tensor], OptimizerInfo]:
         if self._objectives_version != self.objective.current_version:
@@ -38,8 +47,15 @@ class TheseusLayer(nn.Module):
             )
         optimizer_kwargs = optimizer_kwargs or {}
         backward_mode = optimizer_kwargs.get("backward_mode", None)
-        dlm_epsilon = optimizer_kwargs.get(TheseusLayerDLMForward._dlm_epsilon, 1e-2)
         if backward_mode == BackwardMode.DLM:
+            dlm_epsilon = optimizer_kwargs.get(
+                TheseusLayerDLMForward._DLM_EPSILON_STR, 1e-2
+            )
+            if not isinstance(dlm_epsilon, float):
+                raise ValueError(
+                    f"{TheseusLayerDLMForward._DLM_EPSILON_STR} must be a float "
+                    f"but {type(dlm_epsilon)} was given."
+                )
 
             if self._dlm_bwd_objective is None:
                 _obj, _opt = _instantiate_dlm_bwd_objective(self.objective)
@@ -48,7 +64,7 @@ class TheseusLayer(nn.Module):
                 self._dlm_bwd_optimizer = _opt
 
             # Tensors cannot be passed inside containers, else we run into memory leaks.
-            input_keys, input_vals = zip(*input_data.items())
+            input_keys, input_vals = zip(*input_tensors.items())
             differentiable_tensors = [t for t in input_vals if t.requires_grad]
 
             *vars, info = TheseusLayerDLMForward.apply(
@@ -65,7 +81,7 @@ class TheseusLayer(nn.Module):
             )
         else:
             vars, info = _forward(
-                self.objective, self.optimizer, optimizer_kwargs, input_data
+                self.objective, self.optimizer, optimizer_kwargs, input_tensors
             )
         values = dict(zip(self.objective.optim_vars.keys(), vars))
         return values, info
@@ -103,7 +119,7 @@ class TheseusLayer(nn.Module):
                 new_var = var.retract(
                     delta_samples[:, var_idx : var_idx + var.dof(), sidx]
                 )
-                x_samples[:, var_idx : var_idx + var.dof(), sidx] = new_var.data
+                x_samples[:, var_idx : var_idx + var.dof(), sidx] = new_var.tensor
                 var_idx = var_idx + var.dof()
 
         return x_samples
@@ -122,10 +138,10 @@ class TheseusLayer(nn.Module):
         return self.objective.dtype
 
 
-def _forward(objective, optimizer, optimizer_kwargs, input_data):
-    objective.update(input_data)
+def _forward(objective, optimizer, optimizer_kwargs, input_tensors):
+    objective.update(input_tensors)
     info = optimizer.optimize(**optimizer_kwargs)
-    vars = [var.data for var in objective.optim_vars.values()]
+    vars = [var.tensor for var in objective.optim_vars.values()]
     return vars, info
 
 
@@ -135,8 +151,8 @@ class TheseusLayerDLMForward(torch.autograd.Function):
     but computes the direct loss minimization in the backward pass.
     """
 
-    _dlm_epsilon = "dlm_epsilon"
-    _grad_suffix = "_grad"
+    _DLM_EPSILON_STR = "dlm_epsilon"
+    _GRAD_SUFFIX = "_grad"
 
     @staticmethod
     def forward(
@@ -148,20 +164,18 @@ class TheseusLayerDLMForward(torch.autograd.Function):
         bwd_optimizer,
         epsilon,
         n,
-        *input_data,
+        *inputs,
     ):
-        input_keys = input_data[:n]
-        input_vals = input_data[n : 2 * n]
-        differentiable_tensors = input_data[2 * n :]
+        input_keys = inputs[:n]
+        input_vals = inputs[n : 2 * n]
+        differentiable_tensors = inputs[2 * n :]
         ctx.n = n
         ctx.k = len(differentiable_tensors)
 
-        input_data = dict(zip(input_keys, input_vals))
+        inputs = dict(zip(input_keys, input_vals))
         ctx.input_keys = input_keys
 
-        optim_tensors, info = _forward(
-            objective, optimizer, optimizer_kwargs, input_data
-        )
+        optim_tensors, info = _forward(objective, optimizer, optimizer_kwargs, inputs)
 
         # Skip computation if there are no differentiable inputs.
         if ctx.k > 0:
@@ -204,12 +218,12 @@ class TheseusLayerDLMForward(torch.autograd.Function):
 
         # Add in gradient values.
         grad_data = {
-            TheseusLayerDLMForward._dlm_epsilon: torch.tensor(epsilon)
+            TheseusLayerDLMForward._DLM_EPSILON_STR: torch.tensor(epsilon)
             .to(grad_outputs[0])
             .reshape(1, 1)
         }
         for i, name in enumerate(bwd_objective.optim_vars.keys()):
-            grad_data[name + TheseusLayerDLMForward._grad_suffix] = grad_outputs[i]
+            grad_data[name + TheseusLayerDLMForward._GRAD_SUFFIX] = grad_outputs[i]
         bwd_data.update(grad_data)
 
         # Solve backward objective.
@@ -237,27 +251,76 @@ class TheseusLayerDLMForward(torch.autograd.Function):
         return (None, None, None, None, None, None, None, *nones, *grads)
 
 
-def _dlm_perturbation(optim_vars, aux_vars):
-    v = optim_vars[0]
-    g = aux_vars[0]
-    epsilon = aux_vars[1]
-    return epsilon.data * v.data - 0.5 * g.data
+class _DLMPerturbation(CostFunction):
+    def __init__(
+        self,
+        var: Manifold,
+        epsilon: Variable,
+        grad: Variable,
+        cost_weight: CostWeight,
+        name: Optional[str] = None,
+    ):
+        if not isinstance(var, LieGroup):
+            raise ValueError(
+                f"DLM requires LieGroup-type variables, but "
+                f"{var.name} has type {var.__class__.__name__}"
+            )
+        super().__init__(cost_weight, name=name)
+        assert epsilon.ndim == 2 and epsilon.shape[1] == 1
+        self.var = var
+        self.epsilon = epsilon
+        self.grad = grad
+        self.register_optim_var("var")
+        self.register_aux_vars(["epsilon", "grad"])
+
+    def error(self) -> torch.Tensor:
+        err = (
+            self.epsilon.tensor.view((-1,) + (1,) * (self.var.ndim - 1))
+            * self.var.tensor
+            - 0.5 * self.grad.tensor
+        )
+        return err.flatten(start_dim=1)
+
+    def jacobians(self) -> Tuple[List[torch.Tensor], torch.Tensor]:
+        d = self.dim()
+        aux = (
+            torch.eye(d, dtype=self.epsilon.dtype, device=self.epsilon.device)
+            .unsqueeze(0)
+            .expand(self.var.shape[0], d, d)
+        )
+        euclidean_grad_flat = self.epsilon.tensor.view(-1, 1, 1) * aux
+        euclidean_grad = euclidean_grad_flat.unflatten(2, self.var.shape[1:])
+        return [self.var.project(euclidean_grad, is_sparse=True)], self.error()
+
+    def dim(self) -> int:
+        return np.prod(self.var.tensor.shape[1:])
+
+    def _copy_impl(self, new_name: Optional[str] = None) -> "CostFunction":
+        return _DLMPerturbation(
+            self.var.copy(),
+            self.epsilon.copy(),
+            self.grad.copy(),
+            self.weight.copy(),
+            name=new_name,
+        )
 
 
-def _instantiate_dlm_bwd_objective(objective):
+def _instantiate_dlm_bwd_objective(objective: Objective):
     bwd_objective = objective.copy()
-    epsilon_var = Variable(torch.ones(1, 1), name=TheseusLayerDLMForward._dlm_epsilon)
+    epsilon_var = Variable(
+        torch.ones(1, 1, dtype=bwd_objective.dtype, device=bwd_objective.device),
+        name=TheseusLayerDLMForward._DLM_EPSILON_STR,
+    )
+    unit_weight = ScaleCostWeight(1.0)
+    unit_weight.to(dtype=objective.dtype, device=objective.device)
     for name, var in bwd_objective.optim_vars.items():
         grad_var = Variable(
-            torch.zeros_like(var.data), name=name + TheseusLayerDLMForward._grad_suffix
+            torch.zeros_like(var.tensor),
+            name=name + TheseusLayerDLMForward._GRAD_SUFFIX,
         )
         bwd_objective.add(
-            AutoDiffCostFunction(
-                [var],
-                _dlm_perturbation,
-                var.shape[1],
-                aux_vars=[grad_var, epsilon_var],
-                name="dlm_perturbation_" + name,
+            _DLMPerturbation(
+                var, epsilon_var, grad_var, unit_weight, name="dlm_perturbation" + name
             )
         )
 

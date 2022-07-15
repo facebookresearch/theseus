@@ -16,44 +16,46 @@ OptionalJacobians = Optional[List[torch.Tensor]]
 
 # Abstract class to represent Manifold-type variables in the objective.
 # Concrete classes must implement the following methods:
-#   - `_init_data`: initializes the underlying data tensor given constructor arguments.
+#   - `_init_tensor`: initializes the underlying tensor given constructor arguments.
 #       The provided tensor must have a batch dimension.
 #   -`_local`: given two close Manifolds gives distance in tangent space
 #   - `_retract`: returns Manifold close by delta to given Manifold
-#   - `update`: replaces the data tensor with the provided one (and checks that
+#   - `update`: replaces the Manifold's tensor with the provided one (and checks that
 #       the provided has the right format).
 #   - `dof`: # of degrees of freedom of the variable
 #
-# Constructor can optionally provide an initial data value as a keyword argument.
+# Constructor can optionally provide an initial tensor value as a keyword argument.
 class Manifold(Variable, abc.ABC):
     def __init__(
         self,
         *args: Any,
-        data: Optional[torch.Tensor] = None,
+        tensor: Optional[torch.Tensor] = None,
         name: Optional[str] = None,
         dtype: Optional[torch.dtype] = None,
+        strict: bool = False,
     ):
         # If nothing specified, use torch's default dtype
-        # else data.dtype takes precedence
-        if data is None and dtype is None:
+        # else tensor.dtype takes precedence
+        if tensor is None and dtype is None:
             dtype = torch.get_default_dtype()
-        if data is not None:
-            if dtype is not None and data.dtype != dtype:
+        if tensor is not None:
+            tensor = self._check_tensor(tensor, strict)
+            if dtype is not None and tensor.dtype != dtype:
                 warnings.warn(
-                    f"data.dtype {data.dtype} does not match given dtype {dtype}, "
-                    "data.dtype will take precendence."
+                    f"tensor.dtype {tensor.dtype} does not match given dtype {dtype}, "
+                    "tensor.dtype will take precendence."
                 )
-            dtype = data.dtype
+            dtype = tensor.dtype
 
-        super().__init__(self.__class__._init_data(*args).to(dtype=dtype), name=name)
-        if data is not None:
-            self.update(data)
+        super().__init__(self.__class__._init_tensor(*args).to(dtype=dtype), name=name)
+        if tensor is not None:
+            self.update(tensor)
 
-    # This method should return a tensor with the manifold's data representation
+    # This method should return a tensor with the manifold's representation
     # as a function of the given args
     @staticmethod
     @abc.abstractmethod
-    def _init_data(*args: Any) -> torch.Tensor:
+    def _init_tensor(*args: Any) -> torch.Tensor:
         pass
 
     @abc.abstractmethod
@@ -80,6 +82,32 @@ class Manifold(Variable, abc.ABC):
         self, euclidean_grad: torch.Tensor, is_sparse: bool = False
     ) -> torch.Tensor:
         return self._project_impl(euclidean_grad, is_sparse)
+
+    @staticmethod
+    @abc.abstractmethod
+    def normalize(tensor: torch.Tensor) -> torch.Tensor:
+        pass
+
+    @staticmethod
+    @abc.abstractmethod
+    def _check_tensor_impl(tensor: torch.Tensor) -> bool:
+        pass
+
+    @classmethod
+    def _check_tensor(cls, tensor: torch.Tensor, strict: bool = True) -> torch.Tensor:
+        check = cls._check_tensor_impl(tensor)
+
+        if not check:
+            if strict:
+                raise ValueError(f"The input tensor is not valid for {cls.__name__}.")
+            else:
+                tensor = cls.normalize(tensor)
+                warnings.warn(
+                    f"The input tensor is not valid for {cls.__name__} "
+                    f"and has been normalized."
+                )
+
+        return tensor
 
     def local(
         self,

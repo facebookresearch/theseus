@@ -42,7 +42,7 @@ def create_pgo():
     # create variables
     poses = []
     for i in range(n_poses):
-        poses.append(th.Vector(data=torch.rand(1, 2), name=f"x{i}"))
+        poses.append(th.Vector(tensor=torch.rand(1, 2), name=f"x{i}"))
 
     # add prior cost constraints with VariableDifference cost
     prior_std = 1.3
@@ -64,11 +64,11 @@ def create_pgo():
                 init = init + torch.FloatTensor(init_noises[p])
                 w = prior_w
 
-            prior_target = th.Vector(data=init, name=f"prior_{p}")
+            prior_target = th.Vector(tensor=init, name=f"prior_{p}")
             inputs[f"x{p}"] = init[None, :]
             inputs[f"prior_{p}"] = init[None, :]
 
-            cf_prior = th.Difference(poses[p], w, prior_target, name=f"prior_cost_{p}")
+            cf_prior = th.Difference(poses[p], prior_target, w, name=f"prior_cost_{p}")
 
             objective.add(cf_prior)
 
@@ -89,11 +89,11 @@ def create_pgo():
                 ix0 = i * size + j
                 ix1 = i * size + j + 1
 
-                meas = th.Vector(data=measurement, name=f"meas_{m}")
+                meas = th.Vector(tensor=measurement, name=f"meas_{m}")
                 inputs[f"meas_{m}"] = measurement[None, :]
 
                 cf_meas = th.eb.Between(
-                    poses[ix0], poses[ix1], meas_w, meas, name=f"meas_cost_{m}"
+                    poses[ix0], poses[ix1], meas, meas_w, name=f"meas_cost_{m}"
                 )
                 objective.add(cf_meas)
                 m += 1
@@ -105,11 +105,11 @@ def create_pgo():
                 ix0 = i * size + j
                 ix1 = (i + 1) * size + j
 
-                meas = th.Vector(data=measurement, name=f"meas_{m}")
+                meas = th.Vector(tensor=measurement, name=f"meas_{m}")
                 inputs[f"meas_{m}"] = measurement[None, :]
 
                 cf_meas = th.eb.Between(
-                    poses[ix0], poses[ix1], meas_w, meas, name=f"meas_cost_{m}"
+                    poses[ix0], poses[ix1], meas, meas_w, name=f"meas_cost_{m}"
                 )
                 objective.add(cf_meas)
                 m += 1

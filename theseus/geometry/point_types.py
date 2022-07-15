@@ -10,31 +10,31 @@ import torch
 from .vector import Vector
 
 
-def _prepare_dof_and_data(
-    expected_dof: int, data: Optional[torch.Tensor]
+def _prepare_dof_and_tensor(
+    expected_dof: int, tensor: Optional[torch.Tensor]
 ) -> Tuple[Optional[int], Optional[torch.Tensor]]:
     dof = None
-    if data is None:
+    if tensor is None:
         dof = expected_dof
     else:
-        if data.ndim == 1:
-            data = data.view(1, -1)
-        if data.shape[1] != expected_dof:
+        if tensor.ndim == 1:
+            tensor = tensor.view(1, -1)
+        if tensor.shape[1] != expected_dof:
             raise ValueError(
-                f"Provided data tensor must have shape (batch_size, {expected_dof})."
+                f"Provided tensor must have shape (batch_size, {expected_dof})."
             )
-    return dof, data
+    return dof, tensor
 
 
 class Point2(Vector):
     def __init__(
         self,
-        data: Optional[torch.Tensor] = None,
+        tensor: Optional[torch.Tensor] = None,
         name: Optional[str] = None,
         dtype: Optional[torch.dtype] = None,
     ):
-        dof, data = _prepare_dof_and_data(2, data)
-        super().__init__(dof=dof, data=data, name=name, dtype=dtype)
+        dof, tensor = _prepare_dof_and_tensor(2, tensor)
+        super().__init__(dof=dof, tensor=tensor, name=name, dtype=dtype)
 
     @staticmethod
     def rand(
@@ -47,7 +47,7 @@ class Point2(Vector):
         if len(size) != 1:
             raise ValueError("The size should be 1D.")
         return Point2(
-            data=torch.rand(
+            tensor=torch.rand(
                 size[0],
                 2,
                 generator=generator,
@@ -68,7 +68,7 @@ class Point2(Vector):
         if len(size) != 1:
             raise ValueError("The size should be 1D.")
         return Point2(
-            data=torch.randn(
+            tensor=torch.randn(
                 size[0],
                 2,
                 generator=generator,
@@ -77,6 +77,13 @@ class Point2(Vector):
                 requires_grad=requires_grad,
             )
         )
+
+    @staticmethod
+    def _check_tensor_impl(tensor: torch.Tensor) -> bool:
+        if tensor.ndim != 2 or tensor.shape[1] != 2:
+            raise ValueError("Point2D data tensors can only be 2D vectors.")
+
+        return True
 
     def __add__(self, other: Vector) -> "Point2":
         return cast(Point2, super().__add__(other))
@@ -114,7 +121,7 @@ class Point2(Vector):
 
         Vector._exp_map_jacobian_impl(tangent_vector, jacobians)
 
-        return Point2(data=tangent_vector.clone())
+        return Point2(tensor=tangent_vector.clone())
 
     # added to avoid casting downstream
     def copy(self, new_name: Optional[str] = None) -> "Point2":
@@ -124,12 +131,12 @@ class Point2(Vector):
 class Point3(Vector):
     def __init__(
         self,
-        data: Optional[torch.Tensor] = None,
+        tensor: Optional[torch.Tensor] = None,
         name: Optional[str] = None,
         dtype: Optional[torch.dtype] = None,
     ):
-        dof, data = _prepare_dof_and_data(3, data)
-        super().__init__(dof=dof, data=data, name=name, dtype=dtype)
+        dof, tensor = _prepare_dof_and_tensor(3, tensor)
+        super().__init__(dof=dof, tensor=tensor, name=name, dtype=dtype)
 
     @staticmethod
     def rand(
@@ -142,7 +149,7 @@ class Point3(Vector):
         if len(size) != 1:
             raise ValueError("The size should be 1D.")
         return Point3(
-            data=torch.rand(
+            tensor=torch.rand(
                 size[0],
                 3,
                 generator=generator,
@@ -163,7 +170,7 @@ class Point3(Vector):
         if len(size) != 1:
             raise ValueError("The size should be 1D.")
         return Point3(
-            data=torch.randn(
+            tensor=torch.randn(
                 size[0],
                 3,
                 generator=generator,
@@ -172,6 +179,13 @@ class Point3(Vector):
                 requires_grad=requires_grad,
             )
         )
+
+    @staticmethod
+    def _check_tensor_impl(tensor: torch.Tensor) -> bool:
+        if tensor.ndim != 2 or tensor.shape[1] != 3:
+            raise ValueError("Point3 data tensors can only be 3D vectors.")
+
+        return True
 
     def __add__(self, other: Vector) -> "Point3":
         return cast(Point3, super().__add__(other))
@@ -212,7 +226,7 @@ class Point3(Vector):
 
         Vector._exp_map_jacobian_impl(tangent_vector, jacobians)
 
-        return Point3(data=tangent_vector.clone())
+        return Point3(tensor=tangent_vector.clone())
 
     # added to avoid casting downstream
     def copy(self, new_name: Optional[str] = None) -> "Point3":

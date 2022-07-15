@@ -17,15 +17,16 @@ class SO2(LieGroup):
     def __init__(
         self,
         theta: Optional[torch.Tensor] = None,
-        data: Optional[torch.Tensor] = None,
+        tensor: Optional[torch.Tensor] = None,
         name: Optional[str] = None,
         dtype: Optional[torch.dtype] = None,
+        strict: bool = False,
     ):
-        if theta is not None and data is not None:
-            raise ValueError("Please provide only one of theta or data.")
+        if theta is not None and tensor is not None:
+            raise ValueError("Please provide only one of theta or tensor.")
         if theta is not None:
             dtype = theta.dtype
-        super().__init__(data=data, name=name, dtype=dtype)
+        super().__init__(tensor=tensor, name=name, dtype=dtype, strict=strict)
         if theta is not None:
             if theta.ndim == 1:
                 theta = theta.unsqueeze(1)
@@ -82,7 +83,7 @@ class SO2(LieGroup):
         )
 
     @staticmethod
-    def _init_data() -> torch.Tensor:  # type: ignore
+    def _init_tensor() -> torch.Tensor:  # type: ignore
         return torch.tensor([1.0, 0.0]).view(1, 2)
 
     def update_from_angle(self, theta: torch.Tensor):
@@ -92,7 +93,7 @@ class SO2(LieGroup):
         return 1
 
     def __repr__(self) -> str:
-        return f"SO2(data={self.data}, name={self.name})"
+        return f"SO2(tensor={self.tensor}, name={self.name})"
 
     def __str__(self) -> str:
         with torch.no_grad():
@@ -118,6 +119,22 @@ class SO2(LieGroup):
             return torch.einsum("...k,...k", euclidean_grad, temp).unsqueeze(-1)
 
     @staticmethod
+    def _check_tensor_impl(tensor: torch.Tensor) -> bool:
+        with torch.no_grad():
+            if tensor.ndim != 2 or tensor.shape[1] != 2:
+                raise ValueError("SO2 data tensors can only be 2D vectors.")
+
+            MATRIX_EPS = theseus.constants._SO2_MATRIX_EPS[tensor.dtype]
+            if tensor.dtype != torch.float64:
+                tensor = tensor.double()
+
+            _check = (
+                torch.linalg.norm(tensor, dim=1) - 1
+            ).abs().max().item() <= MATRIX_EPS
+
+        return _check
+
+    @staticmethod
     def exp_map(
         tangent_vector: torch.Tensor, jacobians: Optional[List[torch.Tensor]] = None
     ) -> "SO2":
@@ -137,6 +154,23 @@ class SO2(LieGroup):
             )
 
         return so2
+
+    @staticmethod
+    def normalize(tensor: torch.Tensor) -> torch.Tensor:
+        if tensor.ndim != 2 or tensor.shape[1] != 2:
+            raise ValueError("SO2 data tensors can only be 2D vectors.")
+
+        data_norm = torch.norm(tensor, dim=1, keepdim=True)
+        near_zero = data_norm < theseus.constants._SO2_NORMALIZATION_EPS[tensor.dtype]
+        data_norm_nz = torch.where(
+            near_zero,
+            torch.tensor(1.0, dtype=tensor.dtype, device=tensor.device),
+            data_norm,
+        )
+        default_data = torch.tensor(
+            [1, 0], dtype=tensor.dtype, device=tensor.device
+        ).expand([tensor.shape[0], 2])
+        return torch.where(near_zero, default_data, tensor / data_norm_nz)
 
     def _log_map_impl(
         self, jacobians: Optional[List[torch.Tensor]] = None
@@ -162,11 +196,11 @@ class SO2(LieGroup):
         cos_2, sin_2 = so2_2.to_cos_sin()
         new_cos = cos_1 * cos_2 - sin_1 * sin_2
         new_sin = sin_1 * cos_2 + cos_1 * sin_2
-        return SO2(data=torch.stack([new_cos, new_sin], dim=1))
+        return SO2(tensor=torch.stack([new_cos, new_sin], dim=1), strict=False)
 
     def _inverse_impl(self, get_jacobian: bool = False) -> "SO2":
         cosine, sine = self.to_cos_sin()
-        return SO2(data=torch.stack([cosine, -sine], dim=1))
+        return SO2(tensor=torch.stack([cosine, -sine], dim=1), strict=False)
 
     def _rotate_shape_check(self, point: Union[Point2, torch.Tensor]):
         err_msg = (
@@ -201,16 +235,16 @@ class SO2(LieGroup):
                     f"Point tensor must have shape batch_size x 2, "
                     f"but received {point.shape}."
                 )
-            point_data = point
+            point_tensor = point
         else:
-            point_data = point.data
-        px, py = point_data[:, 0], point_data[:, 1]
-        new_point_data = torch.empty(
+            point_tensor = point.tensor
+        px, py = point_tensor[:, 0], point_tensor[:, 1]
+        new_point_tensor = torch.empty(
             batch_size, 2, device=cosine.device, dtype=cosine.dtype
         )
-        new_point_data[:, 0] = cosine * px - sine * py
-        new_point_data[:, 1] = sine * px + cosine * py
-        return Point2(data=new_point_data)
+        new_point_tensor[:, 0] = cosine * px - sine * py
+        new_point_tensor[:, 1] = sine * px + cosine * py
+        return Point2(tensor=new_point_tensor)
 
     def rotate(
         self,
@@ -277,7 +311,7 @@ class SO2(LieGroup):
         return matrix[:, 1, 0].clone().view(-1, 1)
 
     def _copy_impl(self, new_name: Optional[str] = None) -> "SO2":
-        return SO2(data=self.data.clone(), name=new_name)
+        return SO2(tensor=self.tensor.clone(), name=new_name)
 
     # only added to avoid casting downstream
     def copy(self, new_name: Optional[str] = None) -> "SO2":

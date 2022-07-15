@@ -38,7 +38,7 @@ def dataset(request):
     if request.param == VectorType.TORCH_TENSOR:
         joint_states_input = torch.Tensor(data["joint_states"])
     elif request.param == VectorType.TH_VECTOR:
-        joint_states_input = th.Vector(data=torch.Tensor(data["joint_states"]))
+        joint_states_input = th.Vector(tensor=torch.Tensor(data["joint_states"]))
     else:
         raise Exception("Invalid vector type specified.")
 

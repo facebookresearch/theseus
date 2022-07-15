@@ -7,14 +7,14 @@
 # This example illustrates the three backward modes (FULL, IMPLICIT, and TRUNCATED)
 # on a problem fitting a quadratic to data.
 
-import torch
-import theseus as th
-
-import numpy as np
-import numdifftools as nd
-
-from collections import defaultdict
 import time
+from collections import defaultdict
+
+import numdifftools as nd
+import numpy as np
+import torch
+
+import theseus as th
 
 torch.manual_seed(0)
 
@@ -46,8 +46,8 @@ b = th.Vector(1, name="b")
 def quad_error_fn(optim_vars, aux_vars):
     a, b = optim_vars
     x, y = aux_vars
-    est = a.data * x.data.square() + b.data
-    err = y.data - est
+    est = a.tensor * x.tensor.square() + b.tensor
+    err = y.tensor - est
     return err
 
 

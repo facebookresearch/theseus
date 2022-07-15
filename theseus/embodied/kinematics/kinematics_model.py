@@ -73,10 +73,11 @@ class UrdfRobotModel(KinematicsModel):
         if isinstance(joint_states, torch.Tensor):
             joint_states_input = joint_states
         elif isinstance(joint_states, Vector):
-            joint_states_input = joint_states.data
+            joint_states_input = joint_states.tensor
         else:
             raise Exception(
-                "Invalid input joint states data type. Valid types are torch.Tensor and th.Vector."
+                "Invalid input joint states data type. "
+                "Valid types are torch.Tensor and th.Vector."
             )
 
         # Compute forward kinematics for all links

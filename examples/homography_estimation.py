@@ -31,6 +31,7 @@ BACKWARD_MODE = {
 }
 
 
+# Download and extract data
 def prepare_data():
     dataset_root = os.path.join(os.getcwd(), "data")
     chunks = [
@@ -111,6 +112,8 @@ class HomographyDataset(Dataset):
         if img1.shape != (self.imgH, self.imgW, 3):
             img1 = cv2.cvtColor(img1, cv2.COLOR_GRAY2RGB)
         img1 = torch.from_numpy(img1.astype(np.float32) / 255.0).permute(2, 0, 1)[None]
+
+        # apply random geometric augmentations to create homography problem
         img2, H_1_2 = self.rga.forward(
             img1, return_transform=True, normalize_returned_transform=True
         )
@@ -182,6 +185,7 @@ def grid_sample(image, optical):
     return out_val
 
 
+# warp image given homography transform
 def warp_perspective_norm(H, img):
     height, width = img.shape[-2:]
     grid = kornia.utils.create_meshgrid(
@@ -194,6 +198,7 @@ def warp_perspective_norm(H, img):
     return img2
 
 
+# loss is difference between warped and target image
 def homography_error_fn(optim_vars: List[th.Manifold], aux_vars: List[th.Variable]):
     H8_1_2 = optim_vars[0].tensor.reshape(-1, 8)
     # Force the last element H[2,2] to be 1.
@@ -252,6 +257,7 @@ def viz_warp(path, img1, img2, img1_w, iteration, err=-1.0, fc_err=-1.0):
     cv2.imwrite(path, out)
 
 
+# write gif showing source image being warped onto target through optimisation
 def write_gif_batch(log_dir, img1, img2, H_hist, Hgt_1_2, err_hist=None):
     anim_dir = f"{log_dir}/animation"
     os.makedirs(anim_dir, exist_ok=True)
@@ -287,6 +293,8 @@ def write_gif_batch(log_dir, img1, img2, H_hist, Hgt_1_2, err_hist=None):
     return
 
 
+# L1 distance between 4 corners of source image warped using GT homography
+# and estimated homography transform
 def four_corner_dist(H_1_2, H_1_2_gt, height, width):
     Hinv_gt = torch.inverse(H_1_2_gt)
     Hinv = torch.inverse(H_1_2)

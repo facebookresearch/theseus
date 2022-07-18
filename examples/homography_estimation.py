@@ -1,17 +1,23 @@
-import kornia
-from typing import List
+# Copyright (c) Meta Platforms, Inc. and affiliates.
+#
+# This source code is licensed under the MIT license found in the
+# LICENSE file in the root directory of this source tree.
+
 import glob
-import theseus as th
+import os
+import shutil
+from typing import List
+
+import cv2
+import kornia
+import numpy as np
 import torch
 import torch.nn as nn
 from PIL import Image
-import cv2
-import numpy as np
-import os
 from torch.utils.data import DataLoader, Dataset
-import shutil
 from torch.utils.tensorboard import SummaryWriter
 
+import theseus as th
 from theseus.third_party.easyaug import RandomGeoAug, GeoAugParam, RandomPhotoAug
 from theseus.third_party.utils import grid_sample
 
@@ -26,6 +32,7 @@ BACKWARD_MODE = {
 }
 
 
+# Download and extract data
 def prepare_data():
     dataset_root = os.path.join(os.getcwd(), "data")
     chunks = [
@@ -106,6 +113,8 @@ class HomographyDataset(Dataset):
         if img1.shape != (self.imgH, self.imgW, 3):
             img1 = cv2.cvtColor(img1, cv2.COLOR_GRAY2RGB)
         img1 = torch.from_numpy(img1.astype(np.float32) / 255.0).permute(2, 0, 1)[None]
+
+        # apply random geometric augmentations to create homography problem
         img2, H_1_2 = self.rga.forward(
             img1, return_transform=True, normalize_returned_transform=True
         )
@@ -129,13 +138,12 @@ def warp_perspective_norm(H, img):
     )
     Hinv = torch.inverse(H)
     warped_grid = kornia.geometry.transform.homography_warper.warp_grid(grid, Hinv)
-    # grid_sample = torch.nn.functional.grid_sample
-    # img2 = grid_sample(img, warped_grid, mode="bilinear", align_corners=True)
     # Using custom implementation, above will throw error with outer loop optim.
     img2 = grid_sample(img, warped_grid)
     return img2
 
 
+# loss is difference between warped and target image
 def homography_error_fn(optim_vars: List[th.Manifold], aux_vars: List[th.Variable]):
     H8_1_2 = optim_vars[0].tensor.reshape(-1, 8)
     # Force the last element H[2,2] to be 1.
@@ -194,6 +202,7 @@ def viz_warp(path, img1, img2, img1_w, iteration, err=-1.0, fc_err=-1.0):
     cv2.imwrite(path, out)
 
 
+# write gif showing source image being warped onto target through optimisation
 def write_gif_batch(log_dir, img1, img2, H_hist, Hgt_1_2, err_hist=None):
     anim_dir = f"{log_dir}/animation"
     os.makedirs(anim_dir, exist_ok=True)
@@ -229,6 +238,8 @@ def write_gif_batch(log_dir, img1, img2, H_hist, Hgt_1_2, err_hist=None):
     return
 
 
+# L1 distance between 4 corners of source image warped using GT homography
+# and estimated homography transform
 def four_corner_dist(H_1_2, H_1_2_gt, height, width):
     Hinv_gt = torch.inverse(H_1_2_gt)
     Hinv = torch.inverse(H_1_2)

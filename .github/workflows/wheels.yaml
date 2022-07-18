@@ -20,11 +20,16 @@ jobs:
           export PATH="/opt/python/${{ matrix.python_version[1] }}/bin:$PATH"
           python3 -mpip install torch==1.12 ${{ matrix.cuda_support[1] }}
           python3 -mpip install "git+https://github.com/pytorch/functorch.git@release/0.2"
+      - name: Install suitesparse
+        run: |
+          yum makecache
+          yum -y install suitesparse
       - name: Build wheel
         run: |
           export PATH="/opt/python/${{ matrix.python_version[1] }}/bin:$PATH"
-          python3 -mpip install wheel
-          python3 -m build 
+          python3 -m pip install wheel
+          python3 -m pip install build
+          python3 -m build
           # NB: wheels have the linux_x86_64 tag so we rename to manylinux1
           # find . -name 'dist/*whl' -exec bash -c ' mv $0 ${0/linux/manylinux1}' {} \;
       # pytorch/pytorch binaries are also manylinux_2_17 compliant but they

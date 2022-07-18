@@ -44,6 +44,7 @@ class NonlinearLeastSquares(NonlinearOptimizer, abc.ABC):
             rel_err_tolerance=rel_err_tolerance,
             max_iterations=max_iterations,
             step_size=step_size,
+            **kwargs,
         )
 
     @abc.abstractmethod

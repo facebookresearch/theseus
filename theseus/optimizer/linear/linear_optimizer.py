@@ -34,7 +34,7 @@ class LinearOptimizer(Optimizer):
         linear_solver_kwargs: Optional[Dict[str, Any]] = None,
         **kwargs,
     ):
-        super().__init__(objective, vectorize=vectorize)
+        super().__init__(objective, vectorize=vectorize, **kwargs)
         linearization_kwargs = linearization_kwargs or {}
         linear_solver_kwargs = linear_solver_kwargs or {}
         self.linear_solver = linear_solver_cls(

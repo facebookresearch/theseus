@@ -282,7 +282,7 @@ def run():
     outer_lr = 1e-4
     use_cnn = True
 
-    log_dir = os.path.join(os.getcwd(), "viz")
+    log_dir = os.path.join(os.getcwd(), "examples/outputs/viz")
     os.makedirs(log_dir, exist_ok=True)
 
     device = "cuda" if torch.cuda.is_available() and use_gpu else "cpu"

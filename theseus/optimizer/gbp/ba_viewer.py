@@ -43,11 +43,11 @@ class BAViewer(trimesh.viewer.SceneViewer):
 
         if gt_cameras is not None:
             for i, cam in enumerate(gt_cameras):
-                camera = self.make_cam(cam.pose.tensor[0])
+                camera = self.make_cam(cam.pose.tensor[0].cpu())
                 self.scene.add_geometry(camera[1], geom_name=f"gt_cam_{i}")
 
         if gt_points is not None:
-            pts = torch.cat([pt.tensor for pt in gt_points])
+            pts = torch.cat([pt.tensor.cpu() for pt in gt_points])
             pc = trimesh.PointCloud(pts, [0, 255, 0, 200])
             self.scene.add_geometry(pc, geom_name="gt_points")
 
@@ -127,7 +127,7 @@ class BAViewer(trimesh.viewer.SceneViewer):
             points = []
             n_cams, n_pts = 0, 0
             for state in self.state_history.values():
-                state = state[..., self._it]
+                state = state[..., self._it].cpu()
                 if state.ndim == 3:
                     camera = self.make_cam(state[0], color=(0.0, 0.0, 1.0, 0.8))
                     self.scene.delete_geometry(f"cam_{n_cams}")

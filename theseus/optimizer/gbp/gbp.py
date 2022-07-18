@@ -28,7 +28,6 @@ from theseus.optimizer.nonlinear.nonlinear_optimizer import (
 
 """
 TODO
- - batch the factor damping params
  - solving inverse problem to compute message mean
  - factor inherits CF class
 """
@@ -151,10 +150,11 @@ class Factor:
             self.batch_size, device=device, dtype=torch.int
         )
 
-        # self.lm_damping = lin_system_damping
         self.lm_damping = torch.full([self.batch_size], lin_system_damping).to(
             dtype=dtype, device=device
         )
+        self.min_damping = torch.Tensor([1e-4]).to(dtype=dtype, device=device)
+        self.max_damping = torch.Tensor([1e2]).to(dtype=dtype, device=device)
         self.last_err: torch.Tensor = None
         self.a = 2
         self.b = 10
@@ -179,7 +179,6 @@ class Factor:
     def linearize(
         self,
         relin_threshold: float = None,
-        err_change: float = 0.0,
         lie=True,
     ):
         self.steps_since_lin += 1
@@ -215,15 +214,15 @@ class Factor:
                 eta = eta + torch.matmul(lam, optim_vars_stk.unsqueeze(-1))
             eta = eta.squeeze(-1)
 
-            # update lm_damping
+            # update damping parameter
             err = (self.cf.error() ** 2).sum(dim=1)
             if self.last_err is not None:
                 decreased_ixs = err < self.last_err
                 self.lm_damping[decreased_ixs] = torch.max(
-                    self.lm_damping[decreased_ixs] / self.a, torch.Tensor([1e-4])
+                    self.lm_damping[decreased_ixs] / self.a, self.min_damping
                 )
-                self.lm_damping[~decreased_ixs] = (
-                    self.lm_damping[~decreased_ixs] * self.b
+                self.lm_damping[~decreased_ixs] = torch.min(
+                    self.lm_damping[~decreased_ixs] * self.b, self.max_damping
                 )
             self.last_err = err
             # damp precision matrix
@@ -231,22 +230,6 @@ class Factor:
                 lam.shape[1], device=lam.device, dtype=lam.dtype
             ).unsqueeze(0).repeat(self.batch_size, 1, 1)
             lam = lam + damped_D
-
-            # # damping unchanged if err_change == 0
-            # if err_change < 0.0:
-            #     self.lm_damping = max(self.lm_damping / self.a, 1e-4)
-            # elif err_change > 0.0:
-            #     self.lm_damping = self.lm_damping * self.b
-            # lam = th.DenseSolver._apply_damping(
-            #     lam,
-            #     damping=self.lm_damping,
-            #     ellipsoidal=False,
-            #     eps=1e-8,
-            # )
-
-            # if self.name == 'robust_Reprojection__1_copy':
-            #     print('lm damping', self.lm_damping)
-            #     print('err change', err_change)
 
             self.potential_eta[do_lin] = eta[do_lin]
             self.potential_lam[do_lin] = lam[do_lin]
@@ -725,6 +708,7 @@ class GaussianBeliefPropagation(Optimizer, abc.ABC):
                         )
                         indices = indices + shift
                         indices = indices.flatten()
+                    indices = indices.to(factor.cf.optim_var_at(0).device)
                     factor.vectorized_var_ixs[i] = indices
 
                 #  add messages to correct variable using indices
@@ -786,12 +770,10 @@ class GaussianBeliefPropagation(Optimizer, abc.ABC):
                     self.beliefs[ix].update([belief_mean_slice], belief_precision_slice)
                     start_idx += batch_size
 
-    def _linearize_factors(
-        self, relin_threshold: float = None, err_change: float = 0.0
-    ):
+    def _linearize_factors(self, relin_threshold: float = None):
         relins = 0
         for factor in self.factors:
-            factor.linearize(relin_threshold=relin_threshold, err_change=err_change)
+            factor.linearize(relin_threshold=relin_threshold)
             relins += int((factor.steps_since_lin == 0).sum().item())
         return relins
 
@@ -923,12 +905,7 @@ class GaussianBeliefPropagation(Optimizer, abc.ABC):
                 ftov_schedule[it_, dropout_ixs] = False
 
             t0 = time.time()
-            err_change = 0.0
-            if it_ > 0:
-                err_change = (
-                    info.err_history[0, it_] - info.err_history[0, it_ - 1]
-                ).item()
-            relins = self._linearize_factors(relin_threshold, err_change)
+            relins = self._linearize_factors(relin_threshold)
             t_relin = time.time() - t0
 
             t1 = time.time()

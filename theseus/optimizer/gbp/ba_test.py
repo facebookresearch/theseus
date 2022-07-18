@@ -68,18 +68,23 @@ def run(cfg: omegaconf.OmegaConf):
         num_points=cfg["num_points"],
         average_track_length=cfg["average_track_length"],
         track_locality=cfg["track_locality"],
-        feat_random=0.0,
-        prob_feat_is_outlier=0.0,
+        feat_random=1.5,
+        prob_feat_is_outlier=0.02,
         outlier_feat_random=70,
-        cam_pos_rand=0.5,
-        cam_rot_rand=0.1,
-        point_rand=5.0,
+        cam_pos_rand=5.0,
+        cam_rot_rand=0.9,
+        point_rand=10.0,
     )
 
     # cams, points, obs = theg.BundleAdjustmentDataset.load_bal_dataset(
-    #     "/media/joe/3.0TB Hard Disk/bal_data/problem-21-11315-pre.txt")
+    #     # "/home/joe/Downloads/riku/fr1desk.txt", drop_obs=0.0)
+    #     "/mnt/sda/bal/problem-21-11315-pre.txt", drop_obs=0.0)
     # ba = theg.BundleAdjustmentDataset(cams, points, obs)
     # ba.save_to_file(results_path / "ba.txt", gt_path=results_path / "ba_gt.txt")
+
+    print("Cameras:", len(ba.cameras))
+    print("Points:", len(ba.points))
+    print("Observations:", len(ba.observations), "\n")
 
     # param that control transition from squared loss to huber
     radius_tensor = torch.tensor([1.0], dtype=torch.float64)
@@ -134,7 +139,7 @@ def run(cfg: omegaconf.OmegaConf):
     camera_pose_vars: List[th.LieGroup] = [
         objective.optim_vars[c.pose.name] for c in ba.cameras  # type: ignore
     ]
-    if cfg["inner_optim"]["ratio_known_cameras"] > 0.0:
+    if cfg["inner_optim"]["ratio_known_cameras"] > 0.0 and ba.gt_cameras is not None:
         w = 1000.0
         camera_weight = th.ScaleCostWeight(w * torch.ones(1, dtype=dtype))
         for i in range(len(ba.cameras)):
@@ -150,19 +155,20 @@ def run(cfg: omegaconf.OmegaConf):
                 )
             )
 
-    # print("Factors:\n", objective.cost_functions.keys(), "\n")
-
     # Create optimizer and theseus layer
     vectorize = True
     optimizer = cfg["optimizer_cls"](
         objective,
         max_iterations=cfg["inner_optim"]["max_iters"],
         vectorize=vectorize,
+        # linearization_cls=th.SparseLinearization,
+        # linear_solver_cls=th.LUCudaSparseSolver,
     )
     theseus_optim = th.TheseusLayer(optimizer, vectorize=vectorize)
 
     # device = "cuda" if torch.cuda.is_available() else "cpu"
     # theseus_optim.to(device)
+    # print('Device:', device)
 
     optim_arg = {
         "track_best_solution": True,
@@ -171,15 +177,15 @@ def run(cfg: omegaconf.OmegaConf):
         "verbose": True,
         "backward_mode": th.BackwardMode.FULL,
     }
-    if cfg["optimizer_cls"] == GaussianBeliefPropagation:
-        gbp_optim_arg = {
+    if isinstance(optimizer, GaussianBeliefPropagation):
+        extra_args = {
             "relin_threshold": 0.0000000001,
             "damping": 0.0,
             "dropout": 0.0,
             "schedule": GBPSchedule.SYNCHRONOUS,
-            "lin_system_damping": 1e-5,
+            "lin_system_damping": 1.0e-4,
         }
-        optim_arg = {**optim_arg, **gbp_optim_arg}
+    optim_arg = {**optim_arg, **extra_args}
 
     theseus_inputs = {}
     for cam in ba.cameras:
@@ -187,28 +193,27 @@ def run(cfg: omegaconf.OmegaConf):
     for pt in ba.points:
         theseus_inputs[pt.name] = pt.tensor.clone()
 
-    with torch.no_grad():
-        camera_loss_ref = camera_loss(ba, camera_pose_vars).item()
-    print(f"CAMERA LOSS:  {camera_loss_ref: .3f}")
+    if ba.gt_cameras is not None:
+        with torch.no_grad():
+            camera_loss_ref = camera_loss(ba, camera_pose_vars).item()
+        print(f"CAMERA LOSS:  {camera_loss_ref: .3f}")
     print_histogram(ba, theseus_inputs, "Input histogram:")
 
     objective.update(theseus_inputs)
     print("squred err:", objective.error_squared_norm().item())
 
-    theseus_outputs, info = theseus_optim.forward(
-        input_tensors=theseus_inputs,
-        optimizer_kwargs=optim_arg,
-    )
+    with torch.no_grad():
+        theseus_outputs, info = theseus_optim.forward(
+            input_tensors=theseus_inputs,
+            optimizer_kwargs=optim_arg,
+        )
 
-    loss = camera_loss(ba, camera_pose_vars).item()
-    print(f"CAMERA LOSS: (loss, ref loss) {loss:.3f} {camera_loss_ref: .3f}")
+    if ba.gt_cameras is not None:
+        loss = camera_loss(ba, camera_pose_vars).item()
+        print(f"CAMERA LOSS: (loss, ref loss) {loss:.3f} {camera_loss_ref: .3f}")
 
     are = average_repojection_error(objective)
     print("Average reprojection error (pixels): ", are)
-
-    with torch.no_grad():
-        camera_loss_ref = camera_loss(ba, camera_pose_vars).item()
-    print(f"CAMERA LOSS:  {camera_loss_ref: .3f}")
     print_histogram(ba, theseus_inputs, "Final histogram:")
 
     # BAViewer(
@@ -227,12 +232,12 @@ if __name__ == "__main__":
         "optimizer_cls": GaussianBeliefPropagation,
         # "optimizer_cls": th.GaussNewton,
         "inner_optim": {
-            "max_iters": 10,
+            "max_iters": 20,
             "verbose": True,
             "track_err_history": True,
             "keep_step_size": True,
             "regularize": True,
-            "ratio_known_cameras": 0.3,
+            "ratio_known_cameras": 0.1,
             "reg_w": 1e-7,
         },
     }

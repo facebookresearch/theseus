@@ -15,7 +15,6 @@ import torch
 import torch.nn as nn
 from PIL import Image
 from torch.utils.data import DataLoader, Dataset
-from torch.utils.tensorboard import SummaryWriter
 
 import theseus as th
 from theseus.third_party.easyaug import RandomGeoAug, GeoAugParam, RandomPhotoAug
@@ -203,12 +202,12 @@ def viz_warp(path, img1, img2, img1_w, iteration, err=-1.0, fc_err=-1.0):
 
 
 # write gif showing source image being warped onto target through optimisation
-def write_gif_batch(log_dir, img1, img2, H_hist, Hgt_1_2, err_hist=None):
+def write_gif_batch(log_dir, img1, img2, H_hist, Hgt_1_2, err_hist):
     anim_dir = f"{log_dir}/animation"
     os.makedirs(anim_dir, exist_ok=True)
     subsample_anim = 1
     H8_1_2_hist = H_hist["H8_1_2"]
-    num_iters = H8_1_2_hist.shape[-1]
+    num_iters = (~err_hist[0].isinf()).sum().item()
     for it in range(num_iters):
         if it % subsample_anim != 0:
             continue
@@ -221,10 +220,7 @@ def write_gif_batch(log_dir, img1, img2, H_hist, Hgt_1_2, err_hist=None):
         Hgt_1_2_mat = Hgt_1_2[0].reshape(1, 3, 3)
         imgH, imgW = img1.shape[-2], img1.shape[-1]
         fc_err = four_corner_dist(H_1_2_mat, Hgt_1_2_mat, imgH, imgW)
-        if err_hist is None:
-            err = -1
-        else:
-            err = float(err_hist[0][it])
+        err = float(err_hist[0][it])
         img1 = img1[0][None, ...]
         img2 = img2[0][None, ...]
         img1_dsts = warp_perspective_norm(H_1_2_mat, img1)
@@ -288,8 +284,6 @@ def run():
 
     log_dir = os.path.join(os.getcwd(), "viz")
     os.makedirs(log_dir, exist_ok=True)
-    print("Writing to tensorboard at", os.getcwd())
-    writer = SummaryWriter(log_dir)
 
     device = "cuda" if torch.cuda.is_available() and use_gpu else "cpu"
 
@@ -302,6 +296,43 @@ def run():
     # A simple 2-layer CNN network that maintains the original image size.
     cnn_model = SimpleCNN()
     cnn_model.to(device)
+
+    objective = th.Objective()
+
+    data = next(iter(dataloader))
+    H8_init = torch.eye(3).reshape(1, 9)[:, :-1].repeat(batch_size, 1)
+    feats = torch.zeros_like(data["img1"])
+    H8_1_2 = th.Vector(tensor=H8_init, name="H8_1_2")
+    feat1 = th.Variable(tensor=feats, name="feat1")
+    feat2 = th.Variable(tensor=feats, name="feat2")
+
+    # Set up inner loop optimization.
+    homography_cf = th.AutoDiffCostFunction(
+        optim_vars=[H8_1_2],
+        err_fn=homography_error_fn,
+        dim=1,
+        aux_vars=[feat1, feat2],
+    )
+    objective.add(homography_cf)
+
+    # Regularization helps avoid crash with using implicit mode.
+    reg_w = 1e-2
+    reg_w = th.ScaleCostWeight(np.sqrt(reg_w))
+    reg_w.to(dtype=H8_init.dtype)
+    vals = torch.tensor([[1.0, 0.0, 0.0, 0.0, 1.0, 0.0, 0.0, 0.0]])
+    H8_1_2_id = th.Vector(tensor=vals, name="identity")
+    reg_cf = th.Difference(
+        H8_1_2, target=H8_1_2_id, cost_weight=reg_w, name="reg_homography"
+    )
+    objective.add(reg_cf)
+
+    inner_optim = th.LevenbergMarquardt(
+        objective,
+        max_iterations=max_iterations,
+        step_size=step_size,
+    )
+    theseus_layer = th.TheseusLayer(inner_optim)
+    theseus_layer.to(device)
 
     # Set up outer loop optimization.
     outer_optim = torch.optim.Adam(cnn_model.parameters(), lr=outer_lr)
@@ -318,11 +349,6 @@ def run():
             img2 = data["img2"].to(device)
             Hgt_1_2 = data["H_1_2"].to(device)
 
-            objective = th.Objective()
-
-            H8_init = torch.eye(3).reshape(1, 9)[:, :-1].repeat(batch_size, 1)
-            H8_1_2 = th.Vector(tensor=H8_init, name="H8_1_2")
-
             if use_cnn:  # Use cnn features.
                 feat1 = cnn_model.forward(img1)
                 feat2 = cnn_model.forward(img2)
@@ -330,41 +356,13 @@ def run():
                 feat1 = img1
                 feat2 = img2
 
-            feat1 = th.Variable(tensor=feat1, name="feat1")
-            feat2 = th.Variable(tensor=feat2, name="feat2")
-
-            # Set up inner loop optimization.
-            homography_cf = th.AutoDiffCostFunction(
-                optim_vars=[H8_1_2],
-                err_fn=homography_error_fn,
-                dim=1,
-                aux_vars=[feat1, feat2],
-            )
-            objective.add(homography_cf)
-
-            # Regularization helps avoid crash with using implicit mode.
-            reg_w = 1e-2
-            reg_w = th.ScaleCostWeight(np.sqrt(reg_w))
-            reg_w.to(dtype=H8_init.dtype)
-            vals = torch.tensor([[1.0, 0.0, 0.0, 0.0, 1.0, 0.0, 0.0, 0.0]])
-            H8_1_2_id = th.Vector(tensor=vals, name="identity")
-            reg_cf = th.Difference(
-                H8_1_2, target=H8_1_2_id, cost_weight=reg_w, name="reg_homography"
-            )
-            objective.add(reg_cf)
-
-            inner_optim = th.LevenbergMarquardt(
-                objective,
-                max_iterations=max_iterations,
-                step_size=step_size,
-            )
-            theseus_layer = th.TheseusLayer(inner_optim)
-            theseus_layer.to(device)
+            H8_init = torch.eye(3).reshape(1, 9)[:, :-1].repeat(batch_size, 1)
+            H8_init = H8_init.to(device)
 
             inputs = {
-                "H8_1_2": H8_1_2.tensor,
-                "feat1": feat1.tensor,
-                "feat2": feat2.tensor,
+                "H8_1_2": H8_init,
+                "feat1": feat1,
+                "feat2": feat2,
             }
             if itr % disp_every == 0:
                 verbose2 = verbose
@@ -399,7 +397,6 @@ def run():
                 "Epoch %d, iteration %d, outer_loss: %.3f"
                 % (epoch, itr, outer_loss.item())
             )
-            writer.add_scalar("Loss/train", outer_loss.item(), itr)
 
             if itr % viz_every == 0:
                 write_gif_batch(log_dir, feat1, feat2, H_hist, Hgt_1_2, err_hist)

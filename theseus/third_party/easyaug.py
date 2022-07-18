@@ -4,7 +4,7 @@
 
 import math
 import warnings
-from typing import Optional, NamedTuple
+from typing import NamedTuple, Optional
 
 import torch
 

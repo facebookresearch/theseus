@@ -169,7 +169,7 @@ class BundleAdjustmentDataset:
         self.gt_points = gt_points
 
     @staticmethod
-    def load_bal_dataset(path: str):
+    def load_bal_dataset(path: str, drop_obs=0.0):
         observations = []
         cameras = []
         points = []
@@ -177,26 +177,41 @@ class BundleAdjustmentDataset:
             num_cameras, num_points, num_observations = [
                 int(x) for x in out.readline().rstrip().split()
             ]
+
+            fields = out.readline().rstrip().split()
+            intrinsics = None
+            if len(fields) == 4:
+                intrinsics = [
+                    (float(fields[0]) + float(fields[1])) / 2.0,
+                    float(fields[2]),
+                    float(fields[3]),
+                ]
+
             for i in range(num_observations):
-                fields = out.readline().rstrip().split()
-                feat = th.Point2(
-                    tensor=torch.tensor(
-                        [float(fields[2]), float(fields[3])], dtype=torch.float64
-                    ).unsqueeze(0),
-                    name=f"Feat{i}",
-                )
-                observations.append(
-                    Observation(
-                        camera_index=int(fields[0]),
-                        point_index=int(fields[1]),
-                        image_feature_point=feat,
+                if i > 0 or intrinsics is not None:
+                    fields = out.readline().rstrip().split()
+                if np.random.rand() > drop_obs:
+                    feat = th.Point2(
+                        tensor=torch.tensor(
+                            [float(fields[2]), float(fields[3])], dtype=torch.float64
+                        ).unsqueeze(0),
+                        name=f"Feat{i}",
                     )
-                )
+                    observations.append(
+                        Observation(
+                            camera_index=int(fields[0]),
+                            point_index=int(fields[1]),
+                            image_feature_point=feat,
+                        )
+                    )
 
             for i in range(num_cameras):
                 params = []
-                for _ in range(9):
+                n_params = 6 if intrinsics is not None else 9
+                for _ in range(n_params):
                     params.append(float(out.readline().rstrip()))
+                if intrinsics is not None:
+                    params.extend(intrinsics)
                 cameras.append(Camera.from_params(params, name=f"Cam{i}"))
 
             for i in range(num_points):

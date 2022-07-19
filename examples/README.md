@@ -1,5 +1,6 @@
 This folder contains examples of how to use Theseus for several applications:
 
+- simple_example.py: This is a minimal example using Theseus that is fitting a curve to a dataset of observations.
 - state_estimation_2d.py: Is an example of how to do 2D pose estimation from simulated
 noisy GPS and odometry sensors. In this example the noise is state dependent, and we
 learn the cost weight as a function of pose. 

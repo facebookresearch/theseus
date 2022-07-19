@@ -90,7 +90,7 @@ By default, unit tests include tests for our CUDA extensions. You can add the op
 
 ## Examples
 
-Simple example: This example is fitting the curve $y$ to a dataset of $N$ observations $(x,y) \sim D$. This is modeled as an `Objective` with a single `CostFunction` that computes the residual $y - v e^x$. The `Objective` and the `GaussNewton` optimizer are encapsulated into a `TheseusLayer`. With `RMSprop` and MSE loss, $x$ is learned by differentiating through the `TheseusLayer`.
+[Simple example](https://github.com/facebookresearch/theseus/blob/main/examples/simple_example.py). This example is fitting the curve $y$ to a dataset of $N$ observations $(x,y) \sim D$. This is modeled as an `Objective` with a single `CostFunction` that computes the residual $y - v e^x$. The `Objective` and the `GaussNewton` optimizer are encapsulated into a `TheseusLayer`. With `RMSprop` and MSE loss, $x$ is learned by differentiating through the `TheseusLayer`.
 
 ```python
 import torch

@@ -44,6 +44,7 @@ if torch.cuda.is_available():
                 "theseus/extlib/cusolver_lu_solver.cpp",
                 "theseus/extlib/cusolver_sp_defs.cpp",
             ],
+            include_dirs=["theseus/extlib"],
             libraries=["cusolver"],
         ),
     ]
@@ -70,7 +71,6 @@ setuptools.setup(
     python_requires=">=3.7",
     install_requires=reqs_main,
     extras_require={"dev": reqs_main + reqs_dev},
-    headers=["theseus/extlib/cusolver_sp_defs.h"],
     cmdclass={"build_ext": torch_cpp_ext.BuildExtension},
     ext_modules=ext_modules,
 )

@@ -6,6 +6,7 @@
 # A minimal example using Theseus that is fitting a curve to a dataset of observations.
 
 import torch
+
 import theseus as th
 
 
@@ -45,7 +46,7 @@ layer = th.TheseusLayer(th.GaussNewton(objective, max_iterations=10))
 
 phi = torch.nn.Parameter(x_true + 0.1 * torch.ones_like(x_true))
 outer_optimizer = torch.optim.RMSprop([phi], lr=0.001)
-for epoch in range(10):
+for epoch in range(20):
     solution, info = layer.forward(
         input_tensors={"x": phi.clone(), "v": torch.ones(1, 1)},
         optimizer_kwargs={"backward_mode": th.BackwardMode.IMPLICIT},
@@ -53,3 +54,4 @@ for epoch in range(10):
     outer_loss = torch.nn.functional.mse_loss(solution["v"], v_true)
     outer_loss.backward()
     outer_optimizer.step()
+    print("Outer loss: ", outer_loss.item())

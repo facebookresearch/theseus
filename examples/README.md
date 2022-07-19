@@ -15,6 +15,8 @@ problem with loop closure outliers.
 - pose_graph/pose_graph_benchmark: Is an example of using Theseus to solve pose graph optimization problems.
 - pose_graph/pose_graph_g2o: Is an example of using Theseus to solve pose graph optimization problems in the
 g2o format.
+- homography_estimation.py: Is an example of using Theseus to learn CNN image features for homography estimation.
+The features are trained to minimize the four corner distance between the warped and target image.
 
 These can be run from your root `theseus` directory by doing
 
@@ -27,6 +29,7 @@ These can be run from your root `theseus` directory by doing
     python examples/pose_graph/pose_graph_cube
     python examples/pose_graph/pose_graph_benchmark
     python examples/pose_graph/pose_graph_g2o
+    python examples/homography_estimation.py
 
 The motion planning and tactile estimation examples require `hydra` installation, which you can obtain
 by running.

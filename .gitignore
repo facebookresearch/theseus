@@ -5,6 +5,7 @@
 *.code-workspace
 debug/
 build/
+dist/
 datasets/
 .mypy_cache/
 .pytest_cache/

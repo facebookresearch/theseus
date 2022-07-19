@@ -197,10 +197,11 @@ def run(
         linearization_cls=LINEARIZATION_MODE[cast(str, cfg.inner_optim.solver)],
         linear_solver_cls=LINEAR_SOLVER_MODE[cast(str, cfg.inner_optim.solver)],
         vectorize=cfg.inner_optim.vectorize,
+        empty_cuda_cache=cfg.inner_optim.empty_cuda_cache,
     )
 
     # Set up Theseus layer
-    theseus_optim = th.TheseusLayer(optimizer, vectorize=cfg.inner_optim.vectorize)
+    theseus_optim = th.TheseusLayer(optimizer)
     theseus_optim.to(device=device)
 
     # Outer optimization loop

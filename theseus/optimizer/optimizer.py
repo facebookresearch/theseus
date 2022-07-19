@@ -25,7 +25,9 @@ class Optimizer(abc.ABC):
     def __init__(self, objective: Objective, *args, vectorize: bool = True, **kwargs):
         self.objective = objective
         if vectorize:
-            Vectorize(self.objective)
+            Vectorize(
+                self.objective, empty_cuda_cache=kwargs.get("empty_cuda_cache", False)
+            )
         self._objectives_version = objective.current_version
 
     @abc.abstractmethod

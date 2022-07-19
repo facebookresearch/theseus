@@ -23,6 +23,7 @@ inner_optim:
   ratio_known_poses: 0.1
   reg_w: 1e-3
   vectorize: true
+  empty_cuda_cache: false
 
 outer_optim:
   lr: 0.1

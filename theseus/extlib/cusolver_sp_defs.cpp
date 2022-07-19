@@ -5,7 +5,7 @@
 
 #pragma once
 
-#include "cusolver_sp_defs.h"
+#include "theseus/extlib/cusolver_sp_defs.h"
 #include <ATen/cuda/Exceptions.h>
 #include <ATen/cuda/detail/DeviceThreadHandles.h>
 #include <ATen/cuda/CUDAContext.h>

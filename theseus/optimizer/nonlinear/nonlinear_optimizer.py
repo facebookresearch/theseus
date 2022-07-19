@@ -75,7 +75,7 @@ class NonlinearOptimizer(Optimizer, abc.ABC):
         step_size: float = 1.0,
         **kwargs,
     ):
-        super().__init__(objective, vectorize=vectorize)
+        super().__init__(objective, vectorize=vectorize, **kwargs)
         linear_solver_kwargs = linear_solver_kwargs or {}
         self.linear_solver = linear_solver_cls(
             objective,

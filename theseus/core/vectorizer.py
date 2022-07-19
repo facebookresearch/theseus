@@ -84,7 +84,7 @@ class _CostFunctionWrapper(CostFunction):
 class Vectorize:
     _SHARED_TOKEN = "__shared__"
 
-    def __init__(self, objective: Objective):
+    def __init__(self, objective: Objective, empty_cuda_cache: bool = False):
         # Each cost function is assigned a wrapper. The wrapper will hold the error
         # and jacobian after vectorization.
         self._cost_fn_wrappers: List[_CostFunctionWrapper] = []
@@ -127,6 +127,7 @@ class Vectorize:
         )
 
         self._objective = objective
+        self._empty_cuda_cache = empty_cuda_cache
 
     # Returns a dictionary which maps every schema to information about its shared
     # variables.
@@ -288,6 +289,8 @@ class Vectorize:
             for cf in cost_fn_wrappers:
                 cf._cached_error = None
                 cf._cached_jacobians = None
+        if self._empty_cuda_cache:
+            torch.cuda.empty_cache()
 
     # This could be a static method, but writing like this makes some unit tests
     # easier

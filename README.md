@@ -4,7 +4,7 @@
     <a href="https://circleci.com/gh/facebookresearch/theseus/tree/main">
         <img src="https://circleci.com/gh/facebookresearch/theseus/tree/main.svg?style=svg" alt="CircleCI" height="20">
     </a>
-    <a href="https://github.com/facebookresearch/habitat-sim/blob/main/LICENSE">
+    <a href="https://github.com/facebookresearch/theseus/blob/main/LICENSE">
         <img src="https://img.shields.io/badge/license-MIT-blue.svg" alt="License" height="20">
     </a>
     <a href="https://www.python.org/downloads/release/">
@@ -48,8 +48,7 @@ Our implementation provides an easy to use interface to build custom optimizatio
 - [Second-order nonlinear optimizers](https://github.com/facebookresearch/theseus/tree/main/theseus/optimizer/nonlinear)
     - Gauss-Newton, Levenberg–Marquardt
 - [Linear solvers](https://github.com/facebookresearch/theseus/tree/main/theseus/optimizer/linear)
-    - Dense: Cholesky, LU
-    - Sparse: CHOLMOD, LU
+    - Dense: Cholesky, LU; Sparse: CHOLMOD, LU
 - [Commonly used costs](https://github.com/facebookresearch/theseus/tree/main/theseus/embodied), [AutoDiffCostFunction](https://github.com/facebookresearch/theseus/blob/main/theseus/core/cost_function.py)
 - [Lie groups](https://github.com/facebookresearch/theseus/tree/main/theseus/geometry)
 - [Robot kinematics](https://github.com/facebookresearch/theseus/blob/main/theseus/embodied/kinematics/kinematics_model.py)
@@ -66,7 +65,7 @@ We support several features that improve computation times and memory consumptio
 ### Prerequisites
 - We *strongly* recommend you install `theseus` in a venv or conda environment with Python 3.7-3.9.
 - Theseus requires `torch` installation. To install for your particular CPU/CUDA configuration, follow the instructions in the PyTorch [website](https://pytorch.org/get-started/locally/).
-- For GPU support, Theseus requires [nvcc](https://docs.nvidia.com/cuda/cuda-compiler-driver-nvcc/index.html) to compile custom CUDA operations. Make sure it matches the version used to compile pytorch with `nvcc --version.` If not, install it and ensure its location is on your system's `$PATH` variable.
+- For GPU support, Theseus requires [nvcc](https://docs.nvidia.com/cuda/cuda-compiler-driver-nvcc/index.html) to compile custom CUDA operations. Make sure it matches the version used to compile pytorch with `nvcc --version`. If not, install it and ensure its location is on your system's `$PATH` variable.
 - Theseus also requires [`suitesparse`](https://people.engr.tamu.edu/davis/suitesparse.html), which you can install via:
     - `sudo apt-get install libsuitesparse-dev` (Ubuntu).
     - `conda install -c conda-forge suitesparse` (Mac).
@@ -91,7 +90,7 @@ By default, unit tests include tests for our CUDA extensions. You can add the op
 
 ## Examples
 
-Simple example: This example is fitting the curve $y$ to a dataset of $N$ observations $(x,y) \sim D$. This is modeled as an Objective with a single $\texttt{CostFunction}$ that computes the residual $y - v e^x$. The $\texttt{Objective}$ and the $\texttt{GaussNewton}$ optimizer are encapsulated into a $\texttt{TheseusLayer}$. With $\texttt{RMSprop}$ and MSE loss, $x$ is learned by differentiating through the $\texttt{TheseusLayer}$.
+Simple example: This example is fitting the curve $y$ to a dataset of $N$ observations $(x,y) \sim D$. This is modeled as an `Objective` with a single `CostFunction` that computes the residual $y - v e^x$. The `Objective` and the `GaussNewton` optimizer are encapsulated into a `TheseusLayer`. With `RMSprop` and MSE loss, $x$ is learned by differentiating through the `TheseusLayer`.
 
 ```python
 import torch

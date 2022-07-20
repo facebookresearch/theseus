@@ -36,14 +36,16 @@ with open("README.md", "r") as fh:
 if torch.cuda.is_available():
     ext_modules = [
         torch_cpp_ext.CUDAExtension(
-            name="theseus.extlib.mat_mult", sources=["theseus/extlib/mat_mult.cu"]
+            name="theseus.extlib.mat_mult",
+            sources=[str(root_dir / "theseus" / "extlib" / "mat_mult.cu")],
         ),
         torch_cpp_ext.CUDAExtension(
             name="theseus.extlib.cusolver_lu_solver",
             sources=[
-                "theseus/extlib/cusolver_lu_solver.cpp",
-                "theseus/extlib/cusolver_sp_defs.cpp",
+                str(root_dir / "theseus" / "extlib" / "cusolver_lu_solver.cpp"),
+                str(root_dir / "theseus" / "extlib" / "cusolver_sp_defs.cpp"),
             ],
+            include_dirs=[str(root_dir)],
             libraries=["cusolver"],
         ),
     ]

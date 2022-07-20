@@ -754,7 +754,11 @@ class GaussianBeliefPropagation(Optimizer, abc.ABC):
             lam_tau = eta_lam[1]
 
             if update_belief and lam_tau.count_nonzero() != 0:
-                inv_lam_tau = torch.inverse(lam_tau)
+                valid_lam = lam_tau.count_nonzero(1, 2) != 0
+                inv_lam_tau = torch.zeros_like(
+                    lam_tau, dtype=lam_tau.dtype, device=lam_tau.device
+                )
+                inv_lam_tau[valid_lam] = torch.linalg.inv(lam_tau[valid_lam])
                 tau = torch.matmul(inv_lam_tau, eta_tp_acc.unsqueeze(-1)).squeeze(-1)
 
                 new_belief = th.retract_gaussian(vectorized_var, tau, lam_tau)
@@ -841,6 +845,7 @@ class GaussianBeliefPropagation(Optimizer, abc.ABC):
                 self._pass_var_to_fac_messages = self._pass_var_to_fac_messages_loop
 
             # compute factor potentials for the first time
+            unary_factor = False
             for i, cost_function in enumerate(cf_iterator):
 
                 if self.objective.vectorized:
@@ -870,6 +875,13 @@ class GaussianBeliefPropagation(Optimizer, abc.ABC):
                         var_ixs=var_ixs,
                         lin_system_damping=lin_system_damping,
                     )
+                )
+                if cost_function.num_optim_vars() == 1:
+                    unary_factor = True
+            if unary_factor is False:
+                raise Exception(
+                    "We require at least one unary cost function to act as a prior."
+                    "This is because Gaussian Belief Propagation is performing Bayesian inference."
                 )
             relins = self._linearize_factors()
 
@@ -962,11 +974,11 @@ class GaussianBeliefPropagation(Optimizer, abc.ABC):
         track_state_history: bool = False,
         verbose: bool = False,
         backward_mode: BackwardMode = BackwardMode.FULL,
-        relin_threshold: float = 0.1,
+        relin_threshold: float = 1e-8,
         damping: float = 0.0,
         dropout: float = 0.0,
         schedule: GBPSchedule = GBPSchedule.SYNCHRONOUS,
-        lin_system_damping: float = 1e-6,
+        lin_system_damping: float = 1e-4,
         **kwargs,
     ) -> NonlinearOptimizerInfo:
         with torch.no_grad():

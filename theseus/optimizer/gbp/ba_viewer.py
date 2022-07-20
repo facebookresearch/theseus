@@ -36,7 +36,14 @@ class BAViewer(trimesh.viewer.SceneViewer):
         self.flip_z = flip_z
         self.lock = threading.Lock()
 
-        self.num_iters = list(state_history.values())[0].shape[-1]
+        self.num_iters = (~list(state_history.values())[0].isinf()[0, 0, 0]).sum()
+
+        pts = []
+        for k, state in state_history.items():
+            if "Pt" in k:
+                pts.append(state[:, :, 0])
+        extents = torch.cat(pts).max(dim=0)[0] - torch.cat(pts).min(dim=0)[0]
+        self.marker_height = extents.max().item() / 50
 
         scene = trimesh.Scene()
         self.scene = scene
@@ -119,6 +126,7 @@ class BAViewer(trimesh.viewer.SceneViewer):
             self.scene.camera.fov,
             self.scene.camera.resolution,
             color=color,
+            marker_height=self.marker_height,
         )
         return camera
 

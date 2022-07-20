@@ -7,13 +7,23 @@ from typing import Dict, List
 
 import numpy as np
 import omegaconf
+import time
 import torch
+
+# import os
 
 import theseus as th
 import theseus.utils.examples as theg
 from theseus.optimizer.gbp import GaussianBeliefPropagation, GBPSchedule
 
 # from theseus.optimizer.gbp import BAViewer
+
+
+OPTIMIZER_CLASS = {
+    "gbp": GaussianBeliefPropagation,
+    "gauss_newton": th.GaussNewton,
+    "levenberg_marquardt": th.LevenbergMarquardt,
+}
 
 
 def print_histogram(
@@ -63,24 +73,24 @@ def average_repojection_error(objective) -> float:
 
 def run(cfg: omegaconf.OmegaConf):
     # create (or load) dataset
-    ba = theg.BundleAdjustmentDataset.generate_synthetic(
-        num_cameras=cfg["num_cameras"],
-        num_points=cfg["num_points"],
-        average_track_length=cfg["average_track_length"],
-        track_locality=cfg["track_locality"],
-        feat_random=1.5,
-        prob_feat_is_outlier=0.02,
-        outlier_feat_random=70,
-        cam_pos_rand=5.0,
-        cam_rot_rand=0.9,
-        point_rand=10.0,
-    )
-
-    # cams, points, obs = theg.BundleAdjustmentDataset.load_bal_dataset(
-    #     # "/home/joe/Downloads/riku/fr1desk.txt", drop_obs=0.0)
-    #     "/mnt/sda/bal/problem-21-11315-pre.txt", drop_obs=0.0)
-    # ba = theg.BundleAdjustmentDataset(cams, points, obs)
-    # ba.save_to_file(results_path / "ba.txt", gt_path=results_path / "ba_gt.txt")
+    if cfg["bal_file"] is None:
+        ba = theg.BundleAdjustmentDataset.generate_synthetic(
+            num_cameras=cfg["synthetic"]["num_cameras"],
+            num_points=cfg["synthetic"]["num_points"],
+            average_track_length=cfg["synthetic"]["average_track_length"],
+            track_locality=cfg["synthetic"]["track_locality"],
+            feat_random=1.5,
+            prob_feat_is_outlier=0.02,
+            outlier_feat_random=70,
+            cam_pos_rand=5.0,
+            cam_rot_rand=0.9,
+            point_rand=10.0,
+        )
+    else:
+        cams, points, obs = theg.BundleAdjustmentDataset.load_bal_dataset(
+            cfg["bal_file"], drop_obs=0.0
+        )
+        ba = theg.BundleAdjustmentDataset(cams, points, obs)
 
     print("Cameras:", len(ba.cameras))
     print("Points:", len(ba.points))
@@ -92,6 +102,7 @@ def run(cfg: omegaconf.OmegaConf):
 
     # Set up objective
     print("Setting up objective")
+    t0 = time.time()
     objective = th.Objective(dtype=torch.float64)
 
     weight = th.ScaleCostWeight(torch.tensor(1.0).to(dtype=ba.cameras[0].pose.dtype))
@@ -117,33 +128,36 @@ def run(cfg: omegaconf.OmegaConf):
     dtype = objective.dtype
 
     # Add regularization
-    if cfg["inner_optim"]["regularize"]:
-        zero_point3 = th.Point3(dtype=dtype, name="zero_point")
+    if cfg["optim"]["regularize"]:
+        # zero_point3 = th.Point3(dtype=dtype, name="zero_point")
         # identity_se3 = th.SE3(dtype=dtype, name="zero_se3")
-        w = np.sqrt(cfg["inner_optim"]["reg_w"])
+        w = np.sqrt(cfg["optim"]["reg_w"])
         damping_weight = th.ScaleCostWeight(w * torch.ones(1, dtype=dtype))
         for name, var in objective.optim_vars.items():
             target: th.Manifold
             if isinstance(var, th.SE3):
                 target = var.copy(new_name="target_" + var.name)
                 # target = identity_se3
-            elif isinstance(var, th.Point3):
-                # target = var.copy(new_name="target_" + var.name)
-                target = zero_point3
-            else:
-                assert False
-            objective.add(
-                th.Difference(var, target, damping_weight, name=f"reg_{name}")
-            )
+                objective.add(
+                    th.Difference(var, target, damping_weight, name=f"reg_{name}")
+                )
+            # elif isinstance(var, th.Point3):
+            #     target = var.copy(new_name="target_" + var.name)
+            #     # target = zero_point3
+            # else:
+            #     assert False
+            # objective.add(
+            #     th.Difference(var, target, damping_weight, name=f"reg_{name}")
+            # )
 
     camera_pose_vars: List[th.LieGroup] = [
         objective.optim_vars[c.pose.name] for c in ba.cameras  # type: ignore
     ]
-    if cfg["inner_optim"]["ratio_known_cameras"] > 0.0 and ba.gt_cameras is not None:
+    if cfg["optim"]["ratio_known_cameras"] > 0.0 and ba.gt_cameras is not None:
         w = 1000.0
         camera_weight = th.ScaleCostWeight(w * torch.ones(1, dtype=dtype))
         for i in range(len(ba.cameras)):
-            if np.random.rand() > cfg["inner_optim"]["ratio_known_cameras"]:
+            if np.random.rand() > cfg["optim"]["ratio_known_cameras"]:
                 continue
             print("fixing cam", i)
             objective.add(
@@ -154,26 +168,28 @@ def run(cfg: omegaconf.OmegaConf):
                     name=f"camera_diff_{i}",
                 )
             )
+    print("done in:", time.time() - t0)
 
     # Create optimizer and theseus layer
     vectorize = True
-    optimizer = cfg["optimizer_cls"](
+    optimizer = OPTIMIZER_CLASS[cfg["optim"]["optimizer_cls"]](
         objective,
-        max_iterations=cfg["inner_optim"]["max_iters"],
+        max_iterations=cfg["optim"]["max_iters"],
         vectorize=vectorize,
         # linearization_cls=th.SparseLinearization,
         # linear_solver_cls=th.LUCudaSparseSolver,
     )
     theseus_optim = th.TheseusLayer(optimizer, vectorize=vectorize)
 
-    # device = "cuda" if torch.cuda.is_available() else "cpu"
-    # theseus_optim.to(device)
-    # print('Device:', device)
+    if cfg["device"] == "cuda":
+        cfg["device"] = "cuda" if torch.cuda.is_available() else "cpu"
+    theseus_optim.to(cfg["device"])
+    print("Device:", cfg["device"])
 
     optim_arg = {
-        "track_best_solution": True,
+        "track_best_solution": False,
         "track_err_history": True,
-        "track_state_history": True,
+        "track_state_history": cfg["optim"]["track_state_history"],
         "verbose": True,
         "backward_mode": th.BackwardMode.FULL,
     }
@@ -183,9 +199,9 @@ def run(cfg: omegaconf.OmegaConf):
             "damping": 0.0,
             "dropout": 0.0,
             "schedule": GBPSchedule.SYNCHRONOUS,
-            "lin_system_damping": 1.0e-4,
+            "lin_system_damping": 1.0e-0,
         }
-    optim_arg = {**optim_arg, **extra_args}
+        optim_arg = {**optim_arg, **extra_args}
 
     theseus_inputs = {}
     for cam in ba.cameras:
@@ -197,6 +213,8 @@ def run(cfg: omegaconf.OmegaConf):
         with torch.no_grad():
             camera_loss_ref = camera_loss(ba, camera_pose_vars).item()
         print(f"CAMERA LOSS:  {camera_loss_ref: .3f}")
+    are = average_repojection_error(objective)
+    print("Average reprojection error (pixels): ", are)
     print_histogram(ba, theseus_inputs, "Input histogram:")
 
     objective.update(theseus_inputs)
@@ -214,28 +232,44 @@ def run(cfg: omegaconf.OmegaConf):
 
     are = average_repojection_error(objective)
     print("Average reprojection error (pixels): ", are)
-    print_histogram(ba, theseus_inputs, "Final histogram:")
+    print_histogram(ba, theseus_outputs, "Final histogram:")
 
-    # BAViewer(
-    #     info.state_history, gt_cameras=ba.gt_cameras, gt_points=ba.gt_points
-    # )  # , msg_history=optimizer.ftov_msgs_history)
+    # if cfg["optim"]["track_state_history"]:
+    #     BAViewer(
+    #         info.state_history, gt_cameras=ba.gt_cameras, gt_points=ba.gt_points
+    #     )  # , msg_history=optimizer.ftov_msgs_history)
+
+    # if cfg["bal_file"] is not None:
+    #     save_dir = os.path.join(os.getcwd(), "outputs")
+    #     if not os.path.exists(save_dir):
+    #         os.mkdir(save_dir)
+    #     err_history = info.err_history[0].cpu().numpy()
+    #     save_file = os.path.join(
+    #         save_dir,
+    #         f"{cfg['optim']['optimizer_cls']}_{cfg['bal_file'].split('/')[-1]}",
+    #     )
+    #     np.savetxt(save_file, err_history)
 
 
 if __name__ == "__main__":
 
     cfg = {
         "seed": 1,
-        "num_cameras": 10,
-        "num_points": 100,
-        "average_track_length": 8,
-        "track_locality": 0.2,
-        "optimizer_cls": GaussianBeliefPropagation,
-        # "optimizer_cls": th.GaussNewton,
-        "inner_optim": {
-            "max_iters": 20,
-            "verbose": True,
-            "track_err_history": True,
-            "keep_step_size": True,
+        "device": "cpu",
+        # "bal_file": None,
+        "bal_file": "/media/joe/data/bal/trafalgar/problem-21-11315-pre.txt",
+        "synthetic": {
+            "num_cameras": 10,
+            "num_points": 100,
+            "average_track_length": 8,
+            "track_locality": 0.2,
+        },
+        "optim": {
+            "max_iters": 500,
+            "optimizer_cls": "gbp",
+            # "optimizer_cls": "gauss_newton",
+            # "optimizer_cls": "levenberg_marquardt",
+            "track_state_history": False,
             "regularize": True,
             "ratio_known_cameras": 0.1,
             "reg_w": 1e-7,

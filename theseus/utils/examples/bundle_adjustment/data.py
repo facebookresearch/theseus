@@ -180,7 +180,7 @@ class BundleAdjustmentDataset:
 
             fields = out.readline().rstrip().split()
             intrinsics = None
-            if len(fields) == 4:
+            if "." in fields[0]:
                 intrinsics = [
                     (float(fields[0]) + float(fields[1])) / 2.0,
                     float(fields[2]),

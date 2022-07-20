@@ -19,10 +19,22 @@ import theseus.utils.examples as theg
 from theseus.optimizer.linear.linear_solver import LinearSolver
 from theseus.utils.examples.pose_graph.dataset import PoseGraphEdge
 
+# To run this example, you will need the cube datasets available at
+# https://dl.fbaipublicfiles.com/theseus/pose_graph_data.tar.gz
+#
+# The steps below should let you run the example.
+# From the root project folder do:
+#   mkdir datasets
+#   cd datasets
+#   cp your/path/pose_graph_data.tar.gz .
+#   tar -xzvf pose_graph_data.tar.gz
+#   cd ..
+#   python examples/pose_graph_cube.py
+
 # Logger
 log = logging.getLogger(__name__)
 
-DATASET_DIR = pathlib.Path.cwd() / "datasets" / "cube"
+DATASET_DIR = pathlib.Path.cwd() / "datasets" / "pose_graph" / "cube"
 
 dtype = torch.float64
 

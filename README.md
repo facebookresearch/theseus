@@ -26,7 +26,7 @@
 </p>
 
 <p align="center">
-    [<a href="https://arxiv.org/">Paper</a>]
+    [<a href="https://arxiv.org/abs/2207.09442">Paper</a>]
     [<a href="https://ai.facebook.com/blog/theseus-a-library-for-encoding-domain-knowledge-in-end-to-end-ai-models/">Blog</a>]
     [<a href="https://sites.google.com/view/theseus-ai/">Webpage</a>]
     [<a href="https://github.com/facebookresearch/theseus/tree/main/tutorials">Tutorials</a>]
@@ -63,7 +63,7 @@ We support several features that improve computation times and memory consumptio
 ## Getting Started
 
 ### Prerequisites
-- We *strongly* recommend you install `theseus` in a venv or conda environment with Python 3.7-3.9.
+- We *strongly* recommend you install Theseus in a venv or conda environment with Python 3.7-3.9.
 - Theseus requires `torch` installation. To install for your particular CPU/CUDA configuration, follow the instructions in the PyTorch [website](https://pytorch.org/get-started/locally/).
 - For GPU support, Theseus requires [nvcc](https://docs.nvidia.com/cuda/cuda-compiler-driver-nvcc/index.html) to compile custom CUDA operations. Make sure it matches the version used to compile pytorch with `nvcc --version`. If not, install it and ensure its location is on your system's `$PATH` variable.
 - Theseus also requires [`suitesparse`](https://people.engr.tamu.edu/davis/suitesparse.html), which you can install via:
@@ -75,7 +75,7 @@ We support several features that improve computation times and memory consumptio
 git clone https://github.com/facebookresearch/theseus.git && cd theseus
 pip install -e .
 ```
-If you are interested in contributing to `theseus`, instead install
+If you are interested in contributing to Theseus, instead install
 ```bash
 pip install -e ".[dev]"
 ```
@@ -131,6 +131,20 @@ See [tutorials](https://github.com/facebookresearch/theseus/blob/main/tutorials/
 - Join the community on [Github Discussions](https://github.com/facebookresearch/theseus/discussions) for questions and sugesstions.
 - Use [Github Issues](https://github.com/facebookresearch/theseus/issues/new/choose) for bugs and features.
 - See [CONTRIBUTING](https://github.com/facebookresearch/theseus/blob/main/CONTRIBUTING.md) if interested in helping out.
+
+
+## Citing Theseus
+
+If you use Theseus in your work, please cite the [paper](https://arxiv.org/abs/2207.09442) with the BibTeX below.
+
+```bibtex
+@article{pineda2022theseus,
+  title   = {{Theseus: A Library for Differentiable Nonlinear Optimization}},
+  author  = {Luis Pineda and Taosha Fan and Maurizio Monge and Shobha Venkataraman and Paloma Sodhi and Ricky Chen and Joseph Ortiz and Daniel DeTone and Austin Wang and Stuart Anderson and Jing Dong and Brandon Amos and Mustafa Mukadam},
+  journal = {arXiv preprint arXiv:2207.09442},
+  year    = {2022}
+}
+```
 
 
 ## License

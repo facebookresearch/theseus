@@ -28,7 +28,11 @@ def parse_requirements_file(path):
 reqs_main = parse_requirements_file("requirements/main.txt")
 reqs_dev = parse_requirements_file("requirements/dev.txt")
 root_dir = Path(__file__).parent
-version = (root_dir / "version.txt").read_text().strip()
+
+with open(Path("theseus") / "__init__.py", "r") as f:
+    for line in f:
+        if "__version__" in line:
+            version = line.split("__version__ = ")[1].rstrip().strip('"')
 
 with open("README.md", "r") as fh:
     long_description = fh.read()

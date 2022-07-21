@@ -36,10 +36,10 @@ def prepare_data():
     dataset_root = os.path.join(os.getcwd(), "data")
     chunks = [
         "revisitop1m.1",
-        "revisitop1m.2",
-        "revisitop1m.3",
-        "revisitop1m.4",
-        "revisitop1m.5",
+        #"revisitop1m.2", # Uncomment for more data.
+        #"revisitop1m.3",
+        #"revisitop1m.4",
+        #"revisitop1m.5",
     ]
     dataset_paths = []
     for chunk in chunks:

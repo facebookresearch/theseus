@@ -4,6 +4,7 @@
 
 import math
 import warnings
+import kornia
 from typing import NamedTuple, Optional
 
 import torch
@@ -79,113 +80,6 @@ def check_input(inp: torch.Tensor):
     if inp.min() < 0.0 or inp.max() > 1.0:
         raise ValueError("Image must be normalized between [0,1].")
     return
-
-
-# Note(dd): It was a pain to update kornia, so I took this from the kornia directly.
-def get_perspective_transform(src, dst):
-    r"""Calculates a perspective transform from four pairs of the corresponding
-    points.
-    The function calculates the matrix of a perspective transform so that:
-    .. math ::
-        \begin{bmatrix}
-        t_{i}x_{i}^{'} \\
-        t_{i}y_{i}^{'} \\
-        t_{i} \\
-        \end{bmatrix}
-        =
-        \textbf{map_matrix} \cdot
-        \begin{bmatrix}
-        x_{i} \\
-        y_{i} \\
-        1 \\
-        \end{bmatrix}
-    where
-    .. math ::
-        dst(i) = (x_{i}^{'},y_{i}^{'}), src(i) = (x_{i}, y_{i}), i = 0,1,2,3
-    Args:
-        src (torch.Tensor): coordinates of quadrangle vertices in the source image
-        with shape :math:`(B, 4, 2)`.
-        dst (torch.Tensor): coordinates of the corresponding quadrangle vertices in
-            the destination image with shape :math:`(B, 4, 2)`.
-    Returns:
-        torch.Tensor: the perspective transformation with shape :math:`(B, 3, 3)`.
-    .. note::
-        This function is often used in conjuntion with :func:`warp_perspective`.
-    """
-
-    # we build matrix A by using only 4 point correspondence. The linear
-    # system is solved with the least square method, so here
-    # we could even pass more correspondence
-    p = []
-    for i in [0, 1, 2, 3]:
-        p.append(_build_perspective_param(src[:, i], dst[:, i], "x"))
-        p.append(_build_perspective_param(src[:, i], dst[:, i], "y"))
-
-    # A is Bx8x8
-    A = torch.stack(p, dim=1)
-
-    # b is a Bx8x1
-    b = torch.stack(
-        [
-            dst[:, 0:1, 0],
-            dst[:, 0:1, 1],
-            dst[:, 1:2, 0],
-            dst[:, 1:2, 1],
-            dst[:, 2:3, 0],
-            dst[:, 2:3, 1],
-            dst[:, 3:4, 0],
-            dst[:, 3:4, 1],
-        ],
-        dim=1,
-    )
-
-    # solve the system Ax = b
-    X = torch.linalg.solve(A, b)
-
-    # create variable to return
-    batch_size = src.shape[0]
-    M = torch.ones(batch_size, 9, device=src.device, dtype=src.dtype)
-    M[..., :8] = torch.squeeze(X, dim=-1)
-
-    return M.view(-1, 3, 3)  # Bx3x3
-
-
-def _build_perspective_param(
-    p: torch.Tensor, q: torch.Tensor, axis: str
-) -> torch.Tensor:
-    ones = torch.ones_like(p)[..., 0:1]
-    zeros = torch.zeros_like(p)[..., 0:1]
-    if axis == "x":
-        return torch.cat(
-            [
-                p[:, 0:1],
-                p[:, 1:2],
-                ones,
-                zeros,
-                zeros,
-                zeros,
-                -p[:, 0:1] * q[:, 0:1],
-                -p[:, 1:2] * q[:, 0:1],
-            ],
-            dim=1,
-        )
-
-    elif axis == "y":
-        return torch.cat(
-            [
-                zeros,
-                zeros,
-                zeros,
-                p[:, 0:1],
-                p[:, 1:2],
-                ones,
-                -p[:, 0:1] * q[:, 1:2],
-                -p[:, 1:2] * q[:, 1:2],
-            ],
-            dim=1,
-        )
-    else:
-        raise ValueError("Bad input axis, should be x or y")
 
 
 class GeoAugParam(NamedTuple):
@@ -288,13 +182,7 @@ class RandomGeoAug(object):
         start *= corner_signs
         end *= corner_signs
         # Set up a linear system to solve for the homography.
-        # pmat = solve_homography(start, end)
-        # pmat = solve_homography_old(start, end)
-        # pmat = kornia.homography.find_homography_dlt(start, end) # Newer kornia version API.
-        # pmat = kornia.get_perspective_transform(start, end)
-        pmat = get_perspective_transform(
-            start, end
-        )  # Copied kornia functioned directly.
+        pmat = kornia.geometry.transform.get_perspective_transform(start, end)
         # Apply perspective transform first, then affine.
         matrix = pmat @ matrix
         # Normalize such that H[2,2] = 1.

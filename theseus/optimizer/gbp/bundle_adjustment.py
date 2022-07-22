@@ -13,6 +13,7 @@ import torch
 # import os
 
 import theseus as th
+from theseus.core import Vectorize
 import theseus.utils.examples as theg
 from theseus.optimizer.gbp import GaussianBeliefPropagation, GBPSchedule
 
@@ -59,12 +60,18 @@ def camera_loss(
     return loss
 
 
-def average_repojection_error(objective) -> float:
-
+# Assumes the weight of the cost functions are 1
+def average_repojection_error(objective, values_dict=None) -> float:
+    if values_dict is not None:
+        objective.update(values_dict)
+    if objective._vectorized is False:
+        Vectorize(objective)
     reproj_norms = []
-    for k in objective.cost_functions.keys():
-        if "Reprojection" in k:
-            err = objective.cost_functions[k].error().norm(dim=1)
+    for cost_function in objective._get_iterator():
+        if "Reprojection" in cost_function.name:
+            # should equal error as weight is 1
+            # need to call weighted_error as error is not cached
+            err = cost_function.weighted_error().norm(dim=1)
             reproj_norms.append(err)
 
     are = torch.tensor(reproj_norms).mean().item()
@@ -96,6 +103,8 @@ def run(cfg: omegaconf.OmegaConf):
     print("Points:", len(ba.points))
     print("Observations:", len(ba.observations), "\n")
 
+    print("Optimizer:", cfg["optim"]["optimizer_cls"], "\n")
+
     # param that control transition from squared loss to huber
     radius_tensor = torch.tensor([1.0], dtype=torch.float64)
     log_loss_radius = th.Vector(tensor=radius_tensor, name="log_loss_radius")
@@ -103,7 +112,9 @@ def run(cfg: omegaconf.OmegaConf):
     # Set up objective
     print("Setting up objective")
     t0 = time.time()
-    objective = th.Objective(dtype=torch.float64)
+    dtype = torch.float64
+    objective = th.Objective(dtype=dtype)
+    dummy_objective = th.Objective(dtype=dtype)  # for computing are
 
     weight = th.ScaleCostWeight(torch.tensor(1.0).to(dtype=ba.cameras[0].pose.dtype))
     for i, obs in enumerate(ba.observations):
@@ -125,7 +136,7 @@ def run(cfg: omegaconf.OmegaConf):
             name=f"robust_{cost_function.name}",
         )
         objective.add(robust_cost_function)
-    dtype = objective.dtype
+        dummy_objective.add(cost_function)
 
     # Add regularization
     if cfg["optim"]["regularize"]:
@@ -184,6 +195,7 @@ def run(cfg: omegaconf.OmegaConf):
     if cfg["device"] == "cuda":
         cfg["device"] = "cuda" if torch.cuda.is_available() else "cpu"
     theseus_optim.to(cfg["device"])
+    dummy_objective.to(cfg["device"])
     print("Device:", cfg["device"])
 
     optim_arg = {
@@ -199,7 +211,7 @@ def run(cfg: omegaconf.OmegaConf):
             "damping": 0.0,
             "dropout": 0.0,
             "schedule": GBPSchedule.SYNCHRONOUS,
-            "lin_system_damping": 1.0e-0,
+            "lin_system_damping": 1.0e-1,
         }
         optim_arg = {**optim_arg, **extra_args}
 
@@ -213,12 +225,12 @@ def run(cfg: omegaconf.OmegaConf):
         with torch.no_grad():
             camera_loss_ref = camera_loss(ba, camera_pose_vars).item()
         print(f"CAMERA LOSS:  {camera_loss_ref: .3f}")
-    are = average_repojection_error(objective)
+    are = average_repojection_error(dummy_objective, values_dict=theseus_inputs)
     print("Average reprojection error (pixels): ", are)
     print_histogram(ba, theseus_inputs, "Input histogram:")
 
     objective.update(theseus_inputs)
-    print("squred err:", objective.error_squared_norm().item())
+    print("squared err:", objective.error_squared_norm().item() / 2)
 
     with torch.no_grad():
         theseus_outputs, info = theseus_optim.forward(
@@ -230,11 +242,11 @@ def run(cfg: omegaconf.OmegaConf):
         loss = camera_loss(ba, camera_pose_vars).item()
         print(f"CAMERA LOSS: (loss, ref loss) {loss:.3f} {camera_loss_ref: .3f}")
 
-    are = average_repojection_error(objective)
+    are = average_repojection_error(dummy_objective, values_dict=theseus_outputs)
     print("Average reprojection error (pixels): ", are)
     print_histogram(ba, theseus_outputs, "Final histogram:")
 
-    # if cfg["optim"]["track_state_history"]:
+    # if info.state_history is not None:
     #     BAViewer(
     #         info.state_history, gt_cameras=ba.gt_cameras, gt_points=ba.gt_points
     #     )  # , msg_history=optimizer.ftov_msgs_history)
@@ -246,9 +258,40 @@ def run(cfg: omegaconf.OmegaConf):
     #     err_history = info.err_history[0].cpu().numpy()
     #     save_file = os.path.join(
     #         save_dir,
-    #         f"{cfg['optim']['optimizer_cls']}_{cfg['bal_file'].split('/')[-1]}",
+    #         f"{cfg['optim']['optimizer_cls']}_err_{cfg['bal_file'].split('/')[-1]}",
     #     )
     #     np.savetxt(save_file, err_history)
+
+    # # get average reprojection error for each iteration
+    # if info.state_history is not None:
+    #     ares = []
+    #     iters = (
+    #         info.converged_iter
+    #         if info.converged_iter != -1
+    #         else cfg["optim"]["max_iters"]
+    #     )
+    #     for i in range(iters):
+    #         t0 = time.time()
+    #         values_dict = {}
+    #         for name, state in info.state_history.items():
+    #             values_dict[name] = (
+    #                 state[..., i].to(dtype=torch.float64).to(dummy_objective.device)
+    #             )
+    #         are = average_repojection_error(dummy_objective, values_dict=values_dict)
+    #         ares.append(are)
+    #         print(i, "-- ARE:", are, " -- time", time.time() - t0)
+    #     are = average_repojection_error(dummy_objective, values_dict=theseus_outputs)
+    #     ares.append(are)
+
+    #     if cfg["bal_file"] is not None:
+    #         save_dir = os.path.join(os.getcwd(), "outputs")
+    #         if not os.path.exists(save_dir):
+    #             os.mkdir(save_dir)
+    #         save_file = os.path.join(
+    #             save_dir,
+    #             f"{cfg['optim']['optimizer_cls']}_are_{cfg['bal_file'].split('/')[-1]}",
+    #         )
+    #         np.savetxt(save_file, np.array(ares))
 
 
 if __name__ == "__main__":
@@ -265,11 +308,11 @@ if __name__ == "__main__":
             "track_locality": 0.2,
         },
         "optim": {
-            "max_iters": 500,
+            "max_iters": 300,
             "optimizer_cls": "gbp",
             # "optimizer_cls": "gauss_newton",
             # "optimizer_cls": "levenberg_marquardt",
-            "track_state_history": False,
+            "track_state_history": True,
             "regularize": True,
             "ratio_known_cameras": 0.1,
             "reg_w": 1e-7,

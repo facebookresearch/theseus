@@ -18,20 +18,20 @@ class Collision2D(CostFunction):
     def __init__(
         self,
         pose: Point2,
-        sdf_origin: Variable,
-        sdf_data: Variable,
-        sdf_cell_size: Variable,
+        sdf_origin: Union[Point2, torch.Tensor],
+        sdf_data: Union[torch.Tensor, Variable],
+        sdf_cell_size: Union[float, torch.Tensor, Variable],
         cost_eps: Union[float, Variable, torch.Tensor],
         cost_weight: CostWeight,
         name: Optional[str] = None,
     ):
         if not isinstance(pose, Point2):
-            raise ValueError("Collision2D only accepts 2D poses as inputs.")
+            raise ValueError("Collision2D only accepts Point2 poses.")
         super().__init__(cost_weight, name=name)
         self.pose = pose
-        self.sdf_origin = sdf_origin
-        self.sdf_data = sdf_data
-        self.sdf_cell_size = sdf_cell_size
+        self.sdf_origin = SignedDistanceField2D.convert_origin(sdf_origin)
+        self.sdf_data = SignedDistanceField2D.convert_sdf_data(sdf_data)
+        self.sdf_cell_size = SignedDistanceField2D.convert_cell_size(sdf_cell_size)
         if not isinstance(cost_eps, Variable):
             if not isinstance(cost_eps, torch.Tensor):
                 cost_eps = torch.tensor(cost_eps)
@@ -42,7 +42,9 @@ class Collision2D(CostFunction):
         self.register_optim_vars(["pose"])
         self.register_aux_vars(["sdf_origin", "sdf_data", "sdf_cell_size", "cost_eps"])
         self.robot: KinematicsModel = IdentityModel()
-        self.sdf = SignedDistanceField2D(sdf_origin, sdf_cell_size, sdf_data)
+        self.sdf = SignedDistanceField2D(
+            self.sdf_origin, self.sdf_cell_size, self.sdf_data
+        )
 
     def _compute_distances_and_jacobians(
         self,

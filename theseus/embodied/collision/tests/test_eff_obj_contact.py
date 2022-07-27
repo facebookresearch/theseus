@@ -8,6 +8,11 @@ import pytest  # noqa
 import torch
 
 import theseus as th
+from theseus.embodied.collision.tests.utils import (
+    random_origin,
+    random_sdf_data,
+    random_scalar,
+)
 from theseus.geometry.tests.test_se2 import create_random_se2
 from theseus.utils import numeric_jacobian
 
@@ -18,10 +23,10 @@ def test_eff_obj_interesect_jacobians():
     for batch_size in [1, 10, 100]:
         obj = create_random_se2(batch_size, rng)
         eff = create_random_se2(batch_size, rng)
-        origin = th.Variable(torch.randn(batch_size, 2).double())
-        sdf_data = th.Variable(torch.randn(batch_size, 10, 10).double())
-        cell_size = th.Variable(torch.rand(batch_size, 1).double())
-        eff_radius = th.Variable(torch.rand(batch_size, 1).double())
+        origin = random_origin(batch_size)
+        sdf_data = random_sdf_data(batch_size, 10, 10)
+        cell_size = random_scalar(batch_size)
+        eff_radius = random_scalar(batch_size)
         cost_weight = th.ScaleCostWeight(1.0)
         cost_function = th.eb.EffectorObjectContactPlanar(
             obj, eff, origin, sdf_data, cell_size, eff_radius, cost_weight
@@ -139,10 +144,10 @@ def test_eff_obj_interesect_errors():
         cost_fn = th.eb.EffectorObjectContactPlanar(
             obj,
             eff,
-            th.Variable(origin.repeat(5, 1)),
-            th.Variable(sdf_data.repeat(5, 1, 1)),
-            th.Variable(cell_size.repeat(5, 1)),
-            th.Variable(eff_radius),
+            origin.repeat(5, 1),
+            sdf_data.repeat(5, 1, 1),
+            cell_size.repeat(5, 1),
+            eff_radius,
             cost_weight,
         )
 
@@ -157,17 +162,20 @@ def test_eff_obj_variable_type():
     for batch_size in [1, 10, 100]:
         obj = create_random_se2(batch_size, rng)
         eff = create_random_se2(batch_size, rng)
-        origin = th.Variable(torch.randn(batch_size, 2).double())
-        sdf_data = th.Variable(torch.randn(batch_size, 10, 10).double())
-        cell_size = th.Variable(torch.rand(batch_size, 1).double())
-        eff_radius = th.Variable(torch.rand(batch_size, 1).double())
+        origin = random_origin(batch_size)
+        sdf_data = random_sdf_data(batch_size, 10, 10)
+        cell_size = random_scalar(batch_size)
+        eff_radius = random_scalar(batch_size)
         cost_weight = th.ScaleCostWeight(1.0)
         cost_function = th.eb.EffectorObjectContactPlanar(
             obj, eff, origin, sdf_data, cell_size, eff_radius, cost_weight
         )
 
         assert isinstance(cost_function.eff_radius, th.Variable)
-        assert cost_function.eff_radius is eff_radius
+        if isinstance(eff_radius, th.Variable):
+            assert cost_function.eff_radius is eff_radius
+        else:
+            assert torch.allclose(cost_function.eff_radius.tensor, eff_radius)
 
         eff_radius_t = torch.rand(batch_size, 1).double()
 

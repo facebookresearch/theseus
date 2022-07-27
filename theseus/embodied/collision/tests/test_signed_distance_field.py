@@ -8,6 +8,7 @@ import torch
 
 import theseus as th
 from theseus.utils import numeric_jacobian
+from .utils import random_sdf
 
 
 def test_sdf_2d_shapes():
@@ -17,13 +18,8 @@ def test_sdf_2d_shapes():
         for field_width in [1, 10, 100]:
             for field_height in [1, 10, 100]:
                 for num_points in [1, 10, 100]:
-                    origin = th.Variable(tensor=torch.randn(batch_size, 2))
-                    sdf_data = th.Variable(
-                        tensor=torch.randn(batch_size, field_width, field_height)
-                    )
                     points = th.Variable(tensor=torch.randn(batch_size, 2, num_points))
-                    cell_size = th.Variable(tensor=torch.randn(batch_size, 1))
-                    sdf = th.eb.SignedDistanceField2D(origin, cell_size, sdf_data)
+                    sdf = random_sdf(batch_size, field_width, field_height)
                     dist, jac = sdf.signed_distance(points)
                     assert dist.shape == (batch_size, num_points)
                     assert jac.shape == (batch_size, num_points, 2)
@@ -39,11 +35,7 @@ def test_signed_distance_2d():
             [1.7321, 1.4142, 1.4142, 1.4142, 1.7321],
         ]
     ).view(1, 5, 5)
-    sdf = th.eb.SignedDistanceField2D(
-        th.Variable(-0.2 * torch.ones(1, 2)),
-        th.Variable(0.1 * torch.ones(1, 1)),
-        th.Variable(data),
-    )
+    sdf = th.eb.SignedDistanceField2D(-0.2 * torch.ones(1, 2), 0.1, data)
 
     points = torch.tensor([[0, 0], [0.18, -0.17]])
     rows, cols, _ = sdf.convert_points_to_cell(points)
@@ -67,7 +59,7 @@ def test_sdf_2d_creation():
     map2 = torch.zeros(5, 5)
     data_maps = th.Variable(torch.stack([map1, map2]))
     sdf_batch = th.eb.SignedDistanceField2D(
-        -0.2 * torch.ones(2, 2), 0.1 * torch.ones(2, 1), occupancy_map=data_maps
+        -0.2 * torch.ones(2, 2), 0.1, occupancy_map=data_maps
     )
     # generate verification data for map1
     import numpy as np
@@ -94,10 +86,7 @@ def test_sdf_2d_creation():
 
 def test_signed_distance_2d_jacobian():
     for batch_size in [1, 10, 100]:
-        origin = th.Variable(torch.randn(batch_size, 2).double())
-        sdf_data = th.Variable(torch.randn(batch_size, 10, 10).double())
-        cell_size = th.Variable(torch.rand(batch_size, 1).double())
-        sdf = th.eb.SignedDistanceField2D(origin, cell_size, sdf_data)
+        sdf = random_sdf(batch_size, 10, 10)
         for num_points in [1, 10]:
             points = torch.randn(batch_size, 2, num_points).double()
             _, jacobian = sdf.signed_distance(points)

@@ -19,9 +19,9 @@ class EffectorObjectContactPlanar(CostFunction):
         self,
         obj: SE2,
         eff: SE2,
-        sdf_origin: Variable,
-        sdf_data: Variable,
-        sdf_cell_size: Variable,
+        sdf_origin: Union[Point2, torch.Tensor],
+        sdf_data: Union[torch.Tensor, Variable],
+        sdf_cell_size: Union[float, torch.Tensor, Variable],
         eff_radius: Union[float, Variable, torch.Tensor],
         cost_weight: CostWeight,
         name: Optional[str] = None,
@@ -30,9 +30,9 @@ class EffectorObjectContactPlanar(CostFunction):
         super().__init__(cost_weight, name=name)
         self.obj = obj
         self.eff = eff
-        self.sdf_origin = sdf_origin
-        self.sdf_data = sdf_data
-        self.sdf_cell_size = sdf_cell_size
+        self.sdf_origin = SignedDistanceField2D.convert_origin(sdf_origin)
+        self.sdf_data = SignedDistanceField2D.convert_sdf_data(sdf_data)
+        self.sdf_cell_size = SignedDistanceField2D.convert_cell_size(sdf_cell_size)
         if not isinstance(eff_radius, Variable):
             if not isinstance(eff_radius, torch.Tensor):
                 eff_radius = torch.tensor(eff_radius)
@@ -47,7 +47,9 @@ class EffectorObjectContactPlanar(CostFunction):
             ["sdf_origin", "sdf_data", "sdf_cell_size", "eff_radius"]
         )
         self.robot = IdentityModel()
-        self.sdf = SignedDistanceField2D(sdf_origin, sdf_cell_size, sdf_data)
+        self.sdf = SignedDistanceField2D(
+            self.sdf_origin, self.sdf_cell_size, self.sdf_data
+        )
         self._use_huber = use_huber_loss
 
         if use_huber_loss:

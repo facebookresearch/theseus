@@ -153,6 +153,7 @@ def generate_trajectory_figs(
     fig_idx_robot: int = 1,
     figsize: Tuple[int, int] = (8, 8),
     plot_sdf: bool = False,
+    invert_map: bool = False,
 ) -> List[plt.Figure]:
     # cell rows/cols for each batch of trajectories
     traj_rows = []
@@ -171,8 +172,15 @@ def generate_trajectory_figs(
         if map_idx >= max_num_figures:
             continue
         fig, axs = plt.subplots(1, 2 if plot_sdf else 1, figsize=figsize)
+        if plot_sdf:
+            fig.subplots_adjust(right=0.8)
+            cbar_ax = fig.add_axes([0.85, 0.15, 0.10, 0.7])
+            cbar_ax.axis("off")
+
         path_ax = axs[0] if plot_sdf else axs
         map_data = map_tensor[map_idx].clone().cpu().numpy()
+        if invert_map:
+            map_data = 1 - map_data
         map_data = np.tile(map_data, (3, 1, 1)).transpose((1, 2, 0))
         path_ax.imshow(map_data)
         cell_size = sdf.cell_size.tensor
@@ -193,8 +201,11 @@ def generate_trajectory_figs(
         path_ax.legend(handles=patches, fontsize=10)
 
         if plot_sdf:
-            im = axs[1].imshow(sdf.sdf_data.tensor[map_idx].cpu().numpy())
-            fig.colorbar(im)
-        fig.tight_layout()
+            im = axs[1].imshow(
+                sdf.sdf_data.tensor[map_idx].cpu().numpy(), cmap="plasma_r"
+            )
+            fig.colorbar(im, ax=cbar_ax)
+        else:
+            fig.tight_layout()
         figures.append(fig)
     return figures

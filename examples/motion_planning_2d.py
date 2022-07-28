@@ -40,7 +40,7 @@ def plot_and_save_trajectories(
     include_expert: bool = False,
 ):
     sdf = th.eb.SignedDistanceField2D(
-        th.Variable(batch["sdf_origin"]),
+        th.Point2(batch["sdf_origin"]),
         th.Variable(batch["cell_size"]),
         th.Variable(batch["sdf_data"]),
     )

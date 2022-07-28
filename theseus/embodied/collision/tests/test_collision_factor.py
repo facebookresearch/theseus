@@ -13,24 +13,23 @@ from theseus.core.tests.common import (
     check_another_torch_tensor_is_copy,
 )
 from theseus.utils import numeric_jacobian
+from .utils import random_scalar, random_origin, random_sdf_data
 
 
 def test_collision2d_error_shapes():
-    generator = torch.Generator()
-    generator.manual_seed(0)
     cost_weight = th.ScaleCostWeight(1.0)
     for batch_size in [1, 10, 100]:
         for field_widht in [1, 10, 100]:
             for field_height in [1, 10, 100]:
                 pose = th.Point2(tensor=torch.randn(batch_size, 2).double())
-                origin = torch.randn(batch_size, 2)
-                sdf_data = torch.randn(batch_size, field_widht, field_height)
-                cell_size = torch.randn(batch_size, 1)
+                origin = random_origin(batch_size)
+                sdf_data = random_sdf_data(batch_size, field_widht, field_height)
+                cell_size = random_scalar(batch_size)
                 cost_function = th.eb.Collision2D(
                     pose,
-                    th.Variable(origin),
-                    th.Variable(sdf_data),
-                    th.Variable(cell_size),
+                    origin,
+                    sdf_data,
+                    cell_size,
                     th.Variable(torch.ones(1)),
                     cost_weight,
                     name="cost_function",
@@ -46,15 +45,15 @@ def test_collision2d_copy():
     batch_size = 20
     cost_weight = th.ScaleCostWeight(1.0)
     pose = th.Point2(tensor=torch.randn(batch_size, 2).double())
-    origin = torch.ones(batch_size, 2)
-    sdf_data = torch.ones(batch_size, 1, 1)
-    cell_size = torch.ones(batch_size, 1)
+    origin = random_origin(batch_size)
+    sdf_data = random_sdf_data(batch_size, 1, 1)
+    cell_size = random_scalar(batch_size)
     cost_function = th.eb.Collision2D(
         pose,
-        th.Variable(origin),
-        th.Variable(sdf_data),
-        th.Variable(cell_size),
-        th.Variable(torch.ones(1)),
+        origin,
+        sdf_data,
+        cell_size,
+        1.0,
         cost_weight,
         name="name",
     )
@@ -84,7 +83,7 @@ def test_collision2d_jacobians():
         for batch_size in [1, 10, 100, 1000]:
             cost_weight = th.ScaleCostWeight(torch.ones(1).squeeze().double())
             pose = th.Point2(tensor=torch.randn(batch_size, 2, generator=rng).double())
-            origin = th.Variable(torch.ones(batch_size, 2).double())
+            origin = th.Point2(torch.ones(batch_size, 2).double())
             sdf_data = th.Variable(
                 torch.randn(batch_size, 10, 10, generator=rng).double()
             )

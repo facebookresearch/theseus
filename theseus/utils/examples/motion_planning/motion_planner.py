@@ -51,23 +51,25 @@ class MotionPlanner:
         # functions.
         # By giving them names, we can update for each batch (if needed),
         # via the motion planner's forward method.
-        sdf_origin = th.Point2(name="sdf_origin")
-        start_point = th.Point2(name="start")
-        goal_point = th.Point2(name="goal")
-        cell_size_tensor = th.Variable(torch.empty(1, 1), name="cell_size")
-        sdf_data_tensor = th.Variable(
-            torch.empty(1, map_size, map_size), name="sdf_data"
+        sdf_origin = th.Point2(name="sdf_origin", dtype=dtype)
+        start_point = th.Point2(name="start", dtype=dtype)
+        goal_point = th.Point2(name="goal", dtype=dtype)
+        cell_size = th.Variable(torch.empty(1, 1, dtype=dtype), name="cell_size")
+        sdf_data = th.Variable(
+            torch.empty(1, map_size, map_size, dtype=dtype), name="sdf_data"
         )
-        cost_eps = th.Variable(torch.tensor(epsilon_dist).view(1, 1), name="cost_eps")
+        cost_eps = th.Variable(
+            torch.tensor(epsilon_dist, dtype=dtype).view(1, 1), name="cost_eps"
+        )
         dt = th.Variable(
-            torch.tensor(total_time / num_time_steps).view(1, 1), name="dt"
+            torch.tensor(total_time / num_time_steps, dtype=dtype).view(1, 1), name="dt"
         )
 
         # --------------------------------------------------------------------------- #
         # ------------------------------- Cost weights ------------------------------ #
         # --------------------------------------------------------------------------- #
         # For the GP cost functions, we create a single GPCost weight
-        gp_cost_weight = th.eb.GPCostWeight(torch.tensor(Qc_inv), dt)
+        gp_cost_weight = th.eb.GPCostWeight(torch.tensor(Qc_inv, dtype=dtype), dt)
 
         # Now we create cost weights for the collision-avoidance cost functions
         # Each of this is a scalar cost weight with a named auxiliary variable.
@@ -77,7 +79,9 @@ class MotionPlanner:
         if use_single_collision_weight:
             collision_cost_weights.append(
                 th.ScaleCostWeight(
-                    th.Variable(torch.tensor(collision_weight), name="collision_w")
+                    th.Variable(
+                        torch.tensor(collision_weight, dtype=dtype), name="collision_w"
+                    )
                 )
             )
         else:
@@ -92,7 +96,7 @@ class MotionPlanner:
 
         # For hard-constraints (end points pos/vel) we use a single scalar weight
         # with high value
-        boundary_cost_weight = th.ScaleCostWeight(torch.tensor(100.0))
+        boundary_cost_weight = th.ScaleCostWeight(torch.tensor(100.0, dtype=dtype))
 
         # --------------------------------------------------------------------------- #
         # -------------------------- Optimization variables ------------------------- #
@@ -120,7 +124,7 @@ class MotionPlanner:
         objective.add(
             th.Difference(
                 velocities[0],
-                th.Point2(tensor=torch.zeros(1, 2)),
+                th.Point2(tensor=torch.zeros(1, 2, dtype=dtype)),
                 boundary_cost_weight,
                 name="vel_0",
             )
@@ -131,7 +135,7 @@ class MotionPlanner:
         objective.add(
             th.Difference(
                 velocities[-1],
-                th.Point2(tensor=torch.zeros(1, 2)),
+                th.Point2(tensor=torch.zeros(1, 2, dtype=dtype)),
                 boundary_cost_weight,
                 name="vel_N",
             )
@@ -145,8 +149,8 @@ class MotionPlanner:
                 th.eb.Collision2D(
                     poses[i],
                     sdf_origin,
-                    sdf_data_tensor,
-                    cell_size_tensor,
+                    sdf_data,
+                    cell_size,
                     cost_eps,
                     collision_cost_weights[0]
                     if use_single_collision_weight

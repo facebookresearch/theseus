@@ -152,6 +152,8 @@ def generate_trajectory_figs(
     labels: Optional[List[str]] = None,
     fig_idx_robot: int = 1,
     figsize: Tuple[int, int] = (8, 8),
+    plot_sdf: bool = False,
+    invert_map: bool = False,
 ) -> List[plt.Figure]:
     # cell rows/cols for each batch of trajectories
     traj_rows = []
@@ -169,26 +171,41 @@ def generate_trajectory_figs(
     for map_idx in range(map_tensor.shape[0]):
         if map_idx >= max_num_figures:
             continue
-        fig, axs = plt.subplots(1, 1, figsize=figsize)
+        fig, axs = plt.subplots(1, 2 if plot_sdf else 1, figsize=figsize)
+        if plot_sdf:
+            fig.subplots_adjust(right=0.8)
+            cbar_ax = fig.add_axes([0.85, 0.15, 0.10, 0.7])
+            cbar_ax.axis("off")
+
+        path_ax = axs[0] if plot_sdf else axs
         map_data = map_tensor[map_idx].clone().cpu().numpy()
+        if invert_map:
+            map_data = 1 - map_data
         map_data = np.tile(map_data, (3, 1, 1)).transpose((1, 2, 0))
-        axs.imshow(map_data)
+        path_ax.imshow(map_data)
         cell_size = sdf.cell_size.tensor
         patches = []
         for t_idx, trajectory in enumerate(trajectories):
             row = traj_rows[t_idx][map_idx]
             col = traj_cols[t_idx][map_idx]
             line = _create_line_from_trajectory(col, row, color=colors[t_idx])
-            axs.add_line(line)
+            path_ax.add_line(line)
             if t_idx == fig_idx_robot:  # solution trajectory
                 radius = robot_radius / cell_size[map_idx][0]
                 patch_coll = _add_robot_to_trajectory(col, row, radius)
-                axs.add_collection(patch_coll)
+                path_ax.add_collection(patch_coll)
             patches.append(mpl.patches.Patch(color=colors[t_idx], label=labels[t_idx]))
         patches.append(
             mpl.patches.Patch(color="magenta", label=f"radius = {robot_radius}")
         )
-        axs.legend(handles=patches, fontsize=10)
-        fig.tight_layout()
+        path_ax.legend(handles=patches, fontsize=10)
+
+        if plot_sdf:
+            im = axs[1].imshow(
+                sdf.sdf_data.tensor[map_idx].cpu().numpy(), cmap="plasma_r"
+            )
+            fig.colorbar(im, ax=cbar_ax)
+        else:
+            fig.tight_layout()
         figures.append(fig)
     return figures

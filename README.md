@@ -126,13 +126,6 @@ for epoch in range(10):
 See [tutorials](https://github.com/facebookresearch/theseus/blob/main/tutorials/), and robotics and vision [examples](https://github.com/facebookresearch/theseus/tree/main/examples) to learn about the API and usage.
 
 
-## Additional Information
-
-- Join the community on [Github Discussions](https://github.com/facebookresearch/theseus/discussions) for questions and sugesstions.
-- Use [Github Issues](https://github.com/facebookresearch/theseus/issues/new/choose) for bugs and features.
-- See [CONTRIBUTING](https://github.com/facebookresearch/theseus/blob/main/CONTRIBUTING.md) if interested in helping out.
-
-
 ## Citing Theseus
 
 If you use Theseus in your work, please cite the [paper](https://arxiv.org/abs/2207.09442) with the BibTeX below.
@@ -150,3 +143,18 @@ If you use Theseus in your work, please cite the [paper](https://arxiv.org/abs/2
 ## License
 
 Theseus is MIT licensed. See the [LICENSE](https://github.com/facebookresearch/theseus/blob/main/LICENSE) for details.
+
+
+## Additional Information
+
+- Join the community on [Github Discussions](https://github.com/facebookresearch/theseus/discussions) for questions and sugesstions.
+- Use [Github Issues](https://github.com/facebookresearch/theseus/issues/new/choose) for bugs and features.
+- See [CONTRIBUTING](https://github.com/facebookresearch/theseus/blob/main/CONTRIBUTING.md) if interested in helping out.
+
+Theseus is made possible by the following contributors:
+
+<a href="https://github.com/facebookresearch/theseus/graphs/contributors">
+  <img src="https://contrib.rocks/image?repo=facebookresearch/theseus" />
+</a>
+
+Made with [contrib.rocks](https://contrib.rocks).

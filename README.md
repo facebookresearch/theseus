@@ -22,15 +22,15 @@
 </p>
 
 <p align="center">
-    <b>A library for differentiable nonlinear optimization</b>
+    <i>A library for differentiable nonlinear optimization</i>
 </p>
 
 <p align="center">
-    [<a href="https://arxiv.org/abs/2207.09442">Paper</a>]
-    [<a href="https://ai.facebook.com/blog/theseus-a-library-for-encoding-domain-knowledge-in-end-to-end-ai-models/">Blog</a>]
-    [<a href="https://sites.google.com/view/theseus-ai/">Webpage</a>]
-    [<a href="https://github.com/facebookresearch/theseus/tree/main/tutorials">Tutorials</a>]
-    [<a href="https://theseus-ai.readthedocs.io/">Docs</a>]
+    <a href="https://arxiv.org/abs/2207.09442">Paper</a> •
+    <a href="https://ai.facebook.com/blog/theseus-a-library-for-encoding-domain-knowledge-in-end-to-end-ai-models/">Blog</a> •
+    <a href="https://sites.google.com/view/theseus-ai/">Webpage</a> •
+    <a href="https://github.com/facebookresearch/theseus/tree/main/tutorials">Tutorials</a> •
+    <a href="https://theseus-ai.readthedocs.io/">Docs</a>
 </p>
 
 Theseus is an efficient application-agnostic library for building custom nonlinear optimization layers in PyTorch to support constructing various problems in robotics and vision as end-to-end differentiable architectures.
@@ -59,6 +59,7 @@ We support several features that improve computation times and memory consumptio
 - Batching and GPU acceleration
 - [Automatic vectorization](https://github.com/facebookresearch/theseus/blob/main/theseus/core/vectorizer.py)
 - [Backward modes](https://github.com/facebookresearch/theseus/blob/main/theseus/optimizer/nonlinear/nonlinear_optimizer.py): Implicit, Truncated, Direct Loss Minimization ([DLM](https://github.com/facebookresearch/theseus/blob/main/theseus/theseus_layer.py)), Sampling ([LEO](https://github.com/facebookresearch/theseus/blob/main/examples/state_estimation_2d.py))
+
 
 ## Getting Started
 

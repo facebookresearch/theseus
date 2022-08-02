@@ -117,8 +117,8 @@ class Factor:
         self,
         cf: CostFunction,
         var_ixs: torch.Tensor,
+        lin_system_damping: torch.Tensor,
         name: Optional[str] = None,
-        lin_system_damping: float = 1e-6,
     ):
         self._id = next(Factor._ids)
         if name:
@@ -150,9 +150,7 @@ class Factor:
             self.batch_size, device=device, dtype=torch.int
         )
 
-        self.lm_damping = torch.full([self.batch_size], lin_system_damping).to(
-            dtype=dtype, device=device
-        )
+        self.lm_damping = lin_system_damping.repeat(self.batch_size)
         self.min_damping = torch.Tensor([1e-4]).to(dtype=dtype, device=device)
         self.max_damping = torch.Tensor([1e2]).to(dtype=dtype, device=device)
         self.last_err: torch.Tensor = None
@@ -242,7 +240,7 @@ class Factor:
     # Compute all outgoing messages from the factor.
     def comp_mess(
         self,
-        damping,
+        msg_damping,
         schedule,
     ):
         num_optim_vars = self.cf.num_optim_vars()
@@ -325,11 +323,12 @@ class Factor:
                     torch.bmm(lono, torch.linalg.inv(lnono)), eno.unsqueeze(-1)
                 ).squeeze(-1)
 
-                # damping in tangent space at linearisation point as message
+                # message damping in tangent space at linearisation point as message
                 # is already in this tangent space. Could equally do damping
                 # in the tangent space of the new or old message mean.
                 # Damping is applied to the mean parameters.
-                do_damping = torch.logical_and(damping[v] > 0, self.steps_since_lin > 0)
+                # do_damping = torch.logical_and(msg_damping[v] > 0, self.steps_since_lin >= 0)
+                do_damping = msg_damping[v]
                 if do_damping.sum() != 0:
                     damping_check = torch.logical_and(
                         new_mess_lam.count_nonzero(1, 2) != 0,
@@ -343,10 +342,10 @@ class Factor:
                         new_mess_mean = torch.bmm(
                             torch.inverse(new_mess_lam), new_mess_eta.unsqueeze(-1)
                         ).squeeze(-1)
-                        damping[v][~do_damping] = 0.0
+                        msg_damping[v][~do_damping] = 0.0
                         new_mess_mean = (
-                            1 - damping[v][:, None]
-                        ) * new_mess_mean + damping[v][:, None] * prev_mess_mean
+                            1 - msg_damping[v][:, None]
+                        ) * new_mess_mean + msg_damping[v][:, None] * prev_mess_mean
                         new_mess_eta = torch.bmm(
                             new_mess_lam, new_mess_mean.unsqueeze(-1)
                         ).squeeze(-1)
@@ -781,12 +780,14 @@ class GaussianBeliefPropagation(Optimizer, abc.ABC):
             relins += int((factor.steps_since_lin == 0).sum().item())
         return relins
 
-    def _pass_fac_to_var_messages(self, schedule: torch.Tensor, damping: torch.Tensor):
+    def _pass_fac_to_var_messages(
+        self, schedule: torch.Tensor, ftov_msg_damping: torch.Tensor
+    ):
         start_d = 0
         for j, factor in enumerate(self.factors):
             num_optim_vars = factor.cf.num_optim_vars()
             n_edges = num_optim_vars * factor.batch_size
-            damping_tsr = damping[start_d : start_d + n_edges]
+            damping_tsr = ftov_msg_damping[start_d : start_d + n_edges]
             schedule_tsr = schedule[start_d : start_d + n_edges]
             damping_tsr = damping_tsr.reshape(num_optim_vars, factor.batch_size)
             schedule_tsr = schedule_tsr.reshape(num_optim_vars, factor.batch_size)
@@ -807,25 +808,13 @@ class GaussianBeliefPropagation(Optimizer, abc.ABC):
         verbose: bool,
         truncated_grad_loop: bool,
         relin_threshold: float,
-        damping: float,
+        ftov_msg_damping: float,
         dropout: float,
         schedule: GBPSchedule,
-        lin_system_damping: float,
+        lin_system_damping: torch.Tensor,
         clear_messages: bool = True,
         **kwargs,
     ):
-        if damping > 1.0 or damping < 0.0:
-            raise ValueError(f"Damping must be between 0 and 1. Got {damping}.")
-        if dropout > 1.0 or dropout < 0.0:
-            raise ValueError(
-                f"Dropout probability must be between 0 and 1. Got {dropout}."
-            )
-        if dropout > 0.9:
-            print(
-                "Disabling vectorization due to dropout > 0.9 in GBP message schedule."
-            )
-            self.objective.disable_vectorization()
-
         # initialise beliefs
         for var in self.ordering:
             self.beliefs.append(th.ManifoldGaussian([var]))
@@ -905,9 +894,9 @@ class GaussianBeliefPropagation(Optimizer, abc.ABC):
             self.ftov_msgs_history[it_] = curr_ftov_msgs
 
             # damping
-            damping_arr = torch.full(
+            ftov_damping_arr = torch.full(
                 [self.n_edges],
-                damping,
+                ftov_msg_damping,
                 device=self.ordering[0].device,
                 dtype=self.ordering[0].dtype,
             )
@@ -921,7 +910,7 @@ class GaussianBeliefPropagation(Optimizer, abc.ABC):
             t_relin = time.time() - t0
 
             t1 = time.time()
-            self._pass_fac_to_var_messages(ftov_schedule[it_], damping_arr)
+            self._pass_fac_to_var_messages(ftov_schedule[it_], ftov_damping_arr)
             t_ftov = time.time() - t1
 
             t1 = time.time()
@@ -975,16 +964,40 @@ class GaussianBeliefPropagation(Optimizer, abc.ABC):
         verbose: bool = False,
         backward_mode: BackwardMode = BackwardMode.FULL,
         relin_threshold: float = 1e-8,
-        damping: float = 0.0,
+        ftov_msg_damping: float = 0.0,
         dropout: float = 0.0,
         schedule: GBPSchedule = GBPSchedule.SYNCHRONOUS,
-        lin_system_damping: float = 1e-4,
+        lin_system_damping: torch.Tensor = torch.Tensor([1e-4]),
         **kwargs,
     ) -> NonlinearOptimizerInfo:
         with torch.no_grad():
             info = self._init_info(
                 track_best_solution, track_err_history, track_state_history
             )
+
+        if ftov_msg_damping > 1.0 or ftov_msg_damping < 0.0:
+            raise ValueError(
+                f"Damping must be between 0 and 1. Got {ftov_msg_damping}."
+            )
+        if dropout > 1.0 or dropout < 0.0:
+            raise ValueError(
+                f"Dropout probability must be between 0 and 1. Got {dropout}."
+            )
+        if dropout > 0.9:
+            print(
+                "Disabling vectorization due to dropout > 0.9 in GBP message schedule."
+            )
+            self.objective.disable_vectorization()
+
+        if not isinstance(lin_system_damping, torch.Tensor):
+            raise TypeError("lin_system_damping should be an instance of torch.Tensor.")
+        expected_shape = torch.Size([1])
+        if lin_system_damping.shape != expected_shape:
+            raise ValueError(
+                f"lin_system_damping should have shape {expected_shape}. "
+                f"Got shape {lin_system_damping.shape}."
+            )
+        lin_system_damping.to(self.objective.device, self.objective.dtype)
 
         if verbose:
             print(
@@ -998,7 +1011,7 @@ class GaussianBeliefPropagation(Optimizer, abc.ABC):
                 verbose=verbose,
                 truncated_grad_loop=False,
                 relin_threshold=relin_threshold,
-                damping=damping,
+                ftov_msg_damping=ftov_msg_damping,
                 dropout=dropout,
                 schedule=schedule,
                 lin_system_damping=lin_system_damping,
@@ -1039,7 +1052,7 @@ class GaussianBeliefPropagation(Optimizer, abc.ABC):
                     verbose=verbose,
                     truncated_grad_loop=False,
                     relin_threshold=relin_threshold,
-                    damping=damping,
+                    ftov_msg_damping=ftov_msg_damping,
                     dropout=dropout,
                     schedule=schedule,
                     lin_system_damping=lin_system_damping,
@@ -1055,7 +1068,7 @@ class GaussianBeliefPropagation(Optimizer, abc.ABC):
                 verbose=verbose,
                 truncated_grad_loop=True,
                 relin_threshold=relin_threshold,
-                damping=damping,
+                ftov_msg_damping=ftov_msg_damping,
                 dropout=dropout,
                 schedule=schedule,
                 lin_system_damping=lin_system_damping,

@@ -1,4 +1,4 @@
-![Theseus Logo](https://github.com/facebookresearch/theseus/blob/main/docs/source/img/theseus-color-horizontal.png)
+![Theseus Logo](https://raw.githubusercontent.com/facebookresearch/theseus/main/docs/source/img/theseus-color-horizontal.png)
 
 <p align="center">
     <a href="https://circleci.com/gh/facebookresearch/theseus/tree/main">
@@ -35,7 +35,7 @@
 
 Theseus is an efficient application-agnostic library for building custom nonlinear optimization layers in PyTorch to support constructing various problems in robotics and vision as end-to-end differentiable architectures.
 
-<img alt="TheseusLayer" src="https://github.com/facebookresearch/theseus/blob/main/docs/source/img/theseuslayer.png">
+<img alt="TheseusLayer" src="https://raw.githubusercontent.com/facebookresearch/theseus/main/docs/source/img/theseuslayer.png">
 
 Differentiable nonlinear optimization provides a general scheme to encode inductive priors, as the objective function can be partly parameterized by neural models and partly with expert domain-specific differentiable models. The ability to compute gradients end-to-end is retained by differentiating through the optimizer which allows neural models to train on the final task loss, while also taking advantage of priors captured by the optimizer.
 

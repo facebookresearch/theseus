@@ -223,6 +223,7 @@ class Factor:
                     self.lm_damping[~decreased_ixs] * self.b, self.max_damping
                 )
             self.last_err = err
+
             # damp precision matrix
             damped_D = self.lm_damping[:, None, None] * torch.eye(
                 lam.shape[1], device=lam.device, dtype=lam.dtype
@@ -278,27 +279,29 @@ class Factor:
             else:
                 # print(self.cf.name, "---> sending message")
                 # Divide up parameters of distribution
-                eo = eta_factor[:, sdim : sdim + dofs]
-                eno = torch.cat(
+                # *_out = parameters for receiver variable (outgoing message vars)
+                # *_notout = parameters for other variables (not outgoing message vars)
+                eta_out = eta_factor[:, sdim : sdim + dofs]
+                eta_notout = torch.cat(
                     (eta_factor[:, :sdim], eta_factor[:, sdim + dofs :]), dim=1
                 )
 
-                loo = lam_factor[:, sdim : sdim + dofs, sdim : sdim + dofs]
-                lono = torch.cat(
+                lam_out_out = lam_factor[:, sdim : sdim + dofs, sdim : sdim + dofs]
+                lam_out_notout = torch.cat(
                     (
                         lam_factor[:, sdim : sdim + dofs, :sdim],
                         lam_factor[:, sdim : sdim + dofs, sdim + dofs :],
                     ),
                     dim=2,
                 )
-                lnoo = torch.cat(
+                lam_notout_out = torch.cat(
                     (
                         lam_factor[:, :sdim, sdim : sdim + dofs],
                         lam_factor[:, sdim + dofs :, sdim : sdim + dofs],
                     ),
                     dim=1,
                 )
-                lnono = torch.cat(
+                lam_notout_notout = torch.cat(
                     (
                         torch.cat(
                             (
@@ -318,9 +321,15 @@ class Factor:
                     dim=1,
                 )
 
-                new_mess_lam = loo - lono @ torch.linalg.inv(lnono) @ lnoo
-                new_mess_eta = eo - torch.bmm(
-                    torch.bmm(lono, torch.linalg.inv(lnono)), eno.unsqueeze(-1)
+                new_mess_lam = (
+                    lam_out_out
+                    - lam_out_notout
+                    @ torch.linalg.inv(lam_notout_notout)
+                    @ lam_notout_out
+                )
+                new_mess_eta = eta_out - torch.bmm(
+                    torch.bmm(lam_out_notout, torch.linalg.inv(lam_notout_notout)),
+                    eta_notout.unsqueeze(-1),
                 ).squeeze(-1)
 
                 # message damping in tangent space at linearisation point as message
@@ -408,9 +417,6 @@ class GaussianBeliefPropagation(Optimizer, abc.ABC):
         self.params = GBPOptimizerParams(
             abs_err_tolerance, rel_err_tolerance, max_iterations
         )
-
-        self.beliefs: List[th.ManifoldGaussian] = []
-        self.factors: List[Factor] = []
 
     """
     Copied and slightly modified from nonlinear optimizer class
@@ -796,6 +802,67 @@ class GaussianBeliefPropagation(Optimizer, abc.ABC):
             if schedule_tsr.sum() != 0:
                 factor.comp_mess(damping_tsr, schedule_tsr)
 
+    def _create_factors_beliefs(self, lin_system_damping):
+        self.factors: List[Factor] = []
+        self.beliefs: List[th.ManifoldGaussian] = []
+        for var in self.ordering:
+            self.beliefs.append(th.ManifoldGaussian([var]))
+
+        if self.objective.vectorized:
+            cf_iterator = iter(self.objective.vectorized_cost_fns)
+            self._pass_var_to_fac_messages = self._pass_var_to_fac_messages_vectorized
+        else:
+            cf_iterator = self.objective._get_iterator()
+            self._pass_var_to_fac_messages = self._pass_var_to_fac_messages_loop
+
+        # compute factor potentials for the first time
+        unary_factor = False
+        for i, cost_function in enumerate(cf_iterator):
+
+            if self.objective.vectorized:
+                # create array for indexing the messages
+                base_cf_names = self.objective.vectorized_cf_names[i]
+                base_cfs = [
+                    self.objective.get_cost_function(name) for name in base_cf_names
+                ]
+                var_ixs = torch.tensor(
+                    [
+                        [self.ordering.index_of(var.name) for var in cf.optim_vars]
+                        for cf in base_cfs
+                    ]
+                ).long()
+            else:
+                var_ixs = torch.tensor(
+                    [
+                        self.ordering.index_of(var.name)
+                        for var in cost_function.optim_vars
+                    ]
+                ).long()
+
+            self.factors.append(
+                Factor(
+                    cost_function,
+                    name=cost_function.name,
+                    var_ixs=var_ixs,
+                    lin_system_damping=lin_system_damping,
+                )
+            )
+            if cost_function.num_optim_vars() == 1:
+                unary_factor = True
+        if unary_factor is False:
+            raise Exception(
+                "We require at least one unary cost function to act as a prior."
+                "This is because Gaussian Belief Propagation is performing Bayesian inference."
+            )
+        self._linearize_factors()
+
+        self.n_individual_factors = (
+            len(self.objective.cost_functions) * self.objective.batch_size
+        )
+        self.n_edges = sum(
+            [factor.cf.num_optim_vars() * factor.batch_size for factor in self.factors]
+        )
+
     """
     Optimization loop functions
     """
@@ -815,68 +882,11 @@ class GaussianBeliefPropagation(Optimizer, abc.ABC):
         clear_messages: bool = True,
         **kwargs,
     ):
-        # initialise beliefs
-        for var in self.ordering:
-            self.beliefs.append(th.ManifoldGaussian([var]))
-
+        # we only create the factors and beliefs right before runnig GBP as they are
+        # not automatically updated when objective.update is called.
         if clear_messages:
-            self.n_individual_factors = (
-                len(self.objective.cost_functions) * self.objective.batch_size
-            )
+            self._create_factors_beliefs(lin_system_damping)
 
-            if self.objective.vectorized:
-                cf_iterator = iter(self.objective.vectorized_cost_fns)
-                self._pass_var_to_fac_messages = (
-                    self._pass_var_to_fac_messages_vectorized
-                )
-            else:
-                cf_iterator = self.objective._get_iterator()
-                self._pass_var_to_fac_messages = self._pass_var_to_fac_messages_loop
-
-            # compute factor potentials for the first time
-            unary_factor = False
-            for i, cost_function in enumerate(cf_iterator):
-
-                if self.objective.vectorized:
-                    # create array for indexing the messages
-                    base_cf_names = self.objective.vectorized_cf_names[i]
-                    base_cfs = [
-                        self.objective.get_cost_function(name) for name in base_cf_names
-                    ]
-                    var_ixs = torch.tensor(
-                        [
-                            [self.ordering.index_of(var.name) for var in cf.optim_vars]
-                            for cf in base_cfs
-                        ]
-                    ).long()
-                else:
-                    var_ixs = torch.tensor(
-                        [
-                            self.ordering.index_of(var.name)
-                            for var in cost_function.optim_vars
-                        ]
-                    ).long()
-
-                self.factors.append(
-                    Factor(
-                        cost_function,
-                        name=cost_function.name,
-                        var_ixs=var_ixs,
-                        lin_system_damping=lin_system_damping,
-                    )
-                )
-                if cost_function.num_optim_vars() == 1:
-                    unary_factor = True
-            if unary_factor is False:
-                raise Exception(
-                    "We require at least one unary cost function to act as a prior."
-                    "This is because Gaussian Belief Propagation is performing Bayesian inference."
-                )
-            relins = self._linearize_factors()
-
-        self.n_edges = sum(
-            [factor.cf.num_optim_vars() * factor.batch_size for factor in self.factors]
-        )
         if schedule == GBPSchedule.SYNCHRONOUS:
             ftov_schedule = synchronous_schedule(
                 self.params.max_iterations, self.n_edges

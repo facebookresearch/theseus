@@ -192,7 +192,7 @@ def generate_trajectory_figs(
             path_ax.add_line(line)
             if t_idx == fig_idx_robot:  # solution trajectory
                 radius = robot_radius / cell_size[map_idx][0]
-                patch_coll = _add_robot_to_trajectory(col, row, radius)
+                patch_coll = _add_robot_to_trajectory(col, row, radius, alpha=0.25)
                 path_ax.add_collection(patch_coll)
             patches.append(mpl.patches.Patch(color=colors[t_idx], label=labels[t_idx]))
         patches.append(

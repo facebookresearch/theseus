@@ -9,6 +9,7 @@ import torch
 
 import theseus as th
 from theseus.constants import TEST_EPS
+from theseus.geometry.functorch import set_functorch_enabled
 from theseus.utils import numeric_jacobian
 
 from .common import (
@@ -26,9 +27,10 @@ from .common import (
 )
 
 
-def check_SE3_log_map(tangent_vector, atol=TEST_EPS):
-    g = th.SE3.exp_map(tangent_vector)
-    assert torch.allclose(th.SE3.exp_map(g.log_map()).tensor, g.tensor, atol=atol)
+def check_SE3_log_map(tangent_vector, atol=TEST_EPS, enable_functorch=False):
+    with set_functorch_enabled(enable_functorch):
+        g = th.SE3.exp_map(tangent_vector)
+        assert torch.allclose(th.SE3.exp_map(g.log_map()).tensor, g.tensor, atol=atol)
 
 
 def _create_tangent_vector(batch_size, ang_factor, rng, dtype):
@@ -45,7 +47,8 @@ def _create_tangent_vector(batch_size, ang_factor, rng, dtype):
 @pytest.mark.parametrize(
     "ang_factor", [None, 1e-5, 3e-3, 2 * np.pi - 1e-11, np.pi - 1e-11]
 )
-def test_exp_map(batch_size, dtype, ang_factor):
+@pytest.mark.parametrize("enable_functorch", [True, False])
+def test_exp_map(batch_size, dtype, ang_factor, enable_functorch):
     rng = torch.Generator()
     rng.manual_seed(0)
     ATOL = 2e-4 if dtype == torch.float32 else 1e-6
@@ -55,8 +58,10 @@ def test_exp_map(batch_size, dtype, ang_factor):
             torch.rand(batch_size, 1, generator=rng, dtype=dtype) * 2 * np.pi - np.pi
         )
     tangent_vector = _create_tangent_vector(batch_size, ang_factor, rng, dtype)
-    check_exp_map(tangent_vector, th.SE3, atol=ATOL)
-    check_projection_for_exp_map(tangent_vector, th.SE3, atol=ATOL)
+    check_exp_map(tangent_vector, th.SE3, atol=ATOL, enable_functorch=enable_functorch)
+    check_projection_for_exp_map(
+        tangent_vector, th.SE3, atol=ATOL, enable_functorch=enable_functorch
+    )
 
 
 # This test checks that cross products are done correctly
@@ -64,24 +69,28 @@ def test_exp_map(batch_size, dtype, ang_factor):
 @pytest.mark.parametrize(
     "ang_factor", [None, 1e-5, 3e-3, 2 * np.pi - 1e-11, np.pi - 1e-11]
 )
-def test_batch_size_3_exp_map(dtype, ang_factor):
-    rng = torch.Generator()
-    rng.manual_seed(0)
-    ATOL = 1e-4 if dtype == torch.float32 else 1e-6
+@pytest.mark.parametrize("enable_functorch", [True, False])
+def test_batch_size_3_exp_map(dtype, ang_factor, enable_functorch):
+    with set_functorch_enabled(enable_functorch):
+        rng = torch.Generator()
+        rng.manual_seed(0)
+        ATOL = 1e-4 if dtype == torch.float32 else 1e-6
 
-    if ang_factor is None:
-        ang_factor = torch.rand(6, 1, generator=rng, dtype=dtype) * 2 * np.pi - np.pi
-    tangent_vector = _create_tangent_vector(6, ang_factor, rng, dtype)
+        if ang_factor is None:
+            ang_factor = (
+                torch.rand(6, 1, generator=rng, dtype=dtype) * 2 * np.pi - np.pi
+            )
+        tangent_vector = _create_tangent_vector(6, ang_factor, rng, dtype)
 
-    jac, jac1, jac2 = [], [], []
-    g = th.SE3.exp_map(tangent_vector, jac)
-    g1 = th.SE3.exp_map(tangent_vector[:3], jac1)
-    g2 = th.SE3.exp_map(tangent_vector[3:], jac2)
+        jac, jac1, jac2 = [], [], []
+        g = th.SE3.exp_map(tangent_vector, jac)
+        g1 = th.SE3.exp_map(tangent_vector[:3], jac1)
+        g2 = th.SE3.exp_map(tangent_vector[3:], jac2)
 
-    torch.allclose(g.tensor[:3], g1.tensor, atol=1e-6)
-    torch.allclose(g.tensor[3:], g2.tensor, atol=1e-6)
-    torch.allclose(jac[0][:3], jac1[0], atol=ATOL)
-    torch.allclose(jac[0][3:], jac2[0], atol=ATOL)
+        torch.allclose(g.tensor[:3], g1.tensor, atol=1e-6)
+        torch.allclose(g.tensor[3:], g2.tensor, atol=1e-6)
+        torch.allclose(jac[0][:3], jac1[0], atol=ATOL)
+        torch.allclose(jac[0][3:], jac2[0], atol=ATOL)
 
 
 @pytest.mark.parametrize("batch_size", [1, 20, 100])
@@ -89,7 +98,8 @@ def test_batch_size_3_exp_map(dtype, ang_factor):
 @pytest.mark.parametrize(
     "ang_factor", [None, 1e-5, 3e-3, 2 * np.pi - 1e-11, np.pi - 1e-7, np.pi - 1e-10]
 )
-def test_log_map(batch_size, dtype, ang_factor):
+@pytest.mark.parametrize("enable_functorch", [True, False])
+def test_log_map(batch_size, dtype, ang_factor, enable_functorch):
     if dtype == torch.float32 and ang_factor == np.pi - 1e-10:
         return
 
@@ -102,8 +112,10 @@ def test_log_map(batch_size, dtype, ang_factor):
             torch.rand(batch_size, 1, generator=rng, dtype=dtype) * 2 * np.pi - np.pi
         )
     tangent_vector = _create_tangent_vector(batch_size, ang_factor, rng, dtype)
-    check_SE3_log_map(tangent_vector, atol=ATOL)
-    check_projection_for_log_map(tangent_vector, th.SE3, atol=PROJECTION_ATOL)
+    check_SE3_log_map(tangent_vector, atol=ATOL, enable_functorch=enable_functorch)
+    check_projection_for_log_map(
+        tangent_vector, th.SE3, atol=PROJECTION_ATOL, enable_functorch=enable_functorch
+    )
 
 
 # This test checks that cross products are done correctly
@@ -111,57 +123,64 @@ def test_log_map(batch_size, dtype, ang_factor):
 @pytest.mark.parametrize(
     "ang_factor", [None, 1e-5, 3e-3, 2 * np.pi - 1e-11, np.pi - 1e-11]
 )
-def test_batch_size_3_log_map(dtype, ang_factor):
-    rng = torch.Generator()
-    rng.manual_seed(0)
-    ATOL = 1e-3 if dtype == torch.float32 else 1e-6
+@pytest.mark.parametrize("enable_functorch", [True, False])
+def test_batch_size_3_log_map(dtype, ang_factor, enable_functorch):
+    with set_functorch_enabled(enable_functorch):
+        rng = torch.Generator()
+        rng.manual_seed(0)
+        ATOL = 1e-3 if dtype == torch.float32 else 1e-6
 
-    if ang_factor is None:
-        ang_factor = torch.rand(6, 1, generator=rng, dtype=dtype) * 2 * np.pi - np.pi
-    tangent_vector = _create_tangent_vector(6, ang_factor, rng, dtype)
+        if ang_factor is None:
+            ang_factor = (
+                torch.rand(6, 1, generator=rng, dtype=dtype) * 2 * np.pi - np.pi
+            )
+        tangent_vector = _create_tangent_vector(6, ang_factor, rng, dtype)
 
-    g = th.SE3.exp_map(tangent_vector)
-    g1 = th.SE3(tensor=g.tensor[:3])
-    g2 = th.SE3(tensor=g.tensor[3:])
+        g = th.SE3.exp_map(tangent_vector)
+        g1 = th.SE3(tensor=g.tensor[:3])
+        g2 = th.SE3(tensor=g.tensor[3:])
 
-    jac, jac1, jac2 = [], [], []
-    d = g.log_map(jac)
-    d1 = g1.log_map(jac1)
-    d2 = g2.log_map(jac2)
+        jac, jac1, jac2 = [], [], []
+        d = g.log_map(jac)
+        d1 = g1.log_map(jac1)
+        d2 = g2.log_map(jac2)
 
-    torch.allclose(d[:3], d1, atol=ATOL)
-    torch.allclose(d[3:], d2, atol=ATOL)
-    torch.allclose(jac[0][:3], jac1[0], atol=ATOL)
-    torch.allclose(jac[0][3:], jac2[0], atol=ATOL)
+        torch.allclose(d[:3], d1, atol=ATOL)
+        torch.allclose(d[3:], d2, atol=ATOL)
+        torch.allclose(jac[0][:3], jac1[0], atol=ATOL)
+        torch.allclose(jac[0][3:], jac2[0], atol=ATOL)
 
 
 @pytest.mark.parametrize("dtype", [torch.float32, torch.float64])
-def test_compose(dtype):
+@pytest.mark.parametrize("enable_functorch", [True, False])
+def test_compose(dtype, enable_functorch):
     rng = torch.Generator()
     rng.manual_seed(0)
     for batch_size in [1, 20, 100]:
         se3_1 = th.SE3.rand(batch_size, generator=rng, dtype=dtype)
         se3_2 = th.SE3.rand(batch_size, generator=rng, dtype=dtype)
-        check_compose(se3_1, se3_2)
+        check_compose(se3_1, se3_2, enable_functorch)
 
 
 @pytest.mark.parametrize("dtype", [torch.float32, torch.float64])
-def test_inverse(dtype):
+@pytest.mark.parametrize("enable_functorch", [True, False])
+def test_inverse(dtype, enable_functorch):
     rng = torch.Generator()
     rng.manual_seed(0)
     for batch_size in [1, 20, 100]:
         se3 = th.SE3.rand(batch_size, generator=rng, dtype=dtype)
-        check_inverse(se3)
+        check_inverse(se3, enable_functorch)
 
 
 @pytest.mark.parametrize("batch_size", [1, 20, 100])
 @pytest.mark.parametrize("dtype", [torch.float32, torch.float64])
-def test_adjoint(batch_size, dtype):
+@pytest.mark.parametrize("enable_functorch", [True, False])
+def test_adjoint(batch_size, dtype, enable_functorch):
     rng = torch.Generator()
     rng.manual_seed(0)
     se3 = th.SE3.rand(batch_size, generator=rng, dtype=dtype)
     tangent = torch.randn(batch_size, 6, generator=rng, dtype=dtype)
-    check_adjoint(se3, tangent)
+    check_adjoint(se3, tangent, enable_functorch)
 
 
 @pytest.mark.parametrize("dtype", [torch.float32, torch.float64])
@@ -229,7 +248,8 @@ def test_transform_from_and_to(dtype):
 
 
 @pytest.mark.parametrize("dtype", [torch.float32, torch.float64])
-def test_projection(dtype):
+@pytest.mark.parametrize("enable_functorch", [True, False])
+def test_projection(dtype, enable_functorch):
     rng = torch.Generator()
     rng.manual_seed(0)
     for _ in range(10):  # repeat a few times
@@ -245,10 +265,14 @@ def test_projection(dtype):
             )
 
             # Test SE3.compose
-            check_projection_for_compose(th.SE3, batch_size, rng, dtype=dtype)
+            check_projection_for_compose(
+                th.SE3, batch_size, rng, dtype=dtype, enable_functorch=enable_functorch
+            )
 
             # Test SE3.inverse
-            check_projection_for_inverse(th.SE3, batch_size, rng, dtype=dtype)
+            check_projection_for_inverse(
+                th.SE3, batch_size, rng, dtype=dtype, enable_functorch=enable_functorch
+            )
 
 
 @pytest.mark.parametrize("dtype", [torch.float32, torch.float64])

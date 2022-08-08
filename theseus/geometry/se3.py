@@ -126,14 +126,6 @@ class SE3(LieGroup):
         self, euclidean_grad: torch.Tensor, is_sparse: bool = False
     ) -> torch.Tensor:
         self._project_check(euclidean_grad, is_sparse)
-        ret = torch.zeros(
-            euclidean_grad.shape[:-2] + torch.Size([6]),
-            dtype=self.dtype,
-            device=self.device,
-        )
-
-        if _FunctorchContext.get_context():
-            ret = ret * self.tensor.view(-1)[0] * euclidean_grad.view(-1)[0]
 
         if is_sparse:
             temp = torch.einsum(
@@ -144,12 +136,15 @@ class SE3(LieGroup):
                 "...jk,...ji->...ik", euclidean_grad, self.tensor[:, :, :3]
             )
 
-        ret[..., :3] = temp[..., 3]
-        ret[..., 3] = temp[..., 2, 1] - temp[..., 1, 2]
-        ret[..., 4] = temp[..., 0, 2] - temp[..., 2, 0]
-        ret[..., 5] = temp[..., 1, 0] - temp[..., 0, 1]
-
-        return ret
+        return torch.cat(
+            [
+                temp[..., 3],
+                (temp[..., 2, 1] - temp[..., 1, 2]).unsqueeze(-1),
+                (temp[..., 0, 2] - temp[..., 2, 0]).unsqueeze(-1),
+                (temp[..., 1, 0] - temp[..., 0, 1]).unsqueeze(-1),
+            ],
+            dim=-1,
+        )
 
     @staticmethod
     def _check_tensor_impl(tensor: torch.Tensor) -> bool:
@@ -547,7 +542,7 @@ class SE3(LieGroup):
         ret = SE3()
         if _FunctorchContext.get_context():
             ret.tensor = torch.cat(
-                [self[:, :, :3] @ se3_2[:, :, :3], self[:, :, 3].view(-1, 3, 1)], dim=2
+                [self[:, :, :3] @ se3_2[:, :, :3], self[:, :, 3].unsqueeze(-1)], dim=2
             )
         else:
             ret.tensor = torch.zeros(
@@ -567,10 +562,7 @@ class SE3(LieGroup):
         return SE3(tensor=ret, strict=False)
 
     def to_matrix(self) -> torch.Tensor:
-        ret = torch.zeros(self.shape[0], 4, 4).to(dtype=self.dtype, device=self.device)
-        if _FunctorchContext.get_context():
-            ret = ret * self[0, 0, 0]
-        ret[:, :3] = self.tensor
+        ret = torch.nn.functional.pad(self.tensor, [0, 0, 0, 1])
         ret[:, 3, 3] = 1
         return ret
 

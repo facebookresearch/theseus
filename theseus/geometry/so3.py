@@ -111,6 +111,10 @@ class SO3(LieGroup):
         ret = torch.zeros(
             euclidean_grad.shape[:-1], dtype=self.dtype, device=self.device
         )
+
+        if _FunctorchContext.get_context():
+            ret = ret * self.tensor.view(-1)[0] * euclidean_grad.view(-1)[0]
+
         if is_sparse:
             temp = torch.einsum("i...jk,i...jl->i...lk", euclidean_grad, self.tensor)
         else:

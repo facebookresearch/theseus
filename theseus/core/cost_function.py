@@ -5,6 +5,7 @@
 
 import abc
 from typing import Callable, List, Optional, Sequence, Tuple, cast
+import warnings
 
 import torch
 import torch.autograd.functional as autogradF
@@ -111,6 +112,7 @@ class AutoDiffCostFunction(CostFunction):
         autograd_strict: bool = False,
         autograd_vectorize: bool = False,
         autograd_loop_over_batch: bool = False,
+        autograd_use_functorch: bool = False,
     ):
         if cost_weight is None:
             cost_weight = ScaleCostWeight(1.0)
@@ -148,6 +150,16 @@ class AutoDiffCostFunction(CostFunction):
                 self._tmp_aux_vars_for_loop[i].update(aux_var.tensor)
 
         self._autograd_loop_over_batch = autograd_loop_over_batch
+
+        if autograd_use_functorch:
+            self._autograd_use_functorch = autograd_use_functorch
+
+            if self._autograd_loop_over_batch:
+                self._autograd_loop_over_batch = False
+                warnings.warn(
+                    "autograd_loop_over_batch has been reset to be false due to "
+                    "the conflict with autograd_use_functorch."
+                )
 
     def _compute_error(
         self,
@@ -190,8 +202,9 @@ class AutoDiffCostFunction(CostFunction):
     # Returns (jacobians, error)
     def jacobians(self) -> Tuple[List[torch.Tensor], torch.Tensor]:
         err, optim_vars, aux_vars = self._compute_error()
-
-        if self._autograd_loop_over_batch:
+        if self._autograd_use_functorch:
+            raise NotImplementedError
+        elif self._autograd_loop_over_batch:
             jacobians_raw_loop: List[Tuple[torch.Tensor, ...]] = []
             for n in range(optim_vars[0].shape[0]):
                 for i, aux_var in enumerate(aux_vars):

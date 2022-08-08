@@ -11,6 +11,7 @@ import torch
 
 from theseus.constants import _CHECK_DTYPE_SUPPORTED
 from theseus.core.variable import Variable
+from .functorch import _FunctorchContext
 
 OptionalJacobians = Optional[List[torch.Tensor]]
 
@@ -40,7 +41,12 @@ class Manifold(Variable, abc.ABC):
         if tensor is None and dtype is None:
             dtype = torch.get_default_dtype()
         if tensor is not None:
-            tensor = self._check_tensor(tensor, strict)
+            if not _FunctorchContext.get_context():
+                tensor = self._check_tensor(tensor, strict)
+            else:
+                warnings.warn(
+                    "functorch is enabled and tensor is not checked for validness."
+                )
             if dtype is not None and tensor.dtype != dtype:
                 warnings.warn(
                     f"tensor.dtype {tensor.dtype} does not match given dtype {dtype}, "

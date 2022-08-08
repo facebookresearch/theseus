@@ -9,6 +9,7 @@ import torch
 
 import theseus as th
 from theseus.constants import TEST_EPS
+from theseus.geometry.functorch import set_functorch_enabled
 from theseus.utils import numeric_jacobian
 
 from .common import (
@@ -25,17 +26,19 @@ from .common import (
 )
 
 
-def check_SO3_log_map(tangent_vector, atol=1e-7):
-    error = (tangent_vector - th.SO3.exp_map(tangent_vector).log_map()).norm(dim=1)
-    error = torch.minimum(error, (error - 2 * np.pi).abs())
-    assert torch.allclose(error, torch.zeros_like(error), atol=atol)
+def check_SO3_log_map(tangent_vector, atol=1e-7, enable_functorch=False):
+    with set_functorch_enabled(enable_functorch):
+        error = (tangent_vector - th.SO3.exp_map(tangent_vector).log_map()).norm(dim=1)
+        error = torch.minimum(error, (error - 2 * np.pi).abs())
+        assert torch.allclose(error, torch.zeros_like(error), atol=atol)
 
 
-def check_SO3_to_quaternion(so3: th.SO3, atol=1e-10):
-    quaternions = so3.to_quaternion()
-    assert torch.allclose(
-        th.SO3(quaternion=quaternions).to_matrix(), so3.to_matrix(), atol=atol
-    )
+def check_SO3_to_quaternion(so3: th.SO3, atol=1e-10, enable_functorch=False):
+    with set_functorch_enabled(enable_functorch):
+        quaternions = so3.to_quaternion()
+        assert torch.allclose(
+            th.SO3(quaternion=quaternions).to_matrix(), so3.to_matrix(), atol=atol
+        )
 
 
 def _create_tangent_vector(batch_size, ang_factor, rng, dtype):
@@ -50,7 +53,8 @@ def _create_tangent_vector(batch_size, ang_factor, rng, dtype):
 @pytest.mark.parametrize(
     "ang_factor", [None, 1e-5, 3e-3, 2 * np.pi - 1e-11, np.pi - 1e-7, np.pi - 1e-11]
 )
-def test_exp_map(batch_size, dtype, ang_factor):
+@pytest.mark.parametrize("enable_functorch", [True, False])
+def test_exp_map(batch_size, dtype, ang_factor, enable_functorch):
     rng = torch.Generator()
     rng.manual_seed(0)
     ATOL = 2e-4 if dtype == torch.float32 else 1e-6
@@ -61,7 +65,7 @@ def test_exp_map(batch_size, dtype, ang_factor):
         )
 
     tangent_vector = _create_tangent_vector(batch_size, ang_factor, rng, dtype)
-    check_exp_map(tangent_vector, th.SO3, atol=ATOL)
+    check_exp_map(tangent_vector, th.SO3, atol=ATOL, enable_functorch=enable_functorch)
     check_projection_for_exp_map(tangent_vector, th.SO3, atol=ATOL)
 
 
@@ -70,7 +74,8 @@ def test_exp_map(batch_size, dtype, ang_factor):
 @pytest.mark.parametrize(
     "ang_factor", [None, 1e-5, 3e-3, 2 * np.pi - 1e-11, np.pi - 1e-11]
 )
-def test_log_map(batch_size, dtype, ang_factor):
+@pytest.mark.parametrize("enable_functorch", [True, False])
+def test_log_map(batch_size, dtype, ang_factor, enable_functorch):
     if dtype == torch.float32 and ang_factor == np.pi - 1e-11:
         return
 
@@ -85,8 +90,10 @@ def test_log_map(batch_size, dtype, ang_factor):
         )
 
     tangent_vector = _create_tangent_vector(batch_size, ang_factor, rng, dtype)
-    check_SO3_log_map(tangent_vector, atol=ATOL)
-    check_projection_for_log_map(tangent_vector, th.SO3, atol=PROJECTION_ATOL)
+    check_SO3_log_map(tangent_vector, atol=ATOL, enable_functorch=enable_functorch)
+    check_projection_for_log_map(
+        tangent_vector, th.SO3, atol=PROJECTION_ATOL, enable_functorch=enable_functorch
+    )
 
 
 @pytest.mark.parametrize("batch_size", [1, 20, 100])
@@ -94,7 +101,8 @@ def test_log_map(batch_size, dtype, ang_factor):
 @pytest.mark.parametrize(
     "ang_factor", [None, 1e-5, 3e-3, 2 * np.pi - 1e-11, np.pi - 1e-11]
 )
-def test_quaternion(batch_size, dtype, ang_factor):
+@pytest.mark.parametrize("enable_functorch", [True, False])
+def test_quaternion(batch_size, dtype, ang_factor, enable_functorch):
     rng = torch.Generator()
     rng.manual_seed(0)
     ATOL = 1e-3 if dtype == torch.float32 else 1e-8
@@ -106,7 +114,7 @@ def test_quaternion(batch_size, dtype, ang_factor):
 
     tangent_vector = _create_tangent_vector(batch_size, ang_factor, rng, dtype)
     so3 = th.SO3.exp_map(tangent_vector)
-    check_SO3_to_quaternion(so3, atol=ATOL)
+    check_SO3_to_quaternion(so3, atol=ATOL, enable_functorch=enable_functorch)
 
 
 @pytest.mark.parametrize("batch_size", [1, 20, 100])

@@ -7,23 +7,26 @@ import torch
 
 from theseus.constants import TEST_EPS
 from theseus.utils import numeric_jacobian
+from theseus.geometry.functorch import set_functorch_enabled
 
 
-def check_exp_map(tangent_vector, group_cls, atol=TEST_EPS):
-    group = group_cls.exp_map(tangent_vector)
-    tangent_vector_double = tangent_vector.double()
-    tangent_vector_double.to(dtype=torch.float64)
-    assert torch.allclose(
-        group_cls.hat(tangent_vector_double).matrix_exp(),
-        group.to_matrix().double(),
-        atol=atol,
-    )
+def check_exp_map(tangent_vector, group_cls, atol=TEST_EPS, enable_functorch=False):
+    with set_functorch_enabled(enable_functorch):
+        group = group_cls.exp_map(tangent_vector)
+        tangent_vector_double = tangent_vector.double()
+        tangent_vector_double.to(dtype=torch.float64)
+        assert torch.allclose(
+            group_cls.hat(tangent_vector_double).matrix_exp(),
+            group.to_matrix().double(),
+            atol=atol,
+        )
 
 
-def check_log_map(tangent_vector, group_cls, atol=TEST_EPS):
-    assert torch.allclose(
-        tangent_vector, group_cls.exp_map(tangent_vector).log_map(), atol=atol
-    )
+def check_log_map(tangent_vector, group_cls, atol=TEST_EPS, enable_functorch=False):
+    with set_functorch_enabled(enable_functorch):
+        assert torch.allclose(
+            tangent_vector, group_cls.exp_map(tangent_vector).log_map(), atol=atol
+        )
 
 
 def check_compose(group_1, group_2):
@@ -51,20 +54,23 @@ def check_compose(group_1, group_2):
         assert torch.allclose(Jcmp[1].double(), expected_jacs[1], atol=TEST_EPS)
 
 
-def check_inverse(group):
-    tangent_vector = group.log_map()
-    inverse_group = group.exp_map(-tangent_vector.double())
-    jac = []
-    inverse_result = group.inverse(jacobian=jac)
-    group_double = group.copy()
-    group_double.to(torch.float64)
-    expected_jac = numeric_jacobian(lambda groups: groups[0].inverse(), [group_double])
-    assert torch.allclose(
-        inverse_group.to_matrix().double(),
-        inverse_result.to_matrix().double(),
-        atol=TEST_EPS,
-    )
-    assert torch.allclose(jac[0].double(), expected_jac[0], atol=TEST_EPS)
+def check_inverse(group, enable_functorch=False):
+    with set_functorch_enabled(enable_functorch):
+        tangent_vector = group.log_map()
+        inverse_group = group.exp_map(-tangent_vector.double())
+        jac = []
+        inverse_result = group.inverse(jacobian=jac)
+        group_double = group.copy()
+        group_double.to(torch.float64)
+        expected_jac = numeric_jacobian(
+            lambda groups: groups[0].inverse(), [group_double]
+        )
+        assert torch.allclose(
+            inverse_group.to_matrix().double(),
+            inverse_result.to_matrix().double(),
+            atol=TEST_EPS,
+        )
+        assert torch.allclose(jac[0].double(), expected_jac[0], atol=TEST_EPS)
 
 
 def check_adjoint(group, tangent_vector):
@@ -293,30 +299,33 @@ def check_projection_for_exp_map(tangent_vector, Group, is_projected=True, atol=
     assert torch.allclose(actual[0].double(), expected, atol=atol)
 
 
-def check_projection_for_log_map(tangent_vector, Group, is_projected=True, atol=1e-8):
-    batch_size = tangent_vector.shape[0]
-    aux_id = torch.arange(batch_size)
-    group_double = Group.exp_map(tangent_vector.double())
-    group = group_double.copy()
-    if tangent_vector.dtype == torch.float32:
-        group.tensor = group.tensor.float()
+def check_projection_for_log_map(
+    tangent_vector, Group, is_projected=True, atol=1e-8, enable_functorch=True
+):
+    with set_functorch_enabled(enable_functorch):
+        batch_size = tangent_vector.shape[0]
+        aux_id = torch.arange(batch_size)
+        group_double = Group.exp_map(tangent_vector.double())
+        group = group_double.copy()
+        if tangent_vector.dtype == torch.float32:
+            group.tensor = group.tensor.float()
 
-    def log_func(group):
-        return Group(tensor=group).log_map()
+        def log_func(group):
+            return Group(tensor=group).log_map()
 
-    jac_raw = torch.autograd.functional.jacobian(log_func, (group_double.tensor))[
-        aux_id, :, aux_id
-    ]
+        jac_raw = torch.autograd.functional.jacobian(log_func, (group_double.tensor))[
+            aux_id, :, aux_id
+        ]
 
-    if is_projected:
-        expected = group_double.project(jac_raw, is_sparse=True)
-    else:
-        expected = jac_raw
+        if is_projected:
+            expected = group_double.project(jac_raw, is_sparse=True)
+        else:
+            expected = jac_raw
 
-    actual = []
-    _ = group.log_map(jacobians=actual)
+        actual = []
+        _ = group.log_map(jacobians=actual)
 
-    assert torch.allclose(actual[0].double(), expected, atol=atol)
+        assert torch.allclose(actual[0].double(), expected, atol=atol)
 
 
 def check_jacobian_for_local(group0, group1, Group, is_projected=True, atol=TEST_EPS):

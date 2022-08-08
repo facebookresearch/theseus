@@ -119,12 +119,13 @@ def test_quaternion(batch_size, dtype, ang_factor, enable_functorch):
 
 @pytest.mark.parametrize("batch_size", [1, 20, 100])
 @pytest.mark.parametrize("dtype", [torch.float32, torch.float64])
-def test_adjoint(batch_size, dtype):
+@pytest.mark.parametrize("enable_functorch", [True, False])
+def test_adjoint(batch_size, dtype, enable_functorch):
     rng = torch.Generator()
     rng.manual_seed(0)
     so3 = th.SO3.rand(batch_size, generator=rng, dtype=dtype)
     tangent = torch.randn(batch_size, 3, dtype=dtype)
-    check_adjoint(so3, tangent)
+    check_adjoint(so3, tangent, enable_functorch)
 
 
 @pytest.mark.parametrize("batch_size", [1, 20, 100])
@@ -202,7 +203,8 @@ def test_rotate_and_unrotate(dtype):
 
 
 @pytest.mark.parametrize("dtype", [torch.float32, torch.float64])
-def test_projection(dtype):
+@pytest.mark.parametrize("enable_functorch", [True, False])
+def test_projection(dtype, enable_functorch):
     rng = torch.Generator()
     rng.manual_seed(0)
     for _ in range(10):  # repeat a few times
@@ -218,10 +220,14 @@ def test_projection(dtype):
             )
 
             # Test SO3.compose
-            check_projection_for_compose(th.SO3, batch_size, rng, dtype=dtype)
+            check_projection_for_compose(
+                th.SO3, batch_size, rng, dtype=dtype, enable_functorch=enable_functorch
+            )
 
             # Test SO3.inverse
-            check_projection_for_inverse(th.SO3, batch_size, rng, dtype=dtype)
+            check_projection_for_inverse(
+                th.SO3, batch_size, rng, dtype=dtype, enable_functorch=enable_functorch
+            )
 
 
 @pytest.mark.parametrize("dtype", [torch.float32, torch.float64])

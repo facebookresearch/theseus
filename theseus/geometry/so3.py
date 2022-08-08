@@ -4,11 +4,11 @@
 # LICENSE file in the root directory of this source tree.
 
 from typing import List, Optional, Union, cast
+import warnings
 
 import torch
 
 import theseus.constants
-import warnings
 
 from .lie_group import LieGroup
 from .point_types import Point3
@@ -279,7 +279,7 @@ class SO3(LieGroup):
 
             near_zero = theta < self._NEAR_ZERO_EPS
 
-            near_pi = 1 + cosine < self._NEAR_PI_EPS
+            near_pi = 1 + cosine <= self._NEAR_PI_EPS
             # theta != pi
             near_zero_or_near_pi = torch.logical_or(near_zero, near_pi)
             # Compute the approximation of theta / sin(theta) when theta is near to 0
@@ -290,7 +290,6 @@ class SO3(LieGroup):
                 1 + sine**2 / 6,
                 theta / sine_nz,
             )
-            ret = torch.zeros_like(sine_axis)
             ret = sine_axis * scale.view(-1, 1)
             # # theta ~ pi
             ddiag = torch.diagonal(self.tensor, dim1=1, dim2=2)

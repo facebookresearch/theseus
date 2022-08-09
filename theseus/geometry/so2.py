@@ -4,6 +4,7 @@
 # LICENSE file in the root directory of this source tree.
 
 from typing import List, Optional, Tuple, Union, cast
+import warnings
 
 import torch
 
@@ -11,6 +12,7 @@ import theseus.constants
 
 from .lie_group import LieGroup
 from .point_types import Point2
+from .functorch import _FunctorchContext
 
 
 class SO2(LieGroup):
@@ -133,6 +135,22 @@ class SO2(LieGroup):
             ).abs().max().item() <= MATRIX_EPS
 
         return _check
+
+    @staticmethod
+    def _hat_matrix_check(matrix: torch.Tensor):
+        _check = matrix.ndim == 3 and matrix.shape[1:] == (2, 2)
+
+        if _FunctorchContext.get_context():
+            warnings.warn(
+                "functorch is enabled and the skew-symmetry of hat matrices are not checked."
+            )
+        else:
+            _check &= matrix[:, 0, 0].abs().max().item() < theseus.constants.EPS
+            _check &= matrix[:, 1, 1].abs().max().item() < theseus.constants.EPS
+            _check &= torch.allclose(matrix[:, 0, 1], -matrix[:, 1, 0])
+
+        if not _check:
+            raise ValueError("Invalid hat matrix for SO2.")
 
     @staticmethod
     def exp_map(
@@ -280,15 +298,12 @@ class SO2(LieGroup):
         return self[:, 0], self[:, 1]
 
     def to_matrix(self) -> torch.Tensor:
-        matrix = torch.empty(self.shape[0], 2, 2).to(
-            device=self.device, dtype=self.dtype
-        )
         cosine, sine = self.to_cos_sin()
-        matrix[:, 0, 0] = cosine
-        matrix[:, 0, 1] = -sine
-        matrix[:, 1, 0] = sine
-        matrix[:, 1, 1] = cosine
-        return matrix
+        cosine = cosine.view(-1, 1)
+        sine = sine.view(-1, 1)
+        return torch.stack(
+            [torch.cat([cosine, -sine], dim=1), torch.cat([sine, cosine], dim=1)], dim=1
+        )
 
     @staticmethod
     def hat(tangent_vector: torch.Tensor) -> torch.Tensor:
@@ -296,18 +311,16 @@ class SO2(LieGroup):
             dtype=tangent_vector.dtype,
             device=tangent_vector.device,
         )
+
+        if _FunctorchContext.get_context():
+            matrix = matrix * tangent_vector[0, 0]
         matrix[:, 0, 1] = -tangent_vector.view(-1)
         matrix[:, 1, 0] = tangent_vector.view(-1)
         return matrix
 
     @staticmethod
     def vee(matrix: torch.Tensor) -> torch.Tensor:
-        _check = matrix.ndim == 3 and matrix.shape[1:] == (2, 2)
-        _check &= matrix[:, 0, 0].abs().max().item() < theseus.constants.EPS
-        _check &= matrix[:, 1, 1].abs().max().item() < theseus.constants.EPS
-        _check &= torch.allclose(matrix[:, 0, 1], -matrix[:, 1, 0])
-        if not _check:
-            raise ValueError("Invalid hat matrix for SO2.")
+        SO2._hat_matrix_check(matrix)
         return matrix[:, 1, 0].clone().view(-1, 1)
 
     def _copy_impl(self, new_name: Optional[str] = None) -> "SO2":

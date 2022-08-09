@@ -8,6 +8,7 @@ import torch
 from theseus.constants import TEST_EPS
 from theseus.utils import numeric_jacobian
 from theseus.geometry.lie_group_check import set_lie_group_check_enabled
+from theseus.geometry.vector import Vector
 from theseus.core.cost_function import AutoDiffCostFunction
 
 
@@ -21,6 +22,40 @@ def check_exp_map(tangent_vector, group_cls, atol=TEST_EPS, enable_functorch=Fal
             group.to_matrix().double(),
             atol=atol,
         )
+
+    if enable_functorch:
+        optim_vars = [Vector(tensor=tangent_vector)]
+
+        def err_fn(optim_vars, aux_vars):
+            group = group_cls.exp_map(optim_vars[0].tensor)
+            dim = list(range(1, len(group.shape)))
+            return group.tensor.sum(dim=dim).view(-1, 1)
+
+        cost_fn = AutoDiffCostFunction(optim_vars, err_fn, dim=1)
+        jacs, _ = cost_fn.jacobians()
+
+        cost_fn_vec = AutoDiffCostFunction(
+            optim_vars, err_fn, dim=1, autograd_functorch=True
+        )
+        jacs_vec, _ = cost_fn_vec.jacobians()
+
+        assert torch.allclose(jacs[0], jacs_vec[0], atol=atol)
+
+        def err_fn(optim_vars, aux_vars):
+            jacobians = []
+            group_cls.exp_map(optim_vars[0].tensor, jacobians=jacobians)
+            dim = list(range(1, len(jacobians[0].shape)))
+            return jacobians[0].sum(dim=dim).view(-1, 1)
+
+        cost_fn = AutoDiffCostFunction(optim_vars, err_fn, dim=1)
+        jacs, _ = cost_fn.jacobians()
+
+        cost_fn_vec = AutoDiffCostFunction(
+            optim_vars, err_fn, dim=1, autograd_functorch=True
+        )
+        jacs_vec, _ = cost_fn_vec.jacobians()
+
+        assert torch.allclose(jacs[0], jacs_vec[0], atol=atol)
 
 
 def check_log_map(tangent_vector, group_cls, atol=TEST_EPS, enable_functorch=False):
@@ -148,6 +183,23 @@ def check_inverse(group, enable_functorch=False):
         )
         assert torch.allclose(jac[0].double(), expected_jac[0], atol=TEST_EPS)
 
+    if enable_functorch:
+        optim_vars = [group]
+
+        def err_fn(optim_vars, aux_vars):
+            dim = list(range(1, len(optim_vars[0].shape)))
+            return optim_vars[0].inverse().tensor.sum(dim=dim).view(-1, 1)
+
+        cost_fn = AutoDiffCostFunction(optim_vars, err_fn, dim=1)
+        jacs, _ = cost_fn.jacobians()
+
+        cost_fn_vec = AutoDiffCostFunction(
+            optim_vars, err_fn, dim=1, autograd_functorch=True
+        )
+        jacs_vec, _ = cost_fn_vec.jacobians()
+
+        assert torch.allclose(jacs[0], jacs_vec[0], atol=TEST_EPS)
+
 
 def check_adjoint(group, tangent_vector, enable_functorch=False):
     with set_lie_group_check_enabled(enable_functorch):
@@ -161,6 +213,24 @@ def check_adjoint(group, tangent_vector, enable_functorch=False):
         assert torch.allclose(
             tangent_left.double().squeeze(2), tangent_right, atol=TEST_EPS
         )
+
+    if enable_functorch:
+        optim_vars = [group]
+
+        def err_fn(optim_vars, aux_vars):
+            adjoint = optim_vars[0].adjoint()
+            dim = list(range(1, len(adjoint.shape)))
+            return adjoint.sum(dim=dim).view(-1, 1)
+
+        cost_fn = AutoDiffCostFunction(optim_vars, err_fn, dim=1)
+        jacs, _ = cost_fn.jacobians()
+
+        cost_fn_vec = AutoDiffCostFunction(
+            optim_vars, err_fn, dim=1, autograd_functorch=True
+        )
+        jacs_vec, _ = cost_fn_vec.jacobians()
+
+        assert torch.allclose(jacs[0], jacs_vec[0], atol=TEST_EPS)
 
 
 # Func can be SO2.rotate, SE2.transform_to, SO3.unrotate, etc., whose third argument

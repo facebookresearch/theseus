@@ -16,6 +16,7 @@ from .common import (
     check_adjoint,
     check_compose,
     check_exp_map,
+    check_inverse,
     check_jacobian_for_local,
     check_projection_for_compose,
     check_projection_for_exp_map,
@@ -94,6 +95,18 @@ def test_log_map(batch_size, dtype, ang_factor, enable_functorch):
     check_projection_for_log_map(
         tangent_vector, th.SO3, atol=PROJECTION_ATOL, enable_functorch=enable_functorch
     )
+
+
+@pytest.mark.parametrize("batch_size", [1, 20, 100])
+@pytest.mark.parametrize("dtype", [torch.float32, torch.float64])
+@pytest.mark.parametrize("enable_functorch", [True, False])
+def test_inverse(batch_size, dtype, enable_functorch):
+    rng = torch.Generator()
+    rng.manual_seed(0)
+
+    group = th.SO3.rand(batch_size, generator=rng, dtype=dtype)
+
+    check_inverse(group, enable_functorch=enable_functorch)
 
 
 @pytest.mark.parametrize("batch_size", [1, 20, 100])

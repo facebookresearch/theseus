@@ -8,6 +8,7 @@ import torch
 from theseus.constants import TEST_EPS
 from theseus.utils import numeric_jacobian
 from theseus.geometry.lie_group_check import set_lie_group_check_enabled
+from theseus.core.cost_function import AutoDiffCostFunction
 
 
 def check_exp_map(tangent_vector, group_cls, atol=TEST_EPS, enable_functorch=False):
@@ -27,6 +28,37 @@ def check_log_map(tangent_vector, group_cls, atol=TEST_EPS, enable_functorch=Fal
         assert torch.allclose(
             tangent_vector, group_cls.exp_map(tangent_vector).log_map(), atol=atol
         )
+
+    if enable_functorch:
+        optim_vars = [group_cls.exp_map(tangent_vector)]
+
+        def err_fn(optim_vars, aux_vars):
+            return optim_vars[0].log_map().sum(dim=[1]).view(-1, 1)
+
+        cost_fn = AutoDiffCostFunction(optim_vars, err_fn, dim=1)
+        jacs, _ = cost_fn.jacobians()
+
+        cost_fn_vec = AutoDiffCostFunction(
+            optim_vars, err_fn, dim=1, autograd_functorch=True
+        )
+        jacs_vec, _ = cost_fn_vec.jacobians()
+
+        assert torch.allclose(jacs[0], jacs_vec[0], atol=atol)
+
+        def err_fn(optim_vars, aux_vars):
+            jacobians = []
+            optim_vars[0].log_map(jacobians=jacobians)
+            return jacobians[0].sum(dims=[0, 1]).view(-1, 1)
+
+        cost_fn = AutoDiffCostFunction(optim_vars, err_fn, dim=1)
+        jacs, _ = cost_fn.jacobians()
+
+        cost_fn_vec = AutoDiffCostFunction(
+            optim_vars, err_fn, dim=1, autograd_functorch=True
+        )
+        jacs_vec, _ = cost_fn_vec.jacobians()
+
+        assert torch.allclose(jacs[0], jacs_vec[0], atol=atol)
 
 
 def check_compose(group_1, group_2, enable_functorch=False):
@@ -55,6 +87,47 @@ def check_compose(group_1, group_2, enable_functorch=False):
         )
         if group_1.dtype == torch.float64:
             assert torch.allclose(Jcmp[1].double(), expected_jacs[1], atol=TEST_EPS)
+
+    if enable_functorch:
+        optim_vars = [group_1, group_2]
+
+        def err_fn(optim_vars, aux_vars):
+            dim = list(range(1, len(optim_vars[0].shape)))
+            return optim_vars[0].compose(optim_vars[1]).tensor.sum(dim=dim).view(-1, 1)
+
+        cost_fn = AutoDiffCostFunction(optim_vars, err_fn, dim=1)
+        jacs, _ = cost_fn.jacobians()
+
+        cost_fn_vec = AutoDiffCostFunction(
+            optim_vars, err_fn, dim=1, autograd_functorch=True
+        )
+        jacs_vec, _ = cost_fn_vec.jacobians()
+
+        assert torch.allclose(jacs[0], jacs_vec[0], atol=TEST_EPS)
+        assert torch.allclose(jacs[1], jacs_vec[1], atol=TEST_EPS)
+
+        def err_fn(optim_vars, aux_vars):
+            jacobians = []
+            optim_vars[0].compose(optim_vars[1], jacobians=jacobians)
+            dim = [
+                list(range(1, len(jacobians[0].shape))),
+                list(range(1, len(jacobians[1].shape))),
+            ]
+
+            return jacobians[0].sum(dim=dim[0]).view(-1, 1) + jacobians[1].sum(
+                dim=dim[1]
+            ).view(-1, 1)
+
+        cost_fn = AutoDiffCostFunction(optim_vars, err_fn, dim=1)
+        jacs, _ = cost_fn.jacobians()
+
+        cost_fn_vec = AutoDiffCostFunction(
+            optim_vars, err_fn, dim=1, autograd_functorch=True
+        )
+        jacs_vec, _ = cost_fn_vec.jacobians()
+
+        assert torch.allclose(jacs[0], jacs_vec[0], atol=TEST_EPS)
+        assert torch.allclose(jacs[1], jacs_vec[1], atol=TEST_EPS)
 
 
 def check_inverse(group, enable_functorch=False):

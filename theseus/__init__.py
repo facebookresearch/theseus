@@ -58,6 +58,7 @@ from .geometry import (
 )
 from .optimizer import (
     DenseLinearization,
+    OptimizerInfo,
     SparseLinearization,
     VariableOrdering,
     ManifoldGaussian,

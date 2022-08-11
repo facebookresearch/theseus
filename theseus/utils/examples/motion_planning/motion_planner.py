@@ -4,7 +4,7 @@
 # LICENSE file in the root directory of this source tree.
 
 import copy
-from typing import Dict, List, Optional, Tuple
+from typing import Any, Dict, List, Optional, Tuple
 
 import torch
 
@@ -106,14 +106,14 @@ class MotionPlanner:
         poses = []
         velocities = []
         for i in range(self.trajectory_len):
-            poses.append(th.Point2(name=f"pose_{i}", dtype=torch.double))
-            velocities.append(th.Point2(name=f"vel_{i}", dtype=torch.double))
+            poses.append(th.Point2(name=f"pose_{i}", dtype=dtype))
+            velocities.append(th.Point2(name=f"vel_{i}", dtype=dtype))
 
         # --------------------------------------------------------------------------- #
         # ------------------------------ Cost functions ----------------------------- #
         # --------------------------------------------------------------------------- #
         # Create a Theseus objective for adding the cost functions
-        objective = th.Objective(dtype=torch.double)
+        objective = th.Objective(dtype=self.dtype)
 
         # First create the cost functions for the end point positions and velocities
         # which are hard constraints, and can be implemented via Difference cost
@@ -233,6 +233,15 @@ class MotionPlanner:
         # The motion planner will only modify optimization variables, and all other
         # variables are not modified. For convenience, the output is a dictionary of
         # (str, tensor) mapping variable names to optimized variable data tensors.
+
+    def forward(
+        self,
+        input_tensors: Optional[Dict[str, torch.Tensor]] = None,
+        optimizer_kwargs: Optional[Dict[str, Any]] = None,
+    ) -> Tuple[Dict[str, torch.Tensor], th.OptimizerInfo]:
+        return self.layer.forward(
+            input_tensors=input_tensors, optimizer_kwargs=optimizer_kwargs
+        )
 
     def get_variable_values_from_straight_line(
         self, start: torch.Tensor, goal: torch.Tensor

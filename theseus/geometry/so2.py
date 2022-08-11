@@ -298,22 +298,17 @@ class SO2(LieGroup):
         return self[:, 0], self[:, 1]
 
     def to_matrix(self) -> torch.Tensor:
+        matrix = self.tensor.new_empty(self.shape[0], 2, 2)
         cosine, sine = self.to_cos_sin()
-        cosine = cosine.view(-1, 1)
-        sine = sine.view(-1, 1)
-        return torch.stack(
-            [torch.cat([cosine, -sine], dim=1), torch.cat([sine, cosine], dim=1)], dim=1
-        )
+        matrix[:, 0, 0] = cosine
+        matrix[:, 0, 1] = -sine
+        matrix[:, 1, 0] = sine
+        matrix[:, 1, 1] = cosine
+        return matrix
 
     @staticmethod
     def hat(tangent_vector: torch.Tensor) -> torch.Tensor:
-        matrix = torch.zeros(tangent_vector.shape[0], 2, 2).to(
-            dtype=tangent_vector.dtype,
-            device=tangent_vector.device,
-        )
-
-        if _FunctorchContext.get_context():
-            matrix = matrix * tangent_vector[0, 0]
+        matrix = tangent_vector.new_zeros(tangent_vector.shape[0], 2, 2)
         matrix[:, 0, 1] = -tangent_vector.view(-1)
         matrix[:, 1, 0] = tangent_vector.view(-1)
         return matrix

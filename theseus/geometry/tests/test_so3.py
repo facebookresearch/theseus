@@ -16,6 +16,7 @@ from .common import (
     check_adjoint,
     check_compose,
     check_exp_map,
+    check_log_map,
     check_inverse,
     check_jacobian_for_local,
     check_projection_for_compose,
@@ -67,7 +68,9 @@ def test_exp_map(batch_size, dtype, ang_factor, enable_functorch):
 
     tangent_vector = _create_tangent_vector(batch_size, ang_factor, rng, dtype)
     check_exp_map(tangent_vector, th.SO3, atol=ATOL, enable_functorch=enable_functorch)
-    check_projection_for_exp_map(tangent_vector, th.SO3, atol=ATOL)
+    check_projection_for_exp_map(
+        tangent_vector, th.SO3, atol=ATOL, enable_functorch=enable_functorch
+    )
 
 
 @pytest.mark.parametrize("batch_size", [1, 20, 100])
@@ -92,6 +95,10 @@ def test_log_map(batch_size, dtype, ang_factor, enable_functorch):
 
     tangent_vector = _create_tangent_vector(batch_size, ang_factor, rng, dtype)
     check_SO3_log_map(tangent_vector, atol=ATOL, enable_functorch=enable_functorch)
+    if tangent_vector.norm(dim=1).max() < 2 * np.pi - 1e-3:
+        check_log_map(
+            tangent_vector, th.SO3, atol=ATOL, enable_functorch=enable_functorch
+        )
     check_projection_for_log_map(
         tangent_vector, th.SO3, atol=PROJECTION_ATOL, enable_functorch=enable_functorch
     )

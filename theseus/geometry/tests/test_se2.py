@@ -34,36 +34,43 @@ def create_random_se2(batch_size, rng, dtype=torch.float64):
 
 
 @pytest.mark.parametrize("dtype", [torch.float32, torch.float64])
-def test_exp_map(dtype):
+@pytest.mark.parametrize("enable_functorch", [True, False])
+def test_exp_map(dtype, enable_functorch):
     rng = torch.Generator()
     rng.manual_seed(0)
     for batch_size in [1, 20, 100]:
         theta = torch.from_numpy(np.linspace(-np.pi, np.pi, batch_size))
         u = torch.randn(batch_size, 2, dtype=dtype, generator=rng)
         tangent_vector = torch.cat([u, theta.unsqueeze(1)], dim=1)
-        check_exp_map(tangent_vector.to(dtype=dtype), th.SE2)
+        check_exp_map(
+            tangent_vector.to(dtype=dtype), th.SE2, enable_functorch=enable_functorch
+        )
 
 
 @pytest.mark.parametrize("dtype", [torch.float32, torch.float64])
-def test_log_map(dtype):
+@pytest.mark.parametrize("enable_functorch", [True, False])
+def test_log_map(dtype, enable_functorch):
     rng = torch.Generator()
     rng.manual_seed(0)
     for batch_size in [1, 20, 100]:
         theta = torch.from_numpy(np.linspace(-np.pi, np.pi, batch_size))
         u = torch.randn(batch_size, 2, dtype=dtype, generator=rng)
         tangent_vector = torch.cat([u, theta.unsqueeze(1)], dim=1)
-        check_log_map(tangent_vector, th.SE2)
-        check_projection_for_exp_map(tangent_vector, th.SE2)
+        check_log_map(tangent_vector, th.SE2, enable_functorch=enable_functorch)
+        check_projection_for_exp_map(
+            tangent_vector, th.SE2, enable_functorch=enable_functorch
+        )
 
 
 @pytest.mark.parametrize("dtype", [torch.float32, torch.float64])
-def test_compose(dtype):
+@pytest.mark.parametrize("enable_functorch", [True, False])
+def test_compose(dtype, enable_functorch):
     rng = torch.Generator()
     rng.manual_seed(0)
     for batch_size in [1, 20, 100]:
         se2_1 = th.SE2.rand(batch_size, generator=rng, dtype=dtype)
         se2_2 = th.SE2.rand(batch_size, generator=rng, dtype=dtype)
-        check_compose(se2_1, se2_2)
+        check_compose(se2_1, se2_2, enable_functorch=enable_functorch)
 
 
 @pytest.mark.parametrize("dtype", [torch.float32, torch.float64])

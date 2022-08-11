@@ -140,9 +140,7 @@ class SE2(LieGroup):
         if jacobians is not None:
             self._check_jacobians_list(jacobians)
             rotation = self.rotation
-            J_out = torch.zeros(
-                self.shape[0], 2, 3, device=self.device, dtype=self.dtype
-            )
+            J_out = self.tensor.new_zeros(self.shape[0], 2, 3)
             J_out[:, :2, :2] = rotation.to_matrix()
             jacobians.append(J_out)
         return self.translation.tensor

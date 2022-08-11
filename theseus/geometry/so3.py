@@ -261,21 +261,17 @@ class SO3(LieGroup):
     def _log_map_impl(
         self, jacobians: Optional[List[torch.Tensor]] = None
     ) -> torch.Tensor:
+        sine_axis = self.tensor.new_zeros(self.shape[0], 3)
+        sine_axis[:, 0] = 0.5 * (self[:, 2, 1] - self[:, 1, 2])
+        sine_axis[:, 1] = 0.5 * (self[:, 0, 2] - self[:, 2, 0])
+        sine_axis[:, 2] = 0.5 * (self[:, 1, 0] - self[:, 0, 1])
+        cosine = 0.5 * (self[:, 0, 0] + self[:, 1, 1] + self[:, 2, 2] - 1)
+        sine = sine_axis.norm(dim=1)
+        theta = torch.atan2(sine, cosine)
+
+        near_zero = theta < self._NEAR_ZERO_EPS
+
         if _FunctorchContext.get_context():
-            sine_axis = 0.5 * torch.cat(
-                [
-                    (self[:, 2, 1] - self[:, 1, 2]).view(-1, 1),
-                    (self[:, 0, 2] - self[:, 2, 0]).view(-1, 1),
-                    (self[:, 1, 0] - self[:, 0, 1]).view(-1, 1),
-                ],
-                dim=1,
-            )
-            cosine = 0.5 * (self[:, 0, 0] + self[:, 1, 1] + self[:, 2, 2] - 1)
-            sine = sine_axis.norm(dim=1)
-            theta = torch.atan2(sine, cosine)
-
-            near_zero = theta < self._NEAR_ZERO_EPS
-
             near_pi = 1 + cosine <= self._NEAR_PI_EPS
             # theta != pi
             near_zero_or_near_pi = torch.logical_or(near_zero, near_pi)
@@ -300,28 +296,16 @@ class SO3(LieGroup):
             sel_rows = 0.5 * (self[aux, major] + self[aux, :, major])
             sel_rows[aux, major] -= cosine
             axis = sel_rows / torch.where(
-                near_zero.view(-1, 1),
-                non_zero.view(-1, 1),
-                sel_rows.norm(dim=1, keepdim=True),
-            )
+                near_zero,
+                non_zero,
+                sel_rows.norm(dim=1),
+            ).view(-1, 1)
             sign_tmp = sine_axis[aux, major].sign()
             sign = torch.where(sign_tmp != 0, sign_tmp, torch.ones_like(sign_tmp))
             ret = torch.where(
                 near_pi.view(-1, 1), axis * (theta * sign).view(-1, 1), ret
             )
         else:
-            sine_axis = torch.zeros(
-                self.shape[0], 3, dtype=self.dtype, device=self.device
-            )
-            sine_axis[:, 0] = 0.5 * (self[:, 2, 1] - self[:, 1, 2])
-            sine_axis[:, 1] = 0.5 * (self[:, 0, 2] - self[:, 2, 0])
-            sine_axis[:, 2] = 0.5 * (self[:, 1, 0] - self[:, 0, 1])
-            cosine = 0.5 * (self[:, 0, 0] + self[:, 1, 1] + self[:, 2, 2] - 1)
-            sine = sine_axis.norm(dim=1)
-            theta = torch.atan2(sine, cosine)
-
-            near_zero = theta < self._NEAR_ZERO_EPS
-
             not_near_pi = 1 + cosine > self._NEAR_PI_EPS
             # theta != pi
             near_zero_not_near_pi = near_zero[not_near_pi]
@@ -354,7 +338,6 @@ class SO3(LieGroup):
 
         if jacobians is not None:
             SO3._check_jacobians_list(jacobians)
-            jac = torch.zeros_like(self.tensor)
 
             theta2 = theta**2
             sine_theta = sine * theta
@@ -406,26 +389,22 @@ class SO3(LieGroup):
         return self.tensor.clone()
 
     def to_quaternion(self) -> torch.Tensor:
+        sine_axis = self.tensor.new_zeros(self.shape[0], 3)
+        sine_axis[:, 0] = 0.5 * (self[:, 2, 1] - self[:, 1, 2])
+        sine_axis[:, 1] = 0.5 * (self[:, 0, 2] - self[:, 2, 0])
+        sine_axis[:, 2] = 0.5 * (self[:, 1, 0] - self[:, 0, 1])
+        w = 0.5 * (1 + self[:, 0, 0] + self[:, 1, 1] + self[:, 2, 2]).clamp(0, 4).sqrt()
+
+        near_zero = w > 1 - self._NEAR_ZERO_EPS
+        near_pi = w <= self._NEAR_PI_EPS
+        non_zero = self.tensor.new_ones([1])
+
+        ret = self.tensor.new_zeros(self.shape[0], 4)
+        # theta != pi
+        ret[:, 0] = w
+        ret[:, 1:] = 0.5 * sine_axis / torch.where(near_pi, non_zero, w).view(-1, 1)
+
         if _FunctorchContext.get_context():
-            sine_axis = 0.5 * torch.cat(
-                [
-                    (self[:, 2, 1] - self[:, 1, 2]).view(-1, 1),
-                    (self[:, 0, 2] - self[:, 2, 0]).view(-1, 1),
-                    (self[:, 1, 0] - self[:, 0, 1]).view(-1, 1),
-                ],
-                dim=1,
-            )
-            w = (
-                0.5
-                * (1 + self[:, 0, 0] + self[:, 1, 1] + self[:, 2, 2]).clamp(0, 4).sqrt()
-            )
-
-            near_pi = w <= self._NEAR_PI_EPS
-            near_zero = w > 1 - self._NEAR_ZERO_EPS
-
-            # theta != pi
-            ret = torch.cat([w.view(-1, 1), 0.5 * sine_axis / w.view(-1, 1)], dim=1)
-
             # theta ~ pi
             ddiag = torch.diagonal(self.tensor, dim1=1, dim2=2)
             # Find the index of major coloumns and diagonals
@@ -438,7 +417,6 @@ class SO3(LieGroup):
             sel_rows = 0.5 * (self[aux, major] + self[aux, :, major])
             cosine_near_pi = 0.5 * (self[:, 0, 0] + self[:, 1, 1] + self[:, 2, 2] - 1)
             sel_rows[aux, major] -= cosine_near_pi
-            non_zero = torch.ones(1, dtype=self.dtype, device=self.device)
             axis = (
                 sel_rows
                 / torch.where(
@@ -455,26 +433,7 @@ class SO3(LieGroup):
                 near_pi.view(-1, 1), axis * sine_half_theta, ret[:, 1:]
             )
         else:
-            ret = torch.zeros(self.shape[0], 4, dtype=self.dtype, device=self.device)
-            sine_axis = torch.zeros(
-                self.shape[0], 3, dtype=self.dtype, device=self.device
-            )
-            sine_axis[:, 0] = 0.5 * (self[:, 2, 1] - self[:, 1, 2])
-            sine_axis[:, 1] = 0.5 * (self[:, 0, 2] - self[:, 2, 0])
-            sine_axis[:, 2] = 0.5 * (self[:, 1, 0] - self[:, 0, 1])
-            w = (
-                0.5
-                * (1 + self[:, 0, 0] + self[:, 1, 1] + self[:, 2, 2]).clamp(0, 4).sqrt()
-            )
-
-            ret[:, 0] = w
-
-            # theta != pi
-            not_near_pi = ret[:, 0] > self._NEAR_PI_EPS
-            ret[:, 1:] = 0.5 * sine_axis / w.view(-1, 1)
-
             # theta ~ pi
-            near_pi = ~not_near_pi
             ddiag = torch.diagonal(self[near_pi], dim1=1, dim2=2)
             # Find the index of major coloumns and diagonals
             major = torch.logical_and(
@@ -506,17 +465,15 @@ class SO3(LieGroup):
         _check |= tangent_vector.ndim == 2 and tangent_vector.shape[1] == 3
         if not _check:
             raise ValueError("Invalid vee matrix for SO3.")
-        matrix = torch.zeros(tangent_vector.shape[0], 3, 3).to(
-            dtype=tangent_vector.dtype, device=tangent_vector.device
-        )
-        if _FunctorchContext.get_context():
-            matrix = matrix * tangent_vector[0, 0]
+        matrix = tangent_vector.new_zeros(tangent_vector.shape[0], 3, 3)
+
         matrix[:, 0, 1] = -tangent_vector[:, 2].view(-1)
         matrix[:, 0, 2] = tangent_vector[:, 1].view(-1)
         matrix[:, 1, 2] = -tangent_vector[:, 0].view(-1)
         matrix[:, 1, 0] = tangent_vector[:, 2].view(-1)
         matrix[:, 2, 0] = -tangent_vector[:, 1].view(-1)
         matrix[:, 2, 1] = tangent_vector[:, 0].view(-1)
+
         return matrix
 
     @staticmethod
@@ -542,7 +499,7 @@ class SO3(LieGroup):
             raise ValueError(err_msg)
 
     @staticmethod
-    def unit_quaternion_to_SO3(quaternion: torch.torch.Tensor) -> "SO3":
+    def unit_quaternion_to_SO3(quaternion: torch.Tensor) -> "SO3":
         if quaternion.ndim == 1:
             quaternion = quaternion.unsqueeze(0)
         SO3._unit_quaternion_check(quaternion)
@@ -563,9 +520,8 @@ class SO3(LieGroup):
         q33 = q3 * q3
 
         ret = SO3()
-        ret.tensor = torch.zeros(quaternion.shape[0], 3, 3).to(
-            dtype=quaternion.dtype, device=quaternion.device
-        )
+        ret.tensor = quaternion.new_zeros(quaternion.shape[0], 3, 3)
+
         ret[:, 0, 0] = 2 * (q00 + q11) - 1
         ret[:, 0, 1] = 2 * (q12 - q03)
         ret[:, 0, 2] = 2 * (q13 + q02)
@@ -625,7 +581,7 @@ class SO3(LieGroup):
         if jacobians is not None:
             self._check_jacobians_list(jacobians)
             # Left jacobians for SO3 are computed
-            Jrot = torch.zeros(batch_size, 3, 3, dtype=self.dtype, device=self.device)
+            Jrot = self.tensor.new_zeros(batch_size, 3, 3)
             Jrot[:, 0, 1] = -ret[:, 2]
             Jrot[:, 1, 0] = ret[:, 2]
             Jrot[:, 0, 2] = ret[:, 1]

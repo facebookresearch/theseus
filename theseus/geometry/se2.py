@@ -150,7 +150,7 @@ class SE2(LieGroup):
 
     def update_from_rot_and_trans(self, rotation: SO2, translation: Point2):
         batch_size = rotation.shape[0]
-        self.tensor = self.tensor.new_empty(batch_size, 4)
+        self.tensor = rotation.tensor.new_empty(batch_size, 4)
         self[:, :2] = translation.tensor
         cosine, sine = rotation.to_cos_sin()
         self[:, 2] = cosine

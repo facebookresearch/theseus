@@ -282,8 +282,8 @@ def test_local_map(dtype):
     ATOL = 3e-5 if dtype == torch.float32 else 1e-7
 
     for batch_size in [1, 20, 100]:
-        group0 = th.SE3.rand(batch_size, dtype=dtype)
-        group1 = th.SE3.rand(batch_size, dtype=dtype)
+        group0 = th.SE3.rand(batch_size, dtype=dtype, generator=rng)
+        group1 = th.SE3.rand(batch_size, dtype=dtype, generator=rng)
         check_jacobian_for_local(
             group0, group1, Group=th.SE3, is_projected=True, atol=ATOL
         )

@@ -31,15 +31,19 @@ from .common import (
 def test_exp_map():
     for batch_size in [1, 20, 100]:
         theta = torch.from_numpy(np.linspace(-np.pi, np.pi, batch_size)).view(-1, 1)
-        check_exp_map(theta, th.SO2, EPS)
-        check_projection_for_exp_map(theta, th.SO2)
+        check_exp_map(theta, th.SO2, EPS, enable_functorch=False)
+        check_projection_for_exp_map(theta, th.SO2, enable_functorch=False)
+        check_exp_map(theta, th.SO2, EPS, enable_functorch=True)
+        check_projection_for_exp_map(theta, th.SO2, enable_functorch=True)
 
 
 def test_log_map():
     for batch_size in [1, 2, 100]:
         theta = torch.from_numpy(np.linspace(-np.pi, np.pi, batch_size)).view(-1, 1)
-        check_log_map(theta, th.SO2, EPS)
-        check_projection_for_log_map(theta, th.SO2)
+        check_log_map(theta, th.SO2, EPS, enable_functorch=False)
+        check_projection_for_log_map(theta, th.SO2, enable_functorch=False)
+        check_log_map(theta, th.SO2, EPS, enable_functorch=True)
+        check_projection_for_log_map(theta, th.SO2, enable_functorch=True)
 
 
 def test_compose():
@@ -48,7 +52,8 @@ def test_compose():
     for batch_size in [1, 20, 100]:
         so2_1 = th.SO2.rand(batch_size, generator=rng, dtype=torch.float64)
         so2_2 = th.SO2.rand(batch_size, generator=rng, dtype=torch.float64)
-        check_compose(so2_1, so2_2)
+        check_compose(so2_1, so2_2, enable_functorch=False)
+        check_compose(so2_1, so2_2, enable_functorch=True)
 
 
 def test_inverse():
@@ -56,7 +61,8 @@ def test_inverse():
     rng.manual_seed(0)
     for batch_size in [1, 20, 100]:
         so2 = th.SO2.rand(batch_size, generator=rng, dtype=torch.float64)
-        check_inverse(so2)
+        check_inverse(so2, enable_functorch=False)
+        check_inverse(so2, enable_functorch=True)
 
 
 def test_rotate_and_unrotate():
@@ -118,7 +124,8 @@ def test_adjoint():
     for batch_size in [1, 20, 100]:
         so2 = th.SO2.rand(batch_size, generator=rng, dtype=torch.float64)
         tangent = torch.randn(batch_size, 1).double()
-        check_adjoint(so2, tangent)
+        check_adjoint(so2, tangent, enable_functorch=False)
+        check_adjoint(so2, tangent, enable_functorch=True)
 
 
 def test_copy():

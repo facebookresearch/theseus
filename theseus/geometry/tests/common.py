@@ -83,7 +83,8 @@ def check_log_map(tangent_vector, group_cls, atol=TEST_EPS, enable_functorch=Fal
         def err_fn(optim_vars, aux_vars):
             jacobians = []
             optim_vars[0].log_map(jacobians=jacobians)
-            return jacobians[0].sum(dim=[1, 2]).view(-1, 1)
+            dim = list(range(1, len(jacobians[0].shape)))
+            return jacobians[0].sum(dim=dim).view(-1, 1)
 
         cost_fn = AutoDiffCostFunction(optim_vars, err_fn, dim=1)
         jacs, _ = cost_fn.jacobians()

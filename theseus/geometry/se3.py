@@ -122,6 +122,7 @@ class SE3(LieGroup):
         self, euclidean_grad: torch.Tensor, is_sparse: bool = False
     ) -> torch.Tensor:
         self._project_check(euclidean_grad, is_sparse)
+        ret = self.tensor.new_zeros(euclidean_grad.shape[:-2] + torch.Size([6]))
 
         if is_sparse:
             temp = torch.einsum(
@@ -132,15 +133,12 @@ class SE3(LieGroup):
                 "...jk,...ji->...ik", euclidean_grad, self.tensor[:, :, :3]
             )
 
-        return torch.cat(
-            [
-                temp[..., 3],
-                (temp[..., 2, 1] - temp[..., 1, 2]).unsqueeze(-1),
-                (temp[..., 0, 2] - temp[..., 2, 0]).unsqueeze(-1),
-                (temp[..., 1, 0] - temp[..., 0, 1]).unsqueeze(-1),
-            ],
-            dim=-1,
-        )
+        ret[..., :3] = temp[..., 3]
+        ret[..., 3] = temp[..., 2, 1] - temp[..., 1, 2]
+        ret[..., 4] = temp[..., 0, 2] - temp[..., 2, 0]
+        ret[..., 5] = temp[..., 1, 0] - temp[..., 0, 1]
+
+        return ret
 
     @staticmethod
     def _check_tensor_impl(tensor: torch.Tensor) -> bool:

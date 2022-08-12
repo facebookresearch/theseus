@@ -14,7 +14,6 @@ import theseus.constants
 from .lie_group import LieGroup
 from .point_types import Point3
 from .so3 import SO3
-from .functorch import _FunctorchContext
 
 
 class SE3(LieGroup):
@@ -174,22 +173,9 @@ class SE3(LieGroup):
         if matrix.ndim != 3 or matrix.shape[1:] != (4, 4):
             raise ValueError("Hat matrices of SE3 can only be 4x4 matrices")
 
-        if _FunctorchContext.get_context():
-            warnings.warn(
-                "functorch is enabled and the skew-symmetry of hat matrices are not checked."
-            )
-        else:
-            if matrix[:, 3].abs().max().item() > HAT_EPS:
-                raise ValueError(
-                    "The last row of hat matrices of SE3 can only be zero."
-                )
-
-            if (
-                matrix[:, :3, :3].transpose(1, 2) + matrix[:, :3, :3]
-            ).abs().max().item() > HAT_EPS:
-                raise ValueError(
-                    "The 3x3 top-left corner of hat matrices of SE3 can only be skew-symmetric."
-                )
+        warnings.warn(
+            "functorch is enabled and the skew-symmetry of hat matrices are not checked."
+        )
 
     @staticmethod
     def exp_map(
@@ -362,69 +348,36 @@ class SE3(LieGroup):
         near_zero = theta < self._NEAR_ZERO_EPS
         near_pi = 1 + cosine <= self._NEAR_PI_EPS
 
-        if _FunctorchContext.get_context():
-            # Compute the rotation
-            near_zero_or_near_pi = torch.logical_or(near_zero, near_pi)
-            # Compute the approximation of theta / sin(theta) when theta is near to 0
-            sine_nz = torch.where(near_zero_or_near_pi, non_zero, sine)
-            scale = torch.where(
-                near_zero_or_near_pi,
-                1 + sine**2 / 6,
-                theta / sine_nz,
-            )
-            ret_ang = sine_axis * scale.view(-1, 1)
+        # Compute the rotation
+        near_zero_or_near_pi = torch.logical_or(near_zero, near_pi)
+        # Compute the approximation of theta / sin(theta) when theta is near to 0
+        sine_nz = torch.where(near_zero_or_near_pi, non_zero, sine)
+        scale = torch.where(
+            near_zero_or_near_pi,
+            1 + sine**2 / 6,
+            theta / sine_nz,
+        )
+        ret_ang = sine_axis * scale.view(-1, 1)
 
-            # theta is near pi
-            ddiag = torch.diagonal(self.tensor, dim1=1, dim2=2)
-            # Find the index of major coloumns and diagonals
-            major = torch.logical_and(
-                ddiag[:, 1] > ddiag[:, 0], ddiag[:, 1] > ddiag[:, 2]
-            ) + 2 * torch.logical_and(
-                ddiag[:, 2] > ddiag[:, 0], ddiag[:, 2] > ddiag[:, 1]
-            )
-            aux = torch.ones(self.shape[0], dtype=torch.bool)
-            sel_rows = 0.5 * (self[aux, major, :3] + self[aux, :3, major])
-            sel_rows[aux, major] -= cosine
-            axis = sel_rows / torch.where(
-                near_zero.view(-1, 1),
-                non_zero.view(-1, 1),
-                sel_rows.norm(dim=1, keepdim=True),
-            )
-            sign_tmp = sine_axis[aux, major].sign()
-            sign = torch.where(sign_tmp != 0, sign_tmp, torch.ones_like(sign_tmp))
-            ret_ang = torch.where(
-                near_pi.view(-1, 1), axis * (theta * sign).view(-1, 1), ret_ang
-            )
-        else:
-            # Compute the rotation
-            not_near_pi = ~near_pi
-            # theta is not near pi
-            near_zero_not_near_pi = near_zero[not_near_pi]
-            # Compute the approximation of theta / sin(theta) when theta is near to 0
-            sine_nz = torch.where(near_zero_not_near_pi, non_zero, sine[not_near_pi])
-            scale = torch.where(
-                near_zero_not_near_pi,
-                1 + sine[not_near_pi] ** 2 / 6,
-                theta[not_near_pi] / sine_nz,
-            )
-            ret_ang = torch.zeros_like(sine_axis)
-            ret_ang[not_near_pi] = sine_axis[not_near_pi] * scale.view(-1, 1)
-
-            # theta is near pi
-            ddiag = torch.diagonal(self[near_pi], dim1=1, dim2=2)
-            # Find the index of major coloumns and diagonals
-            major = torch.logical_and(
-                ddiag[:, 1] > ddiag[:, 0], ddiag[:, 1] > ddiag[:, 2]
-            ) + 2 * torch.logical_and(
-                ddiag[:, 2] > ddiag[:, 0], ddiag[:, 2] > ddiag[:, 1]
-            )
-            sel_rows = 0.5 * (self[near_pi, major, :3] + self[near_pi, :3, major])
-            aux = torch.ones(sel_rows.shape[0], dtype=torch.bool)
-            sel_rows[aux, major] -= cosine[near_pi]
-            axis = sel_rows / sel_rows.norm(dim=1, keepdim=True)
-            sign_tmp = sine_axis[near_pi, major].sign()
-            sign = torch.where(sign_tmp != 0, sign_tmp, torch.ones_like(sign_tmp))
-            ret_ang[near_pi] = axis * (theta[near_pi] * sign).view(-1, 1)
+        # theta is near pi
+        ddiag = torch.diagonal(self.tensor, dim1=1, dim2=2)
+        # Find the index of major coloumns and diagonals
+        major = torch.logical_and(
+            ddiag[:, 1] > ddiag[:, 0], ddiag[:, 1] > ddiag[:, 2]
+        ) + 2 * torch.logical_and(ddiag[:, 2] > ddiag[:, 0], ddiag[:, 2] > ddiag[:, 1])
+        aux = torch.ones(self.shape[0], dtype=torch.bool)
+        sel_rows = 0.5 * (self[aux, major, :3] + self[aux, :3, major])
+        sel_rows[aux, major] -= cosine
+        axis = sel_rows / torch.where(
+            near_zero.view(-1, 1),
+            non_zero.view(-1, 1),
+            sel_rows.norm(dim=1, keepdim=True),
+        )
+        sign_tmp = sine_axis[aux, major].sign()
+        sign = torch.where(sign_tmp != 0, sign_tmp, torch.ones_like(sign_tmp))
+        ret_ang = torch.where(
+            near_pi.view(-1, 1), axis * (theta * sign).view(-1, 1), ret_ang
+        )
 
         # Compute the translation
         sine_theta = sine * theta

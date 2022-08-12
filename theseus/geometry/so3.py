@@ -268,19 +268,20 @@ class SO3(LieGroup):
 
         near_zero = theta < self._NEAR_ZERO_EPS
 
+        near_pi = 1 + cosine <= self._NEAR_PI_EPS
+        # theta != pi
+        near_zero_or_near_pi = torch.logical_or(near_zero, near_pi)
+        # Compute the approximation of theta / sin(theta) when theta is near to 0
+        non_zero = torch.ones(1, dtype=self.dtype, device=self.device)
+        sine_nz = torch.where(near_zero_or_near_pi, non_zero, sine)
+        scale = torch.where(
+            near_zero_or_near_pi,
+            1 + sine**2 / 6,
+            theta / sine_nz,
+        )
+        ret = sine_axis * scale.view(-1, 1)
+
         if _FunctorchContext.get_context():
-            near_pi = 1 + cosine <= self._NEAR_PI_EPS
-            # theta != pi
-            near_zero_or_near_pi = torch.logical_or(near_zero, near_pi)
-            # Compute the approximation of theta / sin(theta) when theta is near to 0
-            non_zero = torch.ones(1, dtype=self.dtype, device=self.device)
-            sine_nz = torch.where(near_zero_or_near_pi, non_zero, sine)
-            scale = torch.where(
-                near_zero_or_near_pi,
-                1 + sine**2 / 6,
-                theta / sine_nz,
-            )
-            ret = sine_axis * scale.view(-1, 1)
             # # theta ~ pi
             ddiag = torch.diagonal(self.tensor, dim1=1, dim2=2)
             # Find the index of major coloumns and diagonals
@@ -303,35 +304,21 @@ class SO3(LieGroup):
                 near_pi.view(-1, 1), axis * (theta * sign).view(-1, 1), ret
             )
         else:
-            not_near_pi = 1 + cosine > self._NEAR_PI_EPS
-            # theta != pi
-            near_zero_not_near_pi = near_zero[not_near_pi]
-            # Compute the approximation of theta / sin(theta) when theta is near to 0
-            non_zero = torch.ones(1, dtype=self.dtype, device=self.device)
-            sine_nz = torch.where(near_zero_not_near_pi, non_zero, sine[not_near_pi])
-            scale = torch.where(
-                near_zero_not_near_pi,
-                1 + sine[not_near_pi] ** 2 / 6,
-                theta[not_near_pi] / sine_nz,
-            )
-            ret = torch.zeros_like(sine_axis)
-            ret[not_near_pi] = sine_axis[not_near_pi] * scale.view(-1, 1)
-            # # theta ~ pi
-            near_pi = ~not_near_pi
-            ddiag = torch.diagonal(self[near_pi], dim1=1, dim2=2)
-            # Find the index of major coloumns and diagonals
-            major = torch.logical_and(
-                ddiag[:, 1] > ddiag[:, 0], ddiag[:, 1] > ddiag[:, 2]
-            ) + 2 * torch.logical_and(
-                ddiag[:, 2] > ddiag[:, 0], ddiag[:, 2] > ddiag[:, 1]
-            )
-            sel_rows = 0.5 * (self[near_pi, major] + self[near_pi, :, major])
-            aux = torch.ones(sel_rows.shape[0], dtype=torch.bool)
-            sel_rows[aux, major] -= cosine[near_pi]
-            axis = sel_rows / sel_rows.norm(dim=1, keepdim=True)
-            sign_tmp = sine_axis[near_pi, major].sign()
-            sign = torch.where(sign_tmp != 0, sign_tmp, torch.ones_like(sign_tmp))
-            ret[near_pi] = axis * (theta[near_pi] * sign).view(-1, 1)
+            if near_pi.any():
+                ddiag = torch.diagonal(self[near_pi], dim1=1, dim2=2)
+                # Find the index of major coloumns and diagonals
+                major = torch.logical_and(
+                    ddiag[:, 1] > ddiag[:, 0], ddiag[:, 1] > ddiag[:, 2]
+                ) + 2 * torch.logical_and(
+                    ddiag[:, 2] > ddiag[:, 0], ddiag[:, 2] > ddiag[:, 1]
+                )
+                sel_rows = 0.5 * (self[near_pi, major] + self[near_pi, :, major])
+                aux = torch.ones(sel_rows.shape[0], dtype=torch.bool)
+                sel_rows[aux, major] -= cosine[near_pi]
+                axis = sel_rows / sel_rows.norm(dim=1, keepdim=True)
+                sign_tmp = sine_axis[near_pi, major].sign()
+                sign = torch.where(sign_tmp != 0, sign_tmp, torch.ones_like(sign_tmp))
+                ret[near_pi] = axis * (theta[near_pi] * sign).view(-1, 1)
 
         if jacobians is not None:
             SO3._check_jacobians_list(jacobians)

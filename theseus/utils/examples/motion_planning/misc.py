@@ -181,7 +181,8 @@ def generate_trajectory_figs(
         map_data = map_tensor[map_idx].clone().cpu().numpy()
         if invert_map:
             map_data = 1 - map_data
-        map_data = np.tile(map_data, (3, 1, 1)).transpose((1, 2, 0))
+        if map_data.ndim == 2:
+            map_data = np.tile(map_data, (3, 1, 1)).transpose((1, 2, 0))
         path_ax.imshow(map_data)
         cell_size = sdf.cell_size.tensor
         patches = []
@@ -191,12 +192,13 @@ def generate_trajectory_figs(
             line = _create_line_from_trajectory(col, row, color=colors[t_idx])
             path_ax.add_line(line)
             if t_idx == fig_idx_robot:  # solution trajectory
-                radius = robot_radius / cell_size[map_idx][0]
-                patch_coll = _add_robot_to_trajectory(col, row, radius, alpha=0.25)
+                cs_idx = map_idx if cell_size.shape[0] > 1 else 0
+                radius = robot_radius / cell_size[cs_idx][0]
+                patch_coll = _add_robot_to_trajectory(col, row, radius, alpha=0.10)
                 path_ax.add_collection(patch_coll)
             patches.append(mpl.patches.Patch(color=colors[t_idx], label=labels[t_idx]))
         patches.append(
-            mpl.patches.Patch(color="magenta", label=f"radius = {robot_radius}")
+            mpl.patches.Patch(color="magenta", label=f"robot (radius={robot_radius})")
         )
         path_ax.legend(handles=patches, fontsize=10)
 

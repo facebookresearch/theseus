@@ -4,7 +4,7 @@
 # LICENSE file in the root directory of this source tree.
 
 import copy
-from typing import Any, Dict, List, Optional, Tuple
+from typing import Any, Callable, Dict, List, Optional, Tuple
 
 import torch
 
@@ -26,6 +26,7 @@ class MotionPlanner:
         use_single_collision_weight: bool = True,
         device: str = "cpu",
         dtype: torch.dtype = torch.double,
+        extra_costs_callback: Optional[Callable[[th.Objective], None]] = None,
     ):
         self.map_size = map_size
         self.epsilon_dist = epsilon_dist
@@ -171,6 +172,9 @@ class MotionPlanner:
                     )
                 )
             )
+        # Add any extra user-provided cost functions before creating optimizer
+        if extra_costs_callback is not None:
+            extra_costs_callback(objective)
 
         # Finally, create the Nonlinear Least Squares optimizer for this objective
         # and wrap both into a TheseusLayer

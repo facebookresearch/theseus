@@ -35,7 +35,6 @@ for PYTHON_VERSION in 3.9; do
     ENV CONDA_DIR /opt/conda
     RUN wget --quiet https://repo.anaconda.com/miniconda/Miniconda3-latest-Linux-x86_64.sh -O ~/miniconda.sh && \
         /bin/bash ~/miniconda.sh -b -p /opt/conda
-
     ENV PATH \$CONDA_DIR/bin:\$PATH
     RUN conda create --name theseus python=${PYTHON_VERSION}
     RUN source activate theseus
@@ -65,9 +64,16 @@ for PYTHON_VERSION in 3.9; do
         HOST_WHL="theseus_ai-${TAG}-py3-none-any.whl"
     else
         DOCKER_WHL="theseus/dist/theseus_ai-${TAG}-${CP_STR}-${CP_STR}-linux_x86_64.whl"
-        HOST_WHL="theseus_ai-${TAG}+${DEVICE_TAG}-${CP_STR}-${CP_STR}-manylinux_2_17_x86_64.whl"
+        if [[ ${CUDA_VERSION} == "10.2" ]]
+        then
+            PLUS_CU_TAG=""  # 10.2 will be the pypi version, so don't add +cu102
+        else
+            PLUS_CU_TAG="+${DEVICE_TAG}"
+        fi
+        HOST_WHL="theseus_ai-${TAG}${PLUS_CU_TAG}-${CP_STR}-${CP_STR}-manylinux_2_17_x86_64.whl"
     fi
     
+    sudo docker cp "${DOCKER_NAME}:theseus/dist/theseus-ai-${TAG}.tar.gz" "${DOCKER_DIR}/theseus-ai-${TAG}.tar.gz"
     sudo docker cp "${DOCKER_NAME}:${DOCKER_WHL}" ${DOCKER_DIR}/${HOST_WHL}
     sudo docker rm ${DOCKER_NAME}
     sudo docker image rm "${DOCKER_NAME}_img"

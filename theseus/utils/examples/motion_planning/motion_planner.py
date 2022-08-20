@@ -24,9 +24,9 @@ class MotionPlanner:
         max_optim_iters: int,
         step_size: float = 1.0,
         use_single_collision_weight: bool = True,
+        obj_modifier_callback: Optional[Callable[[th.Objective], None]] = None,
         device: str = "cpu",
         dtype: torch.dtype = torch.double,
-        extra_costs_callback: Optional[Callable[[th.Objective], None]] = None,
     ):
         self.map_size = map_size
         self.epsilon_dist = epsilon_dist
@@ -173,8 +173,8 @@ class MotionPlanner:
                 )
             )
         # Add any extra user-provided cost functions before creating optimizer
-        if extra_costs_callback is not None:
-            extra_costs_callback(objective)
+        if obj_modifier_callback is not None:
+            obj_modifier_callback(objective)
 
         # Finally, create the Nonlinear Least Squares optimizer for this objective
         # and wrap both into a TheseusLayer

@@ -76,7 +76,7 @@ We support several features that improve computation times and memory consumptio
 ```bash
 pip install theseus-ai
 ```
-We currently provide wheels with our CUDA extensions compiled using CUDA 10.2 and Python3.9.
+We currently provide wheels with our CUDA extensions compiled using CUDA 10.2 and Python 3.9.
 For other CUDA versions, consider installing from source or using our 
 [build script](https://github.com/facebookresearch/theseus/blob/main/build_scripts/build_wheel.sh).
 

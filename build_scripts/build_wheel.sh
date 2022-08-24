@@ -1,6 +1,15 @@
 #bin/bash
 
-# Ensure that 2 arguments (ROOT_DIR, TAG, CUDA_VERSION) are provided
+# -----------------
+# To use this script, from root theesus folder run 
+#    ./build_scripts/build_wheel.sh ROOT_DIR TAG CUDA_VERSION
+#
+# ROOT_DIR: is the directory where the tar.gz and .whl files will be stored
+# TAG: is a theseus tag (e.g., 0.1.0)
+# CUDA_VERSION: the version of CUDA to use. We have tested 10.2, 11.3, and 11.6
+# -----------------
+
+# Ensure that 3 arguments (ROOT_DIR, TAG, CUDA_VERSION) are provided
 die () {
     echo >&2 "$@"
     exit 1

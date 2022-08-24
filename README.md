@@ -1,24 +1,35 @@
 ![](https://raw.githubusercontent.com/facebookresearch/theseus/main/docs/source/img/theseus-color-horizontal.png)
 
 <p align="center">
+    <!-- CI -->
     <a href="https://circleci.com/gh/facebookresearch/theseus/tree/main">
         <img src="https://circleci.com/gh/facebookresearch/theseus/tree/main.svg?style=svg" alt="CircleCI" height="20">
     </a>
+    <!-- License -->
     <a href="https://github.com/facebookresearch/theseus/blob/main/LICENSE">
         <img src="https://img.shields.io/badge/license-MIT-blue.svg" alt="License" height="20">
     </a>
+    <!-- pypi -->
     <a href="https://pypi.org/project/theseus-ai/">
         <img src="https://img.shields.io/pypi/v/theseus-ai" alt="pypi"
         heigh="20">
+    <!-- Downloads counter -->
+    <a href="https://pypi.org/project/theseus-ai/">
+        <img src="https://pepy.tech/badge/theseus-ai" alt="PyPi Downloads" height="20">
+    </a>
+    <!-- Python -->
     <a href="https://www.python.org/downloads/release/">
         <img src="https://img.shields.io/badge/python-3.7%20%7C%203.8%20%7C%203.9-blue.svg" alt="Python" height="20">
     </a>
+    <!-- Pre-commit -->
     <a href="https://github.com/pre-commit/pre-commit">
         <img src="https://img.shields.io/badge/pre--commit-enabled-green?logo=pre-commit&logoColor=white" alt="pre-commit" height="20">
     </a>
+    <!-- Black -->
     <a href="https://github.com/psf/black">
         <img src="https://img.shields.io/badge/code%20style-black-000000.svg" alt="black" height="20">
     </a>
+    <!-- PRs -->
     <a href="https://github.com/facebookresearch/theseus/blob/main/CONTRIBUTING.md">
         <img src="https://img.shields.io/badge/PRs-welcome-green.svg" alt="PRs" height="20">
     </a>

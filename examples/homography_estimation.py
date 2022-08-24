@@ -49,10 +49,10 @@ def prepare_data():
             print("Downloading data")
             url_root = "http://ptak.felk.cvut.cz/revisitop/revisitop1m/jpg/"
             tar = "%s.tar.gz" % chunk
+            os.makedirs(dataset_path)
             cmd = "wget %s/%s -O %s/%s" % (url_root, tar, dataset_root, tar)
             print("Running command: ", cmd)
             os.system(cmd)
-            os.makedirs(dataset_path)
             cmd = "tar -xf %s/%s -C %s" % (dataset_root, tar, dataset_path)
             print("Running command: ", cmd)
             os.system(cmd)

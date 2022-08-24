@@ -1,12 +1,22 @@
 #bin/bash
 
 # -----------------
+# This script creates and runs a docker image for compiling a wheel
+# to install theseus.
+#
 # To use this script, from root theesus folder run 
 #    ./build_scripts/build_wheel.sh ROOT_DIR TAG CUDA_VERSION
 #
-# ROOT_DIR: is the directory where the tar.gz and .whl files will be stored
+# ROOT_DIR: is the directory where the Dockerfile, tar.gz and .whl files will be stored
+#   (under a new subdirectory named theseus_docker_3.9)
 # TAG: is a theseus tag (e.g., 0.1.0)
-# CUDA_VERSION: the version of CUDA to use. We have tested 10.2, 11.3, and 11.6
+# CUDA_VERSION: the version of CUDA to use. We have tested 10.2, 11.3, and 11.6.
+#   You can also pass "cpu" to compile without CUDA extensions. 
+#
+#   For example
+#    ./build_scripts/build_wheel.sh . 0.1.0 10.2
+#   
+#   will run and store results under ./theseus_docker_3.9
 # -----------------
 
 # Ensure that 3 arguments (ROOT_DIR, TAG, CUDA_VERSION) are provided
@@ -38,7 +48,7 @@ fi
 
 for PYTHON_VERSION in 3.9; do
     # Create dockerfile to build in manylinux container
-    DOCKER_DIR=${ROOT_DIR}/docker_${PYTHON_VERSION}
+    DOCKER_DIR=${ROOT_DIR}/theseus_docker_${PYTHON_VERSION}
     mkdir -p ${DOCKER_DIR}
     echo """FROM ${IMAGE_NAME}
     ENV CONDA_DIR /opt/conda

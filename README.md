@@ -7,6 +7,9 @@
     <a href="https://github.com/facebookresearch/theseus/blob/main/LICENSE">
         <img src="https://img.shields.io/badge/license-MIT-blue.svg" alt="License" height="20">
     </a>
+    <a href="https://pypi.org/project/theseus-ai/">
+        <img src="https://img.shields.io/pypi/v/theseus-ai" alt="pypi"
+        heigh="20">
     <a href="https://www.python.org/downloads/release/">
         <img src="https://img.shields.io/badge/python-3.7%20%7C%203.8%20%7C%203.9-blue.svg" alt="Python" height="20">
     </a>

@@ -17,7 +17,7 @@ Installing
 ^^^^^^^^^^
 .. code-block:: bash
 
-    pip install theseus-ai
+    pip install theseus-opt
 
 If you are interested in contributing to ``theseus``, instead install
 

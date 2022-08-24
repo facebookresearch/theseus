@@ -58,7 +58,7 @@ else:
     ext_modules = []
 
 setuptools.setup(
-    name="theseus-ai",
+    name="theseus-opt",
     version=version,
     author="Meta Research",
     description="A library for differentiable nonlinear optimization.",

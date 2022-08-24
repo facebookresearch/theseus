@@ -11,7 +11,7 @@ import torch
 import theseus as th
 
 
-class MotionPlanner:
+class MotionPlannerObjective(th.Objective):
     def __init__(
         self,
         map_size: int,
@@ -20,25 +20,27 @@ class MotionPlanner:
         collision_weight: float,
         Qc_inv: List[List[int]],
         num_time_steps: int,
-        optim_method: str,
-        max_optim_iters: int,
-        step_size: float = 1.0,
         use_single_collision_weight: bool = True,
-        device: str = "cpu",
         dtype: torch.dtype = torch.double,
     ):
+        for v in [
+            map_size,
+            epsilon_dist,
+            total_time,
+            collision_weight,
+            Qc_inv,
+            num_time_steps,
+        ]:
+            assert v is not None
+
+        super().__init__(dtype=dtype)
         self.map_size = map_size
         self.epsilon_dist = epsilon_dist
         self.total_time = total_time
         self.collision_weight = collision_weight
         self.Qc_inv = copy.deepcopy(Qc_inv)
         self.num_time_steps = num_time_steps
-        self.optim_method = optim_method
-        self.max_optim_iters = max_optim_iters
-        self.step_size = step_size
         self.use_single_collision_weight = use_single_collision_weight
-        self.device = device
-        self.dtype = dtype
 
         self.trajectory_len = num_time_steps + 1
 
@@ -112,16 +114,13 @@ class MotionPlanner:
         # --------------------------------------------------------------------------- #
         # ------------------------------ Cost functions ----------------------------- #
         # --------------------------------------------------------------------------- #
-        # Create a Theseus objective for adding the cost functions
-        objective = th.Objective(dtype=self.dtype)
-
         # First create the cost functions for the end point positions and velocities
         # which are hard constraints, and can be implemented via Difference cost
         # functions.
-        objective.add(
+        self.add(
             th.Difference(poses[0], start_point, boundary_cost_weight, name="pose_0")
         )
-        objective.add(
+        self.add(
             th.Difference(
                 velocities[0],
                 th.Point2(tensor=torch.zeros(1, 2, dtype=dtype)),
@@ -129,10 +128,10 @@ class MotionPlanner:
                 name="vel_0",
             )
         )
-        objective.add(
+        self.add(
             th.Difference(poses[-1], goal_point, boundary_cost_weight, name="pose_N")
         )
-        objective.add(
+        self.add(
             th.Difference(
                 velocities[-1],
                 th.Point2(tensor=torch.zeros(1, 2, dtype=dtype)),
@@ -145,7 +144,7 @@ class MotionPlanner:
         # cost weights created above. We need a separate cost function for each time
         # step
         for i in range(1, self.trajectory_len):
-            objective.add(
+            self.add(
                 th.eb.Collision2D(
                     poses[i],
                     sdf_origin,
@@ -158,7 +157,7 @@ class MotionPlanner:
                     name=f"collision_{i}",
                 )
             )
-            objective.add(
+            self.add(
                 (
                     th.eb.GPMotionModel(
                         poses[i - 1],
@@ -172,25 +171,64 @@ class MotionPlanner:
                 )
             )
 
+
+class MotionPlanner:
+    # If objective is given, this overrides problem arguments
+    def __init__(
+        self,
+        optim_method: str,
+        max_optim_iters: int,
+        step_size: float = 1.0,
+        objective: Optional[MotionPlannerObjective] = None,
+        device: str = "cpu",
+        dtype: torch.dtype = torch.double,
+        # The following are only used if objective is None
+        map_size: Optional[int] = None,
+        epsilon_dist: Optional[float] = None,
+        total_time: Optional[float] = None,
+        collision_weight: Optional[float] = None,
+        Qc_inv: Optional[List[List[int]]] = None,
+        num_time_steps: Optional[int] = None,
+        use_single_collision_weight: bool = True,
+    ):
+        if objective is None:
+            self.objective = MotionPlannerObjective(
+                map_size,
+                epsilon_dist,
+                total_time,
+                collision_weight,
+                Qc_inv,
+                num_time_steps,
+                use_single_collision_weight=use_single_collision_weight,
+                dtype=dtype,
+            )
+        else:
+            self.objective = objective
+
+        self.optim_method = optim_method
+        self.max_optim_iters = max_optim_iters
+        self.step_size = step_size
+        self.device = device
+        self.dtype = dtype
+
         # Finally, create the Nonlinear Least Squares optimizer for this objective
         # and wrap both into a TheseusLayer
         optimizer: th.NonlinearLeastSquares
         if optim_method == "gauss_newton":
             optimizer = th.GaussNewton(
-                objective,
+                self.objective,
                 th.CholeskyDenseSolver,
                 max_iterations=max_optim_iters,
                 step_size=step_size,
             )
         elif optim_method == "levenberg_marquardt":
             optimizer = th.LevenbergMarquardt(
-                objective,
+                self.objective,
                 th.CholeskyDenseSolver,
                 max_iterations=max_optim_iters,
                 step_size=step_size,
             )
 
-        self.objective = objective
         self.layer = th.TheseusLayer(optimizer)
         self.layer.to(device=device, dtype=dtype)
 
@@ -249,10 +287,10 @@ class MotionPlanner:
         # Returns a dictionary of variable names to values that represent a straight
         # line trajectory from start to goal.
         start_goal_dist = goal - start
-        avg_vel = start_goal_dist / self.total_time
-        unit_trajectory_len = start_goal_dist / (self.trajectory_len - 1)
+        avg_vel = start_goal_dist / self.objective.total_time
+        unit_trajectory_len = start_goal_dist / (self.objective.trajectory_len - 1)
         input_dict: Dict[str, torch.Tensor] = {}
-        for i in range(self.trajectory_len):
+        for i in range(self.objective.trajectory_len):
             input_dict[f"pose_{i}"] = start + unit_trajectory_len * i
             input_dict[f"vel_{i}"] = avg_vel
         return input_dict
@@ -262,7 +300,7 @@ class MotionPlanner:
     ) -> Dict[str, torch.Tensor]:
         # Returns a dictionary of variable names with random initial poses.
         input_dict: Dict[str, torch.Tensor] = {}
-        for i in range(self.trajectory_len):
+        for i in range(self.objective.trajectory_len):
             input_dict[f"pose_{i}"] = torch.randn_like(start)
             input_dict[f"vel_{i}"] = torch.randn_like(start)
         return input_dict
@@ -273,9 +311,9 @@ class MotionPlanner:
         # Returns a dictionary of variable names to values, so that values
         # are assigned with the data from the given trajectory. Trajectory should be a
         # tensor of shape (batch_size, 4, planner.trajectory_len).
-        assert trajectory.shape[1:] == (4, self.trajectory_len)
+        assert trajectory.shape[1:] == (4, self.objective.trajectory_len)
         input_dict: Dict[str, torch.Tensor] = {}
-        for i in range(self.trajectory_len):
+        for i in range(self.objective.trajectory_len):
             input_dict[f"pose_{i}"] = trajectory[:, :2, i]
             input_dict[f"vel_{i}"] = trajectory[:, :2, i]
         return input_dict
@@ -296,11 +334,11 @@ class MotionPlanner:
         trajectory = torch.empty(
             self.objective.batch_size,
             4,
-            self.trajectory_len,
+            self.objective.trajectory_len,
             device=self.objective.device,
         )
         variables = self.objective.optim_vars
-        for i in range(self.trajectory_len):
+        for i in range(self.objective.trajectory_len):
             if values_dict is None:
                 trajectory[:, :2, i] = variables[f"pose_{i}"].tensor.clone()
                 trajectory[:, 2:, i] = variables[f"vel_{i}"].tensor.clone()
@@ -321,16 +359,16 @@ class MotionPlanner:
 
     def copy(self, collision_weight: Optional[float] = None) -> "MotionPlanner":
         return MotionPlanner(
-            self.map_size,
-            self.epsilon_dist,
-            self.total_time,
-            collision_weight or self.collision_weight,
-            self.Qc_inv,
-            self.num_time_steps,
             self.optim_method,
             self.max_optim_iters,
             step_size=self.step_size,
-            use_single_collision_weight=self.use_single_collision_weight,
+            map_size=self.objective.map_size,
+            epsilon_dist=self.objective.epsilon_dist,
+            total_time=self.objective.total_time,
+            collision_weight=collision_weight or self.objective.collision_weight,
+            Qc_inv=self.objective.Qc_inv,
+            num_time_steps=self.objective.num_time_steps,
+            use_single_collision_weight=self.objective.use_single_collision_weight,
             device=self.device,
             dtype=self.dtype,
         )

@@ -121,7 +121,7 @@ class InitialTrajectoryModel(nn.Module):
             nn.ReLU(),
             nn.Linear(hid_size, hid_size),
             nn.ReLU(),
-            nn.Linear(hid_size, 4 * (planner.num_time_steps + 1)),
+            nn.Linear(hid_size, 4 * (planner.objective.num_time_steps + 1)),
         )
 
         # Learns a quadratic offset in normal direction to bend the mean trajectory.
@@ -141,7 +141,7 @@ class InitialTrajectoryModel(nn.Module):
 
         self.bend_factor.apply(init_weights)
 
-        self.dt = planner.total_time / planner.num_time_steps
+        self.dt = planner.objective.total_time / planner.objective.num_time_steps
 
         self.num_images = max_num_images
 
@@ -157,7 +157,7 @@ class InitialTrajectoryModel(nn.Module):
             one_hot_dummy[batch_idx, idx] = 1
 
         # Compute straight line positions to use as mean of initial trajectory
-        trajectory_len = self.aux_motion_planner.trajectory_len
+        trajectory_len = self.aux_motion_planner.objective.trajectory_len
         dist_vec = goal - start
         pos_incr_per_step = dist_vec / (trajectory_len - 1)
         trajectory = torch.zeros(start.shape[0], 4 * trajectory_len).to(

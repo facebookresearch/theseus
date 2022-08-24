@@ -1,21 +1,35 @@
-![Theseus Logo](https://raw.githubusercontent.com/facebookresearch/theseus/main/docs/source/img/theseus-color-horizontal.png)
+![](https://raw.githubusercontent.com/facebookresearch/theseus/main/docs/source/img/theseus-color-horizontal.png)
 
 <p align="center">
+    <!-- CI -->
     <a href="https://circleci.com/gh/facebookresearch/theseus/tree/main">
         <img src="https://circleci.com/gh/facebookresearch/theseus/tree/main.svg?style=svg" alt="CircleCI" height="20">
     </a>
+    <!-- License -->
     <a href="https://github.com/facebookresearch/theseus/blob/main/LICENSE">
         <img src="https://img.shields.io/badge/license-MIT-blue.svg" alt="License" height="20">
     </a>
+    <!-- pypi -->
+    <a href="https://pypi.org/project/theseus-ai/">
+        <img src="https://img.shields.io/pypi/v/theseus-ai" alt="pypi"
+        heigh="20">
+    <!-- Downloads counter -->
+    <a href="https://pypi.org/project/theseus-ai/">
+        <img src="https://pepy.tech/badge/theseus-ai" alt="PyPi Downloads" height="20">
+    </a>
+    <!-- Python -->
     <a href="https://www.python.org/downloads/release/">
         <img src="https://img.shields.io/badge/python-3.7%20%7C%203.8%20%7C%203.9-blue.svg" alt="Python" height="20">
     </a>
+    <!-- Pre-commit -->
     <a href="https://github.com/pre-commit/pre-commit">
         <img src="https://img.shields.io/badge/pre--commit-enabled-green?logo=pre-commit&logoColor=white" alt="pre-commit" height="20">
     </a>
+    <!-- Black -->
     <a href="https://github.com/psf/black">
         <img src="https://img.shields.io/badge/code%20style-black-000000.svg" alt="black" height="20">
     </a>
+    <!-- PRs -->
     <a href="https://github.com/facebookresearch/theseus/blob/main/CONTRIBUTING.md">
         <img src="https://img.shields.io/badge/PRs-welcome-green.svg" alt="PRs" height="20">
     </a>
@@ -35,7 +49,7 @@
 
 Theseus is an efficient application-agnostic library for building custom nonlinear optimization layers in PyTorch to support constructing various problems in robotics and vision as end-to-end differentiable architectures.
 
-<img alt="TheseusLayer" src="https://raw.githubusercontent.com/facebookresearch/theseus/main/docs/source/img/theseuslayer.png">
+![](https://raw.githubusercontent.com/facebookresearch/theseus/main/docs/source/img/theseuslayer.png)
 
 Differentiable nonlinear optimization provides a general scheme to encode inductive priors, as the objective function can be partly parameterized by neural models and partly with expert domain-specific differentiable models. The ability to compute gradients end-to-end is retained by differentiating through the optimizer which allows neural models to train on the final task loss, while also taking advantage of priors captured by the optimizer.
 
@@ -72,6 +86,15 @@ We support several features that improve computation times and memory consumptio
     - `conda install -c conda-forge suitesparse` (Mac).
     
 ### Installing
+#### **pypi**
+```bash
+pip install theseus-ai
+```
+We currently provide wheels with our CUDA extensions compiled using CUDA 10.2 and Python 3.9.
+For other CUDA versions, consider installing from source or using our 
+[build script](https://github.com/facebookresearch/theseus/blob/main/build_scripts/build_wheel.sh).
+
+#### **From source**
 ```bash
 git clone https://github.com/facebookresearch/theseus.git && cd theseus
 pip install -e .

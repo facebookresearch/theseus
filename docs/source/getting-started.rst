@@ -15,17 +15,33 @@ Prerequisites
 
 Installing
 ^^^^^^^^^^
+
+pypi
+""""
+
 .. code-block:: bash
 
-    pip install theseus-opt
+    pip install theseus-ai
 
-If you are interested in contributing to ``theseus``, instead install
+We currently provide wheels with our CUDA extensions compiled using CUDA 10.2 and Python 3.9.
+For other CUDA versions, consider installing from source or using our 
+`build script <https://github.com/facebookresearch/theseus/blob/main/build_scripts/build_wheel.sh>`_.
+
+From source
+"""""""""""
+To install from source code, you can use
 
 .. code-block:: bash
 
     git clone https://github.com/facebookresearch/theseus.git
-    pip install -e ".[dev]"
+    pip install -e .
     python -m pytest theseus
+
+If you are interested in contributing to ``theseus``, instead install using 
+
+.. code-block:: bash
+
+    pip install -e ".[dev]"
 
 and follow the more detailed instructions in `CONTRIBUTING <https://github.com/facebookresearch/theseus/blob/main/CONTRIBUTING.md>`_.
 

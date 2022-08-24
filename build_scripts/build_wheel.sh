@@ -1,6 +1,25 @@
 #bin/bash
 
-# Ensure that 2 arguments (ROOT_DIR, TAG, CUDA_VERSION) are provided
+# -----------------
+# This script creates and runs a docker image for compiling a wheel
+# to install theseus.
+#
+# To use this script, from root theesus folder run 
+#    ./build_scripts/build_wheel.sh ROOT_DIR TAG CUDA_VERSION
+#
+# ROOT_DIR: is the directory where the Dockerfile, tar.gz and .whl files will be stored
+#   (under a new subdirectory named theseus_docker_3.9)
+# TAG: is a theseus tag (e.g., 0.1.0)
+# CUDA_VERSION: the version of CUDA to use. We have tested 10.2, 11.3, and 11.6.
+#   You can also pass "cpu" to compile without CUDA extensions. 
+#
+#   For example
+#    ./build_scripts/build_wheel.sh . 0.1.0 10.2
+#   
+#   will run and store results under ./theseus_docker_3.9
+# -----------------
+
+# Ensure that 3 arguments (ROOT_DIR, TAG, CUDA_VERSION) are provided
 die () {
     echo >&2 "$@"
     exit 1
@@ -29,7 +48,7 @@ fi
 
 for PYTHON_VERSION in 3.9; do
     # Create dockerfile to build in manylinux container
-    DOCKER_DIR=${ROOT_DIR}/docker_${PYTHON_VERSION}
+    DOCKER_DIR=${ROOT_DIR}/theseus_docker_${PYTHON_VERSION}
     mkdir -p ${DOCKER_DIR}
     echo """FROM ${IMAGE_NAME}
     ENV CONDA_DIR /opt/conda
@@ -60,10 +79,10 @@ for PYTHON_VERSION in 3.9; do
     CP_STR="cp"$(echo ${PYTHON_VERSION} | sed 's/[.]//g')
     if [[ ${CUDA_VERSION} == "cpu" ]] 
     then
-        DOCKER_WHL="theseus/dist/theseus_opt-${TAG}-py3-none-any.whl"
-        HOST_WHL="theseus_opt-${TAG}-py3-none-any.whl"
+        DOCKER_WHL="theseus/dist/theseus_ai-${TAG}-py3-none-any.whl"
+        HOST_WHL="theseus_ai-${TAG}-py3-none-any.whl"
     else
-        DOCKER_WHL="theseus/dist/theseus_opt-${TAG}-${CP_STR}-${CP_STR}-linux_x86_64.whl"
+        DOCKER_WHL="theseus/dist/theseus_ai-${TAG}-${CP_STR}-${CP_STR}-linux_x86_64.whl"
         if [[ ${CUDA_VERSION} == "10.2" ]]
         then
             PLUS_CU_TAG=""  # 10.2 will be the pypi version, so don't add +cu102
@@ -73,7 +92,7 @@ for PYTHON_VERSION in 3.9; do
         HOST_WHL="theseus_ai-${TAG}${PLUS_CU_TAG}-${CP_STR}-${CP_STR}-manylinux_2_17_x86_64.whl"
     fi
     
-    sudo docker cp "${DOCKER_NAME}:theseus/dist/theseus-opt-${TAG}.tar.gz" "${DOCKER_DIR}/theseus-opt-${TAG}.tar.gz"
+    sudo docker cp "${DOCKER_NAME}:theseus/dist/theseus-ai-${TAG}.tar.gz" "${DOCKER_DIR}/theseus-ai-${TAG}.tar.gz"
     sudo docker cp "${DOCKER_NAME}:${DOCKER_WHL}" ${DOCKER_DIR}/${HOST_WHL}
     sudo docker rm ${DOCKER_NAME}
     sudo docker image rm "${DOCKER_NAME}_img"

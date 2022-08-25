@@ -6,7 +6,7 @@
 from .collision import Collision2D, EffectorObjectContactPlanar, SignedDistanceField2D
 from .kinematics import IdentityModel, KinematicsModel, UrdfRobotModel
 from .measurements import Between, MovingFrameBetween, Reprojection
-from .misc import Local
+from .misc import Local, XYDifference
 from .motionmodel import (
     DoubleIntegrator,
     GPCostWeight,

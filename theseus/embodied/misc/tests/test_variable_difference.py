@@ -112,3 +112,36 @@ def test_error_local_cost_fn_se2():
             error = dist_cf.error()
             assert np.allclose(error.squeeze().numpy(), sq_dist_errors[k])
             k += 1
+
+
+def test_xy_difference():
+    rng = torch.Generator()
+    rng.manual_seed(1)
+    cost_weight = th.ScaleCostWeight(1)
+    for batch_size in [1, 10, 100]:
+        v0 = th.SE2.randn(batch_size, dtype=torch.float64, generator=rng)
+        target = th.Point2.rand(batch_size, dtype=torch.float64, generator=rng)
+        cost_function = th.eb.XYDifference(v0, target, cost_weight)
+        error = cost_function.error()
+        expected_error = v0[:, :2] - target.tensor
+        assert torch.allclose(expected_error, error)
+
+
+def test_numerical_jacobian_xy_difference():
+    rng = torch.Generator()
+    rng.manual_seed(1)
+    cost_weight = th.ScaleCostWeight(1)
+    for batch_size in [1, 10, 100]:
+        v0 = th.SE2.randn(batch_size, dtype=torch.float64, generator=rng)
+        target = th.Point2.rand(batch_size, dtype=torch.float64, generator=rng)
+        cost_function = th.eb.XYDifference(v0, target, cost_weight)
+
+        def new_error_fn(groups):
+            new_cost_function = th.eb.XYDifference(groups[0], target, cost_weight)
+            return th.Vector(tensor=new_cost_function.error())
+
+        expected_jacs = numeric_jacobian(new_error_fn, [v0], function_dim=2)
+        jacobians, error_jac = cost_function.jacobians()
+        error = cost_function.error()
+        assert torch.allclose(error_jac, error)
+        assert torch.allclose(jacobians[0], expected_jacs[0], atol=1e-7)

@@ -137,6 +137,7 @@ jobs:
     steps:
       - checkout
       - <<: *install_suitesparse
+      - <<: *install_functorch
       - <<: *install_nox
       - run:
           name: "Testing theseus"
@@ -151,6 +152,7 @@ jobs:
     steps:
       - checkout
       - <<: *install_suitesparse
+      - <<: *install_functorch
       - <<: *install_nox
       - run:
           name: "Testing theseus"
@@ -165,6 +167,7 @@ jobs:
     steps:
       - checkout
       - <<: *install_suitesparse
+      - <<: *install_functorch
       - <<: *install_nox
       - run:
           name: "Testing theseus"

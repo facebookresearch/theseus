@@ -212,7 +212,7 @@ def check_adjoint(group, tangent_vector, enable_functorch=False):
             @ group.inverse().to_matrix().double()
         )
         assert torch.allclose(
-            tangent_left.double().squeeze(2), tangent_right, atol=TEST_EPS
+            tangent_left.double().squeeze(2), tangent_right, atol=1e-5
         )
 
     if enable_functorch:

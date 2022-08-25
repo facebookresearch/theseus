@@ -57,6 +57,9 @@ class MockVarNoArgs(th.Manifold):
     def dof(self):
         return 0
 
+    def numel(self):
+        return 0
+
     def _local_impl(self, variable2):
         pass
 

@@ -92,6 +92,9 @@ class SO2(LieGroup):
     def dof(self) -> int:
         return 1
 
+    def numel(self) -> int:
+        return 2
+
     def __repr__(self) -> str:
         return f"SO2(tensor={self.tensor}, name={self.name})"
 

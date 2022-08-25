@@ -92,6 +92,9 @@ class SO3(LieGroup):
     def dof(self) -> int:
         return 3
 
+    def numel(self) -> int:
+        return 9
+
     def __repr__(self) -> str:
         return f"SO3(tensor={self.tensor}, name={self.name})"
 

@@ -45,6 +45,10 @@ class LieGroup(Manifold):
     def dof(self) -> int:
         pass
 
+    @abc.abstractmethod
+    def numel(self) -> int:
+        pass
+
     @staticmethod
     @abc.abstractmethod
     def rand(

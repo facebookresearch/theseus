@@ -65,6 +65,10 @@ class Manifold(Variable, abc.ABC):
         pass
 
     @abc.abstractmethod
+    def numel(self) -> int:
+        pass
+
+    @abc.abstractmethod
     def _local_impl(
         self, variable2: "Manifold", jacobians: Optional[List[torch.Tensor]] = None
     ) -> torch.Tensor:

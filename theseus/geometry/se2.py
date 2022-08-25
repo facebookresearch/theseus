@@ -109,6 +109,9 @@ class SE2(LieGroup):
     def dof(self) -> int:
         return 3
 
+    def numel(self) -> int:
+        return 4
+
     def __repr__(self) -> str:
         return f"SE2(tensor={self.tensor}, name={self.name})"
 

@@ -41,6 +41,9 @@ class Vector(LieGroup):
     def dof(self) -> int:
         return self.tensor.shape[1]
 
+    def numel(self) -> int:
+        return self.tensor.shape[1]
+
     @staticmethod
     def rand(
         *size: int,

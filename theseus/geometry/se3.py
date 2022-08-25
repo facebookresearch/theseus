@@ -101,6 +101,9 @@ class SE3(LieGroup):
     def dof(self) -> int:
         return 6
 
+    def numel(self) -> int:
+        return 12
+
     def __repr__(self) -> str:
         return f"SE3(tensor={self.tensor}, name={self.name})"
 

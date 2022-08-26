@@ -3,7 +3,6 @@
 # This source code is licensed under the MIT license found in the
 # LICENSE file in the root directory of this source tree.
 
-import abc
 from typing import List, Optional, Any, cast
 
 import torch
@@ -11,12 +10,16 @@ import torch
 from .lie_group import LieGroup
 
 
-def ProductLieGroup(group_clses: List[abc.ABCMeta]):
-    if not all([issubclass(group_cls, LieGroup) for group_cls in group_clses]):
-        raise ValueError("All the classes must be the subclasses of LieGroup.")
-
+def ProductLieGroup(groups: List[LieGroup]):
     class _ProductLieGroup(LieGroup):
-        _group_clses = group_clses
+        _group_clses = [type(group) for group in groups]
+        _shapes = [list(group.shape[1:]) for group in groups]
+        _dofs: List[int] = [0]
+        _numels: List[int] = [0]
+
+        for group in groups:
+            _dofs.append(_dofs[-1] + group.dof())
+            _numels.append(_numels[-1] + group.numel())
 
         def __init__(
             self,
@@ -41,17 +44,10 @@ def ProductLieGroup(group_clses: List[abc.ABCMeta]):
             self.groups: List[LieGroup] = (
                 List([group.copy() for group in groups]) if new_copy else groups
             )
-            super().__init__(
-                tensor=torch.empty([1, 0]), name=name, dtype=dtype, strict=strict
-            )
-            self.tensor = torch.cat(
+            tensor = torch.cat(
                 [group.tensor.view(group.shape[0], -1) for group in self.groups], dim=-1
             )
-            self._dofs: List[int] = [0]
-            self._numels: List[int] = [0]
-            for group in self.groups:
-                self._dofs.append(self._dofs[-1] + group.dof())
-                self._numels.append(self._numels[-1] + group.numel())
+            super().__init__(tensor=tensor, name=name, dtype=dtype, strict=strict)
 
         @staticmethod
         def rand(
@@ -160,10 +156,22 @@ def ProductLieGroup(group_clses: List[abc.ABCMeta]):
 
         @staticmethod
         def _check_tensor_impl(tensor: torch.Tensor) -> bool:
-            return True
+            return all(
+                [
+                    cast(LieGroup, group_cls)._check_tensor_impl(
+                        tensor[
+                            :,
+                            _ProductLieGroup._numels[i] : _ProductLieGroup._numels[
+                                i + 1
+                            ],
+                        ].view([-1] + _ProductLieGroup._shapes[i])
+                    )
+                ]
+                for i, group_cls in enumerate(_ProductLieGroup._group_clses)
+            )
 
         @staticmethod
         def normalize(tensor: torch.Tensor) -> torch.Tensor:
-            return tensor
+            raise NotImplementedError
 
     return _ProductLieGroup

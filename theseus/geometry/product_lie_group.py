@@ -3,11 +3,12 @@
 # This source code is licensed under the MIT license found in the
 # LICENSE file in the root directory of this source tree.
 
-from typing import List, Optional, Any, cast, Type
+from typing import List, Optional, Any, cast, Type, Union
 
 import torch
 
 from .lie_group import LieGroup
+from .manifold import Variable
 
 
 def ProductLieGroup(groups: List[LieGroup]):
@@ -243,5 +244,18 @@ def ProductLieGroup(groups: List[LieGroup]):
         @staticmethod
         def group_clses() -> List[Type[LieGroup]]:
             return _ProductLieGroup._group_clses
+
+        def update(
+            self,
+            data: Union[torch.Tensor, "Variable"],
+            batch_ignore_mask: Optional[torch.Tensor] = None,
+        ):
+            super().update(data, batch_ignore_mask)
+
+            for i, group in enumerate(self.groups):
+                new_data = self.tensor[:, self._numels[i] : self._numels[i + 1]].view(
+                    [-1] + self._shapes[i]
+                )
+                group.update(new_data, batch_ignore_mask)
 
     return _ProductLieGroup

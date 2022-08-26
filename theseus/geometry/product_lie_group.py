@@ -25,7 +25,19 @@ def ProductLieGroup(group_clses: List[abc.ABCMeta]):
             dtype: Optional[torch.dtype] = None,
             strict: bool = False,
             new_copy: bool = True,
+            group_cls_check: bool = True,
         ):
+            if group_cls_check:
+                if not all(
+                    [
+                        group.__class__ == group_cls
+                        for group, group_cls in zip(groups, self._group_clses)
+                    ]
+                ):
+                    raise ValueError(
+                        "All the groups must be the instances of the given Lie group classes."
+                    )
+
             self.groups: List[LieGroup] = (
                 List([group.copy() for group in groups]) if new_copy else groups
             )
@@ -49,7 +61,20 @@ def ProductLieGroup(group_clses: List[abc.ABCMeta]):
             device: Optional[torch.device] = None,
             requires_grad: bool = False,
         ) -> "LieGroup":
-            raise NotImplementedError
+            return _ProductLieGroup(
+                groups=[
+                    cast(LieGroup, group_cls).rand(
+                        *size,
+                        generator=generator,
+                        dtype=dtype,
+                        device=device,
+                        requires_grad=requires_grad,
+                    )
+                    for group_cls in _ProductLieGroup._group_clses
+                ],
+                new_copy=False,
+                group_cls_check=False,
+            )
 
         @staticmethod
         def randn(
@@ -59,7 +84,20 @@ def ProductLieGroup(group_clses: List[abc.ABCMeta]):
             device: Optional[torch.device] = None,
             requires_grad: bool = False,
         ) -> "LieGroup":
-            raise NotImplementedError
+            return _ProductLieGroup(
+                groups=[
+                    cast(LieGroup, group_cls).randn(
+                        *size,
+                        generator=generator,
+                        dtype=dtype,
+                        device=device,
+                        requires_grad=requires_grad,
+                    )
+                    for group_cls in _ProductLieGroup._group_clses
+                ],
+                new_copy=False,
+                group_cls_check=False,
+            )
 
         @staticmethod
         def _init_tensor(*args: Any) -> torch.Tensor:

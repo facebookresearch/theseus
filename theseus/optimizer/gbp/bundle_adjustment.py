@@ -10,7 +10,9 @@ import omegaconf
 import time
 import torch
 
-# import os
+import os
+import json
+from datetime import datetime
 
 import theseus as th
 from theseus.core import Vectorize
@@ -25,6 +27,24 @@ OPTIMIZER_CLASS = {
     "gauss_newton": th.GaussNewton,
     "levenberg_marquardt": th.LevenbergMarquardt,
 }
+
+OUTER_OPTIMIZER_CLASS = {
+    "sgd": torch.optim.SGD,
+    "adam": torch.optim.Adam,
+}
+
+
+def save_res_loss_rad(save_dir, cfg, sweep_radii, sweep_losses, radius_vals, losses):
+    with open(f"{save_dir}/config.txt", "w") as f:
+        json.dump(cfg, f, indent=4)
+
+    # sweep values
+    np.savetxt(f"{save_dir}/sweep_radius.txt", sweep_radii)
+    np.savetxt(f"{save_dir}/sweep_loss.txt", sweep_losses)
+
+    # optim trajectory
+    np.savetxt(f"{save_dir}/optim_radius.txt", radius_vals)
+    np.savetxt(f"{save_dir}/optim_loss.txt", losses)
 
 
 def print_histogram(
@@ -78,7 +98,7 @@ def average_repojection_error(objective, values_dict=None) -> float:
     return are
 
 
-def run(cfg: omegaconf.OmegaConf):
+def load_problem(cfg: omegaconf.OmegaConf):
     # create (or load) dataset
     if cfg["bal_file"] is None:
         ba = theg.BundleAdjustmentDataset.generate_synthetic(
@@ -102,6 +122,12 @@ def run(cfg: omegaconf.OmegaConf):
     print("Cameras:", len(ba.cameras))
     print("Points:", len(ba.points))
     print("Observations:", len(ba.observations), "\n")
+
+    return ba
+
+
+def setup_layer(cfg: omegaconf.OmegaConf):
+    ba = load_problem(cfg)
 
     print("Optimizer:", cfg["optim"]["optimizer_cls"], "\n")
 
@@ -198,6 +224,10 @@ def run(cfg: omegaconf.OmegaConf):
     dummy_objective.to(cfg["device"])
     print("Device:", cfg["device"])
 
+    # create damping parameter
+    lin_system_damping = torch.nn.Parameter(torch.tensor([1.0e-2], dtype=torch.float64))
+    lin_system_damping.to(device=cfg["device"])
+
     optim_arg = {
         "track_best_solution": False,
         "track_err_history": True,
@@ -207,11 +237,11 @@ def run(cfg: omegaconf.OmegaConf):
     }
     if isinstance(optimizer, GaussianBeliefPropagation):
         extra_args = {
-            "relin_threshold": 0.0000000001,
-            "damping": 0.0,
+            "relin_threshold": 1e-8,
+            "ftov_msg_damping": 0.0,
             "dropout": 0.0,
             "schedule": GBPSchedule.SYNCHRONOUS,
-            "lin_system_damping": 1.0e-1,
+            "lin_system_damping": lin_system_damping,
         }
         optim_arg = {**optim_arg, **extra_args}
 
@@ -221,6 +251,26 @@ def run(cfg: omegaconf.OmegaConf):
     for pt in ba.points:
         theseus_inputs[pt.name] = pt.tensor.clone()
 
+    return (
+        theseus_optim,
+        theseus_inputs,
+        optim_arg,
+        ba,
+        dummy_objective,
+        camera_pose_vars,
+        lin_system_damping,
+    )
+
+
+def run_inner(
+    theseus_optim,
+    theseus_inputs,
+    optim_arg,
+    ba,
+    dummy_objective,
+    camera_pose_vars,
+    lin_system_damping,
+):
     if ba.gt_cameras is not None:
         with torch.no_grad():
             camera_loss_ref = camera_loss(ba, camera_pose_vars).item()
@@ -228,9 +278,6 @@ def run(cfg: omegaconf.OmegaConf):
     are = average_repojection_error(dummy_objective, values_dict=theseus_inputs)
     print("Average reprojection error (pixels): ", are)
     print_histogram(ba, theseus_inputs, "Input histogram:")
-
-    objective.update(theseus_inputs)
-    print("squared err:", objective.error_squared_norm().item() / 2)
 
     with torch.no_grad():
         theseus_outputs, info = theseus_optim.forward(
@@ -294,13 +341,109 @@ def run(cfg: omegaconf.OmegaConf):
     #         np.savetxt(save_file, np.array(ares))
 
 
+def run_outer(cfg: omegaconf.OmegaConf):
+
+    (
+        theseus_optim,
+        theseus_inputs,
+        optim_arg,
+        ba,
+        dummy_objective,
+        camera_pose_vars,
+        lin_system_damping,
+    ) = setup_layer(cfg)
+
+    loss_radius_tensor = torch.nn.Parameter(torch.tensor([3.0], dtype=torch.float64))
+    model_optimizer = OUTER_OPTIMIZER_CLASS[cfg["outer"]["optimizer"]](
+        [loss_radius_tensor], lr=cfg["outer"]["lr"]
+    )
+    # model_optimizer = torch.optim.Adam([lin_system_damping], lr=cfg["outer"]["lr"])
+
+    theseus_inputs["log_loss_radius"] = loss_radius_tensor.unsqueeze(1).clone()
+
+    with torch.no_grad():
+        camera_loss_ref = camera_loss(ba, camera_pose_vars).item()
+    print(f"CAMERA LOSS (no learning):  {camera_loss_ref: .3f}")
+    print_histogram(ba, theseus_inputs, "Input histogram:")
+
+    import matplotlib.pylab as plt
+
+    sweep_radii = torch.linspace(0.01, 5.0, 20)
+    sweep_losses = []
+    with torch.set_grad_enabled(False):
+        for r in sweep_radii:
+            theseus_inputs["log_loss_radius"][0] = r
+
+            print(theseus_inputs["log_loss_radius"])
+
+            theseus_outputs, info = theseus_optim.forward(
+                input_tensors=theseus_inputs,
+                optimizer_kwargs=optim_arg,
+            )
+            cam_loss = camera_loss(ba, camera_pose_vars)
+            loss = (cam_loss - camera_loss_ref) / camera_loss_ref
+            sweep_losses.append(torch.sum(loss.detach()).item())
+
+    plt.plot(sweep_radii, sweep_losses)
+    plt.xlabel("Log loss radius")
+    plt.ylabel("(Camera loss - reference loss) / reference loss")
+
+    losses = []
+    radius_vals = []
+    theseus_inputs["log_loss_radius"] = loss_radius_tensor.unsqueeze(1).clone()
+
+    for epoch in range(cfg["outer"]["num_epochs"]):
+        print(f" ******************* EPOCH {epoch} ******************* ")
+        start_time = time.time_ns()
+        model_optimizer.zero_grad()
+        theseus_inputs["log_loss_radius"] = loss_radius_tensor.unsqueeze(1).clone()
+
+        theseus_outputs, info = theseus_optim.forward(
+            input_tensors=theseus_inputs,
+            optimizer_kwargs=optim_arg,
+        )
+
+        cam_loss = camera_loss(ba, camera_pose_vars)
+        loss = (cam_loss - camera_loss_ref) / camera_loss_ref
+        loss.backward()
+        radius_vals.append(loss_radius_tensor.data.item())
+        print(loss_radius_tensor.grad)
+        model_optimizer.step()
+        loss_value = torch.sum(loss.detach()).item()
+        losses.append(loss_value)
+        end_time = time.time_ns()
+
+        # print_histogram(ba, theseus_outputs, "Output histogram:")
+        print(f"camera loss {cam_loss} and ref loss {camera_loss_ref}")
+        print(
+            f"Epoch: {epoch} Loss: {loss_value} "
+            # f"Lin system damping {lin_system_damping}"
+            f"Kernel Radius: exp({loss_radius_tensor.data.item()})="
+            f"{torch.exp(loss_radius_tensor.data).item()}"
+        )
+        print(f"Epoch took {(end_time - start_time) / 1e9: .3f} seconds")
+
+    print("Loss values:", losses)
+
+    now = datetime.now()
+    time_str = now.strftime("%m-%d-%y_%H-%M-%S")
+    save_dir = os.getcwd() + "/outputs/loss_radius_exp/" + time_str
+    os.mkdir(save_dir)
+
+    save_res_loss_rad(save_dir, cfg, sweep_radii, sweep_losses, radius_vals, losses)
+
+    plt.scatter(radius_vals, losses, c=range(len(losses)), cmap=plt.get_cmap("viridis"))
+    plt.title(cfg["optim"]["optimizer_cls"] + " - " + time_str)
+    plt.show()
+
+
 if __name__ == "__main__":
 
     cfg = {
         "seed": 1,
         "device": "cpu",
-        # "bal_file": None,
-        "bal_file": "/media/joe/data/bal/trafalgar/problem-21-11315-pre.txt",
+        "bal_file": None,
+        # "bal_file": "/mnt/sda/bal/problem-21-11315-pre.txt",
         "synthetic": {
             "num_cameras": 10,
             "num_points": 100,
@@ -308,7 +451,7 @@ if __name__ == "__main__":
             "track_locality": 0.2,
         },
         "optim": {
-            "max_iters": 300,
+            "max_iters": 200,
             "optimizer_cls": "gbp",
             # "optimizer_cls": "gauss_newton",
             # "optimizer_cls": "levenberg_marquardt",
@@ -317,10 +460,18 @@ if __name__ == "__main__":
             "ratio_known_cameras": 0.1,
             "reg_w": 1e-7,
         },
+        "outer": {
+            "num_epochs": 15,
+            "lr": 1e2,  # 5.0e-1,
+            "optimizer": "sgd",
+        },
     }
 
     torch.manual_seed(cfg["seed"])
     np.random.seed(cfg["seed"])
     random.seed(cfg["seed"])
 
-    run(cfg)
+    # args = setup_layer(cfg)
+    # run_inner(*args)
+
+    run_outer(cfg)

@@ -38,6 +38,12 @@ Utitily functions
 """
 
 
+def next_nesterov_params(lam) -> Tuple[float, float]:
+    new_lambda = (1 + np.sqrt(4 * lam * lam + 1)) / 2.0
+    new_gamma = (1 - lam) / new_lambda
+    return new_lambda, new_gamma
+
+
 # Same of NonlinearOptimizerParams but without step size
 @dataclass
 class GBPOptimizerParams:
@@ -212,17 +218,18 @@ class Factor:
                 eta = eta + torch.matmul(lam, optim_vars_stk.unsqueeze(-1))
             eta = eta.squeeze(-1)
 
-            # update damping parameter
-            err = (self.cf.error() ** 2).sum(dim=1)
-            if self.last_err is not None:
-                decreased_ixs = err < self.last_err
-                self.lm_damping[decreased_ixs] = torch.max(
-                    self.lm_damping[decreased_ixs] / self.a, self.min_damping
-                )
-                self.lm_damping[~decreased_ixs] = torch.min(
-                    self.lm_damping[~decreased_ixs] * self.b, self.max_damping
-                )
-            self.last_err = err
+            # update damping parameter. This is non-differentiable
+            with torch.no_grad():
+                err = (self.cf.error() ** 2).sum(dim=1)
+                if self.last_err is not None:
+                    decreased_ixs = err < self.last_err
+                    self.lm_damping[decreased_ixs] = torch.max(
+                        self.lm_damping[decreased_ixs] / self.a, self.min_damping
+                    )
+                    self.lm_damping[~decreased_ixs] = torch.min(
+                        self.lm_damping[~decreased_ixs] * self.b, self.max_damping
+                    )
+                self.last_err = err
 
             # damp precision matrix
             damped_D = self.lm_damping[:, None, None] * torch.eye(
@@ -879,6 +886,7 @@ class GaussianBeliefPropagation(Optimizer, abc.ABC):
         dropout: float,
         schedule: GBPSchedule,
         lin_system_damping: torch.Tensor,
+        nesterov: bool,
         clear_messages: bool = True,
         **kwargs,
     ):
@@ -891,6 +899,9 @@ class GaussianBeliefPropagation(Optimizer, abc.ABC):
             ftov_schedule = synchronous_schedule(
                 self.params.max_iterations, self.n_edges
             )
+
+        if nesterov:
+            nest_lambda, nest_gamma = next_nesterov_params(0.0)
 
         self.ftov_msgs_history = {}
 
@@ -924,6 +935,10 @@ class GaussianBeliefPropagation(Optimizer, abc.ABC):
             t_ftov = time.time() - t1
 
             t1 = time.time()
+            if nesterov:
+                nest_lambda, nest_gamma = next_nesterov_params(nest_lambda)
+                print("nesterov lambda", nest_lambda)
+                print("nesterov gamma", nest_gamma)
             self._pass_var_to_fac_messages(update_belief=True)
             t_vtof = time.time() - t1
 
@@ -978,6 +993,7 @@ class GaussianBeliefPropagation(Optimizer, abc.ABC):
         dropout: float = 0.0,
         schedule: GBPSchedule = GBPSchedule.SYNCHRONOUS,
         lin_system_damping: torch.Tensor = torch.Tensor([1e-4]),
+        nesterov: bool = False,
         **kwargs,
     ) -> NonlinearOptimizerInfo:
         with torch.no_grad():
@@ -1025,6 +1041,7 @@ class GaussianBeliefPropagation(Optimizer, abc.ABC):
                 dropout=dropout,
                 schedule=schedule,
                 lin_system_damping=lin_system_damping,
+                nesterov=nesterov,
                 **kwargs,
             )
 
@@ -1066,6 +1083,7 @@ class GaussianBeliefPropagation(Optimizer, abc.ABC):
                     dropout=dropout,
                     schedule=schedule,
                     lin_system_damping=lin_system_damping,
+                    nesterov=nesterov,
                     **kwargs,
                 )
 
@@ -1082,6 +1100,7 @@ class GaussianBeliefPropagation(Optimizer, abc.ABC):
                 dropout=dropout,
                 schedule=schedule,
                 lin_system_damping=lin_system_damping,
+                nesterov=nesterov,
                 clear_messages=False,
                 **kwargs,
             )

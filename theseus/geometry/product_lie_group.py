@@ -34,7 +34,10 @@ def ProductLieGroup(groups: List[LieGroup]):
                 if not all(
                     [
                         group.__class__ == group_cls
-                        for group, group_cls in zip(groups, self._group_clses)
+                        and group.dof() != self._dofs[i + 1] - self._dofs[i]
+                        for i, (group, group_cls) in enumerate(
+                            zip(groups, self._group_clses)
+                        )
                     ]
                 ):
                     raise ValueError(
@@ -47,7 +50,7 @@ def ProductLieGroup(groups: List[LieGroup]):
             tensor = torch.cat(
                 [group.tensor.view(group.shape[0], -1) for group in self.groups], dim=-1
             )
-            super().__init__(True, tensor=tensor, name=name, dtype=dtype, strict=strict)
+            super().__init__(tensor=tensor, name=name, dtype=dtype, strict=strict)
 
         @staticmethod
         def rand(
@@ -197,19 +200,26 @@ def ProductLieGroup(groups: List[LieGroup]):
 
         @staticmethod
         def _check_tensor_impl(tensor: torch.Tensor) -> bool:
-            return all(
-                [
-                    cast(LieGroup, group_cls)._check_tensor_impl(
-                        tensor[
-                            :,
-                            _ProductLieGroup._numels[i] : _ProductLieGroup._numels[
-                                i + 1
-                            ],
-                        ].view([-1] + _ProductLieGroup._shapes[i])
+            with torch.no_grad():
+                size = _ProductLieGroup._numels[-1]
+                if tensor.ndim != 2 or tensor.shape[1] != size:
+                    raise ValueError(
+                        f"ProductLieGroup data tensors can only be {size}-D tensors."
                     )
-                    for i, group_cls in enumerate(_ProductLieGroup._group_clses)
-                ]
-            )
+
+                return all(
+                    [
+                        cast(LieGroup, group_cls)._check_tensor_impl(
+                            tensor[
+                                :,
+                                _ProductLieGroup._numels[i] : _ProductLieGroup._numels[
+                                    i + 1
+                                ],
+                            ].view([-1] + _ProductLieGroup._shapes[i])
+                        )
+                        for i, group_cls in enumerate(_ProductLieGroup._group_clses)
+                    ]
+                )
 
         @staticmethod
         def normalize(tensor: torch.Tensor) -> torch.Tensor:

@@ -76,18 +76,14 @@ def test_collision2d_copy():
     assert cost_function2.name == "new_name"
 
 
-@pytest.mark.parametrize("pose_cls", [th.Vector, th.SE2])
+@pytest.mark.parametrize("pose_cls", [th.Point2, th.SE2])
 def test_collision2d_jacobians(pose_cls):
     rng = torch.Generator()
     rng.manual_seed(0)
     for _ in range(10):
         for batch_size in [1, 10, 100]:
             cost_weight = th.ScaleCostWeight(torch.ones(1).squeeze().double())
-            if pose_cls == th.Vector:
-                pose = th.Point2.randn(batch_size, generator=rng, dtype=torch.float64)
-            else:
-                pose = th.SE2.randn(batch_size, generator=rng, dtype=torch.float64)
-
+            pose = pose_cls.randn(batch_size, generator=rng, dtype=torch.float64)
             origin = th.Point2(torch.ones(batch_size, 2).double())
             sdf_data = th.Variable(
                 torch.randn(batch_size, 10, 10, generator=rng).double()

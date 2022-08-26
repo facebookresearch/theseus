@@ -47,7 +47,7 @@ def ProductLieGroup(groups: List[LieGroup]):
             tensor = torch.cat(
                 [group.tensor.view(group.shape[0], -1) for group in self.groups], dim=-1
             )
-            super().__init__(tensor=tensor, name=name, dtype=dtype, strict=strict)
+            super().__init__(True, tensor=tensor, name=name, dtype=dtype, strict=strict)
 
         @staticmethod
         def rand(
@@ -97,7 +97,7 @@ def ProductLieGroup(groups: List[LieGroup]):
 
         @staticmethod
         def _init_tensor(*args: Any) -> torch.Tensor:
-            return torch.empty([1, 0])
+            return torch.empty([1, _ProductLieGroup._numels[-1]])
 
         def dof(self) -> int:
             return self._dofs[-1]
@@ -166,12 +166,27 @@ def ProductLieGroup(groups: List[LieGroup]):
                             ],
                         ].view([-1] + _ProductLieGroup._shapes[i])
                     )
+                    for i, group_cls in enumerate(_ProductLieGroup._group_clses)
                 ]
-                for i, group_cls in enumerate(_ProductLieGroup._group_clses)
             )
 
         @staticmethod
         def normalize(tensor: torch.Tensor) -> torch.Tensor:
-            raise NotImplementedError
+            return torch.cat(
+                [
+                    cast(LieGroup, group_cls)
+                    .normalize(
+                        tensor[
+                            :,
+                            _ProductLieGroup._numels[i] : _ProductLieGroup._numels[
+                                i + 1
+                            ],
+                        ].view([-1] + _ProductLieGroup._shapes[i])
+                    )
+                    .view(tensor.shape[0], -1)
+                    for i, group_cls in enumerate(_ProductLieGroup._group_clses)
+                ],
+                dim=-1,
+            )
 
     return _ProductLieGroup

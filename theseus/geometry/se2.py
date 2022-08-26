@@ -134,7 +134,7 @@ class SE2(LieGroup):
 
     @property
     def translation(self) -> Point2:
-        return Point2(tensor=self[:, :2])
+        return self.xy()
 
     def xy(self, jacobians: Optional[List[torch.Tensor]] = None) -> Point2:
         if jacobians is not None:
@@ -145,7 +145,7 @@ class SE2(LieGroup):
             )
             J_out[:, :2, :2] = rotation.to_matrix()
             jacobians.append(J_out)
-        return self.translation
+        return Point2(tensor=self[:, :2])
 
     def update_from_x_y_theta(self, x_y_theta: torch.Tensor):
         rotation = SO2(theta=x_y_theta[:, 2:])

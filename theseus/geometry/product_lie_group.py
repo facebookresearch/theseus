@@ -108,7 +108,7 @@ def ProductLieGroup(groups: List[LieGroup]):
         @staticmethod
         def exp_map(
             tangent_vector: torch.Tensor, jacobians: Optional[List[torch.Tensor]] = None
-        ) -> "LieGroup":
+        ) -> "_ProductLieGroup":
             if (
                 tangent_vector.ndim != 2
                 or tangent_vector.shape[1] != _ProductLieGroup._dofs[-1]
@@ -128,7 +128,7 @@ def ProductLieGroup(groups: List[LieGroup]):
                 groups=groups, new_copy=False, group_cls_check=False
             )
 
-        def _retract_impl(self, delta: torch.Tensor) -> "LieGroup":
+        def _retract_impl(self, delta: torch.Tensor) -> "_ProductLieGroup":
             groups_plus = cast(
                 List[LieGroup],
                 [
@@ -155,12 +155,11 @@ def ProductLieGroup(groups: List[LieGroup]):
             return self.tensor
 
         def _compose_impl(self, variable2: "LieGroup") -> "_ProductLieGroup":
+            variable2 = cast(_ProductLieGroup, variable2)
             return _ProductLieGroup(
                 groups=[
                     group1.compose(group2)
-                    for group1, group2 in zip(
-                        self.groups, cast(_ProductLieGroup, variable2).groups
-                    )
+                    for group1, group2 in zip(self.groups, variable2.groups)
                 ],
                 new_copy=False,
                 group_cls_check=False,
@@ -169,6 +168,7 @@ def ProductLieGroup(groups: List[LieGroup]):
         def _copy_impl(self, new_name: Optional[str] = None) -> "_ProductLieGroup":
             return _ProductLieGroup(
                 groups=[group.copy() for group in self.groups],
+                name=new_name,
                 new_copy=False,
                 group_cls_check=False,
             )
@@ -187,7 +187,13 @@ def ProductLieGroup(groups: List[LieGroup]):
         def _project_impl(
             self, euclidean_grad: torch.Tensor, is_sparse: bool = False
         ) -> torch.Tensor:
-            raise NotImplementedError
+            ret = [
+                group.project(
+                    euclidean_grad[:, self._dofs[i] : self._dofs[i + 1]], is_sparse
+                )
+                for i, group in enumerate(self.groups)
+            ]
+            return torch.cat(ret, dim=-1)
 
         @staticmethod
         def _check_tensor_impl(tensor: torch.Tensor) -> bool:

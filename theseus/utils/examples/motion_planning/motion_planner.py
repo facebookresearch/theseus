@@ -4,11 +4,53 @@
 # LICENSE file in the root directory of this source tree.
 
 import copy
-from typing import Any, Dict, List, Optional, Tuple
+from typing import Any, Dict, List, Optional, Tuple, Type, Union
 
 import torch
 
 import theseus as th
+
+
+class _XYDifference(th.CostFunction):
+    def __init__(
+        self,
+        var: th.SE2,
+        target: th.Point2,
+        cost_weight: th.CostWeight,
+        name: Optional[str] = None,
+    ):
+        super().__init__(cost_weight, name=name)
+        if not isinstance(var, th.SE2) and not isinstance(target, th.Point2):
+            raise ValueError(
+                "XYDifference expects var of type SE2 and target of type Point2."
+            )
+        self.var = var
+        self.target = target
+        self.register_optim_vars(["var"])
+        self.register_aux_vars(["target"])
+
+    def _jacobians_and_error_impl(
+        self, compute_jacobians: bool = False
+    ) -> Tuple[List[torch.Tensor], torch.Tensor]:
+        Jlocal: List[torch.Tensor] = [] if compute_jacobians else None
+        Jxy: List[torch.Tensor] = [] if compute_jacobians else None
+        error = self.target.local(self.var.xy(jacobians=Jxy), jacobians=Jlocal)
+        jac = [Jlocal[1].matmul(Jxy[0])] if compute_jacobians else None
+        return jac, error
+
+    def error(self) -> torch.Tensor:
+        return self._jacobians_and_error_impl(compute_jacobians=False)[1]
+
+    def jacobians(self) -> Tuple[List[torch.Tensor], torch.Tensor]:
+        return self._jacobians_and_error_impl(compute_jacobians=True)
+
+    def dim(self) -> int:
+        return 2
+
+    def _copy_impl(self, new_name: Optional[str] = None) -> "_XYDifference":
+        return _XYDifference(  # type: ignore
+            self.var.copy(), self.target.copy(), self.weight.copy(), name=new_name
+        )
 
 
 class MotionPlannerObjective(th.Objective):
@@ -21,6 +63,7 @@ class MotionPlannerObjective(th.Objective):
         Qc_inv: List[List[int]],
         num_time_steps: int,
         use_single_collision_weight: bool = True,
+        pose_type: Union[Type[th.Point2], Type[th.SE2]] = th.Point2,
         dtype: torch.dtype = torch.double,
     ):
         for v in [
@@ -41,6 +84,7 @@ class MotionPlannerObjective(th.Objective):
         self.Qc_inv = copy.deepcopy(Qc_inv)
         self.num_time_steps = num_time_steps
         self.use_single_collision_weight = use_single_collision_weight
+        self.pose_type = pose_type
 
         self.trajectory_len = num_time_steps + 1
 
@@ -54,7 +98,7 @@ class MotionPlannerObjective(th.Objective):
         # By giving them names, we can update for each batch (if needed),
         # via the motion planner's forward method.
         sdf_origin = th.Point2(name="sdf_origin", dtype=dtype)
-        start_point = th.Point2(name="start", dtype=dtype)
+        start_pose = pose_type(name="start", dtype=dtype)
         goal_point = th.Point2(name="goal", dtype=dtype)
         cell_size = th.Variable(torch.empty(1, 1, dtype=dtype), name="cell_size")
         sdf_data = th.Variable(
@@ -103,13 +147,13 @@ class MotionPlannerObjective(th.Objective):
         # --------------------------------------------------------------------------- #
         # -------------------------- Optimization variables ------------------------- #
         # --------------------------------------------------------------------------- #
-        # The optimization variables for the motion planer are 2-D positions and
-        # velocities for each of the discrete time steps
-        poses = []
-        velocities = []
+        # The optimization variables for the motion planer are poses (Point2/SE2) and
+        # velocities (Vector) for each of the discrete time steps
+        poses: List[Union[th.Point2, th.SE2]] = []
+        velocities: List[th.Vector] = []
         for i in range(self.trajectory_len):
-            poses.append(th.Point2(name=f"pose_{i}", dtype=dtype))
-            velocities.append(th.Point2(name=f"vel_{i}", dtype=dtype))
+            poses.append(pose_type(name=f"pose_{i}", dtype=dtype))
+            velocities.append(th.Vector(poses[-1].dof(), name=f"vel_{i}", dtype=dtype))
 
         # --------------------------------------------------------------------------- #
         # ------------------------------ Cost functions ----------------------------- #
@@ -118,23 +162,30 @@ class MotionPlannerObjective(th.Objective):
         # which are hard constraints, and can be implemented via Difference cost
         # functions.
         self.add(
-            th.Difference(poses[0], start_point, boundary_cost_weight, name="pose_0")
+            th.Difference(poses[0], start_pose, boundary_cost_weight, name="pose_0")
         )
         self.add(
             th.Difference(
                 velocities[0],
-                th.Point2(tensor=torch.zeros(1, 2, dtype=dtype)),
+                th.Vector(tensor=torch.zeros(1, velocities[0].dof(), dtype=dtype)),
                 boundary_cost_weight,
                 name="vel_0",
             )
         )
+        assert pose_type in [th.Point2, th.SE2]
+        goal_cost_cls = th.Difference if pose_type == th.Point2 else _XYDifference
         self.add(
-            th.Difference(poses[-1], goal_point, boundary_cost_weight, name="pose_N")
+            goal_cost_cls(
+                poses[-1],  # type: ignore
+                goal_point,
+                boundary_cost_weight,
+                name="pose_N",
+            )
         )
         self.add(
             th.Difference(
                 velocities[-1],
-                th.Point2(tensor=torch.zeros(1, 2, dtype=dtype)),
+                th.Vector(tensor=torch.zeros(1, velocities[-1].dof(), dtype=dtype)),
                 boundary_cost_weight,
                 name="vel_N",
             )

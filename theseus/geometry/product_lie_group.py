@@ -124,7 +124,9 @@ def ProductLieGroup(groups: List[LieGroup]):
                 )
                 for i, group_cls in enumerate(_ProductLieGroup._group_clses)
             ]
-            return _ProductLieGroup(groups=groups, new_copy=False)
+            return _ProductLieGroup(
+                groups=groups, new_copy=False, group_cls_check=False
+            )
 
         def _retract_impl(self, delta: torch.Tensor) -> "LieGroup":
             groups_plus = cast(
@@ -134,7 +136,9 @@ def ProductLieGroup(groups: List[LieGroup]):
                     for i, group in enumerate(self.groups)
                 ],
             )
-            return _ProductLieGroup(groups=groups_plus, new_copy=False)
+            return _ProductLieGroup(
+                groups=groups_plus, new_copy=False, group_cls_check=False
+            )
 
         def _adjoint_impl(self) -> torch.Tensor:
             adjoint = self.tensor.new_zeros([self.shape[0], self.dof(), self.dof()])
@@ -163,10 +167,13 @@ def ProductLieGroup(groups: List[LieGroup]):
         def _log_map_impl(
             self, jacobians: Optional[List[torch.Tensor]] = None
         ) -> torch.Tensor:
-            raise NotImplementedError
+            return torch.cat([group.log_map() for group in self.groups], dim=-1)
 
         def _inverse_impl(self) -> "_ProductLieGroup":
-            raise NotImplementedError
+            groups_inv = [group.inverse() for group in self.groups]
+            return _ProductLieGroup(
+                groups=groups_inv, new_copy=False, group_cls_check=False
+            )
 
         def _project_impl(
             self, euclidean_grad: torch.Tensor, is_sparse: bool = False

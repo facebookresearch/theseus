@@ -8,7 +8,7 @@ from typing import List, Optional, Any, cast, Type, Union
 import torch
 
 from .lie_group import LieGroup
-from .manifold import Variable
+from .manifold import Manifold, Variable
 
 
 def ProductLieGroup(groups: List[LieGroup]):
@@ -244,6 +244,46 @@ def ProductLieGroup(groups: List[LieGroup]):
         @staticmethod
         def group_clses() -> List[Type[LieGroup]]:
             return _ProductLieGroup._group_clses
+
+        def _local_impl(
+            self, variable2: Manifold, jacobians: List[torch.Tensor] = None
+        ) -> torch.Tensor:
+            variable2 = cast(_ProductLieGroup, variable2)
+            ret: List[torch.Tensor] = []
+
+            if jacobians is not None:
+                LieGroup._check_jacobians_list(jacobians)
+
+                jacobians.append(
+                    self.tensor.new_zeros(self.shape[0], self.dof(), self.dof())
+                )
+                jacobians.append(
+                    self.tensor.new_zeros(self.shape[0], self.dof(), self.dof())
+                )
+
+                for i, (group1, group2) in enumerate(
+                    zip(self.groups, variable2.groups)
+                ):
+                    jacobians_temp: List[torch.Tensor] = []
+                    ret.append(group1.local(group2, jacobians_temp))
+                    jacobians[0][
+                        :,
+                        self._dofs[i] : self._dofs[i + 1],
+                        self._dofs[i] : self._dofs[i + 1],
+                    ] = jacobians_temp[0]
+                    jacobians[1][
+                        :,
+                        self._dofs[i] : self._dofs[i + 1],
+                        self._dofs[i] : self._dofs[i + 1],
+                    ] = jacobians_temp[1]
+
+            else:
+                ret = [
+                    group1.local(group2)
+                    for group1, group2 in zip(self.groups, variable2.groups)
+                ]
+
+            return torch.cat(ret, dim=-1)
 
         def update(
             self,

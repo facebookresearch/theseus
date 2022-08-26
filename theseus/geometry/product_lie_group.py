@@ -3,7 +3,7 @@
 # This source code is licensed under the MIT license found in the
 # LICENSE file in the root directory of this source tree.
 
-from typing import List, Optional, Any, cast
+from typing import List, Optional, Any, cast, Type
 
 import torch
 
@@ -12,8 +12,8 @@ from .lie_group import LieGroup
 
 def ProductLieGroup(groups: List[LieGroup]):
     class _ProductLieGroup(LieGroup):
-        _group_clses = [type(group) for group in groups]
-        _shapes = [list(group.shape[1:]) for group in groups]
+        _group_clses: List[Type[LieGroup]] = [type(group) for group in groups]
+        _shapes: List[List[int]] = [list(group.shape[1:]) for group in groups]
         _dofs: List[int] = [0]
         _numels: List[int] = [0]
 
@@ -148,13 +148,17 @@ def ProductLieGroup(groups: List[LieGroup]):
             return adjoint
 
         def to_matrix(self) -> torch.Tensor:
-            raise NotImplementedError
+            return self.tensor
 
         def _compose_impl(self, variable2: "LieGroup") -> "_ProductLieGroup":
             raise NotImplementedError
 
         def _copy_impl(self, new_name: Optional[str] = None) -> "_ProductLieGroup":
-            raise NotImplementedError
+            return _ProductLieGroup(
+                groups=[group.copy() for group in self.groups],
+                new_copy=False,
+                group_cls_check=False,
+            )
 
         def _log_map_impl(
             self, jacobians: Optional[List[torch.Tensor]] = None
@@ -203,5 +207,9 @@ def ProductLieGroup(groups: List[LieGroup]):
                 ],
                 dim=-1,
             )
+
+        @staticmethod
+        def group_clses() -> List[Type[LieGroup]]:
+            return _ProductLieGroup._group_clses
 
     return _ProductLieGroup

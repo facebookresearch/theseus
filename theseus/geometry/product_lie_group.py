@@ -109,7 +109,22 @@ def ProductLieGroup(groups: List[LieGroup]):
         def exp_map(
             tangent_vector: torch.Tensor, jacobians: Optional[List[torch.Tensor]] = None
         ) -> "LieGroup":
-            raise NotImplementedError
+            if (
+                tangent_vector.ndim != 2
+                or tangent_vector.shape[1] != _ProductLieGroup._dofs[-1]
+            ):
+                raise ValueError(
+                    f"Tangent vectors should be {_ProductLieGroup._dofs[-1]}-D vectors."
+                )
+            groups = [
+                cast(LieGroup, group_cls).exp_map(
+                    tangent_vector[
+                        :, _ProductLieGroup._dofs[i] : _ProductLieGroup._dofs[i + 1]
+                    ]
+                )
+                for i, group_cls in enumerate(_ProductLieGroup._group_clses)
+            ]
+            return _ProductLieGroup(groups=groups, new_copy=False)
 
         def _retract_impl(self, delta: torch.Tensor) -> "LieGroup":
             groups_plus = cast(

@@ -64,9 +64,8 @@ class Manifold(Variable, abc.ABC):
     def dof(self) -> int:
         pass
 
-    @abc.abstractmethod
     def numel(self) -> int:
-        pass
+        return self.tensor[0].numel()
 
     @abc.abstractmethod
     def _local_impl(

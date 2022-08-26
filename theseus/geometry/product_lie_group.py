@@ -276,7 +276,6 @@ def ProductLieGroup(groups: List[LieGroup]):
                         self._dofs[i] : self._dofs[i + 1],
                         self._dofs[i] : self._dofs[i + 1],
                     ] = jacobians_temp[1]
-
             else:
                 ret = [
                     group1.local(group2)

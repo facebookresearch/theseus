@@ -9,4 +9,4 @@ from .models import (
     ScalarCollisionWeightAndCostEpstModel,
     ScalarCollisionWeightModel,
 )
-from .motion_planner import MotionPlanner
+from .motion_planner import MotionPlanner, MotionPlannerObjective

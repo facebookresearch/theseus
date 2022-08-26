@@ -45,7 +45,7 @@ def ProductLieGroup(group_clses: List[abc.ABCMeta]):
                 tensor=torch.empty([1, 0]), name=name, dtype=dtype, strict=strict
             )
             self.tensor = torch.cat(
-                [group.tensor.view(group.shape[0], -1) for group in self.groups]
+                [group.tensor.view(group.shape[0], -1) for group in self.groups], dim=-1
             )
             self._dofs: List[int] = [0]
             self._numels: List[int] = [0]
@@ -160,10 +160,10 @@ def ProductLieGroup(group_clses: List[abc.ABCMeta]):
 
         @staticmethod
         def _check_tensor_impl(tensor: torch.Tensor) -> bool:
-            raise NotImplementedError
+            return True
 
         @staticmethod
         def normalize(tensor: torch.Tensor) -> torch.Tensor:
-            raise NotImplementedError
+            return tensor
 
     return _ProductLieGroup

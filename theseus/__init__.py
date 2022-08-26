@@ -29,6 +29,7 @@ from .geometry import (
     Point2,
     Point3,
     Vector,
+    ProductLieGroup,
     adjoint,
     between,
     local,

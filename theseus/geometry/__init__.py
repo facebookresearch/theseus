@@ -24,3 +24,4 @@ from .utils import (
     set_lie_tangent_enabled,
 )
 from .vector import Vector, rand_vector, randn_vector
+from .product_lie_group import ProductLieGroup

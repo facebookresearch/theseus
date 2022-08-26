@@ -155,7 +155,16 @@ def ProductLieGroup(groups: List[LieGroup]):
             return self.tensor
 
         def _compose_impl(self, variable2: "LieGroup") -> "_ProductLieGroup":
-            raise NotImplementedError
+            return _ProductLieGroup(
+                groups=[
+                    group1.compose(group2)
+                    for group1, group2 in zip(
+                        self.groups, cast(_ProductLieGroup, variable2).groups
+                    )
+                ],
+                new_copy=False,
+                group_cls_check=False,
+            )
 
         def _copy_impl(self, new_name: Optional[str] = None) -> "_ProductLieGroup":
             return _ProductLieGroup(

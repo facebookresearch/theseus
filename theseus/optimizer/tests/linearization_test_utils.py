@@ -26,6 +26,9 @@ class MockVector(th.Manifold):
     def dof(self):
         return self.tensor.shape[1]
 
+    def numel(self):
+        return self.tensor.shape[1]
+
     def _local_impl(self, variable2):
         return torch.zeros(1)
 

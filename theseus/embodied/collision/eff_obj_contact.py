@@ -63,7 +63,7 @@ class EffectorObjectContactPlanar(CostFunction):
         J_transf: List[torch.Tensor] = []
         J_xy: List[torch.Tensor] = []
         eff__obj = self.obj.transform_to(
-            self.eff.xy(jacobians=J_xy), jacobians=J_transf
+            self.eff.xy(jacobians=J_xy).tensor, jacobians=J_transf
         )
         J_transf_obj = J_transf[0]
         J_transf_eff = J_transf[1].matmul(J_xy[0])

@@ -170,7 +170,7 @@ def test_xy_jacobian(dtype):
         jacobian = []
         se2.xy(jacobians=jacobian)
         expected_jac = numeric_jacobian(
-            lambda groups: th.Point2(groups[0].xy()), [se2], function_dim=2
+            lambda groups: groups[0].xy(), [se2], function_dim=2
         )
         torch.allclose(jacobian[0], expected_jac[0])
 

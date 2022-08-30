@@ -171,7 +171,7 @@ def get_tactile_nn_measurements_inputs(
                 model_measurements.append(
                     torch.cat(
                         (
-                            meas_pose_rel.xy(),
+                            meas_pose_rel.xy().tensor,
                             meas_pose_rel.theta().cos(),
                             meas_pose_rel.theta().sin(),
                         ),

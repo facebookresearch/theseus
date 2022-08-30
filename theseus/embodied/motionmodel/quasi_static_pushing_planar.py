@@ -8,7 +8,7 @@ from typing import List, Optional, Tuple, Union, cast
 import torch
 
 from theseus.core import CostFunction, CostWeight, Variable
-from theseus.geometry import SE2, OptionalJacobians, Point2
+from theseus.geometry import SE2, OptionalJacobians
 from theseus.geometry.so2 import SO2
 
 
@@ -115,7 +115,9 @@ class QuasiStaticPushingPlanar(CostFunction):
         vel_xy_obj__world = self.obj2.xy(jacobians=J_o2xy_o2) - self.obj1.xy(
             jacobians=J_o1xy_o1
         )
-        vel_xy_obj__obj = obj2_angle.unrotate(vel_xy_obj__world, jacobians=J_vxyoo)
+        vel_xy_obj__obj = obj2_angle.unrotate(
+            vel_xy_obj__world.tensor, jacobians=J_vxyoo
+        )
 
         # Putting V together
         obj_diff__world = cast(SE2, self.obj1.between(self.obj2, jacobians=J_odw))
@@ -173,8 +175,8 @@ class QuasiStaticPushingPlanar(CostFunction):
         J_vxyco: OptionalJacobians = [] if get_jacobians else None
 
         # Compute contact point velocities using consecutive end effector poses
-        contact_point_1 = self.eff1.xy(jacobians=J_cp1_e1)
-        vel_xy_contact__world = cast(Point2, contact_point_2 - contact_point_1)
+        contact_point_1 = self.eff1.xy(jacobians=J_cp1_e1).tensor
+        vel_xy_contact__world = contact_point_2 - contact_point_1
 
         # Transform velocity to object's 2 frame
         vel_xy_contact__obj = obj2_angle.unrotate(
@@ -220,7 +222,7 @@ class QuasiStaticPushingPlanar(CostFunction):
         # These quantities are needed by two or more of D, V, Vp, so we compute once.
         obj2_angle = self.obj2.rotation
         self.obj2.theta(jacobians=J_o2angle_o2)
-        contact_point_2 = self.eff2.xy(jacobians=J_cp2_e2)
+        contact_point_2 = self.eff2.xy(jacobians=J_cp2_e2).tensor
 
         # D * V = Vp, See Zhou et al.
         # A Fast Stochastic Contact Model for Planar Pushing and Grasping:

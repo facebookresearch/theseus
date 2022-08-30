@@ -9,7 +9,7 @@ import torch
 
 from theseus.core import CostFunction, CostWeight, Variable
 from theseus.embodied.kinematics import IdentityModel, KinematicsModel
-from theseus.geometry import Point2
+from theseus.geometry import Point2, SE2
 
 from .signed_distance_field import SignedDistanceField2D
 
@@ -17,7 +17,7 @@ from .signed_distance_field import SignedDistanceField2D
 class Collision2D(CostFunction):
     def __init__(
         self,
-        pose: Point2,
+        pose: Union[Point2, SE2],
         sdf_origin: Union[Point2, torch.Tensor],
         sdf_data: Union[torch.Tensor, Variable],
         sdf_cell_size: Union[float, torch.Tensor, Variable],
@@ -25,8 +25,8 @@ class Collision2D(CostFunction):
         cost_weight: CostWeight,
         name: Optional[str] = None,
     ):
-        if not isinstance(pose, Point2):
-            raise ValueError("Collision2D only accepts Point2 poses.")
+        if not isinstance(pose, Point2) and not isinstance(pose, SE2):
+            raise ValueError("Collision2D only accepts Point2 or SE2 poses.")
         super().__init__(cost_weight, name=name)
         self.pose = pose
         self.sdf_origin = SignedDistanceField2D.convert_origin(sdf_origin)
@@ -49,8 +49,19 @@ class Collision2D(CostFunction):
     def _compute_distances_and_jacobians(
         self,
     ) -> Tuple[torch.Tensor, torch.Tensor]:
-        robot_state = cast(Point2, self.robot.forward_kinematics(self.pose)["state"])
-        return self.sdf.signed_distance(robot_state.tensor.view(-1, 2, 1))
+        jac_xy: Optional[torch.Tensor] = None
+        if isinstance(self.pose, SE2):
+            aux: List[torch.Tensor] = []
+            xy_pos = self.pose.xy(jacobians=aux)
+            jac_xy = aux[0]
+        else:
+            xy_pos = cast(Point2, self.pose)
+
+        robot_state = self.robot.forward_kinematics(xy_pos)["state"]
+        dist, jac = self.sdf.signed_distance(robot_state.tensor.view(-1, 2, 1))
+        if jac_xy is not None:
+            jac = jac.matmul(jac_xy)
+        return dist, jac
 
     def _error_from_distances(self, distances: torch.Tensor):
         return (self.cost_eps.tensor - distances).clamp(min=0)

@@ -241,6 +241,7 @@ class MotionPlanner:
         Qc_inv: Optional[List[List[int]]] = None,
         num_time_steps: Optional[int] = None,
         use_single_collision_weight: bool = True,
+        pose_type: Union[Type[th.Point2], Type[th.SE2]] = th.Point2,
     ):
         if objective is None:
             self.objective = MotionPlannerObjective(
@@ -251,6 +252,7 @@ class MotionPlanner:
                 Qc_inv,
                 num_time_steps,
                 use_single_collision_weight=use_single_collision_weight,
+                pose_type=pose_type,
                 dtype=dtype,
             )
         else:
@@ -337,36 +339,58 @@ class MotionPlanner:
     ) -> Dict[str, torch.Tensor]:
         # Returns a dictionary of variable names to values that represent a straight
         # line trajectory from start to goal.
-        start_goal_dist = goal - start
+        # For SE2 variables, the start's angle is used for the full trajectory
+        start_goal_dist = goal[:, :2] - start[:, :2]
         avg_vel = start_goal_dist / self.objective.total_time
         unit_trajectory_len = start_goal_dist / (self.objective.trajectory_len - 1)
         input_dict: Dict[str, torch.Tensor] = {}
         for i in range(self.objective.trajectory_len):
-            input_dict[f"pose_{i}"] = start + unit_trajectory_len * i
-            input_dict[f"vel_{i}"] = avg_vel
+            if self.objective.pose_type == th.SE2:
+                cur_pos = start[:, :2] + unit_trajectory_len * i
+                input_dict[f"pose_{i}"] = torch.cat([cur_pos, start[:, 2:]], dim=1)
+                input_dict[f"vel_{i}"] = torch.cat(
+                    [avg_vel, torch.zeros(avg_vel.shape[0], 1)], dim=1
+                )
+            else:
+                input_dict[f"pose_{i}"] = start + unit_trajectory_len * i
+                input_dict[f"vel_{i}"] = avg_vel
         return input_dict
 
-    def get_random_variable_values(
-        self, start: torch.Tensor
+    def get_randn_trajectory_like(
+        self,
+        start: torch.Tensor,
     ) -> Dict[str, torch.Tensor]:
         # Returns a dictionary of variable names with random initial poses.
+        # The batch size, device and dtype are obtained from given start
+        pose_numel = 2 if self.objective.pose_type == th.Point2 else 4
+        vel_numel = 2 if self.objective.pose_type == th.Point2 else 3
         input_dict: Dict[str, torch.Tensor] = {}
+        assert start.shape[1] == pose_numel
         for i in range(self.objective.trajectory_len):
             input_dict[f"pose_{i}"] = torch.randn_like(start)
-            input_dict[f"vel_{i}"] = torch.randn_like(start)
+            input_dict[f"vel_{i}"] = torch.randn_like(start[:, :vel_numel])
         return input_dict
 
     def get_variable_values_from_trajectory(
         self, trajectory: torch.Tensor
     ) -> Dict[str, torch.Tensor]:
         # Returns a dictionary of variable names to values, so that values
-        # are assigned with the data from the given trajectory. Trajectory should be a
+        # are assigned with the data from the given trajectory.
+        # For Point2 trajectories, trajectory should be a
         # tensor of shape (batch_size, 4, planner.trajectory_len).
-        assert trajectory.shape[1:] == (4, self.objective.trajectory_len)
+        # For SE2 trajectories, it should be a tensor of shape
+        # tensor of shape (batch_size, 7, planner.trajectory_len).
+        pose_numel = 2 if self.objective.pose_type == th.Point2 else 4
+        vel_numel = 2 if self.objective.pose_type == th.Point2 else 3
+
+        assert trajectory.shape[1:] == (
+            pose_numel + vel_numel,
+            self.objective.trajectory_len,
+        )
         input_dict: Dict[str, torch.Tensor] = {}
         for i in range(self.objective.trajectory_len):
-            input_dict[f"pose_{i}"] = trajectory[:, :2, i]
-            input_dict[f"vel_{i}"] = trajectory[:, :2, i]
+            input_dict[f"pose_{i}"] = trajectory[:, :pose_numel, i]
+            input_dict[f"vel_{i}"] = trajectory[:, pose_numel:, i]
         return input_dict
 
     def error(self) -> float:
@@ -382,20 +406,22 @@ class MotionPlanner:
         # Returns the a tensor with the trajectory that the given variable
         # values represent. If no dictionary is passed, it will used the latest
         # values stored in the objective's variables.
+        pose_numel = 2 if self.objective.pose_type == th.Point2 else 4
+        vel_numel = 2 if self.objective.pose_type == th.Point2 else 3
         trajectory = torch.empty(
             self.objective.batch_size,
-            4,
+            pose_numel + vel_numel,
             self.objective.trajectory_len,
             device=self.objective.device,
         )
         variables = self.objective.optim_vars
         for i in range(self.objective.trajectory_len):
             if values_dict is None:
-                trajectory[:, :2, i] = variables[f"pose_{i}"].tensor.clone()
-                trajectory[:, 2:, i] = variables[f"vel_{i}"].tensor.clone()
+                trajectory[:, :pose_numel, i] = variables[f"pose_{i}"].tensor.clone()
+                trajectory[:, pose_numel:, i] = variables[f"vel_{i}"].tensor.clone()
             else:
-                trajectory[:, :2, i] = values_dict[f"pose_{i}"]
-                trajectory[:, 2:, i] = values_dict[f"vel_{i}"]
+                trajectory[:, :pose_numel, i] = values_dict[f"pose_{i}"]
+                trajectory[:, pose_numel:, i] = values_dict[f"vel_{i}"]
         return trajectory.detach() if detach else trajectory
 
     def get_total_squared_errors(self) -> Tuple[torch.Tensor, torch.Tensor]:
@@ -421,5 +447,6 @@ class MotionPlanner:
             num_time_steps=self.objective.num_time_steps,
             use_single_collision_weight=self.objective.use_single_collision_weight,
             device=self.device,
+            pose_type=self.objective.pose_type,
             dtype=self.dtype,
         )

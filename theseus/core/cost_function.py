@@ -228,8 +228,6 @@ class AutoDiffCostFunction(CostFunction):
     ) -> Tuple[torch.Tensor, ...]:
         return vmap(jacrev(jac_fn, argnums=0))(optim_tensors, aux_tensors)
 
-        # Returns (jacobians, error)
-
     def jacobians(self) -> Tuple[List[torch.Tensor], torch.Tensor]:
         err, optim_vars, aux_vars = self._compute_error()
         if self._autograd_functorch:

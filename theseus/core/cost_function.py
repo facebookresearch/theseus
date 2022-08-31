@@ -209,13 +209,16 @@ class AutoDiffCostFunction(CostFunction):
         def jac_fn(optim_vars_tensors_, aux_vars_tensors_):
             assert len(optim_vars_tensors_) == len(tmp_optim_vars)
 
+            # disable tensor checks and other operations that are incompatible with functorch
             with enable_functorch():
                 for i, tensor in enumerate(optim_vars_tensors_):
                     tmp_optim_vars[i].update(tensor.unsqueeze(0))
 
+                # only aux_var in current batch is evaluated
                 for i, tensor in enumerate(aux_vars_tensors_):
                     tmp_aux_vars[i].update(tensor.unsqueeze(0))
 
+                # return [0] since functorch expects no batch output
                 return self._err_fn(optim_vars=tmp_optim_vars, aux_vars=tmp_aux_vars)[0]
 
         return jac_fn

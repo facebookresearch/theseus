@@ -45,7 +45,8 @@ class Manifold(Variable, abc.ABC):
                 tensor = self._check_tensor(tensor, strict)
             else:
                 warnings.warn(
-                    "functorch is enabled and tensor is not checked for validness."
+                    "functorch is enabled and tensor is not checked for {self.__class__.__name__}.",
+                    RuntimeWarning,
                 )
             if dtype is not None and tensor.dtype != dtype:
                 warnings.warn(

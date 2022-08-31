@@ -145,7 +145,9 @@ class SO3(LieGroup):
 
         if _FunctorchContext.get_context():
             warnings.warn(
-                "functorch is enabled and the quaternions are not checked for validness."
+                "functorch is enabled and the validness of unit quaternions are not "
+                "checked for SO3.",
+                RuntimeWarning,
             )
         else:
             QUANTERNION_EPS = theseus.constants._SO3_QUATERNION_EPS[quaternion.dtype]
@@ -165,7 +167,9 @@ class SO3(LieGroup):
 
         if _FunctorchContext.get_context():
             warnings.warn(
-                "functorch is enabled and the skew-symmetry of hat matrices are not checked."
+                "functorch is enabled and the skew-symmetry of hat matrices is "
+                "not checked for SO3.",
+                RuntimeWarning,
             )
         else:
             if (

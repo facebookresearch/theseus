@@ -142,7 +142,9 @@ class SO2(LieGroup):
 
         if _FunctorchContext.get_context():
             warnings.warn(
-                "functorch is enabled and the skew-symmetry of hat matrices are not checked."
+                "functorch is enabled and the skew-symmetry of hat matrices is "
+                "not checked for SO2.",
+                RuntimeWarning,
             )
         else:
             _check &= matrix[:, 0, 0].abs().max().item() < theseus.constants.EPS

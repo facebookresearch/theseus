@@ -555,44 +555,21 @@ class SO3(LieGroup):
         )
         ret = sine_axis * scale.view(-1, 1)
 
-        if _FunctorchContext.get_context():
-            # # theta ~ pi
-            ddiag = torch.diagonal(self.tensor, dim1=1, dim2=2)
+        if near_pi.any():
+            ddiag = torch.diagonal(self[near_pi], dim1=1, dim2=2)
             # Find the index of major coloumns and diagonals
             major = torch.logical_and(
                 ddiag[:, 1] > ddiag[:, 0], ddiag[:, 1] > ddiag[:, 2]
             ) + 2 * torch.logical_and(
                 ddiag[:, 2] > ddiag[:, 0], ddiag[:, 2] > ddiag[:, 1]
             )
-            aux = torch.ones(self.shape[0], dtype=torch.bool)
-            sel_rows = 0.5 * (self[aux, major] + self[aux, :, major])
-            sel_rows[aux, major] -= cosine
-            axis = sel_rows / torch.where(
-                near_zero,
-                non_zero,
-                sel_rows.norm(dim=1),
-            ).view(-1, 1)
-            sign_tmp = sine_axis[aux, major].sign()
+            sel_rows = 0.5 * (self[near_pi, major] + self[near_pi, :, major])
+            aux = torch.ones(sel_rows.shape[0], dtype=torch.bool)
+            sel_rows[aux, major] -= cosine[near_pi]
+            axis = sel_rows / sel_rows.norm(dim=1, keepdim=True)
+            sign_tmp = sine_axis[near_pi, major].sign()
             sign = torch.where(sign_tmp != 0, sign_tmp, torch.ones_like(sign_tmp))
-            ret = torch.where(
-                near_pi.view(-1, 1), axis * (theta * sign).view(-1, 1), ret
-            )
-        else:
-            if near_pi.any():
-                ddiag = torch.diagonal(self[near_pi], dim1=1, dim2=2)
-                # Find the index of major coloumns and diagonals
-                major = torch.logical_and(
-                    ddiag[:, 1] > ddiag[:, 0], ddiag[:, 1] > ddiag[:, 2]
-                ) + 2 * torch.logical_and(
-                    ddiag[:, 2] > ddiag[:, 0], ddiag[:, 2] > ddiag[:, 1]
-                )
-                sel_rows = 0.5 * (self[near_pi, major] + self[near_pi, :, major])
-                aux = torch.ones(sel_rows.shape[0], dtype=torch.bool)
-                sel_rows[aux, major] -= cosine[near_pi]
-                axis = sel_rows / sel_rows.norm(dim=1, keepdim=True)
-                sign_tmp = sine_axis[near_pi, major].sign()
-                sign = torch.where(sign_tmp != 0, sign_tmp, torch.ones_like(sign_tmp))
-                ret[near_pi] = axis * (theta[near_pi] * sign).view(-1, 1)
+            ret[near_pi] = axis * (theta[near_pi] * sign).view(-1, 1)
 
         if jacobians is not None:
             SO3._check_jacobians_list(jacobians)
@@ -639,7 +616,6 @@ class SO3(LieGroup):
         sine_axis[:, 2] = 0.5 * (self[:, 1, 0] - self[:, 0, 1])
         w = 0.5 * (1 + self[:, 0, 0] + self[:, 1, 1] + self[:, 2, 2]).clamp(0, 4).sqrt()
 
-        near_zero = w > 1 - self._NEAR_ZERO_EPS
         near_pi = w <= self._NEAR_PI_EPS
         non_zero = self.tensor.new_ones([1])
 
@@ -648,58 +624,25 @@ class SO3(LieGroup):
         ret[:, 0] = w
         ret[:, 1:] = 0.5 * sine_axis / torch.where(near_pi, non_zero, w).view(-1, 1)
 
-        if _FunctorchContext.get_context():
-            # theta ~ pi
-            ddiag = torch.diagonal(self.tensor, dim1=1, dim2=2)
-            # Find the index of major coloumns and diagonals
-            major = torch.logical_and(
-                ddiag[:, 1] > ddiag[:, 0], ddiag[:, 1] > ddiag[:, 2]
-            ) + 2 * torch.logical_and(
-                ddiag[:, 2] > ddiag[:, 0], ddiag[:, 2] > ddiag[:, 1]
-            )
-            aux = torch.ones(self.shape[0], dtype=torch.bool)
-            sel_rows = 0.5 * (self[aux, major] + self[aux, :, major])
-            cosine_near_pi = 0.5 * (self[:, 0, 0] + self[:, 1, 1] + self[:, 2, 2] - 1)
-            sel_rows[aux, major] -= cosine_near_pi
-            axis = (
-                sel_rows
-                / torch.where(
-                    near_zero.view(-1, 1),
-                    non_zero.view(-1, 1),
-                    sel_rows.norm(dim=1, keepdim=True),
-                )
-                * sine_axis[aux, major].sign().view(-1, 1)
-            )
-            sine_half_theta = (
-                (0.5 * (1 - cosine_near_pi)).clamp(0, 1).sqrt().view(-1, 1)
-            )
-            ret[:, 1:] = torch.where(
-                near_pi.view(-1, 1), axis * sine_half_theta, ret[:, 1:]
-            )
-        else:
-            # theta ~ pi
-            ddiag = torch.diagonal(self[near_pi], dim1=1, dim2=2)
-            # Find the index of major coloumns and diagonals
-            major = torch.logical_and(
-                ddiag[:, 1] > ddiag[:, 0], ddiag[:, 1] > ddiag[:, 2]
-            ) + 2 * torch.logical_and(
-                ddiag[:, 2] > ddiag[:, 0], ddiag[:, 2] > ddiag[:, 1]
-            )
-            sel_rows = 0.5 * (self[near_pi, major] + self[near_pi, :, major])
-            aux = torch.ones(sel_rows.shape[0], dtype=torch.bool)
-            cosine_near_pi = 0.5 * (
-                self[near_pi, 0, 0] + self[near_pi, 1, 1] + self[near_pi, 2, 2] - 1
-            )
-            sel_rows[aux, major] -= cosine_near_pi
-            axis = (
-                sel_rows
-                / sel_rows.norm(dim=1, keepdim=True)
-                * sine_axis[near_pi, major].sign().view(-1, 1)
-            )
-            sine_half_theta = (
-                (0.5 * (1 - cosine_near_pi)).clamp(0, 1).sqrt().view(-1, 1)
-            )
-            ret[near_pi, 1:] = axis * sine_half_theta
+        # theta ~ pi
+        ddiag = torch.diagonal(self[near_pi], dim1=1, dim2=2)
+        # Find the index of major coloumns and diagonals
+        major = torch.logical_and(
+            ddiag[:, 1] > ddiag[:, 0], ddiag[:, 1] > ddiag[:, 2]
+        ) + 2 * torch.logical_and(ddiag[:, 2] > ddiag[:, 0], ddiag[:, 2] > ddiag[:, 1])
+        sel_rows = 0.5 * (self[near_pi, major] + self[near_pi, :, major])
+        aux = torch.ones(sel_rows.shape[0], dtype=torch.bool)
+        cosine_near_pi = 0.5 * (
+            self[near_pi, 0, 0] + self[near_pi, 1, 1] + self[near_pi, 2, 2] - 1
+        )
+        sel_rows[aux, major] -= cosine_near_pi
+        axis = (
+            sel_rows
+            / sel_rows.norm(dim=1, keepdim=True)
+            * sine_axis[near_pi, major].sign().view(-1, 1)
+        )
+        sine_half_theta = (0.5 * (1 - cosine_near_pi)).clamp(0, 1).sqrt().view(-1, 1)
+        ret[near_pi, 1:] = axis * sine_half_theta
 
         return ret
 

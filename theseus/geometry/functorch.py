@@ -7,7 +7,7 @@ import threading
 from typing import Any
 
 
-class _FunctorchContext(object):
+class _FunctorchContext:
     contexts = threading.local()
 
     @classmethod
@@ -21,7 +21,7 @@ class _FunctorchContext(object):
         cls.contexts.use_functorch = use_functorch
 
 
-class set_functorch_enabled(object):
+class set_functorch_enabled:
     def __init__(self, mode: bool) -> None:
         self.prev = _FunctorchContext.get_context()
         _FunctorchContext.set_context(mode)
@@ -33,7 +33,7 @@ class set_functorch_enabled(object):
         _FunctorchContext.set_context(self.prev)
 
 
-class enable_functorch(object):
+class enable_functorch(_FunctorchContext):
     def __enter__(self) -> None:
         self.prev = _FunctorchContext.get_context()
         _FunctorchContext.set_context(True)

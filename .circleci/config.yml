@@ -53,6 +53,7 @@ setup_cuda10_libs: &setup_cuda10_libs
       working_directory: ~/
       command: |
         # ubuntu's default gcc9.3 is too recent for cuda10.2
+        sudo apt-get install -y gcc-7 g++-7
         sudo apt-get install -y gcc-8 g++-8
         sudo update-alternatives --install /usr/bin/gcc gcc /usr/bin/gcc-9 10
         sudo update-alternatives --install /usr/bin/gcc gcc /usr/bin/gcc-8 20
@@ -111,9 +112,17 @@ install_functorch: &install_functorch
       command: |
         pip install functorch
 
-setup_project: &setup_project
+setup_project_cuda10: &setup_project_cuda10
   - run:
-      name: Setting up project
+      name: Setting up project for cuda10
+      working_directory: ~/project
+      command: |
+        CXX=g++-7 CC=gcc-7 LD=g++-7 pip install --progress-bar off -e .
+        CXX=g++-7 CC=gcc-7 LD=g++-7 pip install -r requirements/dev.txt
+
+setup_project_cuda11: &setup_project_cuda11
+  - run:
+      name: Setting up project for cuda11
       working_directory: ~/project
       command: |
         pip install --progress-bar off -e .
@@ -199,6 +208,7 @@ jobs:
       - <<: *setup_cuda11_libs
       - <<: *setup_environment
       - <<: *install_torch_cuda11
+      - <<: *install_functorch
       - <<: *setup_project
       - <<: *run_tests
 

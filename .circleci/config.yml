@@ -191,11 +191,11 @@ jobs:
       - checkout
       - <<: *update_and_install_python
       - <<: *install_suitesparse
-      - <<: *install_functorch
       - <<: *setup_cuda10_libs
       - <<: *setup_environment
       - <<: *install_torch_cuda10
-      - <<: *setup_project
+      - <<: *install_functorch
+      - <<: *setup_project_cuda10
       - <<: *run_tests
 
   unittests_gpu17_cuda11:
@@ -209,7 +209,7 @@ jobs:
       - <<: *setup_environment
       - <<: *install_torch_cuda11
       - <<: *install_functorch
-      - <<: *setup_project
+      - <<: *setup_project_cuda11
       - <<: *run_tests
 
 workflows:

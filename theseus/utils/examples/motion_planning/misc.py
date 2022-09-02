@@ -133,17 +133,16 @@ def _create_line_from_trajectory(
 
 
 def _get_triangle_pts(x, y, theta, radius):
-    triangle_pts = [(x, y)]
-    x, y = triangle_pts[0]
-    # use theta  and add something
-    theta1 = theta + (2 * np.pi) + (np.pi / 8)
-    theta2 = theta + (2 * np.pi) - (np.pi / 8)
-    x2 = x - (radius * np.cos(theta1))
-    y2 = y - (radius * np.sin(theta1))
-    triangle_pts.append((x2, y2))
-    x3 = x - (radius * np.cos(theta2))
-    y3 = y - (radius * np.sin(theta2))
-    triangle_pts.append((x3, y3))
+    triangle_pts = []
+
+    def _append(new_theta, scale=1.0):
+        x_new = x + radius * np.cos(new_theta) * scale
+        y_new = y + radius * np.sin(new_theta) * scale
+        triangle_pts.append((x_new, y_new))
+
+    _append(theta, 1.0)
+    _append(theta + np.pi / 2, 0.5)
+    _append(theta - np.pi / 2, 0.5)
     return triangle_pts
 
 
@@ -153,15 +152,14 @@ def _add_robot_to_trajectory(
     patches = []
     for i in range(x_list.shape[0]):
         if theta is None:
-            patch = mpl.patches.Circle((x_list[i], y_list[i]), radius)
+            patches.append(mpl.patches.Circle((x_list[i], y_list[i]), radius))
+            alpha_ = alpha
         else:
-            triangle_pts = _get_triangle_pts(
-                x_list[i], y_list[i], theta[i], 1.41 * radius
-            )
-            patch = mpl.patches.Polygon(triangle_pts)
-        patches.append(patch)
+            triangle_pts = _get_triangle_pts(x_list[i], y_list[i], theta[i], radius)
+            patches.append(mpl.patches.Polygon(triangle_pts))
+            alpha_ = 2 * alpha
     patch_collection = mpl.collections.PatchCollection(
-        patches, alpha=alpha if theta is None else 2 * alpha, color=color
+        patches, alpha=alpha_, color=color
     )
     return patch_collection
 
@@ -190,7 +188,7 @@ def generate_trajectory_figs(
         traj_rows.append(np.clip(row, 0, map_tensor.shape[1] - 1))
         traj_cols.append(np.clip(col, 0, map_tensor.shape[1] - 1))
         if trajectory.shape[1] == 7:  # SE2 trajectory
-            traj_angles.append(trajectory[:, 2].acos().numpy())
+            traj_angles.append(torch.atan2(trajectory[:, 3], trajectory[:, 2]).numpy())
     assert len(traj_angles) == 0 or len(traj_angles) == len(traj_rows)
 
     # Generate a separate figure for each batch index

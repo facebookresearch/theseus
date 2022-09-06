@@ -362,8 +362,8 @@ class MotionPlanner:
     ) -> Dict[str, torch.Tensor]:
         # Returns a dictionary of variable names with random initial poses.
         # The batch size, device and dtype are obtained from given start
-        pose_numel = 2 if self.objective.pose_type == th.Point2 else 4
-        vel_numel = 2 if self.objective.pose_type == th.Point2 else 3
+        pose_numel = self.objective.optim_vars["pose_0"].numel()
+        vel_numel = self.objective.optim_vars["vel_0"].numel()
         input_dict: Dict[str, torch.Tensor] = {}
         assert start.shape[1] == pose_numel
         for i in range(self.objective.trajectory_len):
@@ -380,9 +380,8 @@ class MotionPlanner:
         # tensor of shape (batch_size, 4, planner.trajectory_len).
         # For SE2 trajectories, it should be a tensor of shape
         # tensor of shape (batch_size, 7, planner.trajectory_len).
-        pose_numel = 2 if self.objective.pose_type == th.Point2 else 4
-        vel_numel = 2 if self.objective.pose_type == th.Point2 else 3
-
+        pose_numel = self.objective.optim_vars["pose_0"].numel()
+        vel_numel = self.objective.optim_vars["vel_0"].numel()
         assert trajectory.shape[1:] == (
             pose_numel + vel_numel,
             self.objective.trajectory_len,

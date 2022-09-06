@@ -38,10 +38,39 @@ Utitily functions
 """
 
 
+# as in https://blogs.princeton.edu/imabandit/2013/04/01/acceleratedgradientdescent/
 def next_nesterov_params(lam) -> Tuple[float, float]:
     new_lambda = (1 + np.sqrt(4 * lam * lam + 1)) / 2.0
-    new_gamma = (1 - lam) / new_lambda
+    new_gamma = (lam - 1) / new_lambda
     return new_lambda, new_gamma
+
+
+def apply_nesterov(
+    y_curr: th.Manifold,
+    y_last: th.Manifold,
+    nesterov_gamma: float,
+    normalize_method: bool = True,
+) -> th.Manifold:
+    if normalize_method:
+        # apply to tensors and then project back to closest group element
+        nesterov_mean_tensor = (
+            1 + nesterov_gamma
+        ) * y_curr.tensor - nesterov_gamma * y_last.tensor
+        nesterov_mean_tensor = y_curr.__class__.normalize(nesterov_mean_tensor)
+        nesterov_mean = y_curr.__class__(tensor=nesterov_mean_tensor)
+
+    else:
+        # apply nesterov damping in tanget plane.
+        # Cannot use new_belief or nesterov_y as the tangent plance, because tangent vector is 0.
+        # Use identity as tangent plane, may not be best choice as could be far from identity.
+        tp = y_curr.__class__(dtype=y_curr.dtype)
+        tp.to(y_curr.device)
+        tp_mean = (1 + nesterov_gamma) * tp.local(y_curr) - nesterov_gamma * tp.local(
+            y_last
+        )
+        nesterov_mean = tp.retract(tp_mean)
+
+    return nesterov_mean
 
 
 # Same of NonlinearOptimizerParams but without step size
@@ -593,7 +622,13 @@ class GaussianBeliefPropagation(Optimizer, abc.ABC):
     GBP functions
     """
 
-    def _pass_var_to_fac_messages_loop(self, update_belief=True):
+    def _pass_var_to_fac_messages_loop(self, update_belief=True, nesterov_gamma=None):
+        if nesterov_gamma is not None:
+            if nesterov_gamma == 0:  # only on the first call
+                self.nesterov_ys = [
+                    belief.mean[0].copy(new_name="nesterov_y_" + belief.mean[0].name)
+                    for belief in self.beliefs
+                ]
         for i, var in enumerate(self.ordering):
 
             # Collect all incoming messages in the tangent space at the current belief
@@ -640,9 +675,27 @@ class GaussianBeliefPropagation(Optimizer, abc.ABC):
                 tau = torch.matmul(inv_lam_tau, sum_taus.unsqueeze(-1)).squeeze(-1)
 
                 new_belief = th.retract_gaussian(var, tau, lam_tau)
+
+                # nesterov acceleration
+                if nesterov_gamma is not None:
+                    nesterov_mean = apply_nesterov(
+                        new_belief.mean[0],
+                        self.nesterov_ys[i],
+                        nesterov_gamma,
+                        normalize_method=False,
+                    )
+                    # belief mean as calculated by GBP step is the new nesterov y value at this step
+                    self.nesterov_ys[i] = new_belief.mean[0].copy()
+                    # use nesterov mean for new belief
+                    new_belief.update(
+                        mean=[nesterov_mean], precision=new_belief.precision
+                    )
+
                 self.beliefs[i].update(new_belief.mean, new_belief.precision)
 
-    def _pass_var_to_fac_messages_vectorized(self, update_belief=True):
+    def _pass_var_to_fac_messages_vectorized(
+        self, update_belief=True, nesterov_gamma=None
+    ):
         # Each (variable-type, dof) gets mapped to a tuple with:
         #   - the variable that will hold the vectorized data
         #   - all the variables of that type that will be vectorized together
@@ -686,6 +739,10 @@ class GaussianBeliefPropagation(Optimizer, abc.ABC):
             eta_tp_acc = eta_tp_acc.to(vectorized_data.device, vectorized_data.dtype)
             lam_tp_acc = lam_tp_acc.to(vectorized_data.device, vectorized_data.dtype)
             eta_lam.extend([eta_tp_acc, lam_tp_acc])
+
+        if nesterov_gamma is not None:
+            if nesterov_gamma == 0:  # only on the first call
+                self.nesterov_ys = [info[0].copy() for info in var_info.values()]
 
         # add ftov messages to eta_tp and lam_tp accumulator tensors
         for factor in self.factors:
@@ -761,6 +818,7 @@ class GaussianBeliefPropagation(Optimizer, abc.ABC):
                     msg.update(new_mess.mean, new_mess.precision)
 
         # compute the new belief for the vectorized variables
+        i = 0
         for (vectorized_var, _, var_ixs, eta_lam) in var_info.values():
             eta_tp_acc = eta_lam[0]
             lam_tau = eta_lam[1]
@@ -774,6 +832,23 @@ class GaussianBeliefPropagation(Optimizer, abc.ABC):
                 tau = torch.matmul(inv_lam_tau, eta_tp_acc.unsqueeze(-1)).squeeze(-1)
 
                 new_belief = th.retract_gaussian(vectorized_var, tau, lam_tau)
+
+                # nesterov acceleration
+                if nesterov_gamma is not None:
+                    nesterov_mean = apply_nesterov(
+                        new_belief.mean[0],
+                        self.nesterov_ys[i],
+                        nesterov_gamma,
+                        normalize_method=False,
+                    )
+                    # belief mean as calculated by GBP step is the new nesterov y value at this step
+                    self.nesterov_ys[i] = new_belief.mean[0].copy()
+                    # use nesterov mean for new belief
+                    new_belief.update(
+                        mean=[nesterov_mean], precision=new_belief.precision
+                    )
+                    i += 1
+
                 # update non vectorized beliefs with slices
                 start_idx = 0
                 for ix in var_ixs:
@@ -935,11 +1010,13 @@ class GaussianBeliefPropagation(Optimizer, abc.ABC):
             t_ftov = time.time() - t1
 
             t1 = time.time()
+            nest_gamma = None
             if nesterov:
                 nest_lambda, nest_gamma = next_nesterov_params(nest_lambda)
-                print("nesterov lambda", nest_lambda)
                 print("nesterov gamma", nest_gamma)
-            self._pass_var_to_fac_messages(update_belief=True)
+            self._pass_var_to_fac_messages(
+                update_belief=True, nesterov_gamma=nest_gamma
+            )
             t_vtof = time.time() - t1
 
             t_vec = 0.0

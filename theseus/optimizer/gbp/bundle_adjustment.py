@@ -33,6 +33,10 @@ OUTER_OPTIMIZER_CLASS = {
     "adam": torch.optim.Adam,
 }
 
+GBP_SCHEDULE = {
+    "synchronous": GBPSchedule.SYNCHRONOUS,
+}
+
 
 def save_res_loss_rad(save_dir, cfg, sweep_radii, sweep_losses, radius_vals, losses):
     with open(f"{save_dir}/config.txt", "w") as f:
@@ -208,7 +212,7 @@ def setup_layer(cfg: omegaconf.OmegaConf):
     print("done in:", time.time() - t0)
 
     # Create optimizer and theseus layer
-    vectorize = True
+    vectorize = cfg["optim"]["vectorize"]
     optimizer = OPTIMIZER_CLASS[cfg["optim"]["optimizer_cls"]](
         objective,
         max_iterations=cfg["optim"]["max_iters"],
@@ -225,7 +229,11 @@ def setup_layer(cfg: omegaconf.OmegaConf):
     print("Device:", cfg["device"])
 
     # create damping parameter
-    lin_system_damping = torch.nn.Parameter(torch.tensor([1.0e-2], dtype=torch.float64))
+    lin_system_damping = torch.nn.Parameter(
+        torch.tensor(
+            [cfg["optim"]["gbp_settings"]["lin_system_damping"]], dtype=torch.float64
+        )
+    )
     lin_system_damping.to(device=cfg["device"])
 
     optim_arg = {
@@ -236,14 +244,10 @@ def setup_layer(cfg: omegaconf.OmegaConf):
         "backward_mode": th.BackwardMode.FULL,
     }
     if isinstance(optimizer, GaussianBeliefPropagation):
-        extra_args = {
-            "relin_threshold": 1e-8,
-            "ftov_msg_damping": 0.0,
-            "dropout": 0.0,
-            "schedule": GBPSchedule.SYNCHRONOUS,
-            "lin_system_damping": lin_system_damping,
-        }
-        optim_arg = {**optim_arg, **extra_args}
+        gbp_args = cfg["optim"]["gbp_settings"].copy()
+        gbp_args["lin_system_damping"] = lin_system_damping
+        gbp_args["schedule"] = GBP_SCHEDULE[gbp_args["schedule"]]
+        optim_arg = {**optim_arg, **gbp_args}
 
     theseus_inputs = {}
     for cam in ba.cameras:
@@ -297,6 +301,23 @@ def run_inner(
     #     BAViewer(
     #         info.state_history, gt_cameras=ba.gt_cameras, gt_points=ba.gt_points
     #     )  # , msg_history=optimizer.ftov_msgs_history)
+
+    """
+    Save for nesterov experiments
+    """
+    save_dir = os.getcwd() + "/outputs/nesterov/bal/"
+    if cfg["optim"]["gbp_settings"]["nesterov"]:
+        save_dir += "1/"
+    else:
+        save_dir += "0/"
+    os.mkdir(save_dir)
+    with open(f"{save_dir}/config.txt", "w") as f:
+        json.dump(cfg, f, indent=4)
+    np.savetxt(save_dir + "/error_history.txt", info.err_history[0].cpu().numpy())
+
+    """
+    Save for bal sequences
+    """
 
     # if cfg["bal_file"] is not None:
     #     save_dir = os.path.join(os.getcwd(), "outputs")
@@ -442,8 +463,8 @@ if __name__ == "__main__":
     cfg = {
         "seed": 1,
         "device": "cpu",
-        "bal_file": None,
-        # "bal_file": "/mnt/sda/bal/problem-21-11315-pre.txt",
+        # "bal_file": None,
+        "bal_file": "/mnt/sda/bal/problem-21-11315-pre.txt",
         "synthetic": {
             "num_cameras": 10,
             "num_points": 100,
@@ -451,7 +472,8 @@ if __name__ == "__main__":
             "track_locality": 0.2,
         },
         "optim": {
-            "max_iters": 200,
+            "max_iters": 300,
+            "vectorize": True,
             "optimizer_cls": "gbp",
             # "optimizer_cls": "gauss_newton",
             # "optimizer_cls": "levenberg_marquardt",
@@ -459,6 +481,14 @@ if __name__ == "__main__":
             "regularize": True,
             "ratio_known_cameras": 0.1,
             "reg_w": 1e-7,
+            "gbp_settings": {
+                "relin_threshold": 1e-8,
+                "ftov_msg_damping": 0.0,
+                "dropout": 0.0,
+                "schedule": "synchronous",
+                "lin_system_damping": 1.0e-2,
+                "nesterov": True,
+            },
         },
         "outer": {
             "num_epochs": 15,
@@ -471,7 +501,7 @@ if __name__ == "__main__":
     np.random.seed(cfg["seed"])
     random.seed(cfg["seed"])
 
-    # args = setup_layer(cfg)
-    # run_inner(*args)
+    args = setup_layer(cfg)
+    run_inner(*args)
 
-    run_outer(cfg)
+    # run_outer(cfg)

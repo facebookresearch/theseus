@@ -204,7 +204,6 @@ jobs:
       - checkout
       - <<: *update_and_install_python
       - <<: *install_suitesparse
-      - <<: *install_functorch
       - <<: *setup_cuda11_libs
       - <<: *setup_environment
       - <<: *install_torch_cuda11

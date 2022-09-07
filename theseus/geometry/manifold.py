@@ -11,6 +11,7 @@ import torch
 
 from theseus.constants import _CHECK_DTYPE_SUPPORTED
 from theseus.core.variable import Variable
+from .lie_group_check import _LieGroupCheckContext
 
 OptionalJacobians = Optional[List[torch.Tensor]]
 
@@ -40,7 +41,14 @@ class Manifold(Variable, abc.ABC):
         if tensor is None and dtype is None:
             dtype = torch.get_default_dtype()
         if tensor is not None:
-            tensor = self._check_tensor(tensor, strict)
+            if _LieGroupCheckContext.get_context():
+                tensor = self._check_tensor(tensor, strict)
+            else:
+                warnings.warn(
+                    f"functorch is enabled and tensor is not checked "
+                    f"for {self.__class__.__name__}.",
+                    RuntimeWarning,
+                )
             if dtype is not None and tensor.dtype != dtype:
                 warnings.warn(
                     f"tensor.dtype {tensor.dtype} does not match given dtype {dtype}, "

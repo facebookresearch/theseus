@@ -4,6 +4,7 @@
 # LICENSE file in the root directory of this source tree.
 
 from typing import List, Optional, Union, cast
+import warnings
 
 import torch
 
@@ -11,6 +12,7 @@ import theseus.constants
 
 from .lie_group import LieGroup
 from .point_types import Point3
+from .lie_group_check import _LieGroupCheckContext
 
 
 class SO3(LieGroup):
@@ -119,9 +121,7 @@ class SO3(LieGroup):
         self, euclidean_grad: torch.Tensor, is_sparse: bool = False
     ) -> torch.Tensor:
         self._project_check(euclidean_grad, is_sparse)
-        ret = torch.zeros(
-            euclidean_grad.shape[:-1], dtype=self.dtype, device=self.device
-        )
+        ret = self.tensor.new_zeros(euclidean_grad.shape[:-1])
         if is_sparse:
             temp = torch.einsum("i...jk,i...jl->i...lk", euclidean_grad, self.tensor)
         else:
@@ -156,25 +156,39 @@ class SO3(LieGroup):
         if quaternion.ndim != 2 or quaternion.shape[1] != 4:
             raise ValueError("Quaternions can only be 4-D vectors.")
 
-        QUANTERNION_EPS = theseus.constants._SO3_QUATERNION_EPS[quaternion.dtype]
+        if _LieGroupCheckContext.get_context():
+            QUANTERNION_EPS = theseus.constants._SO3_QUATERNION_EPS[quaternion.dtype]
 
-        if quaternion.dtype != torch.float64:
-            quaternion = quaternion.double()
+            if quaternion.dtype != torch.float64:
+                quaternion = quaternion.double()
 
-        if (
-            torch.linalg.norm(quaternion, dim=1) - 1
-        ).abs().max().item() >= QUANTERNION_EPS:
-            raise ValueError("Not unit quaternions.")
+            if (
+                torch.linalg.norm(quaternion, dim=1) - 1
+            ).abs().max().item() >= QUANTERNION_EPS:
+                raise ValueError("Not unit quaternions.")
+        else:
+            warnings.warn(
+                "functorch is enabled and the validness of unit quaternions are not "
+                "checked for SO3.",
+                RuntimeWarning,
+            )
 
     @staticmethod
     def _hat_matrix_check(matrix: torch.Tensor):
         if matrix.ndim != 3 or matrix.shape[1:] != (3, 3):
             raise ValueError("Hat matrices of SO(3) can only be 3x3 matrices")
 
-        if (
-            matrix.transpose(1, 2) + matrix
-        ).abs().max().item() > theseus.constants._SO3_HAT_EPS[matrix.dtype]:
-            raise ValueError("Hat matrices of SO(3) can only be skew-symmetric.")
+        if _LieGroupCheckContext.get_context():
+            warnings.warn(
+                "functorch is enabled and the skew-symmetry of hat matrices is "
+                "not checked for SO3.",
+                RuntimeWarning,
+            )
+        else:
+            if (
+                matrix.transpose(1, 2) + matrix
+            ).abs().max().item() > theseus.constants._SO3_HAT_EPS[matrix.dtype]:
+                raise ValueError("Hat matrices of SO(3) can only be skew-symmetric.")
 
     @staticmethod
     def exp_map(
@@ -261,7 +275,7 @@ class SO3(LieGroup):
     def _log_map_impl(
         self, jacobians: Optional[List[torch.Tensor]] = None
     ) -> torch.Tensor:
-        sine_axis = torch.zeros(self.shape[0], 3, dtype=self.dtype, device=self.device)
+        sine_axis = self.tensor.new_zeros(self.shape[0], 3)
         sine_axis[:, 0] = 0.5 * (self[:, 2, 1] - self[:, 1, 2])
         sine_axis[:, 1] = 0.5 * (self[:, 0, 2] - self[:, 2, 0])
         sine_axis[:, 2] = 0.5 * (self[:, 1, 0] - self[:, 0, 1])
@@ -271,37 +285,39 @@ class SO3(LieGroup):
 
         near_zero = theta < self._NEAR_ZERO_EPS
 
-        not_near_pi = 1 + cosine > self._NEAR_PI_EPS
+        near_pi = 1 + cosine <= self._NEAR_PI_EPS
         # theta != pi
-        near_zero_not_near_pi = near_zero[not_near_pi]
+        near_zero_or_near_pi = torch.logical_or(near_zero, near_pi)
         # Compute the approximation of theta / sin(theta) when theta is near to 0
         non_zero = torch.ones(1, dtype=self.dtype, device=self.device)
-        sine_nz = torch.where(near_zero_not_near_pi, non_zero, sine[not_near_pi])
+        sine_nz = torch.where(near_zero_or_near_pi, non_zero, sine)
         scale = torch.where(
-            near_zero_not_near_pi,
-            1 + sine[not_near_pi] ** 2 / 6,
-            theta[not_near_pi] / sine_nz,
+            near_zero_or_near_pi,
+            1 + sine**2 / 6,
+            theta / sine_nz,
         )
-        ret = torch.zeros_like(sine_axis)
-        ret[not_near_pi] = sine_axis[not_near_pi] * scale.view(-1, 1)
+        ret = sine_axis * scale.view(-1, 1)
+
         # # theta ~ pi
-        near_pi = ~not_near_pi
-        ddiag = torch.diagonal(self[near_pi], dim1=1, dim2=2)
+        ddiag = torch.diagonal(self.tensor, dim1=1, dim2=2)
         # Find the index of major coloumns and diagonals
         major = torch.logical_and(
             ddiag[:, 1] > ddiag[:, 0], ddiag[:, 1] > ddiag[:, 2]
         ) + 2 * torch.logical_and(ddiag[:, 2] > ddiag[:, 0], ddiag[:, 2] > ddiag[:, 1])
-        sel_rows = 0.5 * (self[near_pi, major] + self[near_pi, :, major])
-        aux = torch.ones(sel_rows.shape[0], dtype=torch.bool)
-        sel_rows[aux, major] -= cosine[near_pi]
-        axis = sel_rows / sel_rows.norm(dim=1, keepdim=True)
-        sign_tmp = sine_axis[near_pi, major].sign()
+        aux = torch.ones(self.shape[0], dtype=torch.bool)
+        sel_rows = 0.5 * (self[aux, major] + self[aux, :, major])
+        sel_rows[aux, major] -= cosine
+        axis = sel_rows / torch.where(
+            near_zero,
+            non_zero,
+            sel_rows.norm(dim=1),
+        ).view(-1, 1)
+        sign_tmp = sine_axis[aux, major].sign()
         sign = torch.where(sign_tmp != 0, sign_tmp, torch.ones_like(sign_tmp))
-        ret[near_pi] = axis * (theta[near_pi] * sign).view(-1, 1)
+        ret = torch.where(near_pi.view(-1, 1), axis * (theta * sign).view(-1, 1), ret)
 
         if jacobians is not None:
             SO3._check_jacobians_list(jacobians)
-            jac = torch.zeros_like(self.tensor)
 
             theta2 = theta**2
             sine_theta = sine * theta
@@ -353,40 +369,44 @@ class SO3(LieGroup):
         return self.tensor.clone()
 
     def to_quaternion(self) -> torch.Tensor:
-        ret = torch.zeros(self.shape[0], 4, dtype=self.dtype, device=self.device)
-
-        sine_axis = torch.zeros(self.shape[0], 3, dtype=self.dtype, device=self.device)
+        sine_axis = self.tensor.new_zeros(self.shape[0], 3)
         sine_axis[:, 0] = 0.5 * (self[:, 2, 1] - self[:, 1, 2])
         sine_axis[:, 1] = 0.5 * (self[:, 0, 2] - self[:, 2, 0])
         sine_axis[:, 2] = 0.5 * (self[:, 1, 0] - self[:, 0, 1])
         w = 0.5 * (1 + self[:, 0, 0] + self[:, 1, 1] + self[:, 2, 2]).clamp(0, 4).sqrt()
 
-        ret[:, 0] = w
+        near_zero = w > 1 - self._NEAR_ZERO_EPS
+        near_pi = w <= self._NEAR_PI_EPS
+        non_zero = self.tensor.new_ones([1])
 
+        ret = self.tensor.new_zeros(self.shape[0], 4)
         # theta != pi
-        not_near_pi = ret[:, 0] > self._NEAR_PI_EPS
-        ret[:, 1:] = 0.5 * sine_axis / w.view(-1, 1)
+        ret[:, 0] = w
+        ret[:, 1:] = 0.5 * sine_axis / torch.where(near_pi, non_zero, w).view(-1, 1)
 
         # theta ~ pi
-        near_pi = ~not_near_pi
-        ddiag = torch.diagonal(self[near_pi], dim1=1, dim2=2)
+        ddiag = torch.diagonal(self.tensor, dim1=1, dim2=2)
         # Find the index of major coloumns and diagonals
         major = torch.logical_and(
             ddiag[:, 1] > ddiag[:, 0], ddiag[:, 1] > ddiag[:, 2]
         ) + 2 * torch.logical_and(ddiag[:, 2] > ddiag[:, 0], ddiag[:, 2] > ddiag[:, 1])
-        sel_rows = 0.5 * (self[near_pi, major] + self[near_pi, :, major])
-        aux = torch.ones(sel_rows.shape[0], dtype=torch.bool)
-        cosine_near_pi = 0.5 * (
-            self[near_pi, 0, 0] + self[near_pi, 1, 1] + self[near_pi, 2, 2] - 1
-        )
+        aux = torch.ones(self.shape[0], dtype=torch.bool)
+        sel_rows = 0.5 * (self[aux, major] + self[aux, :, major])
+        cosine_near_pi = 0.5 * (self[:, 0, 0] + self[:, 1, 1] + self[:, 2, 2] - 1)
         sel_rows[aux, major] -= cosine_near_pi
         axis = (
             sel_rows
-            / sel_rows.norm(dim=1, keepdim=True)
-            * sine_axis[near_pi, major].sign().view(-1, 1)
+            / torch.where(
+                near_zero.view(-1, 1),
+                non_zero.view(-1, 1),
+                sel_rows.norm(dim=1, keepdim=True),
+            )
+            * sine_axis[aux, major].sign().view(-1, 1)
         )
         sine_half_theta = (0.5 * (1 - cosine_near_pi)).clamp(0, 1).sqrt().view(-1, 1)
-        ret[near_pi, 1:] = axis * sine_half_theta
+        ret[:, 1:] = torch.where(
+            near_pi.view(-1, 1), axis * sine_half_theta, ret[:, 1:]
+        )
 
         return ret
 
@@ -396,15 +416,15 @@ class SO3(LieGroup):
         _check |= tangent_vector.ndim == 2 and tangent_vector.shape[1] == 3
         if not _check:
             raise ValueError("Invalid vee matrix for SO3.")
-        matrix = torch.zeros(tangent_vector.shape[0], 3, 3).to(
-            dtype=tangent_vector.dtype, device=tangent_vector.device
-        )
+        matrix = tangent_vector.new_zeros(tangent_vector.shape[0], 3, 3)
+
         matrix[:, 0, 1] = -tangent_vector[:, 2].view(-1)
         matrix[:, 0, 2] = tangent_vector[:, 1].view(-1)
         matrix[:, 1, 2] = -tangent_vector[:, 0].view(-1)
         matrix[:, 1, 0] = tangent_vector[:, 2].view(-1)
         matrix[:, 2, 0] = -tangent_vector[:, 1].view(-1)
         matrix[:, 2, 1] = tangent_vector[:, 0].view(-1)
+
         return matrix
 
     @staticmethod
@@ -430,7 +450,7 @@ class SO3(LieGroup):
             raise ValueError(err_msg)
 
     @staticmethod
-    def unit_quaternion_to_SO3(quaternion: torch.torch.Tensor) -> "SO3":
+    def unit_quaternion_to_SO3(quaternion: torch.Tensor) -> "SO3":
         if quaternion.ndim == 1:
             quaternion = quaternion.unsqueeze(0)
         SO3._unit_quaternion_check(quaternion)
@@ -451,9 +471,8 @@ class SO3(LieGroup):
         q33 = q3 * q3
 
         ret = SO3()
-        ret.tensor = torch.zeros(quaternion.shape[0], 3, 3).to(
-            dtype=quaternion.dtype, device=quaternion.device
-        )
+        ret.tensor = quaternion.new_zeros(quaternion.shape[0], 3, 3)
+
         ret[:, 0, 0] = 2 * (q00 + q11) - 1
         ret[:, 0, 1] = 2 * (q12 - q03)
         ret[:, 0, 2] = 2 * (q13 + q02)
@@ -513,7 +532,7 @@ class SO3(LieGroup):
         if jacobians is not None:
             self._check_jacobians_list(jacobians)
             # Left jacobians for SO3 are computed
-            Jrot = torch.zeros(batch_size, 3, 3, dtype=self.dtype, device=self.device)
+            Jrot = self.tensor.new_zeros(batch_size, 3, 3)
             Jrot[:, 0, 1] = -ret[:, 2]
             Jrot[:, 1, 0] = ret[:, 2]
             Jrot[:, 0, 2] = ret[:, 1]
@@ -524,6 +543,123 @@ class SO3(LieGroup):
             Jpnt = self.to_matrix().transpose(1, 2).expand(batch_size, 3, 3)
 
             jacobians.extend([Jrot, Jpnt])
+
+        return ret
+
+    def _deprecated_log_map_impl(
+        self, jacobians: Optional[List[torch.Tensor]] = None
+    ) -> torch.Tensor:
+        sine_axis = self.tensor.new_zeros(self.shape[0], 3)
+        sine_axis[:, 0] = 0.5 * (self[:, 2, 1] - self[:, 1, 2])
+        sine_axis[:, 1] = 0.5 * (self[:, 0, 2] - self[:, 2, 0])
+        sine_axis[:, 2] = 0.5 * (self[:, 1, 0] - self[:, 0, 1])
+        cosine = 0.5 * (self[:, 0, 0] + self[:, 1, 1] + self[:, 2, 2] - 1)
+        sine = sine_axis.norm(dim=1)
+        theta = torch.atan2(sine, cosine)
+
+        near_zero = theta < self._NEAR_ZERO_EPS
+
+        near_pi = 1 + cosine <= self._NEAR_PI_EPS
+        # theta != pi
+        near_zero_or_near_pi = torch.logical_or(near_zero, near_pi)
+        # Compute the approximation of theta / sin(theta) when theta is near to 0
+        non_zero = torch.ones(1, dtype=self.dtype, device=self.device)
+        sine_nz = torch.where(near_zero_or_near_pi, non_zero, sine)
+        scale = torch.where(
+            near_zero_or_near_pi,
+            1 + sine**2 / 6,
+            theta / sine_nz,
+        )
+        ret = sine_axis * scale.view(-1, 1)
+
+        if near_pi.any():
+            ddiag = torch.diagonal(self[near_pi], dim1=1, dim2=2)
+            # Find the index of major coloumns and diagonals
+            major = torch.logical_and(
+                ddiag[:, 1] > ddiag[:, 0], ddiag[:, 1] > ddiag[:, 2]
+            ) + 2 * torch.logical_and(
+                ddiag[:, 2] > ddiag[:, 0], ddiag[:, 2] > ddiag[:, 1]
+            )
+            sel_rows = 0.5 * (self[near_pi, major] + self[near_pi, :, major])
+            aux = torch.ones(sel_rows.shape[0], dtype=torch.bool)
+            sel_rows[aux, major] -= cosine[near_pi]
+            axis = sel_rows / sel_rows.norm(dim=1, keepdim=True)
+            sign_tmp = sine_axis[near_pi, major].sign()
+            sign = torch.where(sign_tmp != 0, sign_tmp, torch.ones_like(sign_tmp))
+            ret[near_pi] = axis * (theta[near_pi] * sign).view(-1, 1)
+
+        if jacobians is not None:
+            SO3._check_jacobians_list(jacobians)
+
+            theta2 = theta**2
+            sine_theta = sine * theta
+            two_cosine_minus_two = 2 * cosine - 2
+            two_cosine_minus_two_nz = torch.where(
+                near_zero, non_zero, two_cosine_minus_two
+            )
+            theta2_nz = torch.where(near_zero, non_zero, theta2)
+
+            a = torch.where(
+                near_zero, 1 - theta2 / 12, -sine_theta / two_cosine_minus_two_nz
+            )
+            b = torch.where(
+                near_zero,
+                1.0 / 12 + theta2 / 720,
+                (sine_theta + two_cosine_minus_two)
+                / (theta2_nz * two_cosine_minus_two_nz),
+            )
+
+            jac = (b.view(-1, 1) * ret).view(-1, 3, 1) * ret.view(-1, 1, 3)
+
+            half_ret = 0.5 * ret
+            jac[:, 0, 1] -= half_ret[:, 2]
+            jac[:, 1, 0] += half_ret[:, 2]
+            jac[:, 0, 2] += half_ret[:, 1]
+            jac[:, 2, 0] -= half_ret[:, 1]
+            jac[:, 1, 2] -= half_ret[:, 0]
+            jac[:, 2, 1] += half_ret[:, 0]
+
+            diag_jac = torch.diagonal(jac, dim1=1, dim2=2)
+            diag_jac += a.view(-1, 1)
+
+            jacobians.append(jac)
+
+        return ret
+
+    def _deprecated_to_quaternion(self) -> torch.Tensor:
+        sine_axis = self.tensor.new_zeros(self.shape[0], 3)
+        sine_axis[:, 0] = 0.5 * (self[:, 2, 1] - self[:, 1, 2])
+        sine_axis[:, 1] = 0.5 * (self[:, 0, 2] - self[:, 2, 0])
+        sine_axis[:, 2] = 0.5 * (self[:, 1, 0] - self[:, 0, 1])
+        w = 0.5 * (1 + self[:, 0, 0] + self[:, 1, 1] + self[:, 2, 2]).clamp(0, 4).sqrt()
+
+        near_pi = w <= self._NEAR_PI_EPS
+        non_zero = self.tensor.new_ones([1])
+
+        ret = self.tensor.new_zeros(self.shape[0], 4)
+        # theta != pi
+        ret[:, 0] = w
+        ret[:, 1:] = 0.5 * sine_axis / torch.where(near_pi, non_zero, w).view(-1, 1)
+
+        # theta ~ pi
+        ddiag = torch.diagonal(self[near_pi], dim1=1, dim2=2)
+        # Find the index of major coloumns and diagonals
+        major = torch.logical_and(
+            ddiag[:, 1] > ddiag[:, 0], ddiag[:, 1] > ddiag[:, 2]
+        ) + 2 * torch.logical_and(ddiag[:, 2] > ddiag[:, 0], ddiag[:, 2] > ddiag[:, 1])
+        sel_rows = 0.5 * (self[near_pi, major] + self[near_pi, :, major])
+        aux = torch.ones(sel_rows.shape[0], dtype=torch.bool)
+        cosine_near_pi = 0.5 * (
+            self[near_pi, 0, 0] + self[near_pi, 1, 1] + self[near_pi, 2, 2] - 1
+        )
+        sel_rows[aux, major] -= cosine_near_pi
+        axis = (
+            sel_rows
+            / sel_rows.norm(dim=1, keepdim=True)
+            * sine_axis[near_pi, major].sign().view(-1, 1)
+        )
+        sine_half_theta = (0.5 * (1 - cosine_near_pi)).clamp(0, 1).sqrt().view(-1, 1)
+        ret[near_pi, 1:] = axis * sine_half_theta
 
         return ret
 

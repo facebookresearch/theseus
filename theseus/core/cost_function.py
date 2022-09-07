@@ -285,6 +285,8 @@ class AutoDiffCostFunction(CostFunction):
             aux_vars=[v.copy() for v in self.aux_vars],
             cost_weight=self.weight.copy(),
             name=new_name,
+            autograd_loop_over_batch=self._autograd_loop_over_batch,
+            autograd_functorch=self._autograd_functorch,
         )
 
     def to(self, *args, **kwargs):
@@ -298,4 +300,8 @@ class AutoDiffCostFunction(CostFunction):
                 var.to(*args, **kwargs)
 
             for var in self._tmp_aux_vars_for_loop:
+                var.to(*args, **kwargs)
+
+        if self._autograd_functorch:
+            for var in self._tmp_aux_vars:
                 var.to(*args, **kwargs)

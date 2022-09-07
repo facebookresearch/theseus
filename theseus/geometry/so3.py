@@ -144,12 +144,6 @@ class SO3(LieGroup):
             raise ValueError("Quaternions can only be 4-D vectors.")
 
         if _LieGroupCheckContext.get_context():
-            warnings.warn(
-                "functorch is enabled and the validness of unit quaternions are not "
-                "checked for SO3.",
-                RuntimeWarning,
-            )
-        else:
             QUANTERNION_EPS = theseus.constants._SO3_QUATERNION_EPS[quaternion.dtype]
 
             if quaternion.dtype != torch.float64:
@@ -159,6 +153,12 @@ class SO3(LieGroup):
                 torch.linalg.norm(quaternion, dim=1) - 1
             ).abs().max().item() >= QUANTERNION_EPS:
                 raise ValueError("Not unit quaternions.")
+        else:
+            warnings.warn(
+                "functorch is enabled and the validness of unit quaternions are not "
+                "checked for SO3.",
+                RuntimeWarning,
+            )
 
     @staticmethod
     def _hat_matrix_check(matrix: torch.Tensor):

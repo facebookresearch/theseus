@@ -141,15 +141,15 @@ class SO2(LieGroup):
         _check = matrix.ndim == 3 and matrix.shape[1:] == (2, 2)
 
         if _LieGroupCheckContext.get_context():
+            _check &= matrix[:, 0, 0].abs().max().item() < theseus.constants.EPS
+            _check &= matrix[:, 1, 1].abs().max().item() < theseus.constants.EPS
+            _check &= torch.allclose(matrix[:, 0, 1], -matrix[:, 1, 0])
+        else:
             warnings.warn(
                 "functorch is enabled and the skew-symmetry of hat matrices is "
                 "not checked for SO2.",
                 RuntimeWarning,
             )
-        else:
-            _check &= matrix[:, 0, 0].abs().max().item() < theseus.constants.EPS
-            _check &= matrix[:, 1, 1].abs().max().item() < theseus.constants.EPS
-            _check &= torch.allclose(matrix[:, 0, 1], -matrix[:, 1, 0])
 
         if not _check:
             raise ValueError("Invalid hat matrix for SO2.")

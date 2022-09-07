@@ -175,12 +175,6 @@ class SE3(LieGroup):
             raise ValueError("Hat matrices of SE3 can only be 4x4 matrices")
 
         if _LieGroupCheckContext.get_context():
-            warnings.warn(
-                "functorch is enabled and the skew-symmetry of hat matrices is "
-                "not checked for SE3.",
-                RuntimeWarning,
-            )
-        else:
             if matrix[:, 3].abs().max().item() > HAT_EPS:
                 raise ValueError(
                     "The last row of hat matrices of SE3 can only be zero."
@@ -192,6 +186,12 @@ class SE3(LieGroup):
                 raise ValueError(
                     "The 3x3 top-left corner of hat matrices of SE3 can only be skew-symmetric."
                 )
+        else:
+            warnings.warn(
+                "functorch is enabled and the skew-symmetry of hat matrices is "
+                "not checked for SE3.",
+                RuntimeWarning,
+            )
 
     @staticmethod
     def exp_map(

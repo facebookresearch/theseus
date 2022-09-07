@@ -41,7 +41,7 @@ class Manifold(Variable, abc.ABC):
         if tensor is None and dtype is None:
             dtype = torch.get_default_dtype()
         if tensor is not None:
-            if not _LieGroupCheckContext.get_context():
+            if _LieGroupCheckContext.get_context():
                 tensor = self._check_tensor(tensor, strict)
             else:
                 warnings.warn(

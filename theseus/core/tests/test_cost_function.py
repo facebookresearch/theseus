@@ -57,7 +57,10 @@ def test_default_name_and_ids():
 
 
 @pytest.mark.parametrize("autograd_loop_over_batch", [True, False])
-def test_autodiff_cost_function_error_and_jacobians_shape(autograd_loop_over_batch):
+@pytest.mark.parametrize("autograd_functorch", [True, False])
+def test_autodiff_cost_function_error_and_jacobians_shape(
+    autograd_loop_over_batch, autograd_functorch
+):
     for i in range(100):
         num_optim_vars = np.random.randint(0, 5)
         num_aux_vars = np.random.randint(0, 5)
@@ -100,15 +103,17 @@ def test_autodiff_cost_function_error_and_jacobians_shape(autograd_loop_over_bat
 
             all_vars = optim_vars + aux_vars
 
-            vals = []
             for i, arg in enumerate(all_vars):
                 assert isinstance(arg, th.Variable)
                 assert arg.shape == (batch_size, i + 1) or arg.shape == (1, i + 1)
-                assert arg.tensor.allclose(
-                    variable_values[i] * torch.ones_like(arg.tensor)
+                if not autograd_functorch:
+                    assert arg.tensor.allclose(
+                        variable_values[i] * torch.ones_like(arg.tensor)
+                    )
+                ret_val = ret_val + arg.tensor.view(arg.shape[0], -1).mean(
+                    dim=1, keepdim=True
                 )
-                vals.append(arg[0, 0])
-            return ret_val + torch.Tensor(vals).sum()
+            return ret_val
 
         # this checks that 0 optimization variables is not allowed
         if len(optim_vars) < 1:
@@ -129,6 +134,7 @@ def test_autodiff_cost_function_error_and_jacobians_shape(autograd_loop_over_bat
                 cost_weight=cost_weight,
                 aux_vars=aux_vars,
                 autograd_loop_over_batch=autograd_loop_over_batch,
+                autograd_functorch=autograd_functorch,
             )
             err = cost_function.error()
             assert err.allclose(variable_values.sum() * torch.ones(batch_size, err_dim))

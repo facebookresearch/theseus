@@ -149,7 +149,10 @@ def test_autodiff_cost_function_error_and_jacobians_shape(
 
 
 @pytest.mark.parametrize("autograd_loop_over_batch", [True, False])
-def test_autodiff_cost_function_cost_weight(autograd_loop_over_batch):
+@pytest.mark.parametrize("autograd_functorch", [True, False])
+def test_autodiff_cost_function_cost_weight(
+    autograd_loop_over_batch, autograd_functorch
+):
     batch_size = 10
     optim_vars = []
     aux_vars = []
@@ -181,6 +184,7 @@ def test_autodiff_cost_function_cost_weight(autograd_loop_over_batch):
         1,
         aux_vars=aux_vars,
         autograd_loop_over_batch=autograd_loop_over_batch,
+        autograd_functorch=autograd_functorch,
     )
     assert isinstance(cost_function.weight, ScaleCostWeight)
     assert torch.allclose(cost_function.weight.scale.tensor, torch.ones(1, 1))
@@ -208,7 +212,8 @@ def test_autodiff_cost_function_cost_weight(autograd_loop_over_batch):
 
 
 @pytest.mark.parametrize("autograd_loop_over_batch", [True, False])
-def test_autodiff_cost_function_to(autograd_loop_over_batch):
+@pytest.mark.parametrize("autograd_functorch", [True, False])
+def test_autodiff_cost_function_to(autograd_loop_over_batch, autograd_functorch):
     batch_size = 10
     optim_vars = []
     aux_vars = []
@@ -242,6 +247,7 @@ def test_autodiff_cost_function_to(autograd_loop_over_batch):
         1,
         aux_vars=aux_vars,
         autograd_loop_over_batch=autograd_loop_over_batch,
+        autograd_functorch=autograd_functorch,
     )
 
     for var in optim_vars:
@@ -257,8 +263,9 @@ def test_autodiff_cost_function_to(autograd_loop_over_batch):
 
 
 @pytest.mark.parametrize("autograd_loop_over_batch", [True, False])
+@pytest.mark.parametrize("autograd_functorch", [True, False])
 def test_autodiff_cost_function_error_and_jacobians_shape_on_SO3(
-    autograd_loop_over_batch,
+    autograd_loop_over_batch, autograd_functorch
 ):
     for i in range(100):
         num_vars = np.random.randint(0, 5)
@@ -283,7 +290,9 @@ def test_autodiff_cost_function_error_and_jacobians_shape_on_SO3(
             ret_val = torch.zeros(optim_vars[0].shape[0], err_dim)
 
             for optim_var, aux_var in zip(optim_vars, aux_vars):
-                ret_val += th.SO3(tensor=optim_var.tensor).rotate(aux_var).tensor
+                ret_val = (
+                    ret_val + th.SO3(tensor=optim_var.tensor).rotate(aux_var).tensor
+                )
 
             return ret_val
 
@@ -306,6 +315,7 @@ def test_autodiff_cost_function_error_and_jacobians_shape_on_SO3(
                 cost_weight=cost_weight,
                 aux_vars=aux_vars,
                 autograd_loop_over_batch=autograd_loop_over_batch,
+                autograd_functorch=autograd_functorch,
             )
             err = cost_function.error()
 
@@ -319,8 +329,9 @@ def test_autodiff_cost_function_error_and_jacobians_shape_on_SO3(
 
 
 @pytest.mark.parametrize("autograd_loop_over_batch", [True, False])
+@pytest.mark.parametrize("autograd_functorch", [True, False])
 def test_autodiff_cost_function_error_and_jacobians_value_on_SO3(
-    autograd_loop_over_batch,
+    autograd_loop_over_batch, autograd_functorch
 ):
     for i in range(100):
         num_vars = np.random.randint(0, 5)
@@ -345,7 +356,9 @@ def test_autodiff_cost_function_error_and_jacobians_value_on_SO3(
             ret_val = torch.zeros(optim_vars[0].shape[0], err_dim, dtype=torch.float64)
 
             for optim_var, aux_var in zip(optim_vars, aux_vars):
-                ret_val += th.SO3(tensor=optim_var.tensor).rotate(aux_var).tensor
+                ret_val = (
+                    ret_val + th.SO3(tensor=optim_var.tensor).rotate(aux_var).tensor
+                )
 
             return ret_val
 
@@ -368,6 +381,7 @@ def test_autodiff_cost_function_error_and_jacobians_value_on_SO3(
                 cost_weight=cost_weight,
                 aux_vars=aux_vars,
                 autograd_loop_over_batch=autograd_loop_over_batch,
+                autograd_functorch=autograd_functorch,
             )
             jac_actual, err_actual = cost_function.jacobians()
 

@@ -9,7 +9,7 @@ import torch
 
 import theseus as th
 from theseus.constants import TEST_EPS
-from theseus.geometry.functorch import set_functorch_enabled
+from theseus.geometry.tensor_check import set_lie_group_tensor_check_enabled
 from theseus.utils import numeric_jacobian
 
 from .common import (
@@ -27,14 +27,14 @@ from .common import (
 
 
 def check_SO3_log_map(tangent_vector, atol=1e-7, enable_functorch=False):
-    with set_functorch_enabled(enable_functorch):
+    with set_lie_group_tensor_check_enabled(enable_functorch):
         error = (tangent_vector - th.SO3.exp_map(tangent_vector).log_map()).norm(dim=1)
         error = torch.minimum(error, (error - 2 * np.pi).abs())
         assert torch.allclose(error, torch.zeros_like(error), atol=atol)
 
 
 def check_SO3_to_quaternion(so3: th.SO3, atol=1e-10, enable_functorch=False):
-    with set_functorch_enabled(enable_functorch):
+    with set_lie_group_tensor_check_enabled(enable_functorch):
         quaternions = so3.to_quaternion()
         assert torch.allclose(
             th.SO3(quaternion=quaternions).to_matrix(), so3.to_matrix(), atol=atol

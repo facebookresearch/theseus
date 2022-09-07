@@ -9,7 +9,7 @@ import torch
 
 import theseus as th
 from theseus.constants import TEST_EPS
-from theseus.geometry.functorch import set_functorch_enabled
+from theseus.geometry.tensor_check import set_lie_group_tensor_check_enabled
 from theseus.utils import numeric_jacobian
 
 from .common import (
@@ -28,7 +28,7 @@ from .common import (
 
 
 def check_SE3_log_map(tangent_vector, atol=TEST_EPS, enable_functorch=False):
-    with set_functorch_enabled(enable_functorch):
+    with set_lie_group_tensor_check_enabled(enable_functorch):
         g = th.SE3.exp_map(tangent_vector)
         assert torch.allclose(th.SE3.exp_map(g.log_map()).tensor, g.tensor, atol=atol)
 
@@ -71,7 +71,7 @@ def test_exp_map(batch_size, dtype, ang_factor, enable_functorch):
 )
 @pytest.mark.parametrize("enable_functorch", [True, False])
 def test_batch_size_3_exp_map(dtype, ang_factor, enable_functorch):
-    with set_functorch_enabled(enable_functorch):
+    with set_lie_group_tensor_check_enabled(enable_functorch):
         rng = torch.Generator()
         rng.manual_seed(0)
         ATOL = 1e-4 if dtype == torch.float32 else 1e-6
@@ -125,7 +125,7 @@ def test_log_map(batch_size, dtype, ang_factor, enable_functorch):
 )
 @pytest.mark.parametrize("enable_functorch", [True, False])
 def test_batch_size_3_log_map(dtype, ang_factor, enable_functorch):
-    with set_functorch_enabled(enable_functorch):
+    with set_lie_group_tensor_check_enabled(enable_functorch):
         rng = torch.Generator()
         rng.manual_seed(0)
         ATOL = 1e-3 if dtype == torch.float32 else 1e-6

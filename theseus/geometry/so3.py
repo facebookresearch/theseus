@@ -12,7 +12,7 @@ import theseus.constants
 
 from .lie_group import LieGroup
 from .point_types import Point3
-from .functorch import _FunctorchContext
+from .tensor_check import _LieGroupTensorCheckContext
 
 
 class SO3(LieGroup):
@@ -143,7 +143,7 @@ class SO3(LieGroup):
         if quaternion.ndim != 2 or quaternion.shape[1] != 4:
             raise ValueError("Quaternions can only be 4-D vectors.")
 
-        if _FunctorchContext.get_context():
+        if _LieGroupTensorCheckContext.get_context():
             warnings.warn(
                 "functorch is enabled and the validness of unit quaternions are not "
                 "checked for SO3.",
@@ -165,7 +165,7 @@ class SO3(LieGroup):
         if matrix.ndim != 3 or matrix.shape[1:] != (3, 3):
             raise ValueError("Hat matrices of SO(3) can only be 3x3 matrices")
 
-        if _FunctorchContext.get_context():
+        if _LieGroupTensorCheckContext.get_context():
             warnings.warn(
                 "functorch is enabled and the skew-symmetry of hat matrices is "
                 "not checked for SO3.",

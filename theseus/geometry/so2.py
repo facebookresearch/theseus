@@ -12,7 +12,7 @@ import theseus.constants
 
 from .lie_group import LieGroup
 from .point_types import Point2
-from .functorch import _FunctorchContext
+from .tensor_check import _LieGroupTensorCheckContext
 
 
 class SO2(LieGroup):
@@ -140,7 +140,7 @@ class SO2(LieGroup):
     def _hat_matrix_check(matrix: torch.Tensor):
         _check = matrix.ndim == 3 and matrix.shape[1:] == (2, 2)
 
-        if _FunctorchContext.get_context():
+        if _LieGroupTensorCheckContext.get_context():
             warnings.warn(
                 "functorch is enabled and the skew-symmetry of hat matrices is "
                 "not checked for SO2.",

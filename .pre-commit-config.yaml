@@ -13,7 +13,7 @@ repos:
     rev: v0.931
     hooks:
       - id: mypy
-        additional_dependencies: [torch==1.9.0, tokenize-rt==3.2.0, types-PyYAML, types-mock]
+        additional_dependencies: [torch, tokenize-rt==3.2.0, types-PyYAML, types-mock]
         args: [--no-strict-optional, --ignore-missing-imports]
         exclude: setup.py
 

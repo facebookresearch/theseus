@@ -132,13 +132,34 @@ def _create_line_from_trajectory(
     return line
 
 
-def _add_robot_to_trajectory(x_list, y_list, radius, color="magenta", alpha=0.05):
+def _get_triangle_pts(x, y, theta, radius):
+    triangle_pts = []
+
+    def _append(new_theta, scale=1.0):
+        x_new = x + radius * np.cos(new_theta) * scale
+        y_new = y + radius * np.sin(new_theta) * scale
+        triangle_pts.append((x_new, y_new))
+
+    _append(theta, 1.0)
+    _append(theta + np.pi / 2, 0.5)
+    _append(theta - np.pi / 2, 0.5)
+    return triangle_pts
+
+
+def _add_robot_to_trajectory(
+    x_list, y_list, radius, color="magenta", alpha=0.05, theta=None
+):
     patches = []
     for i in range(x_list.shape[0]):
-        patch = mpl.patches.Circle((x_list[i], y_list[i]), radius)
-        patches.append(patch)
+        if theta is None:
+            patches.append(mpl.patches.Circle((x_list[i], y_list[i]), radius))
+            alpha_ = alpha
+        else:
+            triangle_pts = _get_triangle_pts(x_list[i], y_list[i], theta[i], radius)
+            patches.append(mpl.patches.Polygon(triangle_pts))
+            alpha_ = 2 * alpha
     patch_collection = mpl.collections.PatchCollection(
-        patches, alpha=alpha, color=color
+        patches, alpha=alpha_, color=color
     )
     return patch_collection
 
@@ -158,10 +179,17 @@ def generate_trajectory_figs(
     # cell rows/cols for each batch of trajectories
     traj_rows = []
     traj_cols = []
+    traj_angles = []
+    # Trajectories in the list correspond to different sources
+    # (e.g., motion planner, expert, straight line, etc.)
+    # Each trajectory tensor has shape (num_maps, data_size, traj_len)
     for trajectory in trajectories:
         row, col, _ = sdf.convert_points_to_cell(trajectory[:, :2, :])
         traj_rows.append(np.clip(row, 0, map_tensor.shape[1] - 1))
         traj_cols.append(np.clip(col, 0, map_tensor.shape[1] - 1))
+        if trajectory.shape[1] == 7:  # SE2 trajectory
+            traj_angles.append(torch.atan2(trajectory[:, 3], trajectory[:, 2]).numpy())
+    assert len(traj_angles) == 0 or len(traj_angles) == len(traj_rows)
 
     # Generate a separate figure for each batch index
     colors = ["green", "blue", "red"]
@@ -189,12 +217,15 @@ def generate_trajectory_figs(
         for t_idx, trajectory in enumerate(trajectories):
             row = traj_rows[t_idx][map_idx]
             col = traj_cols[t_idx][map_idx]
+            theta = None if len(traj_angles) == 0 else traj_angles[t_idx][map_idx]
             line = _create_line_from_trajectory(col, row, color=colors[t_idx])
             path_ax.add_line(line)
             if t_idx == fig_idx_robot:  # solution trajectory
                 cs_idx = map_idx if cell_size.shape[0] > 1 else 0
                 radius = robot_radius / cell_size[cs_idx][0]
-                patch_coll = _add_robot_to_trajectory(col, row, radius, alpha=0.10)
+                patch_coll = _add_robot_to_trajectory(
+                    col, row, radius, alpha=0.10, theta=theta
+                )
                 path_ax.add_collection(patch_coll)
             patches.append(mpl.patches.Patch(color=colors[t_idx], label=labels[t_idx]))
         patches.append(

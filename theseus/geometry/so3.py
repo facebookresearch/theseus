@@ -168,7 +168,7 @@ class SO3(LieGroup):
                 raise ValueError("Not unit quaternions.")
         else:
             warnings.warn(
-                "functorch is enabled and the validness of unit quaternions are not "
+                "Lie group checks are disabled, so the validness of unit quaternions is not "
                 "checked for SO3.",
                 RuntimeWarning,
             )
@@ -180,7 +180,7 @@ class SO3(LieGroup):
 
         if _LieGroupCheckContext.get_context():
             warnings.warn(
-                "functorch is enabled and the skew-symmetry of hat matrices is "
+                "Lie group checks are disabled, so the skew-symmetry of hat matrices is "
                 "not checked for SO3.",
                 RuntimeWarning,
             )

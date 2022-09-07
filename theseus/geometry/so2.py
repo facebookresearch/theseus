@@ -146,7 +146,7 @@ class SO2(LieGroup):
             _check &= torch.allclose(matrix[:, 0, 1], -matrix[:, 1, 0])
         else:
             warnings.warn(
-                "functorch is enabled and the skew-symmetry of hat matrices is "
+                "Lie group checks are disabled, so the skew-symmetry of hat matrices is "
                 "not checked for SO2.",
                 RuntimeWarning,
             )

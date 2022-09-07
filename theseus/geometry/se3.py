@@ -188,7 +188,7 @@ class SE3(LieGroup):
                 )
         else:
             warnings.warn(
-                "functorch is enabled and the skew-symmetry of hat matrices is "
+                "Lie group checks are disabled, so the skew-symmetry of hat matrices is "
                 "not checked for SE3.",
                 RuntimeWarning,
             )

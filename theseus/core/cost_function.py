@@ -14,7 +14,7 @@ from typing_extensions import Protocol
 from functorch import vmap, jacrev
 
 from theseus.geometry import Manifold
-from theseus.geometry.lie_group_check import enable_lie_group_check
+from theseus.geometry.lie_group_check import no_lie_group_check
 
 from .cost_weight import CostWeight, ScaleCostWeight
 from .theseus_function import TheseusFunction
@@ -210,7 +210,7 @@ class AutoDiffCostFunction(CostFunction):
             assert len(optim_vars_tensors_) == len(tmp_optim_vars)
 
             # disable tensor checks and other operations that are incompatible with functorch
-            with enable_lie_group_check():
+            with no_lie_group_check():
                 for i, tensor in enumerate(optim_vars_tensors_):
                     tmp_optim_vars[i].update(tensor.unsqueeze(0))
 

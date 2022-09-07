@@ -45,7 +45,7 @@ class Manifold(Variable, abc.ABC):
                 tensor = self._check_tensor(tensor, strict)
             else:
                 warnings.warn(
-                    f"Lie group consistency checks are disabled "
+                    f"Manifold consistency checks are disabled "
                     f"for {self.__class__.__name__}.",
                     RuntimeWarning,
                 )

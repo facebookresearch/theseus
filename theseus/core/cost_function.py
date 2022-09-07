@@ -148,8 +148,8 @@ class AutoDiffCostFunction(CostFunction):
         if autograd_functorch and self._autograd_loop_over_batch:
             self._autograd_loop_over_batch = False
             warnings.warn(
-                "autograd_loop_over_batch has been reset to be False due to "
-                "the conflict with given autograd_use_functorch=True."
+                "autograd_use_functorch=True overrides given autograd_loop_over_batch=True, "
+                "so the latter will be set to False"
             )
 
         if self._autograd_loop_over_batch:

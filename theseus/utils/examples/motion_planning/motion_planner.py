@@ -349,7 +349,7 @@ class MotionPlanner:
                 cur_pos = start[:, :2] + unit_trajectory_len * i
                 input_dict[f"pose_{i}"] = torch.cat([cur_pos, start[:, 2:]], dim=1)
                 input_dict[f"vel_{i}"] = torch.cat(
-                    [avg_vel, torch.zeros(avg_vel.shape[0], 1)], dim=1
+                    [avg_vel, torch.zeros_like(avg_vel[:, :1])], dim=1
                 )
             else:
                 input_dict[f"pose_{i}"] = start + unit_trajectory_len * i

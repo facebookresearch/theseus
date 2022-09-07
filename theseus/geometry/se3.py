@@ -14,7 +14,7 @@ import theseus.constants
 from .lie_group import LieGroup
 from .point_types import Point3
 from .so3 import SO3
-from .tensor_check import _LieGroupTensorCheckContext
+from .lie_group_check import _LieGroupCheckContext
 
 
 class SE3(LieGroup):
@@ -174,7 +174,7 @@ class SE3(LieGroup):
         if matrix.ndim != 3 or matrix.shape[1:] != (4, 4):
             raise ValueError("Hat matrices of SE3 can only be 4x4 matrices")
 
-        if _LieGroupTensorCheckContext.get_context():
+        if _LieGroupCheckContext.get_context():
             warnings.warn(
                 "functorch is enabled and the skew-symmetry of hat matrices is "
                 "not checked for SE3.",

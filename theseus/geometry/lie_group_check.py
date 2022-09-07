@@ -7,7 +7,7 @@ import threading
 from typing import Any
 
 
-class _LieGroupContext:
+class _LieGroupCheckContext:
     contexts = threading.local()
 
     @classmethod
@@ -23,30 +23,30 @@ class _LieGroupContext:
 
 class set_lie_group_check_enabled:
     def __init__(self, mode: bool) -> None:
-        self.prev = _LieGroupContext.get_context()
-        _LieGroupContext.set_context(mode)
+        self.prev = _LieGroupCheckContext.get_context()
+        _LieGroupCheckContext.set_context(mode)
 
     def __enter__(self) -> None:
         pass
 
     def __exit__(self, exc_type: Any, exc_value: Any, traceback: Any) -> None:
-        _LieGroupContext.set_context(self.prev)
+        _LieGroupCheckContext.set_context(self.prev)
 
 
-class enable_lie_group_check(_LieGroupContext):
+class enable_lie_group_check(_LieGroupCheckContext):
     def __enter__(self) -> None:
-        self.prev = _LieGroupContext.get_context()
-        _LieGroupContext.set_context(True)
+        self.prev = _LieGroupCheckContext.get_context()
+        _LieGroupCheckContext.set_context(True)
 
     def __exit__(self, typ, value, traceback) -> None:
-        _LieGroupContext.set_context(self.prev)
+        _LieGroupCheckContext.set_context(self.prev)
 
 
-class no_lie_group_check(_LieGroupContext):
+class no_lie_group_check(_LieGroupCheckContext):
     def __enter__(self):
         self.prev = super().get_context()
-        _LieGroupContext.set_context(False)
+        _LieGroupCheckContext.set_context(False)
         return self
 
     def __exit__(self, typ, value, traceback):
-        _LieGroupContext.set_context(self.prev)
+        _LieGroupCheckContext.set_context(self.prev)

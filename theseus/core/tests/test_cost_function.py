@@ -61,6 +61,8 @@ def test_default_name_and_ids():
 def test_autodiff_cost_function_error_and_jacobians_shape(
     autograd_loop_over_batch, autograd_functorch
 ):
+    rng = torch.Generator()
+    rng.manual_seed(0)
     for i in range(100):
         num_optim_vars = np.random.randint(0, 5)
         num_aux_vars = np.random.randint(0, 5)
@@ -68,7 +70,7 @@ def test_autodiff_cost_function_error_and_jacobians_shape(
         err_dim = np.random.randint(1, 5)
         optim_vars = []
         aux_vars = []
-        variable_values = torch.randn(num_optim_vars + num_aux_vars)
+        variable_values = torch.randn(num_optim_vars + num_aux_vars, generator=rng)
         idx = 0
         for i in range(num_optim_vars):
             optim_vars.append(
@@ -137,7 +139,9 @@ def test_autodiff_cost_function_error_and_jacobians_shape(
                 autograd_functorch=autograd_functorch,
             )
             err = cost_function.error()
-            assert err.allclose(variable_values.sum() * torch.ones(batch_size, err_dim))
+            assert err.allclose(
+                variable_values.sum() * torch.ones(batch_size, err_dim), atol=1e-7
+            )
 
             # Now checking the jacobians
             jacobians, err_jac = cost_function.jacobians()

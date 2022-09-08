@@ -40,8 +40,10 @@ class UrdfRobotModel(KinematicsModel):
         try:
             import differentiable_robot_model as drm
         except ModuleNotFoundError as e:
-            print("UrdfRobotModel requires installing differentiable-robot-model.")
-            print("Please run `pip install differentiable-robot-model`.")
+            print(
+                "UrdfRobotModel requires installing differentiable-robot-model. "
+                "Please run `pip install differentiable-robot-model`."
+            )
             raise e
 
         self.drm_model = drm.DifferentiableRobotModel(urdf_path)

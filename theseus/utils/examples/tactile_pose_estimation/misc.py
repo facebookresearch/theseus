@@ -47,11 +47,11 @@ class TactilePushingDataset:
             stop = max(int(np.ceil(num_episodes * val_ratio)), 2)
             idx = order[:stop] if data_mode == "val" else order[stop:]
 
-        self.img_feats = data["img_feats"][idx]
-        self.eff_poses = data["eff_poses"][idx]
-        self.obj_poses = data["obj_poses"][idx]
-        self.contact_episode = data["contact_episode"][idx]
-        self.contact_flag = data["contact_flag"][idx]
+        self.img_feats = data["img_feats"][idx]  # type: ignore
+        self.eff_poses = data["eff_poses"][idx]  # type: ignore
+        self.obj_poses = data["obj_poses"][idx]  # type: ignore
+        self.contact_episode = data["contact_episode"][idx]  # type: ignore
+        self.contact_flag = data["contact_flag"][idx]  # type: ignore
         # Check sizes of the attributes assigned above
         self.dataset_size: int = -1
         for key in data:

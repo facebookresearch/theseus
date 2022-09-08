@@ -298,7 +298,7 @@ class _DLMPerturbation(CostFunction):
         return [self.var.project(euclidean_grad, is_sparse=True)], self.error()
 
     def dim(self) -> int:
-        return np.prod(self.var.tensor.shape[1:])
+        return int(np.prod(self.var.tensor.shape[1:]))
 
     def _copy_impl(self, new_name: Optional[str] = None) -> "CostFunction":
         return _DLMPerturbation(

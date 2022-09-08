@@ -105,9 +105,9 @@ pip install -e ".[dev]"
 ```
 and follow the more detailed instructions in [CONTRIBUTING](https://github.com/facebookresearch/theseus/blob/main/CONTRIBUTING.md).
 
-### Running unit tests
+### Running unit tests (requires `dev` installation)
 ```bash
-pytest theseus
+python -m pytest theseus
 ```
 By default, unit tests include tests for our CUDA extensions. You can add the option `-m "not cudaext"` to skip them when installing without CUDA support.
 

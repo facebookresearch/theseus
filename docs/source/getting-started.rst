@@ -45,6 +45,14 @@ If you are interested in contributing to ``theseus``, instead install using
 
 and follow the more detailed instructions in `CONTRIBUTING <https://github.com/facebookresearch/theseus/blob/main/CONTRIBUTING.md>`_.
 
+Unit tests
+""""""""""
+With ``dev`` installation, you can run unit tests via
+
+.. code-block:: bash
+
+    python -m pytest theseus
+
 By default, unit tests include tests for our CUDA extensions. You can add the option ``-m "not cudaext"`` to
 skip them when installing without CUDA support.
 

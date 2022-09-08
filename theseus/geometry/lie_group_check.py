@@ -13,7 +13,7 @@ class _LieGroupCheckContext:
     @classmethod
     def get_context(cls):
         if not hasattr(cls.contexts, "check_lie_group"):
-            cls.contexts.check_lie_group = False
+            cls.contexts.check_lie_group = True
         return cls.contexts.check_lie_group
 
     @classmethod

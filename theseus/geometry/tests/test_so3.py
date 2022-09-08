@@ -16,6 +16,8 @@ from .common import (
     check_adjoint,
     check_compose,
     check_exp_map,
+    check_log_map,
+    check_inverse,
     check_jacobian_for_local,
     check_projection_for_compose,
     check_projection_for_exp_map,
@@ -27,14 +29,14 @@ from .common import (
 
 
 def check_SO3_log_map(tangent_vector, atol=1e-7, enable_functorch=False):
-    with set_lie_group_check_enabled(enable_functorch):
+    with set_lie_group_check_enabled(not enable_functorch):
         error = (tangent_vector - th.SO3.exp_map(tangent_vector).log_map()).norm(dim=1)
         error = torch.minimum(error, (error - 2 * np.pi).abs())
         assert torch.allclose(error, torch.zeros_like(error), atol=atol)
 
 
 def check_SO3_to_quaternion(so3: th.SO3, atol=1e-10, enable_functorch=False):
-    with set_lie_group_check_enabled(enable_functorch):
+    with set_lie_group_check_enabled(not enable_functorch):
         quaternions = so3.to_quaternion()
         assert torch.allclose(
             th.SO3(quaternion=quaternions).to_matrix(), so3.to_matrix(), atol=atol
@@ -66,7 +68,9 @@ def test_exp_map(batch_size, dtype, ang_factor, enable_functorch):
 
     tangent_vector = _create_tangent_vector(batch_size, ang_factor, rng, dtype)
     check_exp_map(tangent_vector, th.SO3, atol=ATOL, enable_functorch=enable_functorch)
-    check_projection_for_exp_map(tangent_vector, th.SO3, atol=ATOL)
+    check_projection_for_exp_map(
+        tangent_vector, th.SO3, atol=ATOL, enable_functorch=enable_functorch
+    )
 
 
 @pytest.mark.parametrize("batch_size", [1, 20, 100])
@@ -91,9 +95,25 @@ def test_log_map(batch_size, dtype, ang_factor, enable_functorch):
 
     tangent_vector = _create_tangent_vector(batch_size, ang_factor, rng, dtype)
     check_SO3_log_map(tangent_vector, atol=ATOL, enable_functorch=enable_functorch)
+    if tangent_vector.norm(dim=1).max() < 2 * np.pi - 1e-3:
+        check_log_map(
+            tangent_vector, th.SO3, atol=ATOL, enable_functorch=enable_functorch
+        )
     check_projection_for_log_map(
         tangent_vector, th.SO3, atol=PROJECTION_ATOL, enable_functorch=enable_functorch
     )
+
+
+@pytest.mark.parametrize("batch_size", [1, 20, 100])
+@pytest.mark.parametrize("dtype", [torch.float32, torch.float64])
+@pytest.mark.parametrize("enable_functorch", [True, False])
+def test_inverse(batch_size, dtype, enable_functorch):
+    rng = torch.Generator()
+    rng.manual_seed(0)
+
+    group = th.SO3.rand(batch_size, generator=rng, dtype=dtype)
+
+    check_inverse(group, enable_functorch=enable_functorch)
 
 
 @pytest.mark.parametrize("batch_size", [1, 20, 100])

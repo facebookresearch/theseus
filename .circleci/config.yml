@@ -53,6 +53,7 @@ setup_cuda10_libs: &setup_cuda10_libs
       working_directory: ~/
       command: |
         # ubuntu's default gcc9.3 is too recent for cuda10.2
+        sudo apt-get install -y gcc-7 g++-7
         sudo apt-get install -y gcc-8 g++-8
         sudo update-alternatives --install /usr/bin/gcc gcc /usr/bin/gcc-9 10
         sudo update-alternatives --install /usr/bin/gcc gcc /usr/bin/gcc-8 20
@@ -93,7 +94,7 @@ install_torch_cuda10: &install_torch_cuda10
       name: Install Torch for cuda10
       working_directory: ~/project
       command: |
-        pip install --progress-bar off torch==1.10.0+cu102 torchvision==0.11.1+cu102 torchaudio==0.10.0+cu102 -f https://download.pytorch.org/whl/cu102/torch_stable.html
+        pip install --progress-bar off torch==1.12.1+cu102 torchvision==0.13.1+cu102 torchaudio==0.12.1+cu102 -f https://download.pytorch.org/whl/cu102/torch_stable.html
         python -c 'import torch; print("Torch version:", torch.__version__); assert torch.cuda.is_available()'
 
 install_torch_cuda11: &install_torch_cuda11
@@ -101,12 +102,27 @@ install_torch_cuda11: &install_torch_cuda11
       name: Install Torch for cuda11
       working_directory: ~/project
       command: |
-        pip install --progress-bar off torch==1.10.0+cu113 torchvision==0.11.1+cu113 torchaudio==0.10.0+cu113 -f https://download.pytorch.org/whl/cu113/torch_stable.html
+        pip install --progress-bar off torch==1.12.1+cu113 torchvision==0.13.1+cu113 torchaudio==0.12.1+cu113 -f https://download.pytorch.org/whl/cu113/torch_stable.html
         python -c 'import torch; print("Torch version:", torch.__version__); assert torch.cuda.is_available()'
 
-setup_project: &setup_project
+install_functorch: &install_functorch
   - run:
-      name: Setting up project
+      name: Install Functorch
+      working_directory: ~/project
+      command: |
+        pip install functorch
+
+setup_project_cuda10: &setup_project_cuda10
+  - run:
+      name: Setting up project for cuda10
+      working_directory: ~/project
+      command: |
+        CXX=g++-7 CC=gcc-7 LD=g++-7 pip install --progress-bar off -e .
+        CXX=g++-7 CC=gcc-7 LD=g++-7 pip install -r requirements/dev.txt
+
+setup_project_cuda11: &setup_project_cuda11
+  - run:
+      name: Setting up project for cuda11
       working_directory: ~/project
       command: |
         pip install --progress-bar off -e .
@@ -130,6 +146,7 @@ jobs:
     steps:
       - checkout
       - <<: *install_suitesparse
+      - <<: *install_functorch
       - <<: *install_nox
       - run:
           name: "Testing theseus"
@@ -144,6 +161,7 @@ jobs:
     steps:
       - checkout
       - <<: *install_suitesparse
+      - <<: *install_functorch
       - <<: *install_nox
       - run:
           name: "Testing theseus"
@@ -158,6 +176,7 @@ jobs:
     steps:
       - checkout
       - <<: *install_suitesparse
+      - <<: *install_functorch
       - <<: *install_nox
       - run:
           name: "Testing theseus"
@@ -175,7 +194,8 @@ jobs:
       - <<: *setup_cuda10_libs
       - <<: *setup_environment
       - <<: *install_torch_cuda10
-      - <<: *setup_project
+      - <<: *install_functorch
+      - <<: *setup_project_cuda10
       - <<: *run_tests
 
   unittests_gpu17_cuda11:
@@ -187,7 +207,8 @@ jobs:
       - <<: *setup_cuda11_libs
       - <<: *setup_environment
       - <<: *install_torch_cuda11
-      - <<: *setup_project
+      - <<: *install_functorch
+      - <<: *setup_project_cuda11
       - <<: *run_tests
 
 workflows:

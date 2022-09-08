@@ -5,12 +5,16 @@
 
 import abc
 from typing import Callable, List, Optional, Sequence, Tuple, cast
+import warnings
 
 import torch
 import torch.autograd.functional as autogradF
 from typing_extensions import Protocol
 
+from functorch import vmap, jacrev
+
 from theseus.geometry import Manifold
+from theseus.geometry.lie_group_check import no_lie_group_check
 
 from .cost_weight import CostWeight, ScaleCostWeight
 from .theseus_function import TheseusFunction
@@ -111,6 +115,7 @@ class AutoDiffCostFunction(CostFunction):
         autograd_strict: bool = False,
         autograd_vectorize: bool = False,
         autograd_loop_over_batch: bool = False,
+        autograd_functorch: bool = False,
     ):
         if cost_weight is None:
             cost_weight = ScaleCostWeight(1.0)
@@ -133,11 +138,21 @@ class AutoDiffCostFunction(CostFunction):
         # The following are auxiliary Variable objects to hold tensor data
         # during jacobian computation without modifying the original Variable objects
         self._tmp_optim_vars = tuple(v.copy() for v in optim_vars)
-
+        self._tmp_aux_vars = None
         self._tmp_optim_vars_for_loop = None
         self._tmp_aux_vars_for_loop = None
 
-        if autograd_loop_over_batch:
+        self._autograd_loop_over_batch = autograd_loop_over_batch
+        self._autograd_functorch = autograd_functorch
+
+        if autograd_functorch and self._autograd_loop_over_batch:
+            self._autograd_loop_over_batch = False
+            warnings.warn(
+                "autograd_use_functorch=True overrides given autograd_loop_over_batch=True, "
+                "so the latter will be set to False"
+            )
+
+        if self._autograd_loop_over_batch:
             self._tmp_optim_vars_for_loop = tuple(v.copy() for v in optim_vars)
             self._tmp_aux_vars_for_loop = tuple(v.copy() for v in aux_vars)
 
@@ -147,7 +162,8 @@ class AutoDiffCostFunction(CostFunction):
             for i, aux_var in enumerate(aux_vars):
                 self._tmp_aux_vars_for_loop[i].update(aux_var.tensor)
 
-        self._autograd_loop_over_batch = autograd_loop_over_batch
+        if self._autograd_functorch:
+            self._tmp_aux_vars = tuple(v.copy() for v in aux_vars)
 
     def _compute_error(
         self,
@@ -187,11 +203,43 @@ class AutoDiffCostFunction(CostFunction):
             vectorize=self._autograd_vectorize,
         )
 
-    # Returns (jacobians, error)
+    def _make_jac_fn_functorch(
+        self, tmp_optim_vars: Tuple[Manifold, ...], tmp_aux_vars: Tuple[Variable, ...]
+    ):
+        def jac_fn(optim_vars_tensors_, aux_vars_tensors_):
+            assert len(optim_vars_tensors_) == len(tmp_optim_vars)
+
+            # disable tensor checks and other operations that are incompatible with functorch
+            with no_lie_group_check():
+                for i, tensor in enumerate(optim_vars_tensors_):
+                    tmp_optim_vars[i].update(tensor.unsqueeze(0))
+
+                # only aux_var in current batch is evaluated
+                for i, tensor in enumerate(aux_vars_tensors_):
+                    tmp_aux_vars[i].update(tensor.unsqueeze(0))
+
+                # return [0] since functorch expects no batch output
+                return self._err_fn(optim_vars=tmp_optim_vars, aux_vars=tmp_aux_vars)[0]
+
+        return jac_fn
+
+    def _compute_autograd_jacobian_functorch(
+        self,
+        optim_tensors: Tuple[torch.Tensor, ...],
+        aux_tensors: Tuple[torch.Tensor, ...],
+        jac_fn: Callable,
+    ) -> Tuple[torch.Tensor, ...]:
+        return vmap(jacrev(jac_fn, argnums=0))(optim_tensors, aux_tensors)
+
     def jacobians(self) -> Tuple[List[torch.Tensor], torch.Tensor]:
         err, optim_vars, aux_vars = self._compute_error()
-
-        if self._autograd_loop_over_batch:
+        if self._autograd_functorch:
+            jacobians_full = self._compute_autograd_jacobian_functorch(
+                tuple(v.tensor for v in optim_vars),
+                tuple(v.tensor for v in aux_vars),
+                self._make_jac_fn_functorch(self._tmp_optim_vars, self._tmp_aux_vars),
+            )
+        elif self._autograd_loop_over_batch:
             jacobians_raw_loop: List[Tuple[torch.Tensor, ...]] = []
             for n in range(optim_vars[0].shape[0]):
                 for i, aux_var in enumerate(aux_vars):
@@ -205,17 +253,17 @@ class AutoDiffCostFunction(CostFunction):
                 )
                 jacobians_raw_loop.append(jacobians_n)
 
-            jacobians_full = [
+            jacobians_full = tuple(
                 torch.cat([jac[k][:, :, 0, :] for jac in jacobians_raw_loop], dim=0)
                 for k in range(len(optim_vars))
-            ]
+            )
         else:
             jacobians_raw = self._compute_autograd_jacobian(
                 tuple(v.tensor for v in optim_vars),
                 self._make_jac_fn(self._tmp_optim_vars, aux_vars),
             )
             aux_idx = torch.arange(err.shape[0])  # batch_size
-            jacobians_full = [jac[aux_idx, :, aux_idx, :] for jac in jacobians_raw]
+            jacobians_full = tuple(jac[aux_idx, :, aux_idx, :] for jac in jacobians_raw)
 
         # torch autograd returns shape (batch_size, dim, batch_size, var_dim), which
         # includes derivatives of batches against each other.
@@ -237,6 +285,8 @@ class AutoDiffCostFunction(CostFunction):
             aux_vars=[v.copy() for v in self.aux_vars],
             cost_weight=self.weight.copy(),
             name=new_name,
+            autograd_loop_over_batch=self._autograd_loop_over_batch,
+            autograd_functorch=self._autograd_functorch,
         )
 
     def to(self, *args, **kwargs):
@@ -250,4 +300,8 @@ class AutoDiffCostFunction(CostFunction):
                 var.to(*args, **kwargs)
 
             for var in self._tmp_aux_vars_for_loop:
+                var.to(*args, **kwargs)
+
+        if self._autograd_functorch:
+            for var in self._tmp_aux_vars:
                 var.to(*args, **kwargs)

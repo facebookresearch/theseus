@@ -4,4 +4,5 @@
 # LICENSE file in the root directory of this source tree.
 
 from .ba_viewer import BAViewer
+from .swarm_viewer import SwarmViewer
 from .gbp import GaussianBeliefPropagation, GBPSchedule

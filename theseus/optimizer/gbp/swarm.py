@@ -1,13 +1,15 @@
 import numpy as np
 import random
 import omegaconf
-import torch
+import time
 from typing import Optional, Tuple, List
 
-import pygame
+import torch
 
 import theseus as th
 from theseus.optimizer.gbp import GaussianBeliefPropagation, GBPSchedule
+
+# from theseus.optimizer.gbp import SwarmViewer
 
 
 OPTIMIZER_CLASS = {
@@ -26,105 +28,34 @@ GBP_SCHEDULE = {
 }
 
 
-class SwarmViewer:
+def fc_block(in_f, out_f):
+    return torch.nn.Sequential(torch.nn.Linear(in_f, out_f), torch.nn.ReLU())
+
+
+class TargetMLP(torch.nn.Module):
     def __init__(
         self,
-        state_history,
-        agent_radius,
-        collision_radius,
-        show_edges=True,
+        input_dim=1,
+        output_dim=2,
+        hidden_dim=8,
+        hidden_layers=0,
     ):
-        self.state_history = state_history
-        self.t = 0
-        self.num_iters = (~list(state_history.values())[0].isinf()[0, 0]).sum()
+        super(TargetMLP, self).__init__()
+        # input is agent index
+        self.relu = torch.nn.ReLU()
+        self.in_layer = torch.nn.Linear(1, hidden_dim)
+        hidden = [fc_block(hidden_dim, hidden_dim) for _ in range(hidden_layers)]
+        self.mid = torch.nn.Sequential(*hidden)
+        self.out_layer = torch.nn.Linear(hidden_dim, output_dim)
 
-        self.agent_cols = None
-        self.scale = 100
-        self.show_edges = show_edges
-        self.agent_r_pix = agent_radius * self.scale
-        self.collision_radius = collision_radius
-        self.range = np.array([[-3, -3], [3, 3]])
-        self.h = (self.range[1, 1] - self.range[0, 1]) * self.scale
-        self.w = (self.range[1, 0] - self.range[0, 0]) * self.scale
-
-        pygame.init()
-        pygame.display.set_caption("Swarm")
-        self.myfont = pygame.font.SysFont("Jokerman", 40)
-        self.screen = pygame.display.set_mode([self.h, self.w])
-
-        self.draw_next()
-
-        running = True
-        while running:
-
-            # Did the user click the window close button?
-            for event in pygame.event.get():
-                if event.type == pygame.QUIT:
-                    running = False
-                if event.type == pygame.KEYDOWN:
-                    if event.key == pygame.K_SPACE:
-                        self.draw_next()
-
-    def draw_next(self):
-        if self.agent_cols is None:
-            self.agent_cols = [
-                tuple(np.random.choice(range(256), size=3))
-                for i in range(len(self.state_history))
-            ]
-
-        if self.t < self.num_iters:
-            self.screen.fill((255, 255, 255))
-
-            # draw agents
-            for i, state in enumerate(self.state_history.values()):
-                pos = state[0, :, self.t].cpu().numpy()
-                centre = self.pos_to_canvas(pos)
-                pygame.draw.circle(
-                    self.screen, self.agent_cols[i], centre, self.agent_r_pix
-                )
-
-            # draw edges between agents
-            if self.show_edges:
-                for i, state1 in enumerate(self.state_history.values()):
-                    pos1 = state1[0, :, self.t].cpu().numpy()
-                    j = 0
-                    for state2 in self.state_history.values():
-                        if j <= i:
-                            j += 1
-                            continue
-                        pos2 = state2[0, :, self.t].cpu().numpy()
-                        dist = np.linalg.norm(pos1 - pos2)
-                        if dist < self.collision_radius:
-                            start = self.pos_to_canvas(pos1)
-                            end = self.pos_to_canvas(pos2)
-                            pygame.draw.line(self.screen, (0, 0, 0), start, end)
-
-            # draw text
-            ssshow = self.myfont.render(
-                f"t = {self.t} / {self.num_iters - 1}", True, (0, 0, 0)
-            )
-            self.screen.blit(ssshow, (10, 10))  # choose location of text
-
-            pygame.display.flip()
-
-            self.t += 1
-
-    def pos_to_canvas(self, pos):
-        return (
-            (pos - self.range[0])
-            / (self.range[1] - self.range[0])
-            * np.array([self.h, self.w])
-        )
+    def forward(self, x):
+        x = self.relu(self.in_layer(x))
+        x = self.mid(x)
+        out = self.out_layer(x)
+        return out
 
 
-def error_fn(optim_vars, aux_vars):
-    var1, var2 = optim_vars
-    radius = aux_vars[0]
-    return torch.relu(
-        1 - torch.norm(var1.tensor - var2.tensor, dim=1, keepdim=True) / radius.tensor
-    )
-
-
+# custom factor for two agents collision
 class TwoAgentsCollision(th.CostFunction):
     def __init__(
         self,
@@ -138,7 +69,7 @@ class TwoAgentsCollision(th.CostFunction):
         self.var1 = var1
         self.var2 = var2
         self.radius = radius
-        # to improve readability, we have skipped the data checks from code block above
+        # skips data checks
         self.register_optim_vars(["var1", "var2"])
         self.register_aux_vars(["radius"])
 
@@ -153,10 +84,7 @@ class TwoAgentsCollision(th.CostFunction):
         jac = (self.var1.tensor - self.var2.tensor) / denom
         jac = jac[:, None, :]
         jac[dist > self.radius.tensor] = 0.0
-        return [
-            -jac,
-            jac,
-        ], self.error()
+        return [-jac, jac], self.error()
 
     def dim(self) -> int:
         return 1
@@ -169,6 +97,13 @@ class TwoAgentsCollision(th.CostFunction):
             self.radius.copy(),
             name=new_name,
         )
+
+
+# all agents should be in square of side length 1 centered at the origin
+def square_loss_fn(outputs, side_len):
+    positions = torch.cat(list(outputs.values()))
+    loss = torch.relu(torch.abs(positions) - side_len / 2)
+    return loss.sum()
 
 
 def setup_problem(cfg: omegaconf.OmegaConf):
@@ -185,21 +120,23 @@ def setup_problem(cfg: omegaconf.OmegaConf):
     objective = th.Objective(dtype=dtype)
 
     # prior factor drawing each robot to the origin
-    origin = th.Point2()
-    origin_weight = th.ScaleCostWeight(
-        torch.tensor([cfg["setup"]["origin_weight"]], dtype=dtype)
-    )
-    for i in range(n_agents):
-        origin_cf = th.Difference(
-            positions[i],
-            origin,
-            origin_weight,
-            name=f"origin_pull_{i}",
-        )
-        objective.add(origin_cf)
+    # origin = th.Point2(name="origin")
+    # origin_weight = th.ScaleCostWeight(
+    #     torch.tensor([cfg["setup"]["origin_weight"]], dtype=dtype)
+    # )
+    # for i in range(n_agents):
+    #     origin_cf = th.Difference(
+    #         positions[i],
+    #         origin,
+    #         origin_weight,
+    #         name=f"origin_pull_{i}",
+    #     )
+    #     objective.add(origin_cf)
 
     # create collision factors, fully connected
-    radius = th.Vector(tensor=torch.tensor([cfg["setup"]["collision_radius"]]))
+    radius = th.Vector(
+        tensor=torch.tensor([cfg["setup"]["collision_radius"]]), name="radius"
+    )
     collision_weight = th.ScaleCostWeight(
         torch.tensor([cfg["setup"]["collision_weight"]], dtype=dtype)
     )
@@ -213,6 +150,23 @@ def setup_problem(cfg: omegaconf.OmegaConf):
                 name=f"collision_{i}_{j}",
             )
             objective.add(collision_cf)
+
+    # learned factors, encouraging a square formation
+    target_weight = th.ScaleCostWeight(
+        torch.tensor([cfg["setup"]["origin_weight"] * 10], dtype=dtype)
+    )
+    for i in range(n_agents):
+        target = th.Point2(
+            tensor=torch.normal(torch.zeros(2), cfg["setup"]["init_std"]),
+            name=f"target_{i}",
+        )
+        target_cf = th.Difference(
+            positions[i],
+            target,
+            target_weight,
+            name=f"formation_target_{i}",
+        )
+        objective.add(target_cf)
 
     return objective
 
@@ -261,22 +215,70 @@ def main(cfg: omegaconf.OmegaConf):
     for agent in objective.optim_vars.values():
         theseus_inputs[agent.name] = agent.tensor.clone()
 
-    # print("initial states\n", theseus_inputs)
+    # setup outer optimizer
+    targets = {}
+    for name, aux_var in objective.aux_vars.items():
+        if "target" in name:
+            targets[name] = torch.nn.Parameter(aux_var.tensor.clone())
+    outer_optimizer = OUTER_OPTIMIZER_CLASS[cfg["outer_optim"]["optimizer"]](
+        targets.values(), lr=cfg["outer_optim"]["lr"]
+    )
 
-    with torch.no_grad():
+    losses = []
+    targets_history = {}
+    for k, target in targets.items():
+        targets_history[k] = target.detach().clone().cpu().unsqueeze(-1)
+
+    for epoch in range(cfg["outer_optim"]["num_epochs"]):
+        print(f" ******************* EPOCH {epoch} ******************* ")
+        start_time = time.time_ns()
+        outer_optimizer.zero_grad()
+
+        for k, target in targets.items():
+            theseus_inputs[k] = target.clone()
+
         theseus_outputs, info = theseus_optim.forward(
             input_tensors=theseus_inputs,
             optimizer_kwargs=optim_arg,
         )
 
-    # print("final states\n", theseus_outputs)
+        if epoch < cfg["outer"]["num_epochs"] - 1:
+            loss = square_loss_fn(
+                theseus_outputs, cfg["outer_optim"]["square_side_len"]
+            )
+            loss.backward()
+            outer_optimizer.step()
+            losses.append(loss.detach().item())
+            end_time = time.time_ns()
+
+            for k, target in targets.items():
+                targets_history[k] = torch.cat(
+                    (targets_history[k], target.detach().clone().cpu().unsqueeze(-1)),
+                    dim=-1,
+                )
+
+            print(f"Loss {losses[-1]}")
+            print(f"Epoch took {(end_time - start_time) / 1e9: .3f} seconds")
+
+    print("Loss values:", losses)
 
     # visualisation
-    # SwarmViewer(
-    #     info.state_history,
+    # viewer = SwarmViewer(
     #     cfg["setup"]["agent_radius"],
     #     cfg["setup"]["collision_radius"],
+    # )
+
+    # viewer.vis_outer_targets_optim(
+    #     targets_history,
+    #     square_side=cfg["outer_optim"]["square_side_len"],
+    #     video_file=cfg["outer_optim_video_file"],
+    # )
+
+    # viewer.vis_inner_optim(
+    #     info.state_history,
+    #     targets=targets,  # make sure targets are from correct innner optim
     #     show_edges=False,
+    #     video_file=cfg["out_video_file"],
     # )
 
 
@@ -285,8 +287,10 @@ if __name__ == "__main__":
     cfg = {
         "seed": 0,
         "device": "cpu",
+        "out_video_file": "outputs/swarm/inner.gif",
+        "outer_optim_video_file": "outputs/swarm/outer_targets.gif",
         "setup": {
-            "num_agents": 100,
+            "num_agents": 80,
             "init_std": 1.0,
             "agent_radius": 0.1,
             "collision_radius": 1.0,
@@ -307,6 +311,12 @@ if __name__ == "__main__":
                 "lin_system_damping": 1.0e-2,
                 "nesterov": False,
             },
+        },
+        "outer_optim": {
+            "num_epochs": 25,
+            "lr": 4e-1,
+            "optimizer": "sgd",
+            "square_side_len": 2.0,
         },
     }
 

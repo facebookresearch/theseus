@@ -17,7 +17,7 @@ from PIL import Image
 from torch.utils.data import DataLoader, Dataset
 
 import theseus as th
-from theseus.third_party.easyaug import RandomGeoAug, GeoAugParam, RandomPhotoAug
+from theseus.third_party.easyaug import GeoAugParam, RandomGeoAug, RandomPhotoAug
 from theseus.third_party.utils import grid_sample
 
 FONT = cv2.FONT_HERSHEY_DUPLEX
@@ -36,10 +36,10 @@ def prepare_data():
     dataset_root = os.path.join(os.getcwd(), "data")
     chunks = [
         "revisitop1m.1",
-        #"revisitop1m.2", # Uncomment for more data.
-        #"revisitop1m.3",
-        #"revisitop1m.4",
-        #"revisitop1m.5",
+        # "revisitop1m.2", # Uncomment for more data.
+        # "revisitop1m.3",
+        # "revisitop1m.4",
+        # "revisitop1m.5",
     ]
     dataset_paths = []
     for chunk in chunks:

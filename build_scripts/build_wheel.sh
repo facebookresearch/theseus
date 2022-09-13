@@ -64,7 +64,7 @@ for PYTHON_VERSION in 3.9; do
     RUN pip install build wheel
     RUN git clone https://github.com/facebookresearch/theseus.git
     WORKDIR theseus
-    RUN git checkout ${TAG} -b tmp_build
+    RUN git checkout -b tmp_build --track origin/${TAG}
     CMD python3 -m build --no-isolation
     """ > ${DOCKER_DIR}/Dockerfile
 

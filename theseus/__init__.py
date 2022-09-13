@@ -66,6 +66,7 @@ from .optimizer import (
     retract_gaussian,
 )
 from .optimizer.linear import (
+    BaspachoSparseSolver,
     CholeskyDenseSolver,
     CholmodSparseSolver,
     DenseSolver,

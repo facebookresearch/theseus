@@ -5,6 +5,7 @@
 
 import numpy as np
 from scipy.sparse import csr_matrix, lil_matrix
+import torch
 
 
 def random_sparse_binary_matrix(rows, cols, fill, min_entries_per_col) -> csr_matrix:
@@ -12,15 +13,17 @@ def random_sparse_binary_matrix(rows, cols, fill, min_entries_per_col) -> csr_ma
 
     if min_entries_per_col > 0:
         min_entries_per_col = min(rows, min_entries_per_col)
-        rows_array = np.arange(rows)
+        rows_array = torch.arange(rows)
+        rows_array_f = rows_array.to(dtype=torch.float)
         for c in range(cols):
-            for r in np.random.choice(rows_array, min_entries_per_col):
+            row_selection = rows_array[rows_array_f.multinomial(min_entries_per_col)]
+            for r in row_selection:
                 retv[r, c] = 1.0
 
     num_entries = int(fill * rows * cols)
     while retv.getnnz() < num_entries:
-        col = np.random.randint(cols)
-        row = np.random.randint(rows)
+        col = int(torch.randint(cols, ()))
+        row = int(torch.randint(rows, ()))
         retv[row, col] = 1.0
 
     return retv.tocsr()

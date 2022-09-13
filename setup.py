@@ -39,6 +39,7 @@ with open("README.md", "r") as fh:
 
 if torch.cuda.is_available():
     ext_modules = [
+        # reference: https://docs.python.org/3/distutils/apiref.html#distutils.core.Extension
         torch_cpp_ext.CUDAExtension(
             name="theseus.extlib.mat_mult",
             sources=[str(root_dir / "theseus" / "extlib" / "mat_mult.cu")],
@@ -52,10 +53,67 @@ if torch.cuda.is_available():
             include_dirs=[str(root_dir)],
             libraries=["cusolver"],
         ),
+        torch_cpp_ext.CUDAExtension(
+            name="theseus.extlib.baspacho_solver",
+            sources=[
+                "theseus/extlib/baspacho_solver_cuda.cu",
+                "theseus/extlib/baspacho_solver.cpp",
+            ],
+            define_macros=[
+                ("THESEUS_HAVE_CUDA", "1"),
+                ("NO_BASPACHO_CHECKS", "1")
+            ],
+            extra_compile_args={
+                'cxx': [
+                    "-std=c++17",
+                ],
+                'nvcc': [
+                    "-std=c++17",
+                    # "--expt-relaxed-constexpr", given to CXX too for some reason?
+                ]
+            },
+            include_dirs=[
+                str(root_dir / "third_party" / "baspacho"),
+                str(root_dir / "third_party" / "baspacho" / "build" / "_deps" / "eigen-src"),
+            ],
+            library_dirs=[
+                str(root_dir / "third_party" / "baspacho" / "build" / "baspacho" / "baspacho"),
+                str(root_dir / "third_party" / "baspacho" / "build" / "_deps" / "dispenso-build" / "dispenso"),
+            ],
+            libraries=[
+                "BaSpaCho",
+                "dispenso",
+                "cusolver",
+                "cublas",
+            ],
+        ),
     ]
 else:
     print("No CUDA support found. CUDA extensions won't be installed.")
-    ext_modules = []
+    ext_modules = [
+        torch_cpp_ext.CppExtension(
+            name="theseus.extlib.baspacho_solver",
+            sources=[
+                "theseus/extlib/baspacho_solver.cpp",
+            ],
+            define_macros=[
+                ("NO_BASPACHO_CHECKS", "1")
+            ],
+            extra_compile_args=["-std=c++17"],
+            include_dirs=[
+                str(root_dir / "third_party" / "baspacho"),
+                str(root_dir / "third_party" / "baspacho" / "build" / "_deps" / "eigen-src"),
+            ],
+            library_dirs=[
+                str(root_dir / "third_party" / "baspacho" / "build" / "baspacho" / "baspacho"),
+                str(root_dir / "third_party" / "baspacho" / "build" / "_deps" / "dispenso-build" / "dispenso"),
+            ],
+            libraries=[
+                "BaSpaCho",
+                "dispenso",
+            ],
+        ), 
+    ]
 
 setuptools.setup(
     name="theseus-ai",

@@ -33,6 +33,16 @@ def check_SE3_log_map(tangent_vector, atol=TEST_EPS, enable_functorch=False):
         assert torch.allclose(th.SE3.exp_map(g.log_map()).tensor, g.tensor, atol=atol)
 
 
+def check_SE3_to_x_y_z_quaternion(se3: th.SE3, atol=1e-10, enable_functorch=False):
+    with set_lie_group_check_enabled(not enable_functorch):
+        x_y_z_quaternion = se3.to_x_y_z_quaternion()
+        assert torch.allclose(
+            th.SE3(x_y_z_quaternion=x_y_z_quaternion).to_matrix(),
+            se3.to_matrix(),
+            atol=atol,
+        )
+
+
 def _create_tangent_vector(batch_size, ang_factor, rng, dtype):
     tangent_vector_ang = torch.rand(batch_size, 3, generator=rng, dtype=dtype) - 0.5
     tangent_vector_ang /= tangent_vector_ang.norm(dim=1, keepdim=True)
@@ -170,6 +180,27 @@ def test_inverse(dtype, enable_functorch):
     for batch_size in [1, 20, 100]:
         se3 = th.SE3.rand(batch_size, generator=rng, dtype=dtype)
         check_inverse(se3, enable_functorch)
+
+
+@pytest.mark.parametrize("batch_size", [1, 20, 100])
+@pytest.mark.parametrize("dtype", [torch.float32, torch.float64])
+@pytest.mark.parametrize(
+    "ang_factor", [None, 1e-5, 3e-3, 2 * np.pi - 1e-11, np.pi - 1e-11]
+)
+@pytest.mark.parametrize("enable_functorch", [True, False])
+def test_x_y_z_quaternion(batch_size, dtype, ang_factor, enable_functorch):
+    rng = torch.Generator()
+    rng.manual_seed(0)
+    ATOL = 1e-3 if dtype == torch.float32 else 1e-8
+
+    if ang_factor is None:
+        ang_factor = (
+            torch.rand(batch_size, 1, generator=rng, dtype=dtype) * 2 * np.pi - np.pi
+        )
+
+    tangent_vector = _create_tangent_vector(batch_size, ang_factor, rng, dtype)
+    se3 = th.SE3.exp_map(tangent_vector)
+    check_SE3_to_x_y_z_quaternion(se3, atol=ATOL, enable_functorch=enable_functorch)
 
 
 @pytest.mark.parametrize("batch_size", [1, 20, 100])

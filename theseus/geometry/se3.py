@@ -625,7 +625,7 @@ class SE3(LieGroup):
 
     # The quaternion takes the [w x y z] convention
     def to_x_y_z_quaternion(self) -> torch.Tensor:
-        ret = self.tensor.new_zeros(self.shape[0], 8)
+        ret = self.tensor.new_zeros(self.shape[0], 7)
         ret[:, :3] = self.tensor[:, :, 3]
         ret[:, 3:] = SO3(tensor=self.tensor[:, :, :3]).to_quaternion()
         return ret

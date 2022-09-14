@@ -4,6 +4,7 @@
 # LICENSE file in the root directory of this source tree.
 
 import glob
+import logging
 import os
 import shutil
 from typing import List
@@ -30,8 +31,13 @@ BACKWARD_MODE = {
     "truncated": th.BackwardMode.TRUNCATED,
 }
 
+# Logger
+logging.basicConfig(level=logging.INFO)
+logger = logging.getLogger(__name__)
 
 # Download and extract data
+
+
 def prepare_data():
     dataset_root = os.path.join(os.getcwd(), "data")
     chunks = [
@@ -269,7 +275,7 @@ class SimpleCNN(nn.Module):
 
 
 def run():
-    batch_size = 64
+    batch_size = 256
     max_iterations = 50
     step_size = 0.1
     verbose = True
@@ -312,6 +318,7 @@ def run():
         err_fn=homography_error_fn,
         dim=1,
         aux_vars=[feat1, feat2],
+        autograd_functorch=True,
     )
     objective.add(homography_cf)
 
@@ -338,6 +345,9 @@ def run():
     outer_optim = torch.optim.Adam(cnn_model.parameters(), lr=outer_lr)
 
     itr = 0
+
+    start_event = torch.cuda.Event(enable_timing=True)
+    end_event = torch.cuda.Event(enable_timing=True)
 
     for epoch in range(num_epochs):
 
@@ -368,6 +378,8 @@ def run():
                 verbose2 = verbose
             else:
                 verbose2 = False
+            start_event.record()
+            torch.cuda.reset_max_memory_allocated()
             info = theseus_layer.forward(
                 inputs,
                 optimizer_kwargs={
@@ -377,6 +389,13 @@ def run():
                     "backward_mode": BACKWARD_MODE["implicit"],
                 },
             )
+            end_event.record()
+            torch.cuda.synchronize()
+            forward_time = start_event.elapsed_time(end_event)
+            forward_mem = torch.cuda.max_memory_allocated() / 1025 / 1024
+            if verbose2:
+                logger.info(f"Forward pass took {forward_time} ms")
+                logger.info(f"Forward pass took {forward_mem} MBs")
             err_hist = info[1].err_history
             H_hist = info[1].state_history
             # print("Finished inner loop in %d iters" % len(H_hist))
@@ -391,7 +410,18 @@ def run():
                 H_1_2.reshape(-1, 3, 3), Hgt_1_2.reshape(-1, 3, 3), imgH, imgW
             )
             outer_loss = fc_dist.mean()
+
+            start_event.record()
+            torch.cuda.reset_max_memory_allocated()
             outer_loss.backward()
+            end_event.record()
+            torch.cuda.synchronize()
+            backward_time = start_event.elapsed_time(end_event)
+            backward_mem = torch.cuda.max_memory_allocated() / 1025 / 1024
+            if verbose2:
+                logger.info(f"backward pass took {backward_time} ms")
+                logger.info(f"backward pass took {backward_mem} MBs")
+
             outer_optim.step()
             print(
                 "Epoch %d, iteration %d, outer_loss: %.3f"

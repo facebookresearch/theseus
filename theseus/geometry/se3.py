@@ -623,8 +623,9 @@ class SE3(LieGroup):
 
         return ret
 
-    # The returned tensor will have 7 elements, [x, y, z, qw, qx, qy, qz] where [x y z] corresponds
-    # to the translation and [qw qx qy qz] to the quaternion using the [w x y z] convention
+    # The returned tensor will have 7 elements, [x, y, z, qw, qx, qy, qz] where
+    # [x y z] corresponds to the translation and [qw qx qy qz] to the quaternion
+    # using the [w x y z] convention
     def to_x_y_z_quaternion(self) -> torch.Tensor:
         ret = self.tensor.new_zeros(self.shape[0], 7)
         ret[:, :3] = self.tensor[:, :, 3]

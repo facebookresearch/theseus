@@ -622,6 +622,12 @@ class SE3(LieGroup):
 
         return ret
 
+    def to_x_y_z_quaternion(self) -> torch.Tensor:
+        ret = self.tensor.new_zeros(self.shape[0], 8)
+        ret[:, :3] = self.tensor[:, :, 3]
+        ret[:, 3:] = SO3(tensor=self.tensor[:, :, :3]).to_quaternion()
+        return ret
+
     # calls to() on the internal tensors
     def to(self, *args, **kwargs):
         super().to(*args, **kwargs)

@@ -8,6 +8,7 @@ from typing import List, Optional, Union, cast
 import torch
 
 import theseus.constants
+from theseus.geometry.lie_group_check import no_lie_group_check
 
 from .lie_group import LieGroup
 from .point_types import Point2
@@ -120,7 +121,8 @@ class SE2(LieGroup):
 
     @property
     def rotation(self) -> SO2:
-        return SO2(tensor=self[:, 2:])
+        with no_lie_group_check():
+            return SO2(tensor=self[:, 2:])
 
     def theta(self, jacobians: Optional[List[torch.Tensor]] = None) -> torch.Tensor:
         if jacobians is not None:
@@ -132,7 +134,8 @@ class SE2(LieGroup):
 
     @property
     def translation(self) -> Point2:
-        return self.xy()
+        with no_lie_group_check():
+            return self.xy()
 
     def xy(self, jacobians: Optional[List[torch.Tensor]] = None) -> Point2:
         if jacobians is not None:

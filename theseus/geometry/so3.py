@@ -368,6 +368,7 @@ class SO3(LieGroup):
     def to_matrix(self) -> torch.Tensor:
         return self.tensor.clone()
 
+    # The quaternion takes the [w x y z] convention
     def to_quaternion(self) -> torch.Tensor:
         sine_axis = self.tensor.new_zeros(self.shape[0], 3)
         sine_axis[:, 0] = 0.5 * (self[:, 2, 1] - self[:, 1, 2])
@@ -449,26 +450,27 @@ class SO3(LieGroup):
         ):
             raise ValueError(err_msg)
 
+    # The quaternion takes the [w x y z] convention
     @staticmethod
     def unit_quaternion_to_SO3(quaternion: torch.Tensor) -> "SO3":
         if quaternion.ndim == 1:
             quaternion = quaternion.unsqueeze(0)
         SO3._unit_quaternion_check(quaternion)
 
-        q0 = quaternion[:, 0]
-        q1 = quaternion[:, 1]
-        q2 = quaternion[:, 2]
-        q3 = quaternion[:, 3]
-        q00 = q0 * q0
-        q01 = q0 * q1
-        q02 = q0 * q2
-        q03 = q0 * q3
-        q11 = q1 * q1
-        q12 = q1 * q2
-        q13 = q1 * q3
-        q22 = q2 * q2
-        q23 = q2 * q3
-        q33 = q3 * q3
+        w = quaternion[:, 0]
+        x = quaternion[:, 1]
+        y = quaternion[:, 2]
+        z = quaternion[:, 3]
+        q00 = w * w
+        q01 = w * x
+        q02 = w * y
+        q03 = w * z
+        q11 = x * x
+        q12 = x * y
+        q13 = x * z
+        q22 = y * y
+        q23 = y * z
+        q33 = z * z
 
         ret = SO3()
         ret.tensor = quaternion.new_zeros(quaternion.shape[0], 3, 3)

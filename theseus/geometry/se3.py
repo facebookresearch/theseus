@@ -499,6 +499,7 @@ class SE3(LieGroup):
         ret[:, 3, 3] = 1
         return ret
 
+    # The quaternion takes the [w x y z] convention
     def update_from_x_y_z_quaternion(self, x_y_z_quaternion: torch.Tensor):
         self.update(SE3.x_y_z_unit_quaternion_to_SE3(x_y_z_quaternion))
 
@@ -622,6 +623,7 @@ class SE3(LieGroup):
 
         return ret
 
+    # The quaternion takes the [w x y z] convention
     def to_x_y_z_quaternion(self) -> torch.Tensor:
         ret = self.tensor.new_zeros(self.shape[0], 8)
         ret[:, :3] = self.tensor[:, :, 3]

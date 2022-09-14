@@ -14,7 +14,7 @@ import theseus.constants
 from .lie_group import LieGroup
 from .point_types import Point3
 from .so3 import SO3
-from .lie_group_check import _LieGroupCheckContext
+from .lie_group_check import _LieGroupCheckContext, no_lie_group_check
 
 
 class SE3(LieGroup):
@@ -627,8 +627,17 @@ class SE3(LieGroup):
     def to_x_y_z_quaternion(self) -> torch.Tensor:
         ret = self.tensor.new_zeros(self.shape[0], 7)
         ret[:, :3] = self.tensor[:, :, 3]
-        ret[:, 3:] = SO3(tensor=self.tensor[:, :, :3]).to_quaternion()
+        with no_lie_group_check():
+            ret[:, 3:] = SO3(tensor=self.tensor[:, :, :3]).to_quaternion()
         return ret
+
+    def rotation(self) -> SO3:
+        with no_lie_group_check():
+            return SO3(tensor=self.tensor[:, :, :3])
+
+    def translation(self) -> Point3:
+        with no_lie_group_check():
+            return Point3(tensor=self.tensor[:, :, 3].view(-1, 3))
 
     # calls to() on the internal tensors
     def to(self, *args, **kwargs):

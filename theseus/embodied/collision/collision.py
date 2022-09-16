@@ -7,7 +7,7 @@ from typing import List, Optional, Tuple, Union, cast
 
 import torch
 
-from theseus.core import CostFunction, CostWeight, Variable
+from theseus.core import CostFunction, CostWeight, Variable, as_variable
 from theseus.embodied.kinematics import IdentityModel, KinematicsModel
 from theseus.geometry import Point2, SE2
 
@@ -32,12 +32,7 @@ class Collision2D(CostFunction):
         self.sdf_origin = SignedDistanceField2D.convert_origin(sdf_origin)
         self.sdf_data = SignedDistanceField2D.convert_sdf_data(sdf_data)
         self.sdf_cell_size = SignedDistanceField2D.convert_cell_size(sdf_cell_size)
-        if not isinstance(cost_eps, Variable):
-            if not isinstance(cost_eps, torch.Tensor):
-                cost_eps = torch.tensor(cost_eps)
-            self.cost_eps = Variable(cost_eps)
-        else:
-            self.cost_eps = cost_eps
+        self.cost_eps = as_variable(cost_eps)
         self.cost_eps.tensor = self.cost_eps.tensor.view(-1, 1)
         self.register_optim_vars(["pose"])
         self.register_aux_vars(["sdf_origin", "sdf_data", "sdf_cell_size", "cost_eps"])

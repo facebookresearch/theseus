@@ -8,7 +8,7 @@ from typing import Optional, Tuple, Union
 import torch
 from scipy import ndimage
 
-from theseus.core import Variable
+from theseus.core import Variable, as_variable
 from theseus.geometry import Point2
 from theseus.utils import gather_from_rows_cols
 
@@ -128,8 +128,7 @@ class SignedDistanceField2D:
 
     @staticmethod
     def convert_sdf_data(sdf_data: Union[torch.Tensor, Variable]) -> Variable:
-        if not isinstance(sdf_data, Variable):
-            sdf_data = Variable(sdf_data)
+        sdf_data = as_variable(sdf_data)
         if sdf_data.ndim != 3:
             raise ValueError(
                 "Argument sdf_data to SignedDistanceField2D must be a "

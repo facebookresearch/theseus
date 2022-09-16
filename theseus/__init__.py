@@ -18,6 +18,7 @@ from .core import (
     RobustCostFunction,
     HuberLoss,
     WelschLoss,
+    as_variable,
 )
 from .geometry import (
     SE2,

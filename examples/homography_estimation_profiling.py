@@ -8,8 +8,7 @@ import logging
 import os
 import shutil
 import warnings
-from ctypes import cast
-from typing import Dict, List
+from typing import Dict, List, cast
 
 import cv2
 import kornia

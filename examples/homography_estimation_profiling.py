@@ -8,9 +8,11 @@ import logging
 import os
 import shutil
 import warnings
+from cmath import log
 from typing import Dict, List, cast
 
 import cv2
+import hydra
 import kornia
 import numpy as np
 import torch
@@ -35,7 +37,6 @@ BACKWARD_MODE = {
 }
 
 # Logger
-logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
 # Download and extract data
@@ -55,15 +56,15 @@ def prepare_data():
         dataset_path = os.path.join(dataset_root, chunk)
         dataset_paths.append(dataset_path)
         if not os.path.exists(dataset_path):
-            print("Downloading data")
+            logger.info("Downloading data")
             url_root = "http://ptak.felk.cvut.cz/revisitop/revisitop1m/jpg/"
             tar = "%s.tar.gz" % chunk
             os.makedirs(dataset_path)
             cmd = "wget %s/%s -O %s/%s" % (url_root, tar, dataset_root, tar)
-            print("Running command: ", cmd)
+            logger.info("Running command: ", cmd)
             os.system(cmd)
             cmd = "tar -xf %s/%s -C %s" % (dataset_root, tar, dataset_path)
-            print("Running command: ", cmd)
+            logger.info("Running command: ", cmd)
             os.system(cmd)
 
     return dataset_paths
@@ -77,7 +78,7 @@ class HomographyDataset(Dataset):
         for direc in img_dirs:
             self.img_paths.extend(glob.glob(direc + "/**/*.jpg", recursive=True))
         assert len(self.img_paths) > 0, "no images found"
-        print("Found %d total images in dataset" % len(self.img_paths))
+        logger.info("Found %d total images in dataset" % len(self.img_paths))
         sc = 0.1
         self.rga = RandomGeoAug(
             rotate_param=GeoAugParam(min=-30 * sc, max=30 * sc),
@@ -107,9 +108,9 @@ class HomographyDataset(Dataset):
             self.img_paths = self.img_paths[split_ix:]
         self.train = train
         if self.train:
-            print("Using %d images for training" % len(self.img_paths))
+            logger.info("Using %d images for training" % len(self.img_paths))
         else:
-            print("Using %d images for testing" % len(self.img_paths))
+            logger.info("Using %d images for testing" % len(self.img_paths))
 
     def __len__(self):
         return len(self.img_paths)
@@ -237,7 +238,7 @@ def write_gif_batch(log_dir, img1, img2, H_hist, Hgt_1_2, err_hist):
         viz_warp(path, img1[0], img2[0], img1_dsts[0], it, err=err, fc_err=fc_err)
     anim_path = os.path.join(log_dir, "animation.gif")
     cmd = f"convert -delay 10 -loop 0 {anim_dir}/*.png {anim_path}"
-    print("Generating gif here: %s" % anim_path)
+    logger.info("Generating gif here: %s" % anim_path)
     os.system(cmd)
     shutil.rmtree(anim_dir)
     return
@@ -279,14 +280,24 @@ class SimpleCNN(nn.Module):
 
 def run(
     batch_size: int = 64,
-    max_iterations: int = 50,
-    step_size: float = 0.1,
     num_epochs: int = 999,
     outer_lr: float = 1e-4,
+    max_iterations: int = 50,
+    step_size: float = 0.1,
     autograd_loop_over_batch: bool = False,
     autograd_functorch: bool = True,
 ):
-    print(
+    logger.info(
+        "==============================================================="
+        "==========================="
+    )
+    logger.info(
+        f"Batch Size: {batch_size}, "
+        f"Autogtad Loop over Batch: {autograd_loop_over_batch}, "
+        f"Autograd Functorch: {autograd_functorch}"
+    )
+
+    logger.info(
         "---------------------------------------------------------------"
         "---------------------------"
     )
@@ -297,7 +308,7 @@ def run(
     save_every = 100
     use_cnn = True
 
-    log_dir = os.path.join(os.getcwd(), "examples/outputs/viz")
+    log_dir = os.path.join(os.getcwd(), "viz")
     os.makedirs(log_dir, exist_ok=True)
 
     device = "cuda" if torch.cuda.is_available() and use_gpu else "cpu"
@@ -359,12 +370,16 @@ def run(
     start_event = torch.cuda.Event(enable_timing=True)
     end_event = torch.cuda.Event(enable_timing=True)
 
-    forward_times: List[float] = []
-    forward_mems: List[float] = []
-    backward_times: List[float] = []
-    backward_mems: List[float] = []
-
+    logger.info(
+        "---------------------------------------------------------------"
+        "---------------------------"
+    )
     for epoch in range(num_epochs):
+        forward_times: List[float] = []
+        forward_mems: List[float] = []
+        backward_times: List[float] = []
+        backward_mems: List[float] = []
+
         for _, data in enumerate(dataloader):
             outer_optim.zero_grad()
 
@@ -416,9 +431,7 @@ def run(
             H8_1_2 = theseus_layer.objective.get_optim_var("H8_1_2").tensor.reshape(
                 -1, 8
             )
-            H_1_2 = torch.cat(
-                [H8_1_2.tensor, H8_1_2.tensor.new_ones(H8_1_2.shape[0], 1)], dim=-1
-            )
+            H_1_2 = torch.cat([H8_1_2, H8_1_2.new_ones(H8_1_2.shape[0], 1)], dim=-1)
             # Loss is on four corner error.
             fc_dist = four_corner_dist(
                 H_1_2.reshape(-1, 3, 3), Hgt_1_2.reshape(-1, 3, 3), imgH, imgW
@@ -437,7 +450,7 @@ def run(
             backward_mems.append(backward_mem)
 
             outer_optim.step()
-            print(
+            logger.info(
                 "Epoch %d, iteration %d, outer_loss: %.3f"
                 % (epoch, itr, outer_loss.item())
             )
@@ -451,45 +464,56 @@ def run(
 
             itr += 1
 
-    print(
-        "---------------------------------------------------------------"
-        "---------------------------"
-    )
-    logger.info(f"Forward pass took {sum(forward_times)/len(forward_times)} ms")
-    logger.info(f"Forward pass took {sum(forward_mems)/len(forward_mems)} MBs")
-    logger.info(f"backward pass took {sum(backward_times)/len(backward_times)} ms")
-    logger.info(f"backward pass took {sum(backward_mems)/len(backward_mems)} MBs")
-    print(
-        "---------------------------------------------------------------"
-        "---------------------------\n"
-    )
-
-
-def main():
-    max_iterations: int = 10
-    num_epochs: int = 1
-
-    batch_size_list: List[int] = [64, 64, 64]
-    autograd_loop_over_batch_list: List[bool] = [False, True, False]
-    autograd_functorch_list: List[bool] = [False, False, True]
-    for batch_size, autograd_loop_over_batch, autograd_functorch in zip(
-        batch_size_list, autograd_loop_over_batch_list, autograd_functorch_list
-    ):
-        print(
-            "==============================================================="
-            "==========================="
+        logger.info(
+            "---------------------------------------------------------------"
+            "---------------------------"
         )
-        print(
-            f"Batch Size: {batch_size}, "
-            f"Autogtad Loop over Batch: {autograd_loop_over_batch}, "
-            f"Autograd Functorch: {autograd_functorch}"
+        logger.info(f"Forward pass took {sum(forward_times)} ms")
+        logger.info(f"Forward pass took {sum(forward_mems)/len(forward_mems)} MBs")
+        logger.info(f"backward pass took {sum(backward_times)} ms")
+        logger.info(f"backward pass took {sum(backward_mems)/len(backward_mems)} MBs")
+        logger.info(
+            "---------------------------------------------------------------"
+            "---------------------------"
         )
+
+
+@hydra.main(config_path="./configs/", config_name="homography_estimation")
+def main(cfg):
+    if cfg.profiling:
+        max_iterations: int = 10
+        num_epochs: int = 1
+
+        batch_size_list: List[int] = [64, 64, 64]
+        autograd_loop_over_batch_list: List[bool] = [False, True, False]
+        autograd_functorch_list: List[bool] = [False, False, True]
+
+        for batch_size, autograd_loop_over_batch, autograd_functorch in zip(
+            batch_size_list, autograd_loop_over_batch_list, autograd_functorch_list
+        ):
+            run(
+                batch_size=batch_size,
+                max_iterations=max_iterations,
+                num_epochs=num_epochs,
+                autograd_loop_over_batch=autograd_loop_over_batch,
+                autograd_functorch=autograd_functorch,
+            )
+        logger.info("\n")
+    else:
+        num_epochs: int = cfg.outer_optim.num_epochs
+        batch_size: int = cfg.outer_optim.batch_size
+        outer_lr: float = cfg.outer_optim.lr
+        max_iterations: int = cfg.inner_optim.max_iters
+        step_size: float = cfg.inner_optim.step_size
+
         run(
             batch_size=batch_size,
-            max_iterations=max_iterations,
+            outer_lr=outer_lr,
             num_epochs=num_epochs,
-            autograd_loop_over_batch=autograd_loop_over_batch,
-            autograd_functorch=autograd_functorch,
+            max_iterations=max_iterations,
+            step_size=step_size,
+            autograd_loop_over_batch=False,
+            autograd_functorch=True,
         )
 
 

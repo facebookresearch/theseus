@@ -2,14 +2,15 @@ import numpy as np
 import random
 import omegaconf
 import time
+from PIL import Image, ImageDraw, ImageFont, ImageFilter
 from typing import Optional, Tuple, List
 
 import torch
+import torch.nn as nn
 
 import theseus as th
 from theseus.optimizer.gbp import GaussianBeliefPropagation, GBPSchedule
-
-# from theseus.optimizer.gbp import SwarmViewer
+from theseus.optimizer.gbp import SwarmViewer
 
 
 OPTIMIZER_CLASS = {
@@ -28,30 +29,81 @@ GBP_SCHEDULE = {
 }
 
 
+# create image from a character and font
+def gen_char_img(
+    char, dilate=True, fontname="LiberationSerif-Bold.ttf", size=(200, 200)
+):
+    img = Image.new("L", size, "white")
+    draw = ImageDraw.Draw(img)
+    fontsize = int(size[0] * 0.5)
+    font = ImageFont.truetype(fontname, fontsize)
+    char_displaysize = font.getsize(char)
+    offset = tuple((si - sc) // 2 for si, sc in zip(size, char_displaysize))
+    draw.text((offset[0], offset[1] * 3 // 4), char, font=font, fill="#000")
+
+    if dilate:
+        img = img.filter(ImageFilter.MinFilter(3))
+
+    return img
+
+
+# all agents should be inside object (negative SDF values)
+def target_char_loss(outputs, sdf):
+    positions = torch.cat(list(outputs.values()))
+    dists = sdf.signed_distance(positions)[0]
+    loss = torch.relu(dists)
+    return loss.sum()
+
+
+def gen_target_sdf(cfg):
+    # setup target shape for outer loop loss fn
+    area_limits = np.array(cfg["setup"]["area_limits"])
+    cell_size = 0.05
+    img_size = tuple(np.rint((area_limits[1] - area_limits[0]) / cell_size).astype(int))
+    img = gen_char_img(
+        cfg["outer_optim"]["target_char"],
+        dilate=True,
+        fontname="DejaVuSans-Bold.ttf",
+        size=img_size,
+    )
+    occ_map = torch.Tensor(np.array(img) < 255)
+    occ_map = torch.flip(
+        occ_map, [0]
+    )  # flip vertically so y axis is upwards wrt character
+    sdf = th.eb.SignedDistanceField2D(
+        th.Variable(torch.Tensor(area_limits[0][None, :])),
+        th.Variable(torch.Tensor([cell_size])),
+        occupancy_map=th.Variable(occ_map[None, :]),
+    )
+    return sdf
+
+
 def fc_block(in_f, out_f):
-    return torch.nn.Sequential(torch.nn.Linear(in_f, out_f), torch.nn.ReLU())
+    return nn.Sequential(nn.Linear(in_f, out_f), nn.ReLU())
 
 
-class TargetMLP(torch.nn.Module):
+class SimpleMLP(nn.Module):
     def __init__(
         self,
-        input_dim=1,
+        input_dim=2,
         output_dim=2,
         hidden_dim=8,
         hidden_layers=0,
+        scale_output=1.0,
     ):
-        super(TargetMLP, self).__init__()
+        super(SimpleMLP, self).__init__()
         # input is agent index
-        self.relu = torch.nn.ReLU()
-        self.in_layer = torch.nn.Linear(1, hidden_dim)
+        self.scale_output = scale_output
+        self.relu = nn.ReLU()
+        self.in_layer = nn.Linear(input_dim, hidden_dim)
         hidden = [fc_block(hidden_dim, hidden_dim) for _ in range(hidden_layers)]
-        self.mid = torch.nn.Sequential(*hidden)
-        self.out_layer = torch.nn.Linear(hidden_dim, output_dim)
+        self.mid = nn.Sequential(*hidden)
+        self.out_layer = nn.Linear(hidden_dim, output_dim)
 
     def forward(self, x):
-        x = self.relu(self.in_layer(x))
-        x = self.mid(x)
-        out = self.out_layer(x)
+        y = self.relu(self.in_layer(x))
+        y = self.mid(y)
+        out = self.out_layer(y) * self.scale_output
         return out
 
 
@@ -99,14 +151,7 @@ class TwoAgentsCollision(th.CostFunction):
         )
 
 
-# all agents should be in square of side length 1 centered at the origin
-def square_loss_fn(outputs, side_len):
-    positions = torch.cat(list(outputs.values()))
-    loss = torch.relu(torch.abs(positions) - side_len / 2)
-    return loss.sum()
-
-
-def setup_problem(cfg: omegaconf.OmegaConf):
+def setup_problem(cfg: omegaconf.OmegaConf, gnn_err_fn):
     dtype = torch.float32
     n_agents = cfg["setup"]["num_agents"]
 
@@ -120,18 +165,18 @@ def setup_problem(cfg: omegaconf.OmegaConf):
     objective = th.Objective(dtype=dtype)
 
     # prior factor drawing each robot to the origin
-    # origin = th.Point2(name="origin")
-    # origin_weight = th.ScaleCostWeight(
-    #     torch.tensor([cfg["setup"]["origin_weight"]], dtype=dtype)
-    # )
-    # for i in range(n_agents):
-    #     origin_cf = th.Difference(
-    #         positions[i],
-    #         origin,
-    #         origin_weight,
-    #         name=f"origin_pull_{i}",
-    #     )
-    #     objective.add(origin_cf)
+    origin = th.Point2(name="origin")
+    origin_weight = th.ScaleCostWeight(
+        torch.tensor([cfg["setup"]["origin_weight"]], dtype=dtype)
+    )
+    for i in range(n_agents):
+        origin_cf = th.Difference(
+            positions[i],
+            origin,
+            origin_weight,
+            name=f"origin_pull_{i}",
+        )
+        objective.add(origin_cf)
 
     # create collision factors, fully connected
     radius = th.Vector(
@@ -152,133 +197,187 @@ def setup_problem(cfg: omegaconf.OmegaConf):
             objective.add(collision_cf)
 
     # learned factors, encouraging a square formation
+    # target_weight = th.ScaleCostWeight(
+    #     torch.tensor([cfg["setup"]["origin_weight"] * 10], dtype=dtype)
+    # )
+    # for i in range(n_agents):
+    #     target = th.Point2(
+    #         tensor=torch.normal(torch.zeros(2), cfg["setup"]["init_std"]),
+    #         name=f"target_{i}",
+    #     )
+    #     target_cf = th.Difference(
+    #         positions[i],
+    #         target,
+    #         target_weight,
+    #         name=f"formation_target_{i}",
+    #     )
+    #     objective.add(target_cf)
+
+    # GNN factor - MLP that takes in all current belief means and outputs all targets
     target_weight = th.ScaleCostWeight(
         torch.tensor([cfg["setup"]["origin_weight"] * 10], dtype=dtype)
     )
-    for i in range(n_agents):
-        target = th.Point2(
-            tensor=torch.normal(torch.zeros(2), cfg["setup"]["init_std"]),
-            name=f"target_{i}",
-        )
-        target_cf = th.Difference(
-            positions[i],
-            target,
-            target_weight,
-            name=f"formation_target_{i}",
-        )
-        objective.add(target_cf)
+    gnn_cf = th.AutoDiffCostFunction(
+        optim_vars=positions,
+        err_fn=gnn_err_fn,
+        dim=n_agents,
+        cost_weight=target_weight,
+    )
+    objective.add(gnn_cf)
 
     return objective
 
 
-def main(cfg: omegaconf.OmegaConf):
+class SwarmGBPAndGNN(nn.Module):
+    def __init__(self, cfg):
+        super().__init__()
 
-    objective = setup_problem(cfg)
+        n_agents = cfg["setup"]["num_agents"]
+        self.gnn = SimpleMLP(
+            input_dim=2 * n_agents,
+            output_dim=2 * n_agents,
+            hidden_dim=64,
+            hidden_layers=2,
+            scale_output=1.0,
+        )
 
-    #  setup optimizer and theseus layer
-    vectorize = cfg["optim"]["vectorize"]
-    optimizer = OPTIMIZER_CLASS[cfg["optim"]["optimizer_cls"]](
-        objective,
-        max_iterations=cfg["optim"]["max_iters"],
-        vectorize=vectorize,
-        # linearization_cls=th.SparseLinearization,
-        # linear_solver_cls=th.LUCudaSparseSolver,
-    )
-    theseus_optim = th.TheseusLayer(optimizer, vectorize=vectorize)
+        # setup objective, optimizer and theseus layer
+        objective = setup_problem(cfg, self._gnn_err_fn)
+        vectorize = cfg["optim"]["vectorize"]
+        optimizer = OPTIMIZER_CLASS[cfg["optim"]["optimizer_cls"]](
+            objective,
+            max_iterations=cfg["optim"]["max_iters"],
+            vectorize=vectorize,
+        )
+        self.layer = th.TheseusLayer(optimizer, vectorize=vectorize)
 
-    if cfg["device"] == "cuda":
-        cfg["device"] = "cuda" if torch.cuda.is_available() else "cpu"
-    theseus_optim.to(cfg["device"])
+        # put on device
+        if cfg["device"] == "cuda":
+            cfg["device"] = "cuda" if torch.cuda.is_available() else "cpu"
+        self.gnn.to(cfg["device"])
+        self.layer.to(cfg["device"])
 
-    optim_arg = {
-        "track_best_solution": False,
-        "track_err_history": True,
-        "track_state_history": True,
-        "verbose": True,
-        "backward_mode": th.BackwardMode.FULL,
-    }
-    if isinstance(optimizer, GaussianBeliefPropagation):
-        gbp_args = cfg["optim"]["gbp_settings"].copy()
-        lin_system_damping = torch.nn.Parameter(
-            torch.tensor(
+        # optimizer arguments
+        optim_arg = {
+            "track_best_solution": False,
+            "track_err_history": True,
+            "track_state_history": True,
+            "verbose": True,
+            "backward_mode": th.BackwardMode.FULL,
+        }
+        if isinstance(optimizer, GaussianBeliefPropagation):
+            gbp_args = cfg["optim"]["gbp_settings"].copy()
+            lin_system_damping = torch.tensor(
                 [cfg["optim"]["gbp_settings"]["lin_system_damping"]],
                 dtype=torch.float32,
             )
+            lin_system_damping.to(device=cfg["device"])
+            gbp_args["lin_system_damping"] = lin_system_damping
+            gbp_args["schedule"] = GBP_SCHEDULE[gbp_args["schedule"]]
+            optim_arg = {**optim_arg, **gbp_args}
+        self.optim_arg = optim_arg
+
+        # fixed inputs to theseus layer
+        self.inputs = {}
+        for agent in objective.optim_vars.values():
+            self.inputs[agent.name] = agent.tensor.clone()
+
+    # network outputs offset for target from agent position
+    # cost is zero when offset is zero, i.e. agent is at the target
+    def _gnn_err_fn(self, optim_vars: List[th.Manifold], aux_vars):
+        assert len(aux_vars) == 0
+        positions = optim_vars
+
+        batch_size = positions[0].shape[0]
+        flattened_pos = torch.cat(
+            [pos.tensor.unsqueeze(1) for pos in positions], dim=1
+        ).flatten(1, 2)
+
+        offsets = self.gnn(flattened_pos)
+        offsets = offsets.reshape(batch_size, len(positions), 2)
+        err = offsets.norm(dim=-1)
+
+        return err
+
+    def forward(self, track_history=False):
+
+        optim_arg = self.optim_arg.copy()
+        optim_arg["track_state_history"] = track_history
+
+        outputs, info = self.layer.forward(
+            input_tensors=self.inputs,
+            optimizer_kwargs=optim_arg,
         )
-        lin_system_damping.to(device=cfg["device"])
-        gbp_args["lin_system_damping"] = lin_system_damping
-        gbp_args["schedule"] = GBP_SCHEDULE[gbp_args["schedule"]]
-        optim_arg = {**optim_arg, **gbp_args}
 
-    # theseus inputs
-    theseus_inputs = {}
-    for agent in objective.optim_vars.values():
-        theseus_inputs[agent.name] = agent.tensor.clone()
+        history = None
+        if track_history:
 
-    # setup outer optimizer
-    targets = {}
-    for name, aux_var in objective.aux_vars.items():
-        if "target" in name:
-            targets[name] = torch.nn.Parameter(aux_var.tensor.clone())
+            history = info.state_history
+
+            # recover target history
+            agent_histories = torch.cat(
+                [state_hist.unsqueeze(1) for state_hist in history.values()], dim=1
+            )
+            history["agent_0"]
+
+            batch_size = agent_histories.shape[0]
+            ts = agent_histories.shape[-1]
+            agent_histories = agent_histories.permute(
+                0, 3, 1, 2
+            )  # time dim is second dim
+            agent_histories = agent_histories.flatten(-2, -1)
+            target_hist = self.gnn(agent_histories)
+            target_hist = target_hist.reshape(batch_size, ts, -1, 2)
+            target_hist = target_hist.permute(0, 2, 3, 1)  # time back to last dim
+
+            for i in range(target_hist.shape[1]):
+                history[f"target_{i}"] = target_hist[:, i] + history[f"agent_{i}"]
+
+        return outputs, history
+
+
+def main(cfg: omegaconf.OmegaConf):
+
+    sdf = gen_target_sdf(cfg)
+
+    model = SwarmGBPAndGNN(cfg)
+
     outer_optimizer = OUTER_OPTIMIZER_CLASS[cfg["outer_optim"]["optimizer"]](
-        targets.values(), lr=cfg["outer_optim"]["lr"]
+        model.gnn.parameters(), lr=cfg["outer_optim"]["lr"]
     )
 
-    losses = []
-    targets_history = {}
-    for k, target in targets.items():
-        targets_history[k] = target.detach().clone().cpu().unsqueeze(-1)
+    viewer = SwarmViewer(cfg["setup"]["collision_radius"], cfg["setup"]["area_limits"])
 
+    losses = []
     for epoch in range(cfg["outer_optim"]["num_epochs"]):
         print(f" ******************* EPOCH {epoch} ******************* ")
         start_time = time.time_ns()
         outer_optimizer.zero_grad()
 
-        for k, target in targets.items():
-            theseus_inputs[k] = target.clone()
+        track_history = epoch % 5 == 0
 
-        theseus_outputs, info = theseus_optim.forward(
-            input_tensors=theseus_inputs,
-            optimizer_kwargs=optim_arg,
-        )
+        outputs, history = model.forward(track_history=track_history)
 
-        if epoch < cfg["outer"]["num_epochs"] - 1:
-            loss = square_loss_fn(
-                theseus_outputs, cfg["outer_optim"]["square_side_len"]
-            )
-            loss.backward()
-            outer_optimizer.step()
-            losses.append(loss.detach().item())
-            end_time = time.time_ns()
+        loss = target_char_loss(outputs, sdf)
 
-            for k, target in targets.items():
-                targets_history[k] = torch.cat(
-                    (targets_history[k], target.detach().clone().cpu().unsqueeze(-1)),
-                    dim=-1,
-                )
+        loss.backward()
+        outer_optimizer.step()
+        losses.append(loss.detach().item())
+        end_time = time.time_ns()
 
-            print(f"Loss {losses[-1]}")
-            print(f"Epoch took {(end_time - start_time) / 1e9: .3f} seconds")
+        print(f"Loss {losses[-1]}")
+        print(f"Epoch took {(end_time - start_time) / 1e9: .3f} seconds")
+
+        if track_history:
+            viewer.vis_inner_optim(history, target_sdf=sdf, show_edges=False)
 
     print("Loss values:", losses)
 
-    # visualisation
-    # viewer = SwarmViewer(
-    #     cfg["setup"]["agent_radius"],
-    #     cfg["setup"]["collision_radius"],
-    # )
-
+    # outputs visualisations
     # viewer.vis_outer_targets_optim(
     #     targets_history,
-    #     square_side=cfg["outer_optim"]["square_side_len"],
+    #     target_sdf=sdf,
     #     video_file=cfg["outer_optim_video_file"],
-    # )
-
-    # viewer.vis_inner_optim(
-    #     info.state_history,
-    #     targets=targets,  # make sure targets are from correct innner optim
-    #     show_edges=False,
-    #     video_file=cfg["out_video_file"],
     # )
 
 
@@ -287,15 +386,16 @@ if __name__ == "__main__":
     cfg = {
         "seed": 0,
         "device": "cpu",
-        "out_video_file": "outputs/swarm/inner.gif",
-        "outer_optim_video_file": "outputs/swarm/outer_targets.gif",
+        "out_video_file": "outputs/swarm/inner_mlp.gif",
+        "outer_optim_video_file": "outputs/swarm/outer_targets_mlp.gif",
         "setup": {
-            "num_agents": 80,
+            "num_agents": 100,
             "init_std": 1.0,
             "agent_radius": 0.1,
             "collision_radius": 1.0,
-            "origin_weight": 0.3,
+            "origin_weight": 0.1,
             "collision_weight": 1.0,
+            "area_limits": [[-3, -3], [3, 3]],
         },
         "optim": {
             "max_iters": 20,
@@ -313,10 +413,10 @@ if __name__ == "__main__":
             },
         },
         "outer_optim": {
-            "num_epochs": 25,
-            "lr": 4e-1,
-            "optimizer": "sgd",
-            "square_side_len": 2.0,
+            "num_epochs": 50,
+            "lr": 2e-2,
+            "optimizer": "adam",
+            "target_char": "A",
         },
     }
 

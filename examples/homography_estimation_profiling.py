@@ -8,6 +8,7 @@ import logging
 import os
 import shutil
 import warnings
+from ctypes import cast
 from typing import Dict, List
 
 import cv2
@@ -389,7 +390,7 @@ def run(
             }
             start_event.record()
             torch.cuda.reset_peak_memory_stats()
-            info = theseus_layer.forward(
+            _, info = theseus_layer.forward(
                 inputs,
                 optimizer_kwargs={
                     "verbose": verbose,
@@ -405,8 +406,11 @@ def run(
             forward_times.append(forward_time)
             forward_mems.append(forward_mem)
 
-            err_hist = info[1].err_history
-            H_hist = info[1].state_history
+            optimizer_info: th.NonlinearOptimizerInfo = cast(
+                th.NonlinearOptimizerInfo, info
+            )
+            err_hist = optimizer_info.err_history
+            H_hist = optimizer_info.state_history
             # print("Finished inner loop in %d iters" % len(H_hist))
 
             Hgt_1_2 = Hgt_1_2.reshape(-1, 9)

@@ -130,7 +130,7 @@ def test_error_between_se2():
 
 
 def test_jacobian_between_se3():
-    for batch_size in [1, 20, 100]:
+    for batch_size in [1, 10]:
         aux_id = torch.arange(batch_size)
         se3_1 = th.SE3.rand(batch_size, dtype=torch.float64)
         se3_2 = th.SE3.rand(batch_size, dtype=torch.float64)

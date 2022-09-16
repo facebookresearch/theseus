@@ -191,7 +191,7 @@ def test_exp_map():
     rng = torch.Generator()
     rng.manual_seed(0)
 
-    for batch_size in [1, 20, 100]:
+    for batch_size in [1, 10]:
         dim = torch.randint(1, 10, size=[1], generator=rng)[0]
         tangent_vector = torch.rand(batch_size, dim, generator=rng).double() - 0.5
         ret = th.Vector.exp_map(tangent_vector)
@@ -206,7 +206,7 @@ def test_log_map():
     rng = torch.Generator()
     rng.manual_seed(0)
 
-    for batch_size in [1, 20, 100]:
+    for batch_size in [1, 10]:
         dim = torch.randint(1, 10, size=[1], generator=rng)[0]
         group = th.Vector.rand(batch_size, dim, generator=rng)
         ret = group.log_map()
@@ -221,7 +221,7 @@ def test_local_map():
     rng = torch.Generator()
     rng.manual_seed(0)
 
-    for batch_size in [1, 20, 100]:
+    for batch_size in [1, 10]:
         dim = torch.randint(1, 10, size=[1], generator=rng)[0]
         group0 = th.Vector.rand(batch_size, dim, generator=rng)
         group1 = th.Vector.rand(batch_size, dim, generator=rng)

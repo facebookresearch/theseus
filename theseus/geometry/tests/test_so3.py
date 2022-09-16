@@ -50,7 +50,7 @@ def _create_tangent_vector(batch_size, ang_factor, rng, dtype):
     return tangent_vector
 
 
-@pytest.mark.parametrize("batch_size", [1, 20, 100])
+@pytest.mark.parametrize("batch_size", [1, 10])
 @pytest.mark.parametrize("dtype", [torch.float32, torch.float64])
 @pytest.mark.parametrize(
     "ang_factor", [None, 1e-5, 3e-3, 2 * np.pi - 1e-11, np.pi - 1e-7, np.pi - 1e-11]
@@ -73,7 +73,7 @@ def test_exp_map(batch_size, dtype, ang_factor, enable_functorch):
     )
 
 
-@pytest.mark.parametrize("batch_size", [1, 20, 100])
+@pytest.mark.parametrize("batch_size", [1, 10])
 @pytest.mark.parametrize("dtype", [torch.float32, torch.float64])
 @pytest.mark.parametrize(
     "ang_factor", [None, 1e-5, 3e-3, 2 * np.pi - 1e-11, np.pi - 1e-11]
@@ -104,7 +104,7 @@ def test_log_map(batch_size, dtype, ang_factor, enable_functorch):
     )
 
 
-@pytest.mark.parametrize("batch_size", [1, 20, 100])
+@pytest.mark.parametrize("batch_size", [1, 10])
 @pytest.mark.parametrize("dtype", [torch.float32, torch.float64])
 @pytest.mark.parametrize("enable_functorch", [True, False])
 def test_inverse(batch_size, dtype, enable_functorch):
@@ -116,7 +116,7 @@ def test_inverse(batch_size, dtype, enable_functorch):
     check_inverse(group, enable_functorch=enable_functorch)
 
 
-@pytest.mark.parametrize("batch_size", [1, 20, 100])
+@pytest.mark.parametrize("batch_size", [1, 10])
 @pytest.mark.parametrize("dtype", [torch.float32, torch.float64])
 @pytest.mark.parametrize(
     "ang_factor", [None, 1e-5, 3e-3, 2 * np.pi - 1e-11, np.pi - 1e-11]
@@ -137,7 +137,7 @@ def test_quaternion(batch_size, dtype, ang_factor, enable_functorch):
     check_SO3_to_quaternion(so3, atol=ATOL, enable_functorch=enable_functorch)
 
 
-@pytest.mark.parametrize("batch_size", [1, 20, 100])
+@pytest.mark.parametrize("batch_size", [1, 10])
 @pytest.mark.parametrize("dtype", [torch.float32, torch.float64])
 @pytest.mark.parametrize("enable_functorch", [True, False])
 def test_adjoint(batch_size, dtype, enable_functorch):
@@ -148,7 +148,7 @@ def test_adjoint(batch_size, dtype, enable_functorch):
     check_adjoint(so3, tangent, enable_functorch)
 
 
-@pytest.mark.parametrize("batch_size", [1, 20, 100])
+@pytest.mark.parametrize("batch_size", [1, 10])
 @pytest.mark.parametrize("dtype", [torch.float32, torch.float64])
 def test_compose(batch_size, dtype):
     rng = torch.Generator()
@@ -163,8 +163,8 @@ def test_rotate_and_unrotate(dtype):
     rng = torch.Generator()
     rng.manual_seed(0)
     for _ in range(10):  # repeat a few times
-        for batch_size_group in [1, 20, 100]:
-            for batch_size_pnt in [1, 20, 100]:
+        for batch_size_group in [1, 10]:
+            for batch_size_pnt in [1, 10]:
                 if (
                     batch_size_group != 1
                     and batch_size_pnt != 1
@@ -228,7 +228,7 @@ def test_projection(dtype, enable_functorch):
     rng = torch.Generator()
     rng.manual_seed(0)
     for _ in range(10):  # repeat a few times
-        for batch_size in [1, 20, 100]:
+        for batch_size in [1, 10]:
             # Test SO3.rotate
             check_projection_for_rotate_and_transform(
                 th.SO3, th.Point3, th.SO3.rotate, batch_size, rng, dtype=dtype
@@ -256,7 +256,7 @@ def test_local_map(dtype):
     rng.manual_seed(0)
     ATOL = 3e-5 if dtype == torch.float32 else 1e-7
 
-    for batch_size in [1, 20, 100]:
+    for batch_size in [1, 10]:
         group0 = th.SO3.rand(batch_size, dtype=dtype)
         group1 = th.SO3.rand(batch_size, dtype=dtype)
 
@@ -265,7 +265,7 @@ def test_local_map(dtype):
         )
 
 
-@pytest.mark.parametrize("batch_size", [1, 20, 100])
+@pytest.mark.parametrize("batch_size", [1, 10])
 @pytest.mark.parametrize("dtype", [torch.float32, torch.float64])
 def test_normalization(batch_size, dtype):
     check_so3_se3_normalize(th.SO3, batch_size, dtype)

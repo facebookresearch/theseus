@@ -8,7 +8,7 @@ import math
 import warnings
 from dataclasses import dataclass
 from enum import Enum
-from typing import Any, Dict, Optional, Type
+from typing import Any, Callable, Dict, NoReturn, Optional, Type
 
 import numpy as np
 import torch
@@ -57,6 +57,11 @@ class BackwardMode(Enum):
     IMPLICIT = 1
     TRUNCATED = 2
     DLM = 3
+
+
+EndStepCallbackType = Callable[
+    ["NonlinearOptimizer", NonlinearOptimizerInfo, torch.Tensor, int], NoReturn
+]
 
 
 class NonlinearOptimizer(Optimizer, abc.ABC):
@@ -254,6 +259,7 @@ class NonlinearOptimizer(Optimizer, abc.ABC):
         info: NonlinearOptimizerInfo,
         verbose: bool,
         truncated_grad_loop: bool,
+        end_step_callback: Optional[EndStepCallbackType] = None,
         **kwargs,
     ) -> int:
         converged_indices = torch.zeros_like(info.last_err).bool()
@@ -325,6 +331,9 @@ class NonlinearOptimizer(Optimizer, abc.ABC):
                     break  # nothing else will happen at this point
                 info.last_err = err
 
+                if end_step_callback is not None:
+                    end_step_callback(self, info, delta, it_)
+
         info.status[
             info.status == NonlinearOptimizerStatus.START
         ] = NonlinearOptimizerStatus.MAX_ITERATIONS
@@ -333,6 +342,9 @@ class NonlinearOptimizer(Optimizer, abc.ABC):
     # `track_best_solution` keeps a **detached** copy (as in no gradient info)
     # of the best variables found, but it is optional to avoid unnecessary copying
     # if this is not needed
+    #
+    # If `end_step_callback` is passed, it's called at the very end of each optimizer
+    # step, with four input arguments: (optimizer, info, delta, step_idx).
     def _optimize_impl(
         self,
         track_best_solution: bool = False,
@@ -340,6 +352,7 @@ class NonlinearOptimizer(Optimizer, abc.ABC):
         track_state_history: bool = False,
         verbose: bool = False,
         backward_mode: BackwardMode = BackwardMode.FULL,
+        end_step_callback: Optional[EndStepCallbackType] = None,
         **kwargs,
     ) -> OptimizerInfo:
         with torch.no_grad():
@@ -360,6 +373,7 @@ class NonlinearOptimizer(Optimizer, abc.ABC):
                 info=info,
                 verbose=verbose,
                 truncated_grad_loop=False,
+                end_step_callback=end_step_callback,
                 **kwargs,
             )
             # If didn't coverge, remove misleading converged_iter value
@@ -394,6 +408,7 @@ class NonlinearOptimizer(Optimizer, abc.ABC):
                     info=info,
                     verbose=verbose,
                     truncated_grad_loop=False,
+                    end_step_callback=end_step_callback,
                     **kwargs,
                 )
 
@@ -405,6 +420,7 @@ class NonlinearOptimizer(Optimizer, abc.ABC):
                 info=grad_loop_info,
                 verbose=verbose,
                 truncated_grad_loop=True,
+                end_step_callback=end_step_callback,
                 **kwargs,
             )
 

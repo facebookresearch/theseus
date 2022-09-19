@@ -199,7 +199,7 @@ class AutoDiffCostFunction(CostFunction):
             vectorize=self._autograd_vectorize,
         )
 
-    def _make_jac_fn_functorch(
+    def _make_jac_fn_vmap(
         self, tmp_optim_vars: Tuple[Manifold, ...], tmp_aux_vars: Tuple[Variable, ...]
     ):
         def jac_fn(optim_vars_tensors_, aux_vars_tensors_):
@@ -219,7 +219,7 @@ class AutoDiffCostFunction(CostFunction):
 
         return jac_fn
 
-    def _compute_autograd_jacobian_functorch(
+    def _compute_autograd_jacobian_vmap(
         self,
         optim_tensors: Tuple[torch.Tensor, ...],
         aux_tensors: Tuple[torch.Tensor, ...],
@@ -230,10 +230,10 @@ class AutoDiffCostFunction(CostFunction):
     def jacobians(self) -> Tuple[List[torch.Tensor], torch.Tensor]:
         err, optim_vars, aux_vars = self._compute_error()
         if self._autograd_mode == AutoGradMode.VMAP:
-            jacobians_full = self._compute_autograd_jacobian_functorch(
+            jacobians_full = self._compute_autograd_jacobian_vmap(
                 tuple(v.tensor for v in optim_vars),
                 tuple(v.tensor for v in aux_vars),
-                self._make_jac_fn_functorch(self._tmp_optim_vars, self._tmp_aux_vars),
+                self._make_jac_fn_vmap(self._tmp_optim_vars, self._tmp_aux_vars),
             )
         elif self._autograd_mode == AutoGradMode.LOOP_BATCH:
             jacobians_raw_loop: List[Tuple[torch.Tensor, ...]] = []

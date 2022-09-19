@@ -25,6 +25,24 @@ def parse_requirements_file(path):
     return reqs
 
 
+def get_baspacho_info(has_cuda):
+    baspacho_root_dir = root_dir / "third_party" / "baspacho"
+    baspacho_build_dir = baspacho_root_dir / "build"
+    include_dirs = [
+        str(baspacho_root_dir),
+        str(baspacho_build_dir / "_deps" / "eigen-src"),
+    ]
+    library_dirs = [
+        str(baspacho_build_dir / "build" / "baspacho" / "baspacho"),
+        str(baspacho_build_dir / "build" / "_deps" / "dispenso-build" / "dispenso"),
+    ]
+    libraries = ["BaSpaCho", "dispenso"]
+    if has_cuda:
+        libraries.append("cusolver")
+        libraries.append("cublas")
+    return include_dirs, library_dirs, libraries
+
+
 reqs_main = parse_requirements_file("requirements/main.txt")
 reqs_dev = parse_requirements_file("requirements/dev.txt")
 root_dir = Path(__file__).parent
@@ -37,7 +55,11 @@ with open(Path("theseus") / "__init__.py", "r") as f:
 with open("README.md", "r") as fh:
     long_description = fh.read()
 
-if torch.cuda.is_available():
+cuda_is_available = torch.cuda.is_available()
+baspacho_include_dirs, baspacho_library_dirs, baspacho_libraries = get_baspacho_info(
+    cuda_is_available
+)
+if cuda_is_available:
     ext_modules = [
         # reference: https://docs.python.org/3/distutils/apiref.html#distutils.core.Extension
         torch_cpp_ext.CUDAExtension(
@@ -53,6 +75,7 @@ if torch.cuda.is_available():
             include_dirs=[str(root_dir)],
             libraries=["cusolver"],
         ),
+        # Baspacho installation
         torch_cpp_ext.CUDAExtension(
             name="theseus.extlib.baspacho_solver",
             sources=[
@@ -60,51 +83,10 @@ if torch.cuda.is_available():
                 "theseus/extlib/baspacho_solver.cpp",
             ],
             define_macros=[("THESEUS_HAVE_CUDA", "1"), ("NO_BASPACHO_CHECKS", "1")],
-            extra_compile_args={
-                "cxx": [
-                    "-std=c++17",
-                ],
-                "nvcc": [
-                    "-std=c++17",
-                    # "--expt-relaxed-constexpr", given to CXX too for some reason?
-                ],
-            },
-            include_dirs=[
-                str(root_dir / "third_party" / "baspacho"),
-                str(
-                    root_dir
-                    / "third_party"
-                    / "baspacho"
-                    / "build"
-                    / "_deps"
-                    / "eigen-src"
-                ),
-            ],
-            library_dirs=[
-                str(
-                    root_dir
-                    / "third_party"
-                    / "baspacho"
-                    / "build"
-                    / "baspacho"
-                    / "baspacho"
-                ),
-                str(
-                    root_dir
-                    / "third_party"
-                    / "baspacho"
-                    / "build"
-                    / "_deps"
-                    / "dispenso-build"
-                    / "dispenso"
-                ),
-            ],
-            libraries=[
-                "BaSpaCho",
-                "dispenso",
-                "cusolver",
-                "cublas",
-            ],
+            extra_compile_args={"cxx": ["-std=c++17"], "nvcc": ["-std=c++17"]},
+            include_dirs=baspacho_include_dirs,
+            library_dirs=baspacho_library_dirs,
+            libraries=baspacho_libraries,
         ),
     ]
 else:
@@ -112,45 +94,12 @@ else:
     ext_modules = [
         torch_cpp_ext.CppExtension(
             name="theseus.extlib.baspacho_solver",
-            sources=[
-                "theseus/extlib/baspacho_solver.cpp",
-            ],
+            sources=["theseus/extlib/baspacho_solver.cpp"],
             define_macros=[("NO_BASPACHO_CHECKS", "1")],
             extra_compile_args=["-std=c++17"],
-            include_dirs=[
-                str(root_dir / "third_party" / "baspacho"),
-                str(
-                    root_dir
-                    / "third_party"
-                    / "baspacho"
-                    / "build"
-                    / "_deps"
-                    / "eigen-src"
-                ),
-            ],
-            library_dirs=[
-                str(
-                    root_dir
-                    / "third_party"
-                    / "baspacho"
-                    / "build"
-                    / "baspacho"
-                    / "baspacho"
-                ),
-                str(
-                    root_dir
-                    / "third_party"
-                    / "baspacho"
-                    / "build"
-                    / "_deps"
-                    / "dispenso-build"
-                    / "dispenso"
-                ),
-            ],
-            libraries=[
-                "BaSpaCho",
-                "dispenso",
-            ],
+            include_dirs=baspacho_include_dirs,
+            library_dirs=baspacho_library_dirs,
+            libraries=baspacho_libraries,
         ),
     ]
 

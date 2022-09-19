@@ -11,6 +11,7 @@ from theseus.core.tests.common import (
     check_another_theseus_function_is_copy,
     check_another_theseus_tensor_is_copy,
     check_another_torch_tensor_is_copy,
+    BATCH_SIZES_TO_TEST,
 )
 from theseus.utils import numeric_jacobian
 from .utils import random_scalar, random_origin, random_sdf_data
@@ -18,9 +19,9 @@ from .utils import random_scalar, random_origin, random_sdf_data
 
 def test_collision2d_error_shapes():
     cost_weight = th.ScaleCostWeight(1.0)
-    for batch_size in [1, 10, 100]:
-        for field_widht in [1, 10, 100]:
-            for field_height in [1, 10, 100]:
+    for batch_size in BATCH_SIZES_TO_TEST:
+        for field_widht in BATCH_SIZES_TO_TEST:
+            for field_height in BATCH_SIZES_TO_TEST:
                 pose = th.Point2(tensor=torch.randn(batch_size, 2).double())
                 origin = random_origin(batch_size)
                 sdf_data = random_sdf_data(batch_size, field_widht, field_height)
@@ -81,7 +82,7 @@ def test_collision2d_jacobians(pose_cls):
     rng = torch.Generator()
     rng.manual_seed(0)
     for _ in range(10):
-        for batch_size in [1, 10, 100]:
+        for batch_size in BATCH_SIZES_TO_TEST:
             cost_weight = th.ScaleCostWeight(torch.ones(1).squeeze().double())
             pose = pose_cls.randn(batch_size, generator=rng, dtype=torch.float64)
             origin = th.Point2(torch.ones(batch_size, 2).double())

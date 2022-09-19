@@ -39,7 +39,7 @@ def test_exp_map():
 
 
 def test_log_map():
-    for batch_size in [1, 2, 100]:
+    for batch_size in BATCH_SIZES_TO_TEST:
         theta = torch.from_numpy(np.linspace(-np.pi, np.pi, batch_size)).view(-1, 1)
         check_log_map(theta, th.SO2, EPS, enable_functorch=False)
         check_projection_for_log_map(theta, th.SO2, enable_functorch=False)

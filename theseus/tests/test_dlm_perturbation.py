@@ -7,6 +7,7 @@ import numpy as np
 import torch
 
 import theseus as th
+from theseus.core.tests.common import BATCH_SIZES_TO_TEST
 from theseus.theseus_layer import _DLMPerturbation
 from theseus.utils import numeric_jacobian
 
@@ -25,7 +26,7 @@ def test_dlm_perturbation_jacobian():
     dtype = torch.float64
     for _ in range(100):
         group_cls = rng.choice([th.Vector, th.SE3, th.SE2, th.SO2, th.SO3])
-        for batch_size in [1, 10, 100]:
+        for batch_size in BATCH_SIZES_TO_TEST:
             epsilon = th.Variable(
                 tensor=torch.randn(batch_size, 1, dtype=dtype, generator=generator)
             )

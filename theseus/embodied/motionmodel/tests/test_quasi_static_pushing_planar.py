@@ -9,6 +9,7 @@ import torch
 import theseus.core as thcore
 import theseus.embodied as thembod
 import theseus.geometry as thgeom
+from theseus.core.tests.common import BATCH_SIZES_TO_TEST
 from theseus.geometry.tests.test_se2 import create_random_se2
 from theseus.utils import numeric_jacobian
 
@@ -95,7 +96,7 @@ def test_quasi_static_pushing_planar_jacobians():
     rng = torch.Generator()
     rng.manual_seed(0)
     for _ in range(10):  # repeat a bunch of times
-        for batch_size in [1, 10, 100]:
+        for batch_size in BATCH_SIZES_TO_TEST:
             obj1 = create_random_se2(batch_size, rng)
             obj2 = create_random_se2(batch_size, rng)
             eff1 = create_random_se2(batch_size, rng)

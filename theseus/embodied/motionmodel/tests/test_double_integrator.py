@@ -11,13 +11,16 @@ import torch
 
 import theseus as th
 from theseus.core import Variable
-from theseus.core.tests.common import check_another_theseus_function_is_copy
+from theseus.core.tests.common import (
+    check_another_theseus_function_is_copy,
+    BATCH_SIZES_TO_TEST,
+)
 from theseus.utils import numeric_jacobian
 
 
 def test_gp_motion_model_cost_weight_weights():
     for dof in range(1, 10):
-        for batch_size in [1, 10, 100]:
+        for batch_size in BATCH_SIZES_TO_TEST:
             aux = torch.randn(batch_size, dof, dof).double()
             q_inv = aux.transpose(-2, -1).bmm(aux)
             dt = torch.rand(1).double()
@@ -64,7 +67,7 @@ def test_gp_motion_model_cost_weight_copy():
 
 def test_gp_motion_model_variable_type():
     for dof in range(1, 10):
-        for batch_size in [1, 10, 100]:
+        for batch_size in BATCH_SIZES_TO_TEST:
             aux = torch.randn(batch_size, dof, dof).double()
             q_inv = aux.transpose(-2, -1).bmm(aux)
             dt = torch.rand(1).double()
@@ -91,7 +94,7 @@ def test_gp_motion_model_variable_type():
 
 
 def test_gp_motion_model_cost_function_error_vector_vars():
-    for batch_size in [1, 10, 100]:
+    for batch_size in BATCH_SIZES_TO_TEST:
         for dof in range(1, 10):
             vars = [
                 th.Vector(tensor=torch.randn(batch_size, dof).double())

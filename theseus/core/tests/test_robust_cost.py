@@ -6,6 +6,7 @@
 import torch
 
 import theseus as th
+from theseus.core.tests.common import BATCH_SIZES_TO_TEST
 
 
 def _new_robust_cf(batch_size, loss_cls, generator) -> th.RobustCostFunction:
@@ -25,7 +26,7 @@ def test_robust_cost_weighted_error():
     generator = torch.Generator()
     generator.manual_seed(0)
     for _ in range(10):
-        for batch_size in [1, 2, 10]:
+        for batch_size in BATCH_SIZES_TO_TEST:
             for loss_cls in [th.WelschLoss, th.HuberLoss]:
                 robust_cf = _new_robust_cf(batch_size, loss_cls, generator)
                 cf = robust_cf.cost_function
@@ -44,7 +45,7 @@ def test_robust_cost_grad_form():
     generator = torch.Generator()
     generator.manual_seed(0)
     for _ in range(10):
-        for batch_size in [1, 2, 10]:
+        for batch_size in BATCH_SIZES_TO_TEST:
             for loss_cls in [th.WelschLoss, th.HuberLoss]:
                 robust_cf = _new_robust_cf(batch_size, loss_cls, generator)
                 cf = robust_cf.cost_function
@@ -66,7 +67,7 @@ def test_robust_cost_jacobians():
     generator.manual_seed(0)
 
     for _ in range(10):
-        for batch_size in [1, 2, 10]:
+        for batch_size in BATCH_SIZES_TO_TEST:
             for loss_cls in [th.WelschLoss, th.HuberLoss]:
                 robust_cf = _new_robust_cf(batch_size, loss_cls, generator)
                 v1, v2 = robust_cf.cost_function.var, robust_cf.cost_function.target

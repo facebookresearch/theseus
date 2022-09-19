@@ -7,6 +7,7 @@ import pytest  # noqa
 import torch
 
 import theseus as th
+from theseus.core.tests.common import BATCH_SIZES_TO_TEST
 from theseus.utils import numeric_jacobian
 from .utils import random_sdf
 
@@ -14,10 +15,10 @@ from .utils import random_sdf
 def test_sdf_2d_shapes():
     generator = torch.Generator()
     generator.manual_seed(0)
-    for batch_size in [1, 10, 100]:
-        for field_width in [1, 10, 100]:
-            for field_height in [1, 10, 100]:
-                for num_points in [1, 10, 100]:
+    for batch_size in BATCH_SIZES_TO_TEST:
+        for field_width in BATCH_SIZES_TO_TEST:
+            for field_height in BATCH_SIZES_TO_TEST:
+                for num_points in BATCH_SIZES_TO_TEST:
                     points = th.Variable(tensor=torch.randn(batch_size, 2, num_points))
                     sdf = random_sdf(batch_size, field_width, field_height)
                     dist, jac = sdf.signed_distance(points)
@@ -85,7 +86,7 @@ def test_sdf_2d_creation():
 
 
 def test_signed_distance_2d_jacobian():
-    for batch_size in [1, 10, 100]:
+    for batch_size in BATCH_SIZES_TO_TEST:
         sdf = random_sdf(batch_size, 10, 10)
         for num_points in [1, 10]:
             points = torch.randn(batch_size, 2, num_points).double()

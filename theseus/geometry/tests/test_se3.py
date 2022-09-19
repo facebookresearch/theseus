@@ -285,7 +285,7 @@ def test_projection(dtype, enable_functorch):
     rng = torch.Generator()
     rng.manual_seed(0)
     for _ in range(10):  # repeat a few times
-        for batch_size in [1, 20]:
+        for batch_size in BATCH_SIZES_TO_TEST:
             # Test SE3.transform_to
             check_projection_for_rotate_and_transform(
                 th.SE3, th.Point3, th.SE3.transform_to, batch_size, rng, dtype=dtype

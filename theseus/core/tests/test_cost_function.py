@@ -10,7 +10,7 @@ import pytest  # noqa: F401
 import torch
 
 import theseus as th
-from theseus.core.cost_function import AutoGradMode
+from theseus.core.cost_function import AutogradMode
 from theseus.core.cost_weight import ScaleCostWeight
 
 from .common import (
@@ -58,7 +58,7 @@ def test_default_name_and_ids():
 
 
 @pytest.mark.parametrize(
-    "autograd_mode", [AutoGradMode.DENSE, AutoGradMode.LOOP_BATCH, AutoGradMode.VMAP]
+    "autograd_mode", [AutogradMode.DENSE, AutogradMode.LOOP_BATCH, AutogradMode.VMAP]
 )
 def test_autodiff_cost_function_error_and_jacobians_shape(autograd_mode):
     rng = torch.Generator()
@@ -108,7 +108,7 @@ def test_autodiff_cost_function_error_and_jacobians_shape(autograd_mode):
             for i, arg in enumerate(all_vars):
                 assert isinstance(arg, th.Variable)
                 assert arg.shape == (batch_size, i + 1) or arg.shape == (1, i + 1)
-                if autograd_mode != AutoGradMode.VMAP:
+                if autograd_mode != AutogradMode.VMAP:
                     assert arg.tensor.allclose(
                         variable_values[i] * torch.ones_like(arg.tensor)
                     )
@@ -152,7 +152,7 @@ def test_autodiff_cost_function_error_and_jacobians_shape(autograd_mode):
 
 
 @pytest.mark.parametrize(
-    "autograd_mode", [AutoGradMode.DENSE, AutoGradMode.LOOP_BATCH, AutoGradMode.VMAP]
+    "autograd_mode", [AutogradMode.DENSE, AutogradMode.LOOP_BATCH, AutogradMode.VMAP]
 )
 def test_autodiff_cost_function_cost_weight(autograd_mode):
     batch_size = 10
@@ -213,7 +213,7 @@ def test_autodiff_cost_function_cost_weight(autograd_mode):
 
 
 @pytest.mark.parametrize(
-    "autograd_mode", [AutoGradMode.DENSE, AutoGradMode.LOOP_BATCH, AutoGradMode.VMAP]
+    "autograd_mode", [AutogradMode.DENSE, AutogradMode.LOOP_BATCH, AutogradMode.VMAP]
 )
 def test_autodiff_cost_function_to(autograd_mode):
     batch_size = 10
@@ -264,7 +264,7 @@ def test_autodiff_cost_function_to(autograd_mode):
 
 
 @pytest.mark.parametrize(
-    "autograd_mode", [AutoGradMode.DENSE, AutoGradMode.LOOP_BATCH, AutoGradMode.VMAP]
+    "autograd_mode", [AutogradMode.DENSE, AutogradMode.LOOP_BATCH, AutogradMode.VMAP]
 )
 def test_autodiff_cost_function_error_and_jacobians_shape_on_SO3(autograd_mode):
     for i in range(100):
@@ -328,7 +328,7 @@ def test_autodiff_cost_function_error_and_jacobians_shape_on_SO3(autograd_mode):
 
 
 @pytest.mark.parametrize(
-    "autograd_mode", [AutoGradMode.DENSE, AutoGradMode.LOOP_BATCH, AutoGradMode.VMAP]
+    "autograd_mode", [AutogradMode.DENSE, AutogradMode.LOOP_BATCH, AutogradMode.VMAP]
 )
 def test_autodiff_cost_function_error_and_jacobians_value_on_SO3(autograd_mode):
     for i in range(100):

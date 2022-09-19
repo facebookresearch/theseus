@@ -96,7 +96,7 @@ class ErrFnType(Protocol):
         ...
 
 
-class AutoGradMode(Enum):
+class AutogradMode(Enum):
     DENSE = 0
     LOOP_BATCH = 1
     VMAP = 2
@@ -120,7 +120,7 @@ class AutoDiffCostFunction(CostFunction):
         name: Optional[str] = None,
         autograd_strict: bool = False,
         autograd_vectorize: bool = False,
-        autograd_mode: AutoGradMode = AutoGradMode.DENSE,
+        autograd_mode: AutogradMode = AutogradMode.DENSE,
     ):
         if cost_weight is None:
             cost_weight = ScaleCostWeight(1.0)
@@ -149,7 +149,7 @@ class AutoDiffCostFunction(CostFunction):
 
         self._autograd_mode = autograd_mode
 
-        if self._autograd_mode == AutoGradMode.LOOP_BATCH:
+        if self._autograd_mode == AutogradMode.LOOP_BATCH:
             self._tmp_optim_vars_for_loop = tuple(v.copy() for v in optim_vars)
             self._tmp_aux_vars_for_loop = tuple(v.copy() for v in aux_vars)
 
@@ -158,7 +158,7 @@ class AutoDiffCostFunction(CostFunction):
 
             for i, aux_var in enumerate(aux_vars):
                 self._tmp_aux_vars_for_loop[i].update(aux_var.tensor)
-        elif self._autograd_mode == AutoGradMode.VMAP:
+        elif self._autograd_mode == AutogradMode.VMAP:
             self._tmp_aux_vars = tuple(v.copy() for v in aux_vars)
 
     def _compute_error(
@@ -229,13 +229,13 @@ class AutoDiffCostFunction(CostFunction):
 
     def jacobians(self) -> Tuple[List[torch.Tensor], torch.Tensor]:
         err, optim_vars, aux_vars = self._compute_error()
-        if self._autograd_mode == AutoGradMode.VMAP:
+        if self._autograd_mode == AutogradMode.VMAP:
             jacobians_full = self._compute_autograd_jacobian_vmap(
                 tuple(v.tensor for v in optim_vars),
                 tuple(v.tensor for v in aux_vars),
                 self._make_jac_fn_vmap(self._tmp_optim_vars, self._tmp_aux_vars),
             )
-        elif self._autograd_mode == AutoGradMode.LOOP_BATCH:
+        elif self._autograd_mode == AutogradMode.LOOP_BATCH:
             jacobians_raw_loop: List[Tuple[torch.Tensor, ...]] = []
             for n in range(optim_vars[0].shape[0]):
                 for i, aux_var in enumerate(aux_vars):
@@ -290,12 +290,12 @@ class AutoDiffCostFunction(CostFunction):
         for var in self._tmp_optim_vars:
             var.to(*args, **kwargs)
 
-        if self._autograd_mode == AutoGradMode.LOOP_BATCH:
+        if self._autograd_mode == AutogradMode.LOOP_BATCH:
             for var in self._tmp_optim_vars_for_loop:
                 var.to(*args, **kwargs)
 
             for var in self._tmp_aux_vars_for_loop:
                 var.to(*args, **kwargs)
-        elif self._autograd_mode == AutoGradMode.VMAP:
+        elif self._autograd_mode == AutogradMode.VMAP:
             for var in self._tmp_aux_vars:
                 var.to(*args, **kwargs)

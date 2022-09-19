@@ -10,7 +10,7 @@ from typing import List, Optional, Sequence, Tuple, Union, cast
 import torch
 
 from .theseus_function import TheseusFunction
-from .variable import Variable
+from .variable import Variable, as_variable
 
 
 # Abstract class for representing cost weights (aka, precisions, inverse covariance)
@@ -59,12 +59,7 @@ class ScaleCostWeight(CostWeight):
         name: Optional[str] = None,
     ):
         super().__init__(name=name)
-        if not isinstance(scale, Variable):
-            if not isinstance(scale, torch.Tensor):
-                scale = torch.tensor(scale)
-            self.scale = Variable(scale)
-        else:
-            self.scale = scale
+        self.scale = as_variable(scale)
         if not self.scale.tensor.squeeze().ndim in [0, 1]:
             raise ValueError(
                 "ScaleCostWeight only accepts 0- or 1-dim (batched) tensors."
@@ -99,12 +94,7 @@ class DiagonalCostWeight(CostWeight):
         name: Optional[str] = None,
     ):
         super().__init__(name=name)
-        if not isinstance(diagonal, Variable):
-            if not isinstance(diagonal, torch.Tensor):
-                diagonal = torch.tensor(diagonal)
-            self.diagonal = Variable(diagonal)
-        else:
-            self.diagonal = diagonal
+        self.diagonal = as_variable(diagonal)
         if not self.diagonal.tensor.squeeze().ndim < 3:
             raise ValueError("DiagonalCostWeight only accepts tensors with ndim < 3.")
         if self.diagonal.tensor.ndim == 0:

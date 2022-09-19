@@ -7,7 +7,7 @@ from typing import List, Optional, Tuple, Union, cast
 
 import torch
 
-from theseus.core import CostFunction, CostWeight, Variable
+from theseus.core import CostFunction, CostWeight, Variable, as_variable
 from theseus.embodied.kinematics import IdentityModel
 from theseus.geometry import SE2, Point2
 
@@ -33,12 +33,7 @@ class EffectorObjectContactPlanar(CostFunction):
         self.sdf_origin = SignedDistanceField2D.convert_origin(sdf_origin)
         self.sdf_data = SignedDistanceField2D.convert_sdf_data(sdf_data)
         self.sdf_cell_size = SignedDistanceField2D.convert_cell_size(sdf_cell_size)
-        if not isinstance(eff_radius, Variable):
-            if not isinstance(eff_radius, torch.Tensor):
-                eff_radius = torch.tensor(eff_radius)
-            self.eff_radius = Variable(eff_radius)
-        else:
-            self.eff_radius = eff_radius
+        self.eff_radius = as_variable(eff_radius)
         if self.eff_radius.tensor.squeeze().ndim > 1:
             raise ValueError("eff_radius must be a 0-D or 1-D tensor.")
         self.eff_radius.tensor = self.eff_radius.tensor.view(-1, 1)

@@ -5,6 +5,7 @@
 
 import torch
 
+from theseus.core.tests.common import BATCH_SIZES_TO_TEST  # noqa: F401
 from theseus.constants import TEST_EPS
 from theseus.utils import numeric_jacobian
 from theseus.geometry.lie_group_check import set_lie_group_check_enabled

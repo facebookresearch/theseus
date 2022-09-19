@@ -291,7 +291,7 @@ def run(
         "==============================================================="
         "==========================="
     )
-    logger.info(f"Batch Size: {batch_size}, " f"Autograd Mode: {AutogradMode.VMAP}, ")
+    logger.info(f"Batch Size: {batch_size}, " f"Autograd Mode: {autograd_mode}, ")
 
     logger.info(
         "---------------------------------------------------------------"
@@ -478,40 +478,28 @@ def run(
 
 @hydra.main(config_path="./configs/", config_name="homography_estimation")
 def main(cfg):
-    if cfg.profiling:
-        max_iterations: int = 10
-        num_epochs: int = 1
+    autograd_modes = {
+        "dense": AutogradMode.DENSE,
+        "loop_batch": AutogradMode.LOOP_BATCH,
+        "vmap": AutogradMode.VMAP,
+    }
 
-        batch_size_list: List[int] = [64, 64, 64]
-        autograd_mode_list: List[bool] = [
-            AutogradMode.DENSE,
-            AutogradMode.LOOP_BATCH,
-            AutogradMode.VMAP,
-        ]
+    num_epochs: int = cfg.outer_optim.num_epochs
+    batch_size: int = cfg.outer_optim.batch_size
+    outer_lr: float = cfg.outer_optim.lr
+    max_iterations: int = cfg.inner_optim.max_iters
+    step_size: float = cfg.inner_optim.step_size
+    autograd_mode = autograd_modes[cfg.autograd_mode]
+    print(autograd_mode)
 
-        for batch_size, autograd_mode in zip(batch_size_list, autograd_mode_list):
-            run(
-                batch_size=batch_size,
-                max_iterations=max_iterations,
-                num_epochs=num_epochs,
-                autograd_mode=autograd_mode,
-            )
-        logger.info("\n")
-    else:
-        num_epochs: int = cfg.outer_optim.num_epochs
-        batch_size: int = cfg.outer_optim.batch_size
-        outer_lr: float = cfg.outer_optim.lr
-        max_iterations: int = cfg.inner_optim.max_iters
-        step_size: float = cfg.inner_optim.step_size
-
-        run(
-            batch_size=batch_size,
-            outer_lr=outer_lr,
-            num_epochs=num_epochs,
-            max_iterations=max_iterations,
-            step_size=step_size,
-            autograd_mode=AutogradMode.VMAP,
-        )
+    run(
+        batch_size=batch_size,
+        outer_lr=outer_lr,
+        num_epochs=num_epochs,
+        max_iterations=max_iterations,
+        step_size=step_size,
+        autograd_mode=autograd_mode,
+    )
 
 
 if __name__ == "__main__":

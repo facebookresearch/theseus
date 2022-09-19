@@ -1,4 +1,4 @@
-profiling: false
+autograd_mode: vmap
 
 outer_optim:
   num_epochs: 999

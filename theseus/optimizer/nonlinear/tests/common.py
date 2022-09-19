@@ -159,7 +159,7 @@ def _check_nonlinear_least_squares_fit(
     info = optimizer.optimize(
         track_best_solution=True,
         track_err_history=True,
-        end_step_callback=callback,
+        end_iter_callback=callback,
         **optimize_kwargs,
     )
     # Solution must now match the true coefficients

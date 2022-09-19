@@ -59,26 +59,45 @@ if torch.cuda.is_available():
                 "theseus/extlib/baspacho_solver_cuda.cu",
                 "theseus/extlib/baspacho_solver.cpp",
             ],
-            define_macros=[
-                ("THESEUS_HAVE_CUDA", "1"),
-                ("NO_BASPACHO_CHECKS", "1")
-            ],
+            define_macros=[("THESEUS_HAVE_CUDA", "1"), ("NO_BASPACHO_CHECKS", "1")],
             extra_compile_args={
-                'cxx': [
+                "cxx": [
                     "-std=c++17",
                 ],
-                'nvcc': [
+                "nvcc": [
                     "-std=c++17",
                     # "--expt-relaxed-constexpr", given to CXX too for some reason?
-                ]
+                ],
             },
             include_dirs=[
                 str(root_dir / "third_party" / "baspacho"),
-                str(root_dir / "third_party" / "baspacho" / "build" / "_deps" / "eigen-src"),
+                str(
+                    root_dir
+                    / "third_party"
+                    / "baspacho"
+                    / "build"
+                    / "_deps"
+                    / "eigen-src"
+                ),
             ],
             library_dirs=[
-                str(root_dir / "third_party" / "baspacho" / "build" / "baspacho" / "baspacho"),
-                str(root_dir / "third_party" / "baspacho" / "build" / "_deps" / "dispenso-build" / "dispenso"),
+                str(
+                    root_dir
+                    / "third_party"
+                    / "baspacho"
+                    / "build"
+                    / "baspacho"
+                    / "baspacho"
+                ),
+                str(
+                    root_dir
+                    / "third_party"
+                    / "baspacho"
+                    / "build"
+                    / "_deps"
+                    / "dispenso-build"
+                    / "dispenso"
+                ),
             ],
             libraries=[
                 "BaSpaCho",
@@ -96,23 +115,43 @@ else:
             sources=[
                 "theseus/extlib/baspacho_solver.cpp",
             ],
-            define_macros=[
-                ("NO_BASPACHO_CHECKS", "1")
-            ],
+            define_macros=[("NO_BASPACHO_CHECKS", "1")],
             extra_compile_args=["-std=c++17"],
             include_dirs=[
                 str(root_dir / "third_party" / "baspacho"),
-                str(root_dir / "third_party" / "baspacho" / "build" / "_deps" / "eigen-src"),
+                str(
+                    root_dir
+                    / "third_party"
+                    / "baspacho"
+                    / "build"
+                    / "_deps"
+                    / "eigen-src"
+                ),
             ],
             library_dirs=[
-                str(root_dir / "third_party" / "baspacho" / "build" / "baspacho" / "baspacho"),
-                str(root_dir / "third_party" / "baspacho" / "build" / "_deps" / "dispenso-build" / "dispenso"),
+                str(
+                    root_dir
+                    / "third_party"
+                    / "baspacho"
+                    / "build"
+                    / "baspacho"
+                    / "baspacho"
+                ),
+                str(
+                    root_dir
+                    / "third_party"
+                    / "baspacho"
+                    / "build"
+                    / "_deps"
+                    / "dispenso-build"
+                    / "dispenso"
+                ),
             ],
             libraries=[
                 "BaSpaCho",
                 "dispenso",
             ],
-        ), 
+        ),
     ]
 
 setuptools.setup(

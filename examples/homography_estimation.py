@@ -8,8 +8,7 @@ import logging
 import os
 import shutil
 import warnings
-from cmath import log
-from typing import Dict, List, cast
+from typing import Dict, List, Tuple, cast
 
 import cv2
 import hydra
@@ -21,6 +20,7 @@ from PIL import Image
 from torch.utils.data import DataLoader, Dataset
 
 import theseus as th
+from theseus.core.cost_function import AutogradMode, ErrFnType
 from theseus.third_party.easyaug import GeoAugParam, RandomGeoAug, RandomPhotoAug
 from theseus.third_party.utils import grid_sample
 
@@ -153,11 +153,12 @@ def warp_perspective_norm(H, img):
 
 
 # loss is difference between warped and target image
-def homography_error_fn(optim_vars: List[th.Manifold], aux_vars: List[th.Variable]):
+def homography_error_fn(optim_vars: Tuple[th.Manifold], aux_vars: Tuple[th.Variable]):
     H8_1_2 = optim_vars[0].tensor.reshape(-1, 8)
     # Force the last element H[2,2] to be 1.
     H_1_2 = torch.cat([H8_1_2, H8_1_2.new_ones(H8_1_2.shape[0], 1)], dim=-1)  # type: ignore
-    img1, img2 = aux_vars
+    img1: th.Variable = aux_vars[0]
+    img2: th.Variable = aux_vars[-1]
     img1_dst = warp_perspective_norm(H_1_2.reshape(-1, 3, 3), img1.tensor)
     loss = torch.nn.functional.mse_loss(img1_dst, img2.tensor, reduction="none")
     ones = warp_perspective_norm(
@@ -284,18 +285,13 @@ def run(
     outer_lr: float = 1e-4,
     max_iterations: int = 50,
     step_size: float = 0.1,
-    autograd_loop_over_batch: bool = False,
-    autograd_functorch: bool = True,
+    autograd_mode: AutogradMode = AutogradMode.VMAP,
 ):
     logger.info(
         "==============================================================="
         "==========================="
     )
-    logger.info(
-        f"Batch Size: {batch_size}, "
-        f"Autogtad Loop over Batch: {autograd_loop_over_batch}, "
-        f"Autograd Functorch: {autograd_functorch}"
-    )
+    logger.info(f"Batch Size: {batch_size}, " f"Autograd Mode: {AutogradMode.VMAP}, ")
 
     logger.info(
         "---------------------------------------------------------------"
@@ -335,11 +331,10 @@ def run(
     # Set up inner loop optimization.
     homography_cf = th.AutoDiffCostFunction(
         optim_vars=[H8_1_2],
-        err_fn=homography_error_fn,
+        err_fn=cast(ErrFnType, homography_error_fn),
         dim=1,
         aux_vars=[feat1, feat2],
-        autograd_loop_over_batch=autograd_loop_over_batch,
-        autograd_functorch=autograd_functorch,
+        autograd_mode=autograd_mode,
     )
     objective.add(homography_cf)
 
@@ -428,10 +423,13 @@ def run(
             # print("Finished inner loop in %d iters" % len(H_hist))
 
             Hgt_1_2 = Hgt_1_2.reshape(-1, 9)
-            H8_1_2 = theseus_layer.objective.get_optim_var("H8_1_2").tensor.reshape(
-                -1, 8
+            H8_1_2_tensor = theseus_layer.objective.get_optim_var(
+                "H8_1_2"
+            ).tensor.reshape(-1, 8)
+            H_1_2 = torch.cat(
+                [H8_1_2_tensor, H8_1_2_tensor.new_ones(H8_1_2_tensor.shape[0], 1)],
+                dim=-1,
             )
-            H_1_2 = torch.cat([H8_1_2, H8_1_2.new_ones(H8_1_2.shape[0], 1)], dim=-1)
             # Loss is on four corner error.
             fc_dist = four_corner_dist(
                 H_1_2.reshape(-1, 3, 3), Hgt_1_2.reshape(-1, 3, 3), imgH, imgW
@@ -485,18 +483,18 @@ def main(cfg):
         num_epochs: int = 1
 
         batch_size_list: List[int] = [64, 64, 64]
-        autograd_loop_over_batch_list: List[bool] = [False, True, False]
-        autograd_functorch_list: List[bool] = [False, False, True]
+        autograd_mode_list: List[bool] = [
+            AutogradMode.DENSE,
+            AutogradMode.LOOP_BATCH,
+            AutogradMode.VMAP,
+        ]
 
-        for batch_size, autograd_loop_over_batch, autograd_functorch in zip(
-            batch_size_list, autograd_loop_over_batch_list, autograd_functorch_list
-        ):
+        for batch_size, autograd_mode in zip(batch_size_list, autograd_mode_list):
             run(
                 batch_size=batch_size,
                 max_iterations=max_iterations,
                 num_epochs=num_epochs,
-                autograd_loop_over_batch=autograd_loop_over_batch,
-                autograd_functorch=autograd_functorch,
+                autograd_mode=autograd_mode,
             )
         logger.info("\n")
     else:
@@ -512,8 +510,7 @@ def main(cfg):
             num_epochs=num_epochs,
             max_iterations=max_iterations,
             step_size=step_size,
-            autograd_loop_over_batch=False,
-            autograd_functorch=True,
+            autograd_mode=AutogradMode.VMAP,
         )
 
 

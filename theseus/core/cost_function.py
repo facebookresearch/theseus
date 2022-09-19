@@ -98,7 +98,7 @@ class ErrFnType(Protocol):
 
 class AutoGradMode(Enum):
     DENSE = 0
-    LOOP = 1
+    LOOP_BATCH = 1
     VMAP = 2
 
 
@@ -149,7 +149,7 @@ class AutoDiffCostFunction(CostFunction):
 
         self._autograd_mode = autograd_mode
 
-        if self._autograd_mode == AutoGradMode.LOOP:
+        if self._autograd_mode == AutoGradMode.LOOP_BATCH:
             self._tmp_optim_vars_for_loop = tuple(v.copy() for v in optim_vars)
             self._tmp_aux_vars_for_loop = tuple(v.copy() for v in aux_vars)
 
@@ -235,7 +235,7 @@ class AutoDiffCostFunction(CostFunction):
                 tuple(v.tensor for v in aux_vars),
                 self._make_jac_fn_functorch(self._tmp_optim_vars, self._tmp_aux_vars),
             )
-        elif self._autograd_mode == AutoGradMode.LOOP:
+        elif self._autograd_mode == AutoGradMode.LOOP_BATCH:
             jacobians_raw_loop: List[Tuple[torch.Tensor, ...]] = []
             for n in range(optim_vars[0].shape[0]):
                 for i, aux_var in enumerate(aux_vars):
@@ -290,7 +290,7 @@ class AutoDiffCostFunction(CostFunction):
         for var in self._tmp_optim_vars:
             var.to(*args, **kwargs)
 
-        if self._autograd_mode == AutoGradMode.LOOP:
+        if self._autograd_mode == AutoGradMode.LOOP_BATCH:
             for var in self._tmp_optim_vars_for_loop:
                 var.to(*args, **kwargs)
 

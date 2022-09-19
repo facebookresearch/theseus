@@ -15,6 +15,7 @@ from .core import (
     Vectorize,
     RobustLoss,
     AutoDiffCostFunction,
+    AutoGradMode,
     RobustCostFunction,
     HuberLoss,
     WelschLoss,

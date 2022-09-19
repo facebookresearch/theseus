@@ -43,6 +43,28 @@ def get_baspacho_info(has_cuda):
     return include_dirs, library_dirs, libraries
 
 
+def maybe_create_baspacho_extension(has_cuda):
+    ext_cls = torch_cpp_ext.CUDAExtension if has_cuda else torch_cpp_ext.CppExtension
+    sources = ["theseus/extlib/baspacho_solver.cpp"]
+    define_macros = [("NO_BASPACHO_CHECKS", "1")]
+    if has_cuda:
+        sources.append("theseus/extlib/baspacho_solver_cuda.cu")
+        define_macros.append(("THESEUS_HAVE_CUDA", "1"))
+        extra_compile_args = {"cxx": ["-std=c++17"], "nvcc": ["-std=c++17"]}
+    else:
+        extra_compile_args = ["-std=c++17"]
+    include_dirs, library_dirs, libraries = get_baspacho_info(has_cuda)
+    return ext_cls(
+        name="theseus.extlib.baspacho_solver",
+        sources=sources,
+        define_macros=define_macros,
+        extra_compile_args=extra_compile_args,
+        include_dirs=include_dirs,
+        library_dirs=library_dirs,
+        libraries=libraries,
+    )
+
+
 reqs_main = parse_requirements_file("requirements/main.txt")
 reqs_dev = parse_requirements_file("requirements/dev.txt")
 root_dir = Path(__file__).parent
@@ -56,9 +78,7 @@ with open("README.md", "r") as fh:
     long_description = fh.read()
 
 cuda_is_available = torch.cuda.is_available()
-baspacho_include_dirs, baspacho_library_dirs, baspacho_libraries = get_baspacho_info(
-    cuda_is_available
-)
+baspacho_extension = maybe_create_baspacho_extension(cuda_is_available)
 if cuda_is_available:
     ext_modules = [
         # reference: https://docs.python.org/3/distutils/apiref.html#distutils.core.Extension
@@ -75,33 +95,11 @@ if cuda_is_available:
             include_dirs=[str(root_dir)],
             libraries=["cusolver"],
         ),
-        # Baspacho installation
-        torch_cpp_ext.CUDAExtension(
-            name="theseus.extlib.baspacho_solver",
-            sources=[
-                "theseus/extlib/baspacho_solver_cuda.cu",
-                "theseus/extlib/baspacho_solver.cpp",
-            ],
-            define_macros=[("THESEUS_HAVE_CUDA", "1"), ("NO_BASPACHO_CHECKS", "1")],
-            extra_compile_args={"cxx": ["-std=c++17"], "nvcc": ["-std=c++17"]},
-            include_dirs=baspacho_include_dirs,
-            library_dirs=baspacho_library_dirs,
-            libraries=baspacho_libraries,
-        ),
     ]
 else:
     print("No CUDA support found. CUDA extensions won't be installed.")
-    ext_modules = [
-        torch_cpp_ext.CppExtension(
-            name="theseus.extlib.baspacho_solver",
-            sources=["theseus/extlib/baspacho_solver.cpp"],
-            define_macros=[("NO_BASPACHO_CHECKS", "1")],
-            extra_compile_args=["-std=c++17"],
-            include_dirs=baspacho_include_dirs,
-            library_dirs=baspacho_library_dirs,
-            libraries=baspacho_libraries,
-        ),
-    ]
+    ext_modules = []
+ext_modules.append(baspacho_extension)
 
 setuptools.setup(
     name="theseus-ai",

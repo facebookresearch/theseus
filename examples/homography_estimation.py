@@ -490,7 +490,6 @@ def main(cfg):
     max_iterations: int = cfg.inner_optim.max_iters
     step_size: float = cfg.inner_optim.step_size
     autograd_mode = autograd_modes[cfg.autograd_mode]
-    print(autograd_mode)
 
     run(
         batch_size=batch_size,

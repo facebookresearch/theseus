@@ -9,7 +9,7 @@ from theseus.constants import TEST_EPS
 from theseus.utils import numeric_jacobian
 from theseus.geometry.lie_group_check import set_lie_group_check_enabled
 from theseus.geometry.vector import Vector
-from theseus.core.cost_function import AutoDiffCostFunction
+from theseus.core.cost_function import AutoDiffCostFunction, AutogradMode
 
 
 def check_exp_map(tangent_vector, group_cls, atol=TEST_EPS, enable_functorch=False):
@@ -35,7 +35,7 @@ def check_exp_map(tangent_vector, group_cls, atol=TEST_EPS, enable_functorch=Fal
         jacs, _ = cost_fn.jacobians()
 
         cost_fn_vec = AutoDiffCostFunction(
-            optim_vars, err_fn, dim=1, autograd_functorch=True
+            optim_vars, err_fn, dim=1, autograd_mode=AutogradMode.VMAP
         )
         jacs_vec, _ = cost_fn_vec.jacobians()
 
@@ -51,7 +51,7 @@ def check_exp_map(tangent_vector, group_cls, atol=TEST_EPS, enable_functorch=Fal
         jacs, _ = cost_fn.jacobians()
 
         cost_fn_vec = AutoDiffCostFunction(
-            optim_vars, err_fn, dim=1, autograd_functorch=True
+            optim_vars, err_fn, dim=1, autograd_mode=AutogradMode.VMAP
         )
         jacs_vec, _ = cost_fn_vec.jacobians()
 
@@ -74,7 +74,7 @@ def check_log_map(tangent_vector, group_cls, atol=TEST_EPS, enable_functorch=Fal
         jacs, _ = cost_fn.jacobians()
 
         cost_fn_vec = AutoDiffCostFunction(
-            optim_vars, err_fn, dim=1, autograd_functorch=True
+            optim_vars, err_fn, dim=1, autograd_mode=AutogradMode.VMAP
         )
         jacs_vec, _ = cost_fn_vec.jacobians()
 
@@ -90,7 +90,7 @@ def check_log_map(tangent_vector, group_cls, atol=TEST_EPS, enable_functorch=Fal
         jacs, _ = cost_fn.jacobians()
 
         cost_fn_vec = AutoDiffCostFunction(
-            optim_vars, err_fn, dim=1, autograd_functorch=True
+            optim_vars, err_fn, dim=1, autograd_mode=AutogradMode.VMAP
         )
         jacs_vec, _ = cost_fn_vec.jacobians()
 
@@ -135,7 +135,7 @@ def check_compose(group_1, group_2, enable_functorch=False):
         jacs, _ = cost_fn.jacobians()
 
         cost_fn_vec = AutoDiffCostFunction(
-            optim_vars, err_fn, dim=1, autograd_functorch=True
+            optim_vars, err_fn, dim=1, autograd_mode=AutogradMode.VMAP
         )
         jacs_vec, _ = cost_fn_vec.jacobians()
 
@@ -158,7 +158,7 @@ def check_compose(group_1, group_2, enable_functorch=False):
         jacs, _ = cost_fn.jacobians()
 
         cost_fn_vec = AutoDiffCostFunction(
-            optim_vars, err_fn, dim=1, autograd_functorch=True
+            optim_vars, err_fn, dim=1, autograd_mode=AutogradMode.VMAP
         )
         jacs_vec, _ = cost_fn_vec.jacobians()
 
@@ -195,7 +195,7 @@ def check_inverse(group, enable_functorch=False):
         jacs, _ = cost_fn.jacobians()
 
         cost_fn_vec = AutoDiffCostFunction(
-            optim_vars, err_fn, dim=1, autograd_functorch=True
+            optim_vars, err_fn, dim=1, autograd_mode=AutogradMode.VMAP
         )
         jacs_vec, _ = cost_fn_vec.jacobians()
 
@@ -227,7 +227,7 @@ def check_adjoint(group, tangent_vector, enable_functorch=False):
         jacs, _ = cost_fn.jacobians()
 
         cost_fn_vec = AutoDiffCostFunction(
-            optim_vars, err_fn, dim=1, autograd_functorch=True
+            optim_vars, err_fn, dim=1, autograd_mode=AutogradMode.VMAP
         )
         jacs_vec, _ = cost_fn_vec.jacobians()
 

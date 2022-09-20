@@ -411,7 +411,7 @@ def run(
             end_event.record()
             torch.cuda.synchronize()
             forward_time = start_event.elapsed_time(end_event)
-            forward_mem = torch.cuda.max_memory_allocated() / 1025 / 1024
+            forward_mem = torch.cuda.max_memory_allocated() / 1024 / 1024
             forward_times.append(forward_time)
             forward_mems.append(forward_mem)
 
@@ -442,7 +442,7 @@ def run(
             end_event.record()
             torch.cuda.synchronize()
             backward_time = start_event.elapsed_time(end_event)
-            backward_mem = torch.cuda.max_memory_allocated() / 1025 / 1024
+            backward_mem = torch.cuda.max_memory_allocated() / 1024 / 1024
 
             backward_times.append(backward_time)
             backward_mems.append(backward_mem)

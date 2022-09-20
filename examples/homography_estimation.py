@@ -466,10 +466,10 @@ def run(
             "---------------------------------------------------------------"
             "---------------------------"
         )
-        logger.info(f"Forward pass took {sum(forward_times)} ms")
-        logger.info(f"Forward pass took {sum(forward_mems)/len(forward_mems)} MBs")
-        logger.info(f"backward pass took {sum(backward_times)} ms")
-        logger.info(f"backward pass took {sum(backward_mems)/len(backward_mems)} MBs")
+        logger.info(f"Forward pass took {sum(forward_times)} ms/epoch.")
+        logger.info(f"Forward pass took {sum(forward_mems)/len(forward_mems)} MBs.")
+        logger.info(f"Backward pass took {sum(backward_times)} ms/epoch.")
+        logger.info(f"Backward pass took {sum(backward_mems)/len(backward_mems)} MBs.")
         logger.info(
             "---------------------------------------------------------------"
             "---------------------------"

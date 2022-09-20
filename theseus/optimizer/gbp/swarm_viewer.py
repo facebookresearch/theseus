@@ -127,6 +127,12 @@ class SwarmViewer:
             # draw target shape as background
             if self.target_sdf is not None:
                 sdf = self.target_sdf.sdf_data.tensor[0].transpose(0, 1)
+                sdf_size = self.target_sdf.cell_size.tensor.item() * sdf.shape[0]
+                area_size = self.range[1, 0] - self.range[0, 0]
+                crop = np.round((1 - area_size / sdf_size) * sdf.shape[0] / 2).astype(
+                    int
+                )
+                sdf = sdf[crop:-crop, crop:-crop]
                 sdf = torch.flip(
                     sdf, [1]
                 )  # flip vertically so y is increasing going up

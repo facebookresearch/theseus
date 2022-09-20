@@ -3,7 +3,7 @@ import random
 import omegaconf
 import time
 from PIL import Image, ImageDraw, ImageFont, ImageFilter
-from typing import Optional, Tuple, List
+from typing import Optional, Tuple, List, Callable
 
 import torch
 import torch.nn as nn
@@ -51,15 +51,17 @@ def gen_char_img(
 def target_char_loss(outputs, sdf):
     positions = torch.cat(list(outputs.values()))
     dists = sdf.signed_distance(positions)[0]
+    if torch.sum(dists == 0).item() != 0:
+        print("\n\nNumber of agents out of bounds: ", torch.sum(dists == 0).item())
     loss = torch.relu(dists)
     return loss.sum()
 
 
 def gen_target_sdf(cfg):
     # setup target shape for outer loop loss fn
-    area_limits = np.array(cfg["setup"]["area_limits"])
+    vis_limits = np.array(cfg["setup"]["vis_limits"])
     cell_size = 0.05
-    img_size = tuple(np.rint((area_limits[1] - area_limits[0]) / cell_size).astype(int))
+    img_size = tuple(np.rint((vis_limits[1] - vis_limits[0]) / cell_size).astype(int))
     img = gen_char_img(
         cfg["outer_optim"]["target_char"],
         dilate=True,
@@ -70,10 +72,18 @@ def gen_target_sdf(cfg):
     occ_map = torch.flip(
         occ_map, [0]
     )  # flip vertically so y axis is upwards wrt character
+    # pad to expand area
+    area_limits = np.array(cfg["setup"]["area_limits"])
+    padded_size = tuple(
+        np.rint((area_limits[1] - area_limits[0]) / cell_size).astype(int)
+    )
+    pad = int((padded_size[0] - img_size[0]) / 2)
+    larger_occ_map = torch.zeros(padded_size)
+    larger_occ_map[pad:-pad, pad:-pad] = occ_map
     sdf = th.eb.SignedDistanceField2D(
         th.Variable(torch.Tensor(area_limits[0][None, :])),
         th.Variable(torch.Tensor([cell_size])),
-        occupancy_map=th.Variable(occ_map[None, :]),
+        occupancy_map=th.Variable(larger_occ_map[None, :]),
     )
     return sdf
 
@@ -151,6 +161,59 @@ class TwoAgentsCollision(th.CostFunction):
         )
 
 
+# custom factor for GNN
+class GNNTargets(th.CostFunction):
+    def __init__(
+        self,
+        weight: th.CostWeight,
+        agents: List[th.Point2],
+        gnn_err_fn: Callable,
+        name: Optional[str] = None,
+    ):
+        super().__init__(weight, name=name)
+        self.agents = agents
+        self.n_agents = len(agents)
+        self._gnn_err_fn = gnn_err_fn
+        # skips data checks
+        for agent in self.agents:
+            setattr(self, agent.name, agent)
+        self.register_optim_vars([v.name for v in agents])
+
+    # no error when distance exceeds radius
+    def error(self) -> torch.Tensor:
+        return self._gnn_err_fn(self.agents)
+
+    # Cannot use autodiff for jacobians as we want the factor to be
+    # independent for each agent. i.e. GNN is implemented as many prior factors
+    def jacobians(self) -> Tuple[List[torch.Tensor], torch.Tensor]:
+        batch_size = self.agents[0].shape[0]
+        jacs = torch.zeros(
+            batch_size,
+            self.n_agents,
+            self.dim(),
+            2,
+            dtype=self.agents[0].dtype,
+            device=self.agents[0].device,
+        )
+        jacs[:, torch.arange(self.n_agents), 2 * torch.arange(self.n_agents), 0] = 1.0
+        jacs[
+            :, torch.arange(self.n_agents), 2 * torch.arange(self.n_agents) + 1, 1
+        ] = 1.0
+        jac_list = [jacs[:, i] for i in range(self.n_agents)]
+        return jac_list, self.error()
+
+    def dim(self) -> int:
+        return self.n_agents * 2
+
+    def _copy_impl(self, new_name: Optional[str] = None) -> "GNNTargets":
+        return GNNTargets(
+            self.weight.copy(),
+            [agent.copy() for agent in self.agents],
+            self._gnn_err_fn,
+            name=new_name,
+        )
+
+
 def setup_problem(cfg: omegaconf.OmegaConf, gnn_err_fn):
     dtype = torch.float32
     n_agents = cfg["setup"]["num_agents"]
@@ -196,32 +259,15 @@ def setup_problem(cfg: omegaconf.OmegaConf, gnn_err_fn):
             )
             objective.add(collision_cf)
 
-    # learned factors, encouraging a square formation
-    # target_weight = th.ScaleCostWeight(
-    #     torch.tensor([cfg["setup"]["origin_weight"] * 10], dtype=dtype)
-    # )
-    # for i in range(n_agents):
-    #     target = th.Point2(
-    #         tensor=torch.normal(torch.zeros(2), cfg["setup"]["init_std"]),
-    #         name=f"target_{i}",
-    #     )
-    #     target_cf = th.Difference(
-    #         positions[i],
-    #         target,
-    #         target_weight,
-    #         name=f"formation_target_{i}",
-    #     )
-    #     objective.add(target_cf)
-
-    # GNN factor - MLP that takes in all current belief means and outputs all targets
+    # GNN factor - GNN takes in all current belief means and outputs all targets
     target_weight = th.ScaleCostWeight(
-        torch.tensor([cfg["setup"]["origin_weight"] * 10], dtype=dtype)
+        torch.tensor([cfg["setup"]["gnn_target_weight"]], dtype=dtype)
     )
-    gnn_cf = th.AutoDiffCostFunction(
-        optim_vars=positions,
-        err_fn=gnn_err_fn,
-        dim=n_agents,
-        cost_weight=target_weight,
+    gnn_cf = GNNTargets(
+        weight=target_weight,
+        agents=positions,
+        gnn_err_fn=gnn_err_fn,
+        name="gnn_factor",
     )
     objective.add(gnn_cf)
 
@@ -284,20 +330,12 @@ class SwarmGBPAndGNN(nn.Module):
 
     # network outputs offset for target from agent position
     # cost is zero when offset is zero, i.e. agent is at the target
-    def _gnn_err_fn(self, optim_vars: List[th.Manifold], aux_vars):
-        assert len(aux_vars) == 0
-        positions = optim_vars
-
-        batch_size = positions[0].shape[0]
+    def _gnn_err_fn(self, positions: List[th.Manifold]):
         flattened_pos = torch.cat(
             [pos.tensor.unsqueeze(1) for pos in positions], dim=1
         ).flatten(1, 2)
-
         offsets = self.gnn(flattened_pos)
-        offsets = offsets.reshape(batch_size, len(positions), 2)
-        err = offsets.norm(dim=-1)
-
-        return err
+        return offsets
 
     def forward(self, track_history=False):
 
@@ -331,7 +369,7 @@ class SwarmGBPAndGNN(nn.Module):
             target_hist = target_hist.permute(0, 2, 3, 1)  # time back to last dim
 
             for i in range(target_hist.shape[1]):
-                history[f"target_{i}"] = target_hist[:, i] + history[f"agent_{i}"]
+                history[f"target_{i}"] = -target_hist[:, i] + history[f"agent_{i}"]
 
         return outputs, history
 
@@ -346,7 +384,7 @@ def main(cfg: omegaconf.OmegaConf):
         model.gnn.parameters(), lr=cfg["outer_optim"]["lr"]
     )
 
-    viewer = SwarmViewer(cfg["setup"]["collision_radius"], cfg["setup"]["area_limits"])
+    viewer = SwarmViewer(cfg["setup"]["collision_radius"], cfg["setup"]["vis_limits"])
 
     losses = []
     for epoch in range(cfg["outer_optim"]["num_epochs"]):
@@ -354,8 +392,7 @@ def main(cfg: omegaconf.OmegaConf):
         start_time = time.time_ns()
         outer_optimizer.zero_grad()
 
-        track_history = epoch % 5 == 0
-
+        track_history = False  # epoch % 20 == 0
         outputs, history = model.forward(track_history=track_history)
 
         loss = target_char_loss(outputs, sdf)
@@ -373,6 +410,10 @@ def main(cfg: omegaconf.OmegaConf):
 
     print("Loss values:", losses)
 
+    import ipdb
+
+    ipdb.set_trace()
+
     # outputs visualisations
     # viewer.vis_outer_targets_optim(
     #     targets_history,
@@ -389,13 +430,15 @@ if __name__ == "__main__":
         "out_video_file": "outputs/swarm/inner_mlp.gif",
         "outer_optim_video_file": "outputs/swarm/outer_targets_mlp.gif",
         "setup": {
-            "num_agents": 100,
+            "num_agents": 50,
             "init_std": 1.0,
             "agent_radius": 0.1,
             "collision_radius": 1.0,
             "origin_weight": 0.1,
             "collision_weight": 1.0,
-            "area_limits": [[-3, -3], [3, 3]],
+            "gnn_target_weight": 10.0,
+            "area_limits": [[-20, -20], [20, 20]],
+            "vis_limits": [[-3, -3], [3, 3]],
         },
         "optim": {
             "max_iters": 20,
@@ -413,7 +456,7 @@ if __name__ == "__main__":
             },
         },
         "outer_optim": {
-            "num_epochs": 50,
+            "num_epochs": 100,
             "lr": 2e-2,
             "optimizer": "adam",
             "target_char": "A",

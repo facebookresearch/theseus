@@ -24,22 +24,6 @@ import theseus.utils.examples as theg
 from theseus.optimizer.linear import LinearSolver
 from theseus.optimizer.linearization import Linearization
 
-BACKWARD_MODE = {
-    "implicit": th.BackwardMode.IMPLICIT,
-    "full": th.BackwardMode.FULL,
-    "truncated": th.BackwardMode.TRUNCATED,
-}
-
-LINEARIZATION_MODE: Dict[str, Type[Linearization]] = {
-    "sparse": th.SparseLinearization,
-    "dense": th.DenseLinearization,
-}
-
-LINEAR_SOLVER_MODE: Dict[str, Type[LinearSolver]] = {
-    "sparse": th.LUCudaSparseSolver,
-    "dense": th.CholeskyDenseSolver,
-}
-
 # Logger
 log = logging.getLogger(__name__)
 
@@ -112,7 +96,7 @@ def run(
     LINEAR_SOLVER_MODE: Dict[str, Type[LinearSolver]] = {
         "sparse": cast(
             Type[LinearSolver],
-            th.LUCudaSparseSolver
+            (th.BaspachoSparseSolver if cast(str, cfg.solver_type) == "baspacho" else th.LUCudaSparseSolver)
             if cast(str, cfg.solver_device) == "cuda"
             else th.CholmodSparseSolver,
         ),

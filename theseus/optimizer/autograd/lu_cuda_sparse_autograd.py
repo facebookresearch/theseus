@@ -6,6 +6,7 @@
 import torch
 
 from ..linear_system import SparseStructure
+from time import time
 
 
 class LUCudaSolveFunction(torch.autograd.Function):
@@ -25,6 +26,8 @@ class LUCudaSolveFunction(torch.autograd.Function):
                 f"{type(e).__name__}: {e}"
             )
 
+        t0 = time()
+
         A_val: torch.Tensor = args[0]
         b: torch.Tensor = args[1]
         sparse_structure: SparseStructure = args[2]
@@ -39,16 +42,26 @@ class LUCudaSolveFunction(torch.autograd.Function):
 
         batch_size = A_val.shape[0]
 
+        t1 = time()
         AtA = mult_MtM(batch_size, A_rowPtr, A_colInd, A_val, AtA_rowPtr, AtA_colInd)
+        t2 = time()
+
         if damping_alpha_beta is not None:
             AtA_args = sparse_structure.num_cols, AtA_rowPtr, AtA_colInd, AtA
             apply_damping(batch_size, *AtA_args, *damping_alpha_beta)
+        t3 = time()
         solver_context.factor(AtA)
+        t4 = time()
 
         A_args = sparse_structure.num_cols, A_rowPtr, A_colInd, A_val
         Atb = tmat_vec(batch_size, *A_args, b)
+        t5 = time()
         x = Atb.clone()
         solver_context.solve(x)  # solve in place
+        t6 = time()
+
+        print(f"LUCUDA TIMINGS:\n  SETUP: {t1-t0}\n  MtxM: {t2-t1}\n  DAMP: {t3-t2}\n"+
+              f"  FACTR: {t4-t3}\n  MxVEC: {t5-t4}\n  SOLVE: {t6-t5}")
 
         ctx.b = b
         ctx.x = x

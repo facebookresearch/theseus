@@ -7,10 +7,21 @@
 #  batch_size: {8, 16, 32, 64, 128, 256}
 #  num_poses: {128, 256, 512, 1024, 2048, 4096}
 
+# python examples/pose_graph/pose_graph_synthetic.py \
+#        inner_optim.solver=sparse \
+#        loop_closure_ratio=0.2 \
+#        solver_device=cuda \
+#        dataset_size=256 \
+#        batch_size=128 \
+#        num_poses=256
+
+# temporary testing:
+# or solver_type=lucuda
 python examples/pose_graph/pose_graph_synthetic.py \
        inner_optim.solver=sparse \
        loop_closure_ratio=0.2 \
        solver_device=cuda \
-       dataset_size=256 \
-       batch_size=128 \
-       num_poses=256
+       dataset_size=32 \
+       batch_size=32 \
+       num_poses=4096 \
+       solver_type=baspacho

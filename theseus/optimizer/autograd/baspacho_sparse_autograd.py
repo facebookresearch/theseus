@@ -80,7 +80,6 @@ class BaspachoSolveFunction(torch.autograd.Function):
 
         numeric_decomposition = symbolic_decomposition.create_numeric_decomposition(batch_size)
         t1 = time()
-        print("SZ:", A_rowPtr.shape, A_val.shape)
         numeric_decomposition.add_MtM(A_val, A_rowPtr, A_colInd)
         t2 = time()
         if damping_alpha_beta is not None:
@@ -92,12 +91,13 @@ class BaspachoSolveFunction(torch.autograd.Function):
         A_args = sparse_structure.num_cols, A_rowPtr, A_colInd, A_val
         Atb = tmat_vec(batch_size, *A_args, b)
         t5 = time()
-                
+
         x = Atb.clone()
         numeric_decomposition.solve(x)  # solve in place
         t6 = time()
 
-        print("TIMINGS:", t1-t0, t2-t1, t3-t2 , "[", t4-t3, "]", t5-t4, t6-t5)
+        print(f"BASPACHO TIMINGS:\n  SETUP: {t1-t0}\n  MtxM: {t2-t1}\n  DAMP: {t3-t2}\n"+
+              f"  FACTR: {t4-t3}\n  MxVEC: {t5-t4}\n  SOLVE: {t6-t5}")
         
         ctx.b = b
         ctx.x = x

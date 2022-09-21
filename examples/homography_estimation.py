@@ -7,6 +7,7 @@ import glob
 import logging
 import os
 import shutil
+import sys
 import warnings
 from typing import Dict, List, Tuple, cast
 
@@ -24,7 +25,8 @@ from theseus.core.cost_function import AutogradMode, ErrFnType
 from theseus.third_party.easyaug import GeoAugParam, RandomGeoAug, RandomPhotoAug
 from theseus.third_party.utils import grid_sample
 
-warnings.filterwarnings("ignore", category=UserWarning)
+if not sys.warnoptions:
+    warnings.filterwarnings("ignore", category=UserWarning)
 
 FONT = cv2.FONT_HERSHEY_DUPLEX
 FONT_SZ = 0.5

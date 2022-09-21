@@ -5,7 +5,7 @@
 
 import abc
 from typing import Callable, List, Optional, Sequence, Tuple, cast
-import warnings
+from enum import Enum
 
 import torch
 import torch.autograd.functional as autogradF
@@ -96,6 +96,12 @@ class ErrFnType(Protocol):
         ...
 
 
+class AutogradMode(Enum):
+    DENSE = 0
+    LOOP_BATCH = 1
+    VMAP = 2
+
+
 # The error function is assumed to receive variables in the format
 #    err_fn(
 #       optim_vars=(optim_vars[0].tensor, ..., optim_vars[N - 1].tensor),
@@ -114,8 +120,7 @@ class AutoDiffCostFunction(CostFunction):
         name: Optional[str] = None,
         autograd_strict: bool = False,
         autograd_vectorize: bool = False,
-        autograd_loop_over_batch: bool = False,
-        autograd_functorch: bool = False,
+        autograd_mode: AutogradMode = AutogradMode.DENSE,
     ):
         if cost_weight is None:
             cost_weight = ScaleCostWeight(1.0)
@@ -142,17 +147,9 @@ class AutoDiffCostFunction(CostFunction):
         self._tmp_optim_vars_for_loop = None
         self._tmp_aux_vars_for_loop = None
 
-        self._autograd_loop_over_batch = autograd_loop_over_batch
-        self._autograd_functorch = autograd_functorch
+        self._autograd_mode = autograd_mode
 
-        if autograd_functorch and self._autograd_loop_over_batch:
-            self._autograd_loop_over_batch = False
-            warnings.warn(
-                "autograd_use_functorch=True overrides given autograd_loop_over_batch=True, "
-                "so the latter will be set to False"
-            )
-
-        if self._autograd_loop_over_batch:
+        if self._autograd_mode == AutogradMode.LOOP_BATCH:
             self._tmp_optim_vars_for_loop = tuple(v.copy() for v in optim_vars)
             self._tmp_aux_vars_for_loop = tuple(v.copy() for v in aux_vars)
 
@@ -161,8 +158,7 @@ class AutoDiffCostFunction(CostFunction):
 
             for i, aux_var in enumerate(aux_vars):
                 self._tmp_aux_vars_for_loop[i].update(aux_var.tensor)
-
-        if self._autograd_functorch:
+        elif self._autograd_mode == AutogradMode.VMAP:
             self._tmp_aux_vars = tuple(v.copy() for v in aux_vars)
 
     def _compute_error(
@@ -203,7 +199,7 @@ class AutoDiffCostFunction(CostFunction):
             vectorize=self._autograd_vectorize,
         )
 
-    def _make_jac_fn_functorch(
+    def _make_jac_fn_vmap(
         self, tmp_optim_vars: Tuple[Manifold, ...], tmp_aux_vars: Tuple[Variable, ...]
     ):
         def jac_fn(optim_vars_tensors_, aux_vars_tensors_):
@@ -223,7 +219,7 @@ class AutoDiffCostFunction(CostFunction):
 
         return jac_fn
 
-    def _compute_autograd_jacobian_functorch(
+    def _compute_autograd_jacobian_vmap(
         self,
         optim_tensors: Tuple[torch.Tensor, ...],
         aux_tensors: Tuple[torch.Tensor, ...],
@@ -233,13 +229,13 @@ class AutoDiffCostFunction(CostFunction):
 
     def jacobians(self) -> Tuple[List[torch.Tensor], torch.Tensor]:
         err, optim_vars, aux_vars = self._compute_error()
-        if self._autograd_functorch:
-            jacobians_full = self._compute_autograd_jacobian_functorch(
+        if self._autograd_mode == AutogradMode.VMAP:
+            jacobians_full = self._compute_autograd_jacobian_vmap(
                 tuple(v.tensor for v in optim_vars),
                 tuple(v.tensor for v in aux_vars),
-                self._make_jac_fn_functorch(self._tmp_optim_vars, self._tmp_aux_vars),
+                self._make_jac_fn_vmap(self._tmp_optim_vars, self._tmp_aux_vars),
             )
-        elif self._autograd_loop_over_batch:
+        elif self._autograd_mode == AutogradMode.LOOP_BATCH:
             jacobians_raw_loop: List[Tuple[torch.Tensor, ...]] = []
             for n in range(optim_vars[0].shape[0]):
                 for i, aux_var in enumerate(aux_vars):
@@ -285,8 +281,7 @@ class AutoDiffCostFunction(CostFunction):
             aux_vars=[v.copy() for v in self.aux_vars],
             cost_weight=self.weight.copy(),
             name=new_name,
-            autograd_loop_over_batch=self._autograd_loop_over_batch,
-            autograd_functorch=self._autograd_functorch,
+            autograd_mode=self._autograd_mode,
         )
 
     def to(self, *args, **kwargs):
@@ -295,13 +290,12 @@ class AutoDiffCostFunction(CostFunction):
         for var in self._tmp_optim_vars:
             var.to(*args, **kwargs)
 
-        if self._autograd_loop_over_batch:
+        if self._autograd_mode == AutogradMode.LOOP_BATCH:
             for var in self._tmp_optim_vars_for_loop:
                 var.to(*args, **kwargs)
 
             for var in self._tmp_aux_vars_for_loop:
                 var.to(*args, **kwargs)
-
-        if self._autograd_functorch:
+        elif self._autograd_mode == AutogradMode.VMAP:
             for var in self._tmp_aux_vars:
                 var.to(*args, **kwargs)

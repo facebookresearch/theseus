@@ -6,7 +6,7 @@ scripts are available, with reference to corresponding figure in our white paper
  - `pose_graph_synthetic.sh`: Same as above, but can change linear solver and problem size (Fig. 2).
  - `pose_graph_cube.sh`: Same as above, but using the cube data for Ceres comparison (Fig. 3). 
  - `backward_modes_tactile.sh`: Runs tactile state estimation with different backward modes (Fig. 4).
- - `autodiff_cost_function_ablation.sh`: Runs homography estimation examples with different autograd modes.
+ - `autodiff_cost_function_ablation.sh`: Runs homography estimation with different autograd modes.
 
 Some other relevant files to look at:
 

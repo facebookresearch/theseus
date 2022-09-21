@@ -4,33 +4,33 @@ save_all: true
 dataset_name: "rectangle-pushing-corners-keypoints"
 sdf_name: "rect"
 
-episode_length: 100
-max_steps: 100
-max_episodes: 1  # if split = true, actual number might be slightly larger
+episode_length: 25
+max_steps: 200
+max_episodes: 100 # if split = true, actual number might be slightly larger
 split_episodes: true
 
 inner_optim:
-  max_iters: 50
+  max_iters: 5
   optimizer: GaussNewton
   reg_w: 0
   backward_mode: IMPLICIT
-  backward_num_iterations: 2 # only needed by TRUNCATED backward mode
-  dlm_epsilon: None
+  backward_num_iterations: None # only needed by TRUNCATED backward mode
+  dlm_epsilon: None # only needed by DLM backward mode
   force_implicit_by_epoch: 10000
-  step_size: 0.3
+  step_size: 0.05
   keep_step_size: true
-  force_max_iters: false
+  force_max_iters: true
   val_iters: 50
 
 train:
   # options: "weights_only" or "weights_and_measurement_nn"
   mode: "weights_and_measurement_nn"
-  batch_size: 1
-  num_epochs: 200
-  lr: 3e-4
+  batch_size: 8
+  num_epochs: 100
+  lr: 1e-4
   optimizer: "adam" # "adam", "rmsprop"
   lr_decay: 0.98
-  val_ratio: 0
+  val_ratio: 0.1
   max_num_batches: 100
 
 # 0: disc, 1: rect-edges, 2: rect-corners, 3: ellip

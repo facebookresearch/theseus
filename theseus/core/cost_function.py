@@ -249,6 +249,9 @@ class AutoDiffCostFunction(CostFunction):
                 )
                 jacobians_raw_loop.append(jacobians_n)
 
+            # torch autograd returns shape (batch_size, dim, batch_size, var_dim), which
+            # includes derivatives of batches against each other.
+            # this indexing recovers only the derivatives wrt the same batch
             jacobians_full = tuple(
                 torch.cat([jac[k][:, :, 0, :] for jac in jacobians_raw_loop], dim=0)
                 for k in range(len(optim_vars))
@@ -261,9 +264,6 @@ class AutoDiffCostFunction(CostFunction):
             aux_idx = torch.arange(err.shape[0])  # batch_size
             jacobians_full = tuple(jac[aux_idx, :, aux_idx, :] for jac in jacobians_raw)
 
-        # torch autograd returns shape (batch_size, dim, batch_size, var_dim), which
-        # includes derivatives of batches against each other.
-        # this indexing recovers only the derivatives wrt the same batch
         jacobians = list(
             v.project(jac, is_sparse=True) for v, jac in zip(optim_vars, jacobians_full)
         )

@@ -4,6 +4,7 @@
 # LICENSE file in the root directory of this source tree.
 
 import warnings
+import itertools
 from collections import OrderedDict
 from typing import Any, Callable, Dict, Iterable, List, Optional, Sequence, Union
 
@@ -101,6 +102,7 @@ class Objective:
             function_vars = function.aux_vars  # type: ignore
             self_var_to_fn_map = self.functions_for_aux_vars  # type: ignore
             self_vars_of_this_type = self.aux_vars  # type: ignore
+
         for variable in function_vars:
             # Check that variables have name and correct dtype
             if variable.name is None:
@@ -195,11 +197,28 @@ class Objective:
 
         self.cost_functions_for_weights[cost_function.weight].append(cost_function)
 
-        if self.optim_vars.keys() & self.aux_vars.keys():
-            raise ValueError(
-                "Objective does not support a variable being both "
-                "an optimization variable and an auxiliary variable."
+        optim_vars_names = [
+            var.name
+            for var in itertools.chain(
+                cost_function.optim_vars, cost_function.weight.optim_vars
             )
+        ]
+        aux_vars_names = [
+            var.name
+            for var in itertools.chain(
+                cost_function.aux_vars, cost_function.weight.aux_vars
+            )
+        ]
+        dual_var_err_msg = (
+            "Objective does not support a variable being both "
+            + "an optimization variable and an auxiliary variable."
+        )
+        for optim_name in optim_vars_names:
+            if self.has_aux_var(optim_name):
+                raise ValueError(dual_var_err_msg)
+        for aux_name in aux_vars_names:
+            if self.has_optim_var(aux_name):
+                raise ValueError(dual_var_err_msg)
 
     # returns a reference to the cost function with the given name
     def get_cost_function(self, name: str) -> CostFunction:

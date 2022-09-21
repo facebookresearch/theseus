@@ -25,11 +25,12 @@ from .common import (
     check_projection_for_inverse,
     check_projection_for_log_map,
     check_projection_for_rotate_and_transform,
+    BATCH_SIZES_TO_TEST,
 )
 
 
 def test_exp_map():
-    for batch_size in [1, 20, 100]:
+    for batch_size in BATCH_SIZES_TO_TEST:
         theta = torch.from_numpy(np.linspace(-np.pi, np.pi, batch_size)).view(-1, 1)
         check_exp_map(theta, th.SO2, EPS, enable_functorch=False)
         check_projection_for_exp_map(theta, th.SO2, enable_functorch=False)
@@ -38,7 +39,7 @@ def test_exp_map():
 
 
 def test_log_map():
-    for batch_size in [1, 2, 100]:
+    for batch_size in BATCH_SIZES_TO_TEST:
         theta = torch.from_numpy(np.linspace(-np.pi, np.pi, batch_size)).view(-1, 1)
         check_log_map(theta, th.SO2, EPS, enable_functorch=False)
         check_projection_for_log_map(theta, th.SO2, enable_functorch=False)
@@ -49,7 +50,7 @@ def test_log_map():
 def test_compose():
     rng = torch.Generator()
     rng.manual_seed(0)
-    for batch_size in [1, 20, 100]:
+    for batch_size in BATCH_SIZES_TO_TEST:
         so2_1 = th.SO2.rand(batch_size, generator=rng, dtype=torch.float64)
         so2_2 = th.SO2.rand(batch_size, generator=rng, dtype=torch.float64)
         check_compose(so2_1, so2_2, enable_functorch=False)
@@ -59,7 +60,7 @@ def test_compose():
 def test_inverse():
     rng = torch.Generator()
     rng.manual_seed(0)
-    for batch_size in [1, 20, 100]:
+    for batch_size in BATCH_SIZES_TO_TEST:
         so2 = th.SO2.rand(batch_size, generator=rng, dtype=torch.float64)
         check_inverse(so2, enable_functorch=False)
         check_inverse(so2, enable_functorch=True)
@@ -69,8 +70,8 @@ def test_rotate_and_unrotate():
     rng = torch.Generator()
     rng.manual_seed(0)
     for _ in range(10):  # repeat a few times
-        for batch_size_so2 in [1, 20, 100]:
-            for batch_size_pnt in [1, 20, 100]:
+        for batch_size_so2 in BATCH_SIZES_TO_TEST:
+            for batch_size_pnt in BATCH_SIZES_TO_TEST:
                 if (
                     batch_size_so2 != 1
                     and batch_size_pnt != 1
@@ -121,7 +122,7 @@ def test_rotate_and_unrotate():
 def test_adjoint():
     rng = torch.Generator()
     rng.manual_seed(0)
-    for batch_size in [1, 20, 100]:
+    for batch_size in BATCH_SIZES_TO_TEST:
         so2 = th.SO2.rand(batch_size, generator=rng, dtype=torch.float64)
         tangent = torch.randn(batch_size, 1).double()
         check_adjoint(so2, tangent, enable_functorch=False)
@@ -139,7 +140,7 @@ def test_projection():
     rng = torch.Generator()
     rng.manual_seed(0)
     for _ in range(10):  # repeat a few times
-        for batch_size in [1, 20, 100]:
+        for batch_size in BATCH_SIZES_TO_TEST:
             # Test SO2.rotate
             check_projection_for_rotate_and_transform(
                 th.SO2, th.Point2, th.SO2.rotate, batch_size, rng
@@ -161,14 +162,14 @@ def test_local_map():
     rng = torch.Generator()
     rng.manual_seed(0)
 
-    for batch_size in [1, 20, 100]:
+    for batch_size in BATCH_SIZES_TO_TEST:
         group0 = th.SO2.rand(batch_size)
         group1 = th.SO2.rand(batch_size)
 
         check_jacobian_for_local(group0, group1, Group=th.SO2, is_projected=True)
 
 
-@pytest.mark.parametrize("batch_size", [1, 20, 100])
+@pytest.mark.parametrize("batch_size", BATCH_SIZES_TO_TEST)
 @pytest.mark.parametrize("dtype", [torch.float32, torch.float64])
 def test_normalization(batch_size, dtype):
     check_normalize(th.SO2, batch_size, dtype)

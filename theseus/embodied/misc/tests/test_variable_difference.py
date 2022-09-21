@@ -10,6 +10,7 @@ import theseus as th
 from theseus.core.tests.common import (
     check_another_theseus_function_is_copy,
     check_another_theseus_tensor_is_copy,
+    BATCH_SIZES_TO_TEST,
 )
 from theseus.utils import numeric_jacobian
 
@@ -18,7 +19,7 @@ def evaluate_numerical_jacobian_local_cost_fn(Group, tol):
     rng = torch.Generator()
     rng.manual_seed(1)
     cost_weight = th.ScaleCostWeight(1)
-    for batch_size in [1, 10, 100]:
+    for batch_size in BATCH_SIZES_TO_TEST:
         v0 = Group.rand(batch_size, dtype=torch.float64, generator=rng)
         target = Group.rand(batch_size, dtype=torch.float64, generator=rng)
         cost_function = th.Difference(v0, target, cost_weight)
@@ -63,7 +64,7 @@ def test_error_local_cost_fn_point2():
     rng = torch.Generator()
     rng.manual_seed(0)
     cost_weight = th.ScaleCostWeight(1)
-    for batch_size in [1, 10, 100]:
+    for batch_size in BATCH_SIZES_TO_TEST:
         p0 = th.Point2(torch.randn(batch_size, 2, generator=rng))
         target = th.Point2(torch.randn(batch_size, 2, generator=rng))
         cost_function = th.Difference(p0, target, cost_weight)

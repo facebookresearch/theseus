@@ -6,9 +6,8 @@
 import numpy as np
 import torch
 
-import theseus.core as thcore
-import theseus.embodied as thembod
-import theseus.geometry as thgeom
+import theseus as th
+from theseus.core.tests.common import BATCH_SIZES_TO_TEST
 from theseus.geometry.tests.test_se2 import create_random_se2
 from theseus.utils import numeric_jacobian
 
@@ -17,7 +16,7 @@ def test_error_quasi_static_pushing_planar_se2():
 
     # c_square is c**2, c = max_torque / max_force is a hyper param dependent on object
     c_square = torch.Tensor([1.0])
-    cost_weight = thcore.ScaleCostWeight(1)
+    cost_weight = th.ScaleCostWeight(1)
 
     inputs = {
         "obj1": torch.DoubleTensor(
@@ -71,12 +70,12 @@ def test_error_quasi_static_pushing_planar_se2():
     }
     n_tests = outputs["error"].shape[0]
     for i in range(0, n_tests):
-        obj1 = thgeom.SE2(x_y_theta=(inputs["obj1"][i, :]).unsqueeze(0))
-        obj2 = thgeom.SE2(x_y_theta=(inputs["obj2"][i, :]).unsqueeze(0))
-        eff1 = thgeom.SE2(x_y_theta=(inputs["eff1"][i, :]).unsqueeze(0))
-        eff2 = thgeom.SE2(x_y_theta=(inputs["eff2"][i, :]).unsqueeze(0))
+        obj1 = th.SE2(x_y_theta=(inputs["obj1"][i, :]).unsqueeze(0))
+        obj2 = th.SE2(x_y_theta=(inputs["obj2"][i, :]).unsqueeze(0))
+        eff1 = th.SE2(x_y_theta=(inputs["eff1"][i, :]).unsqueeze(0))
+        eff2 = th.SE2(x_y_theta=(inputs["eff2"][i, :]).unsqueeze(0))
 
-        cost_fn = thembod.QuasiStaticPushingPlanar(
+        cost_fn = th.eb.QuasiStaticPushingPlanar(
             obj1, obj2, eff1, eff2, c_square, cost_weight
         )
 
@@ -95,24 +94,24 @@ def test_quasi_static_pushing_planar_jacobians():
     rng = torch.Generator()
     rng.manual_seed(0)
     for _ in range(10):  # repeat a bunch of times
-        for batch_size in [1, 10, 100]:
+        for batch_size in BATCH_SIZES_TO_TEST:
             obj1 = create_random_se2(batch_size, rng)
             obj2 = create_random_se2(batch_size, rng)
             eff1 = create_random_se2(batch_size, rng)
             eff2 = create_random_se2(batch_size, rng)
             c_square = torch.Tensor([1.0])
-            cost_weight = thcore.ScaleCostWeight(1)
+            cost_weight = th.ScaleCostWeight(1)
 
-            cost_fn = thembod.QuasiStaticPushingPlanar(
+            cost_fn = th.eb.QuasiStaticPushingPlanar(
                 obj1, obj2, eff1, eff2, c_square, cost_weight
             )
             jacobians, _ = cost_fn.jacobians()
 
             def new_error_fn(groups):
-                new_cost_fn = thembod.QuasiStaticPushingPlanar(
+                new_cost_fn = th.eb.QuasiStaticPushingPlanar(
                     groups[0], groups[1], groups[2], groups[3], c_square, cost_weight
                 )
-                return thgeom.Vector(tensor=new_cost_fn.error())
+                return th.Vector(tensor=new_cost_fn.error())
 
             expected_jacs = numeric_jacobian(
                 new_error_fn, [obj1, obj2, eff1, eff2], delta_mag=1e-6

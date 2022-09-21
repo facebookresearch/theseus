@@ -23,6 +23,7 @@ from .common import (
     check_projection_for_exp_map,
     check_projection_for_inverse,
     check_projection_for_rotate_and_transform,
+    BATCH_SIZES_TO_TEST,
 )
 
 
@@ -40,7 +41,7 @@ def test_exp_map(dtype, enable_functorch):
     rng.manual_seed(0)
     ATOL = 2e-4 if dtype == torch.float32 else 1e-6
 
-    for batch_size in [1, 20, 100]:
+    for batch_size in BATCH_SIZES_TO_TEST:
         theta = torch.from_numpy(np.linspace(-np.pi, np.pi, batch_size))
         u = torch.randn(batch_size, 2, dtype=dtype, generator=rng)
         tangent_vector = torch.cat([u, theta.unsqueeze(1)], dim=1)
@@ -60,7 +61,7 @@ def test_exp_map(dtype, enable_functorch):
 def test_log_map(dtype, enable_functorch):
     rng = torch.Generator()
     rng.manual_seed(0)
-    for batch_size in [1, 20, 100]:
+    for batch_size in BATCH_SIZES_TO_TEST:
         theta = torch.from_numpy(np.linspace(-np.pi, np.pi, batch_size))
         u = torch.randn(batch_size, 2, dtype=dtype, generator=rng)
         tangent_vector = torch.cat([u, theta.unsqueeze(1)], dim=1)
@@ -75,7 +76,7 @@ def test_log_map(dtype, enable_functorch):
 def test_compose(dtype, enable_functorch):
     rng = torch.Generator()
     rng.manual_seed(0)
-    for batch_size in [1, 20, 100]:
+    for batch_size in BATCH_SIZES_TO_TEST:
         se2_1 = th.SE2.rand(batch_size, generator=rng, dtype=dtype)
         se2_2 = th.SE2.rand(batch_size, generator=rng, dtype=dtype)
         check_compose(se2_1, se2_2, enable_functorch=enable_functorch)
@@ -86,7 +87,7 @@ def test_compose(dtype, enable_functorch):
 def test_inverse(dtype, enable_functorch):
     rng = torch.Generator()
     rng.manual_seed(0)
-    for batch_size in [1, 20, 100]:
+    for batch_size in BATCH_SIZES_TO_TEST:
         se2 = th.SE2.rand(batch_size, generator=rng, dtype=dtype)
         check_inverse(se2, enable_functorch=enable_functorch)
 
@@ -96,7 +97,7 @@ def test_inverse(dtype, enable_functorch):
 def test_adjoint(dtype, enable_functorch):
     rng = torch.Generator()
     rng.manual_seed(0)
-    for batch_size in [1, 20, 100]:
+    for batch_size in BATCH_SIZES_TO_TEST:
         se2 = th.SE2.rand(batch_size, generator=rng, dtype=dtype)
         tangent = torch.randn(batch_size, 3, dtype=dtype)
         check_adjoint(se2, tangent, enable_functorch=enable_functorch)
@@ -113,8 +114,8 @@ def test_transform_from_and_to(dtype):
     rng = torch.Generator()
     rng.manual_seed(0)
     for _ in range(10):  # repeat a few times
-        for batch_size_se2 in [1, 20, 100]:
-            for batch_size_pnt in [1, 20, 100]:
+        for batch_size_se2 in BATCH_SIZES_TO_TEST:
+            for batch_size_pnt in BATCH_SIZES_TO_TEST:
                 if (
                     batch_size_se2 != 1
                     and batch_size_pnt != 1
@@ -182,7 +183,7 @@ def test_transform_from_and_to(dtype):
 def test_xy_jacobian(dtype):
     rng = torch.Generator()
     rng.manual_seed(0)
-    for batch_size in [1, 20, 100]:
+    for batch_size in BATCH_SIZES_TO_TEST:
         se2 = th.SE2.rand(batch_size, generator=rng, dtype=dtype)
         jacobian = []
         se2.xy(jacobians=jacobian)
@@ -196,7 +197,7 @@ def test_xy_jacobian(dtype):
 def test_theta_jacobian(dtype):
     rng = torch.Generator()
     rng.manual_seed(0)
-    for batch_size in [1, 20, 100]:
+    for batch_size in BATCH_SIZES_TO_TEST:
         se2 = th.SE2.rand(batch_size, generator=rng, dtype=dtype)
         jacobian = []
         se2.theta(jacobians=jacobian)
@@ -210,7 +211,7 @@ def test_projection():
     rng = torch.Generator()
     rng.manual_seed(0)
     for _ in range(10):  # repeat a few times
-        for batch_size in [1, 20, 100]:
+        for batch_size in BATCH_SIZES_TO_TEST:
             # Test SE2.transform_to
             check_projection_for_rotate_and_transform(
                 th.SE2, th.Point2, th.SE2.transform_to, batch_size, rng
@@ -228,7 +229,7 @@ def test_projection():
             check_projection_for_inverse(th.SE2, batch_size, rng)
 
 
-@pytest.mark.parametrize("batch_size", [1, 20, 100])
+@pytest.mark.parametrize("batch_size", BATCH_SIZES_TO_TEST)
 @pytest.mark.parametrize("dtype", [torch.float32, torch.float64])
 def test_normalization(batch_size, dtype):
     check_normalize(th.SE2, batch_size, dtype)

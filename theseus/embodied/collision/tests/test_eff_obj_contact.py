@@ -8,6 +8,7 @@ import pytest  # noqa
 import torch
 
 import theseus as th
+from theseus.core.tests.common import BATCH_SIZES_TO_TEST
 from theseus.embodied.collision.tests.utils import (
     random_origin,
     random_sdf_data,
@@ -20,7 +21,7 @@ from theseus.utils import numeric_jacobian
 def test_eff_obj_interesect_jacobians():
     rng = torch.Generator()
     rng.manual_seed(0)
-    for batch_size in [1, 10, 100]:
+    for batch_size in BATCH_SIZES_TO_TEST:
         obj = create_random_se2(batch_size, rng)
         eff = create_random_se2(batch_size, rng)
         origin = random_origin(batch_size)
@@ -160,7 +161,7 @@ def test_eff_obj_variable_type():
     rng = torch.Generator()
     rng.manual_seed(0)
     for _ in range(10):
-        for batch_size in [1, 10, 100]:
+        for batch_size in BATCH_SIZES_TO_TEST:
             obj = create_random_se2(batch_size, rng)
             eff = create_random_se2(batch_size, rng)
             origin = random_origin(batch_size)

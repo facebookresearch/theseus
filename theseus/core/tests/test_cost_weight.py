@@ -13,6 +13,7 @@ import theseus as th
 from .common import (
     check_another_theseus_function_is_copy,
     check_another_theseus_tensor_is_copy,
+    BATCH_SIZES_TO_TEST,
 )
 
 
@@ -33,8 +34,8 @@ def test_copy_diagonal_cost_weight():
 
 
 def test_scale_cost_weight():
-    for dim in [1, 2, 10]:
-        for batch_size in [1, 2, 10]:
+    for dim in BATCH_SIZES_TO_TEST:
+        for batch_size in BATCH_SIZES_TO_TEST:
             v1 = th.Vector(tensor=torch.ones(batch_size, dim))
             z = th.Vector(tensor=torch.zeros(batch_size, dim))
             scale = torch.randn(1).item()
@@ -69,8 +70,8 @@ def test_scale_cost_weight():
 
 
 def test_diagonal_cost_weight():
-    for dim in [1, 2, 10]:
-        for batch_size in [1, 2, 10]:
+    for dim in BATCH_SIZES_TO_TEST:
+        for batch_size in BATCH_SIZES_TO_TEST:
             v1 = th.Vector(tensor=torch.ones(batch_size, dim))
             z = th.Vector(tensor=torch.zeros(batch_size, dim))
             diagonal = torch.randn(dim)

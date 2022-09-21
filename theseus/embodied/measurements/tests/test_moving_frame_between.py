@@ -12,6 +12,7 @@ import theseus.geometry as thgeom
 from theseus.core.tests.common import (
     check_another_theseus_function_is_copy,
     check_another_theseus_tensor_is_copy,
+    BATCH_SIZES_TO_TEST,
 )
 from theseus.geometry.tests.test_se2 import create_random_se2
 from theseus.utils import numeric_jacobian
@@ -47,7 +48,7 @@ def test_jacobian_moving_frame_between():
     rng = torch.Generator()
     rng.manual_seed(0)
     cost_weight = thcore.ScaleCostWeight(1)
-    for batch_size in [1, 10, 100]:
+    for batch_size in BATCH_SIZES_TO_TEST:
         f1 = create_random_se2(batch_size, rng)
         f2 = create_random_se2(batch_size, rng)
         p1 = create_random_se2(batch_size, rng)

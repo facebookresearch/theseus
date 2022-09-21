@@ -10,6 +10,9 @@ import torch
 import theseus as th
 
 
+BATCH_SIZES_TO_TEST = (1, 10)
+
+
 class MockVar(th.Manifold):
     def __init__(self, length, tensor=None, name=None):
         super().__init__(length, tensor=tensor, name=name)

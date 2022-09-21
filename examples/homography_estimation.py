@@ -4,11 +4,15 @@
 # LICENSE file in the root directory of this source tree.
 
 import glob
+import logging
 import os
 import shutil
-from typing import List
+import sys
+import warnings
+from typing import Dict, List, Tuple, cast
 
 import cv2
+import hydra
 import kornia
 import numpy as np
 import torch
@@ -17,8 +21,12 @@ from PIL import Image
 from torch.utils.data import DataLoader, Dataset
 
 import theseus as th
+from theseus.core.cost_function import AutogradMode, ErrFnType
 from theseus.third_party.easyaug import GeoAugParam, RandomGeoAug, RandomPhotoAug
 from theseus.third_party.utils import grid_sample
+
+if not sys.warnoptions:
+    warnings.filterwarnings("ignore", category=UserWarning)
 
 FONT = cv2.FONT_HERSHEY_DUPLEX
 FONT_SZ = 0.5
@@ -30,8 +38,12 @@ BACKWARD_MODE = {
     "truncated": th.BackwardMode.TRUNCATED,
 }
 
+# Logger
+logger = logging.getLogger(__name__)
 
 # Download and extract data
+
+
 def prepare_data():
     dataset_root = os.path.join(os.getcwd(), "data")
     chunks = [
@@ -46,15 +58,15 @@ def prepare_data():
         dataset_path = os.path.join(dataset_root, chunk)
         dataset_paths.append(dataset_path)
         if not os.path.exists(dataset_path):
-            print("Downloading data")
+            logger.info("Downloading data")
             url_root = "http://ptak.felk.cvut.cz/revisitop/revisitop1m/jpg/"
             tar = "%s.tar.gz" % chunk
             os.makedirs(dataset_path)
             cmd = "wget %s/%s -O %s/%s" % (url_root, tar, dataset_root, tar)
-            print("Running command: ", cmd)
+            logger.info("Running command: ", cmd)
             os.system(cmd)
             cmd = "tar -xf %s/%s -C %s" % (dataset_root, tar, dataset_path)
-            print("Running command: ", cmd)
+            logger.info("Running command: ", cmd)
             os.system(cmd)
 
     return dataset_paths
@@ -68,7 +80,7 @@ class HomographyDataset(Dataset):
         for direc in img_dirs:
             self.img_paths.extend(glob.glob(direc + "/**/*.jpg", recursive=True))
         assert len(self.img_paths) > 0, "no images found"
-        print("Found %d total images in dataset" % len(self.img_paths))
+        logger.info("Found %d total images in dataset" % len(self.img_paths))
         sc = 0.1
         self.rga = RandomGeoAug(
             rotate_param=GeoAugParam(min=-30 * sc, max=30 * sc),
@@ -98,9 +110,9 @@ class HomographyDataset(Dataset):
             self.img_paths = self.img_paths[split_ix:]
         self.train = train
         if self.train:
-            print("Using %d images for training" % len(self.img_paths))
+            logger.info("Using %d images for training" % len(self.img_paths))
         else:
-            print("Using %d images for testing" % len(self.img_paths))
+            logger.info("Using %d images for testing" % len(self.img_paths))
 
     def __len__(self):
         return len(self.img_paths)
@@ -143,11 +155,12 @@ def warp_perspective_norm(H, img):
 
 
 # loss is difference between warped and target image
-def homography_error_fn(optim_vars: List[th.Manifold], aux_vars: List[th.Variable]):
+def homography_error_fn(optim_vars: Tuple[th.Manifold], aux_vars: Tuple[th.Variable]):
     H8_1_2 = optim_vars[0].tensor.reshape(-1, 8)
     # Force the last element H[2,2] to be 1.
     H_1_2 = torch.cat([H8_1_2, H8_1_2.new_ones(H8_1_2.shape[0], 1)], dim=-1)  # type: ignore
-    img1, img2 = aux_vars
+    img1: th.Variable = aux_vars[0]
+    img2: th.Variable = aux_vars[-1]
     img1_dst = warp_perspective_norm(H_1_2.reshape(-1, 3, 3), img1.tensor)
     loss = torch.nn.functional.mse_loss(img1_dst, img2.tensor, reduction="none")
     ones = warp_perspective_norm(
@@ -228,7 +241,7 @@ def write_gif_batch(log_dir, img1, img2, H_hist, Hgt_1_2, err_hist):
         viz_warp(path, img1[0], img2[0], img1_dsts[0], it, err=err, fc_err=fc_err)
     anim_path = os.path.join(log_dir, "animation.gif")
     cmd = f"convert -delay 10 -loop 0 {anim_dir}/*.png {anim_path}"
-    print("Generating gif here: %s" % anim_path)
+    logger.info("Generating gif here: %s" % anim_path)
     os.system(cmd)
     shutil.rmtree(anim_dir)
     return
@@ -268,21 +281,32 @@ class SimpleCNN(nn.Module):
         return self.conv2(x)
 
 
-def run():
-    batch_size = 64
-    max_iterations = 50
-    step_size = 0.1
-    verbose = True
+def run(
+    batch_size: int = 64,
+    num_epochs: int = 999,
+    outer_lr: float = 1e-4,
+    max_iterations: int = 50,
+    step_size: float = 0.1,
+    autograd_mode: AutogradMode = AutogradMode.VMAP,
+):
+    logger.info(
+        "==============================================================="
+        "==========================="
+    )
+    logger.info(f"Batch Size: {batch_size}, " f"Autograd Mode: {autograd_mode}, ")
+
+    logger.info(
+        "---------------------------------------------------------------"
+        "---------------------------"
+    )
+    verbose = False
     imgH, imgW = 60, 80
     use_gpu = True
     viz_every = 10
-    disp_every = 10
     save_every = 100
-    num_epochs = 999
-    outer_lr = 1e-4
     use_cnn = True
 
-    log_dir = os.path.join(os.getcwd(), "examples/outputs/viz")
+    log_dir = os.path.join(os.getcwd(), "viz")
     os.makedirs(log_dir, exist_ok=True)
 
     device = "cuda" if torch.cuda.is_available() and use_gpu else "cpu"
@@ -309,15 +333,16 @@ def run():
     # Set up inner loop optimization.
     homography_cf = th.AutoDiffCostFunction(
         optim_vars=[H8_1_2],
-        err_fn=homography_error_fn,
+        err_fn=cast(ErrFnType, homography_error_fn),
         dim=1,
         aux_vars=[feat1, feat2],
+        autograd_mode=autograd_mode,
     )
     objective.add(homography_cf)
 
     # Regularization helps avoid crash with using implicit mode.
-    reg_w = 1e-2
-    reg_w = th.ScaleCostWeight(np.sqrt(reg_w))
+    reg_w_value = 1e-2
+    reg_w = th.ScaleCostWeight(np.sqrt(reg_w_value))
     reg_w.to(dtype=H8_init.dtype)
     vals = torch.tensor([[1.0, 0.0, 0.0, 0.0, 1.0, 0.0, 0.0, 0.0]])
     H8_1_2_id = th.Vector(tensor=vals, name="identity")
@@ -339,10 +364,20 @@ def run():
 
     itr = 0
 
+    start_event = torch.cuda.Event(enable_timing=True)
+    end_event = torch.cuda.Event(enable_timing=True)
+
+    logger.info(
+        "---------------------------------------------------------------"
+        "---------------------------"
+    )
     for epoch in range(num_epochs):
+        forward_times: List[float] = []
+        forward_mems: List[float] = []
+        backward_times: List[float] = []
+        backward_mems: List[float] = []
 
         for _, data in enumerate(dataloader):
-
             outer_optim.zero_grad()
 
             img1 = data["img1"].to(device)
@@ -350,50 +385,72 @@ def run():
             Hgt_1_2 = data["H_1_2"].to(device)
 
             if use_cnn:  # Use cnn features.
-                feat1 = cnn_model.forward(img1)
-                feat2 = cnn_model.forward(img2)
+                feat1_tensor = cnn_model.forward(img1)
+                feat2_tensor = cnn_model.forward(img2)
             else:  # Use image pixels.
-                feat1 = img1
-                feat2 = img2
+                feat1_tensor = img1
+                feat2_tensor = img2
 
             H8_init = torch.eye(3).reshape(1, 9)[:, :-1].repeat(batch_size, 1)
             H8_init = H8_init.to(device)
 
-            inputs = {
+            inputs: Dict[str, torch.Tensor] = {
                 "H8_1_2": H8_init,
-                "feat1": feat1,
-                "feat2": feat2,
+                "feat1": feat1_tensor,
+                "feat2": feat2_tensor,
             }
-            if itr % disp_every == 0:
-                verbose2 = verbose
-            else:
-                verbose2 = False
-            info = theseus_layer.forward(
+            start_event.record()
+            torch.cuda.reset_peak_memory_stats()
+            _, info = theseus_layer.forward(
                 inputs,
                 optimizer_kwargs={
-                    "verbose": verbose2,
+                    "verbose": verbose,
                     "track_err_history": True,
                     "track_state_history": True,
                     "backward_mode": BACKWARD_MODE["implicit"],
                 },
             )
-            err_hist = info[1].err_history
-            H_hist = info[1].state_history
+            end_event.record()
+            torch.cuda.synchronize()
+            forward_time = start_event.elapsed_time(end_event)
+            forward_mem = torch.cuda.max_memory_allocated() / 1024 / 1024
+            forward_times.append(forward_time)
+            forward_mems.append(forward_mem)
+
+            optimizer_info: th.NonlinearOptimizerInfo = cast(
+                th.NonlinearOptimizerInfo, info
+            )
+            err_hist = optimizer_info.err_history
+            H_hist = optimizer_info.state_history
             # print("Finished inner loop in %d iters" % len(H_hist))
 
             Hgt_1_2 = Hgt_1_2.reshape(-1, 9)
-            H8_1_2 = theseus_layer.objective.get_optim_var("H8_1_2").tensor.reshape(
-                -1, 8
+            H8_1_2_tensor = theseus_layer.objective.get_optim_var(
+                "H8_1_2"
+            ).tensor.reshape(-1, 8)
+            H_1_2 = torch.cat(
+                [H8_1_2_tensor, H8_1_2_tensor.new_ones(H8_1_2_tensor.shape[0], 1)],
+                dim=-1,
             )
-            H_1_2 = torch.cat([H8_1_2, H8_1_2.new_ones(H8_1_2.shape[0], 1)], dim=-1)
             # Loss is on four corner error.
             fc_dist = four_corner_dist(
                 H_1_2.reshape(-1, 3, 3), Hgt_1_2.reshape(-1, 3, 3), imgH, imgW
             )
             outer_loss = fc_dist.mean()
+
+            start_event.record()
+            torch.cuda.reset_peak_memory_stats()
             outer_loss.backward()
+            end_event.record()
+            torch.cuda.synchronize()
+            backward_time = start_event.elapsed_time(end_event)
+            backward_mem = torch.cuda.max_memory_allocated() / 1024 / 1024
+
+            backward_times.append(backward_time)
+            backward_mems.append(backward_mem)
+
             outer_optim.step()
-            print(
+            logger.info(
                 "Epoch %d, iteration %d, outer_loss: %.3f"
                 % (epoch, itr, outer_loss.item())
             )
@@ -407,9 +464,43 @@ def run():
 
             itr += 1
 
+        logger.info(
+            "---------------------------------------------------------------"
+            "---------------------------"
+        )
+        logger.info(f"Forward pass took {sum(forward_times)} ms/epoch.")
+        logger.info(f"Forward pass took {sum(forward_mems)/len(forward_mems)} MBs.")
+        logger.info(f"Backward pass took {sum(backward_times)} ms/epoch.")
+        logger.info(f"Backward pass took {sum(backward_mems)/len(backward_mems)} MBs.")
+        logger.info(
+            "---------------------------------------------------------------"
+            "---------------------------"
+        )
 
-def main():
-    run()
+
+@hydra.main(config_path="./configs/", config_name="homography_estimation")
+def main(cfg):
+    autograd_modes = {
+        "dense": AutogradMode.DENSE,
+        "loop_batch": AutogradMode.LOOP_BATCH,
+        "vmap": AutogradMode.VMAP,
+    }
+
+    num_epochs: int = cfg.outer_optim.num_epochs
+    batch_size: int = cfg.outer_optim.batch_size
+    outer_lr: float = cfg.outer_optim.lr
+    max_iterations: int = cfg.inner_optim.max_iters
+    step_size: float = cfg.inner_optim.step_size
+    autograd_mode = autograd_modes[cfg.autograd_mode]
+
+    run(
+        batch_size=batch_size,
+        outer_lr=outer_lr,
+        num_epochs=num_epochs,
+        max_iterations=max_iterations,
+        step_size=step_size,
+        autograd_mode=autograd_mode,
+    )
 
 
 if __name__ == "__main__":

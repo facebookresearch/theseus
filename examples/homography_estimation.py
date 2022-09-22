@@ -41,9 +41,8 @@ BACKWARD_MODE = {
 # Logger
 logger = logging.getLogger(__name__)
 
+
 # Download and extract data
-
-
 def prepare_data():
     dataset_root = os.path.join(os.getcwd(), "data")
     chunks = [

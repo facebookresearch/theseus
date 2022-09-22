@@ -1,4 +1,4 @@
-seed: 0
+seed: 1234567
 save_all: true
 
 dataset_name: "rectangle-pushing-corners-keypoints"

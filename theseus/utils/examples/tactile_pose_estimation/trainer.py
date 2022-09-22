@@ -64,6 +64,8 @@ class TactilePushingTrainer:
             cfg.max_steps,
             device,
             split_episodes=cfg.split_episodes,
+            val_ratio=cfg.train.val_ratio,
+            seed=cfg.seed,
             data_mode="train",
         )
         self.dataset_val = TactilePushingDataset(
@@ -75,6 +77,8 @@ class TactilePushingTrainer:
             cfg.max_steps,
             device,
             split_episodes=cfg.split_episodes,
+            val_ratio=cfg.train.val_ratio,
+            seed=cfg.seed,
             data_mode="val",
         )
 

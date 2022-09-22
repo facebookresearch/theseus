@@ -43,7 +43,9 @@ class BaspachoSparseSolver(LinearSolver):
 
     def reset(self, dev="cpu"):
         if dev == "cuda" and not torch.cuda.is_available():
-            raise RuntimeError("Cuda not available, BaspachoSparseSolver cannot be used")
+            raise RuntimeError(
+                "Cuda not available, BaspachoSparseSolver cannot be used"
+            )
 
         try:
             from theseus.extlib.baspacho_solver import SymbolicDecomposition
@@ -71,21 +73,22 @@ class BaspachoSparseSolver(LinearSolver):
         num_vars = len(self.linearization.var_start_cols)
         num_cols = self.linearization.num_cols
         to_blocks = csr_matrix(
-                (np.ones(num_cols), np.arange(num_cols),
-                self.linearization.var_start_cols + [num_cols]),
-                (num_vars, num_cols)
-            )
+            (
+                np.ones(num_cols),
+                np.arange(num_cols),
+                self.linearization.var_start_cols + [num_cols],
+            ),
+            (num_vars, num_cols),
+        )
         block_At_mock = to_blocks @ At_mock
         block_AtA_mock = (block_At_mock @ block_At_mock.T).tocsr()
+        block_AtA_mock.sort_indices()
 
         param_size = torch.tensor(self.linearization.var_dims, dtype=torch.int64)
         block_struct_ptrs = torch.tensor(block_AtA_mock.indptr, dtype=torch.int64)
         block_struct_inds = torch.tensor(block_AtA_mock.indices, dtype=torch.int64)
         self.symbolic_decomposition = SymbolicDecomposition(
-            param_size,
-            block_struct_ptrs,
-            block_struct_inds,
-            dev
+            param_size, block_struct_ptrs, block_struct_inds, dev
         )
 
     def solve(
@@ -116,5 +119,5 @@ class BaspachoSparseSolver(LinearSolver):
             self.A_rowPtr,
             self.A_colInd,
             self.symbolic_decomposition,
-            damping_alpha_beta
+            damping_alpha_beta,
         )

@@ -68,7 +68,7 @@ for PYTHON_VERSION in 3.9; do
     RUN yum -y install openblas-devel
     RUN git clone https://github.com/facebookresearch/baspacho.git
     WORKDIR baspacho
-    RUN /opt/cmake3.24/bin/cmake -S . -B build -DCMAKE_BUILD_TYPE=Release -DCMAKE_CUDA_COMPILER=/usr/local/cuda-${CUDA_VERSION}/bin/nvcc -DBUILD_SHARED_LIBS=OFF -DBASPACHO_CUDA_ARCHS=75
+    RUN /opt/cmake3.24/bin/cmake -S . -B build -DCMAKE_BUILD_TYPE=Release -DCMAKE_CUDA_COMPILER=/usr/local/cuda-${CUDA_VERSION}/bin/nvcc -DBUILD_SHARED_LIBS=OFF -DBASPACHO_CUDA_ARCHS='60;70;75;80;85'
     RUN /opt/cmake3.24/bin/cmake --build build -- -j16
     WORKDIR ..
     # --- Install torch 

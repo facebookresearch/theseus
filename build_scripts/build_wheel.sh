@@ -68,7 +68,7 @@ for PYTHON_VERSION in 3.9; do
     RUN yum -y install openblas-devel
     RUN git clone https://github.com/facebookresearch/baspacho.git
     WORKDIR baspacho
-    RUN /opt/cmake3.24/bin/cmake -S . -B build -DCMAKE_BUILD_TYPE=Release -DCMAKE_CUDA_COMPILER=/usr/local/cuda-${CUDA_VERSION}/bin/nvcc -DBUILD_SHARED_LIBS=OFF
+    RUN /opt/cmake3.24/bin/cmake -S . -B build -DCMAKE_BUILD_TYPE=Release -DCMAKE_CUDA_COMPILER=/usr/local/cuda-${CUDA_VERSION}/bin/nvcc -DBUILD_SHARED_LIBS=OFF -DBASPACHO_CUDA_ARCHS=75
     RUN /opt/cmake3.24/bin/cmake --build build -- -j16
     WORKDIR ..
     # --- Install torch 
@@ -78,7 +78,7 @@ for PYTHON_VERSION in 3.9; do
     RUN pip install build wheel
     RUN git clone https://github.com/facebookresearch/theseus.git
     WORKDIR theseus
-    RUN git checkout -b tmp_build --track mau.baspacho_revamp
+    RUN git checkout -b tmp_build --track origin/mau.baspacho_revamp
     CMD BASPACHO_ROOT_DIR=/baspacho python3 -m build --no-isolation
     """ > ${DOCKER_DIR}/Dockerfile
 

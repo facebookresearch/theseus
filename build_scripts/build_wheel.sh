@@ -71,14 +71,15 @@ for PYTHON_VERSION in 3.9; do
     RUN /opt/cmake3.24/bin/cmake -S . -B build -DCMAKE_BUILD_TYPE=Release -DCMAKE_CUDA_COMPILER=/usr/local/cuda-${CUDA_VERSION}/bin/nvcc -DBUILD_SHARED_LIBS=OFF -DBASPACHO_CUDA_ARCHS='60;70;75;80;85'
     RUN /opt/cmake3.24/bin/cmake --build build -- -j16
     WORKDIR ..
-    # --- Install torch 
+    # --- Install torch
     ENV CUDA_HOME /usr/local/cuda-${CUDA_VERSION}
     RUN pip install torch --extra-index-url https://download.pytorch.org/whl/${DEVICE_TAG}
+    RUN python -c 'import torch; print([torch.cuda.is_available(), torch.cuda.get_arch_list()])'
     # --- Compile theseus wheel
     RUN pip install build wheel
-    RUN git clone https://github.com/facebookresearch/theseus.git
+    RUN git clone -b origin/mau.baspacho_revamp https://github.com/facebookresearch/theseus.git
     WORKDIR theseus
-    RUN git checkout -b tmp_build --track origin/mau.baspacho_revamp
+    RUN git checkout -b tmp_build
     CMD BASPACHO_ROOT_DIR=/baspacho python3 -m build --no-isolation
     """ > ${DOCKER_DIR}/Dockerfile
 
@@ -105,9 +106,10 @@ for PYTHON_VERSION in 3.9; do
         fi
         HOST_WHL="theseus_ai-${TAG}${PLUS_CU_TAG}-${CP_STR}-${CP_STR}-manylinux_2_17_x86_64.whl"
     fi
-    
-    sudo docker cp "${DOCKER_NAME}:theseus/dist/theseus-ai-${TAG}.tar.gz" "${DOCKER_DIR}/theseus-ai-${TAG}.tar.gz"
-    sudo docker cp "${DOCKER_NAME}:${DOCKER_WHL}" ${DOCKER_DIR}/${HOST_WHL}
+
+    sudo docker cp "${DOCKER_NAME}:theseus" "whole_theseus"
+    sudo docker cp "${DOCKER_NAME}:theseus/dist/theseus-ai-${TAG}.tar.gz" "theseus-ai-${TAG}.tar.gz"
+    sudo docker cp "${DOCKER_NAME}:${DOCKER_WHL}" ${HOST_WHL}
     sudo docker rm ${DOCKER_NAME}
     sudo docker image rm "${DOCKER_NAME}_img"
 done

@@ -62,6 +62,7 @@ for PYTHON_VERSION in 3.9; do
     mkdir -p ${DOCKER_DIR}
     echo """# ----------------
     FROM ${IMAGE_NAME}
+
     # --- Install conda and environment
     ENV CONDA_DIR /opt/conda
     RUN wget --quiet https://repo.anaconda.com/miniconda/Miniconda3-latest-Linux-x86_64.sh -O ~/miniconda.sh && \
@@ -69,22 +70,29 @@ for PYTHON_VERSION in 3.9; do
     ENV PATH \$CONDA_DIR/bin:\$PATH
     RUN conda create --name theseus python=${PYTHON_VERSION}
     RUN source activate theseus
-    # --- Install sparse solver dependencies (suitesparse, baspacho)
+
+    # --- Install torch
+    ENV CUDA_HOME /usr/local/cuda-${CUDA_VERSION}
+    RUN pip install torch --extra-index-url https://download.pytorch.org/whl/${DEVICE_TAG}
+    RUN python -c 'import torch; print([torch.cuda.is_available(), torch.cuda.get_arch_list()])'
+
+    # --- Install sparse suitesparse
     RUN conda install -c conda-forge suitesparse
+
+    # --- Install baspacho dependencies (cmake, BLAS)
     RUN wget --quiet https://github.com/Kitware/CMake/releases/download/v3.24.2/cmake-3.24.2-linux-x86_64.sh -O ~/cmake3.24.sh
     RUN mkdir /opt/cmake3.24
     RUN /bin/bash ~/cmake3.24.sh --prefix=/opt/cmake3.24 --skip-license
     RUN yum makecache
     RUN yum -y install openblas-devel
+
+    # --- Install baspacho
     RUN git clone https://github.com/facebookresearch/baspacho.git
     WORKDIR baspacho
     RUN /opt/cmake3.24/bin/cmake -S . -B build -DCMAKE_BUILD_TYPE=Release -DCMAKE_CUDA_COMPILER=/usr/local/cuda-${CUDA_VERSION}/bin/nvcc -DBUILD_SHARED_LIBS=OFF -DBASPACHO_CUDA_ARCHS='${BASPACHO_CUDA_ARCHS}'
     RUN /opt/cmake3.24/bin/cmake --build build -- -j16
     WORKDIR ..
-    # --- Install torch
-    ENV CUDA_HOME /usr/local/cuda-${CUDA_VERSION}
-    RUN pip install torch --extra-index-url https://download.pytorch.org/whl/${DEVICE_TAG}
-    RUN python -c 'import torch; print([torch.cuda.is_available(), torch.cuda.get_arch_list()])'
+
     # --- Compile theseus wheel
     RUN pip install build wheel
     RUN git clone -b mau.baspacho_revamp_exp https://github.com/facebookresearch/theseus.git

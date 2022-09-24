@@ -39,11 +39,11 @@ if [[ ${CUDA_VERSION} == "cpu" ]]
 then
     DEVICE_TAG=cpu
     IMAGE_NAME="pytorch/manylinux-cuda102"
-    GPU_ARGS=""
+		ENABLE_CUDA=0
 else
     DEVICE_TAG="cu${CUDA_SUFFIX}"
     IMAGE_NAME="pytorch/manylinux-cuda${CUDA_SUFFIX}"
-    GPU_ARGS=" --gpus all"
+		ENABLE_CUDA=1
 fi
 
 for PYTHON_VERSION in 3.9; do
@@ -66,9 +66,9 @@ for PYTHON_VERSION in 3.9; do
     RUN /bin/bash ~/cmake3.24.sh --prefix=/opt/cmake3.24 --skip-license
     RUN yum makecache
     RUN yum -y install openblas-devel
-    RUN git clone https://github.com/facebookresearch/baspacho.git
+    RUN git clone -b main https://github.com/facebookresearch/baspacho.git
     WORKDIR baspacho
-    RUN /opt/cmake3.24/bin/cmake -S . -B build -DCMAKE_BUILD_TYPE=Release -DCMAKE_CUDA_COMPILER=/usr/local/cuda-${CUDA_VERSION}/bin/nvcc -DBUILD_SHARED_LIBS=OFF -DBASPACHO_CUDA_ARCHS='60;70;75;80;85'
+    RUN /opt/cmake3.24/bin/cmake -S . -B build -DCMAKE_BUILD_TYPE=Release -DCMAKE_CUDA_COMPILER=/usr/local/cuda-${CUDA_VERSION}/bin/nvcc -DBUILD_SHARED_LIBS=OFF -DBASPACHO_CUDA_ARCHS='60;70;75;80'
     RUN /opt/cmake3.24/bin/cmake --build build -- -j16
     WORKDIR ..
     # --- Install torch
@@ -77,10 +77,9 @@ for PYTHON_VERSION in 3.9; do
     RUN python -c 'import torch; print([torch.cuda.is_available(), torch.cuda.get_arch_list()])'
     # --- Compile theseus wheel
     RUN pip install build wheel
-    RUN git clone -b origin/mau.baspacho_revamp https://github.com/facebookresearch/theseus.git
+    RUN git clone -b mau.baspacho_revamp_exp https://github.com/facebookresearch/theseus.git
     WORKDIR theseus
-    RUN git checkout -b tmp_build
-    CMD BASPACHO_ROOT_DIR=/baspacho python3 -m build --no-isolation
+    CMD BASPACHO_ROOT_DIR=/baspacho THESEUS_ENABLE_CUDA=${ENABLE_CUDA} python3 -m build --no-isolation
     """ > ${DOCKER_DIR}/Dockerfile
 
     # Run the container
@@ -88,7 +87,14 @@ for PYTHON_VERSION in 3.9; do
     echo $(pwd)
     DOCKER_NAME=theseus_${PYTHON_VERSION}
     sudo docker build -t "${DOCKER_NAME}_img" .
-    sudo docker run${GPU_ARGS} --name ${DOCKER_NAME} ${DOCKER_NAME}_img
+		echo TEST1
+		sudo docker image ls
+		sudo docker container ls
+    sudo docker run --name ${DOCKER_NAME} ${DOCKER_NAME}_img
+		# sudo docker run --name ${DOCKER_NAME} ${DOCKER_NAME}_img
+		echo TEST2
+		sudo docker image ls
+		sudo docker container ls
 
     # Copy the wheel to host
     CP_STR="cp"$(echo ${PYTHON_VERSION} | sed 's/[.]//g')

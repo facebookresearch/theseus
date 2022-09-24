@@ -84,8 +84,11 @@ with open("README.md", "r") as fh:
     long_description = fh.read()
 
 # Add C++ and CUDA extensions
-cuda_is_available = torch.cuda.is_available()
-if cuda_is_available:
+compile_cuda_flag = os.environ.get('THESEUS_ENABLE_CUDA')
+compile_cuda_support = torch.cuda.is_available() if (compile_cuda_flag is None) else (compile_cuda_flag not in {'', '0','False'})
+print("CUDA SUPPORT:", compile_cuda_support)
+
+if compile_cuda_support:
     ext_modules = [
         # reference: https://docs.python.org/3/distutils/apiref.html#distutils.core.Extension
         torch_cpp_ext.CUDAExtension(
@@ -105,7 +108,7 @@ if cuda_is_available:
 else:
     print("No CUDA support found. CUDA extensions won't be installed.")
     ext_modules = []
-baspacho_extension = maybe_create_baspacho_extension(cuda_is_available)
+baspacho_extension = maybe_create_baspacho_extension(compile_cuda_support)
 if baspacho_extension is not None:
     ext_modules.append(baspacho_extension)
 

@@ -40,10 +40,20 @@ then
     DEVICE_TAG=cpu
     IMAGE_NAME="pytorch/manylinux-cuda102"
 		ENABLE_CUDA=0
+		GPU_ARGS=''
 else
     DEVICE_TAG="cu${CUDA_SUFFIX}"
     IMAGE_NAME="pytorch/manylinux-cuda${CUDA_SUFFIX}"
 		ENABLE_CUDA=1
+		if [[ "${NO_CUDA_ON_HOST}" -eq '1' ]]; then
+				BASPACHO_CUDA_ARCHS='60;70;75;80'
+				TORCH_CUDA_ARCH_LIST='6.0;7.0;7.5;8.0'
+				GPU_ARGS=''
+		else
+				BASPACHO_CUDA_ARCHS='torch'
+				TORCH_CUDA_ARCH_LIST=''
+				GPU_ARGS='--gpus all'
+		fi
 fi
 
 for PYTHON_VERSION in 3.9; do
@@ -68,7 +78,7 @@ for PYTHON_VERSION in 3.9; do
     RUN yum -y install openblas-devel
     RUN git clone -b main https://github.com/facebookresearch/baspacho.git
     WORKDIR baspacho
-    RUN /opt/cmake3.24/bin/cmake -S . -B build -DCMAKE_BUILD_TYPE=Release -DCMAKE_CUDA_COMPILER=/usr/local/cuda-${CUDA_VERSION}/bin/nvcc -DBUILD_SHARED_LIBS=OFF -DBASPACHO_CUDA_ARCHS='60;70;75;80'
+    RUN /opt/cmake3.24/bin/cmake -S . -B build -DCMAKE_BUILD_TYPE=Release -DCMAKE_CUDA_COMPILER=/usr/local/cuda-${CUDA_VERSION}/bin/nvcc -DBUILD_SHARED_LIBS=OFF -DBASPACHO_CUDA_ARCHS='${BASPACHO_CUDA_ARCHS}'
     RUN /opt/cmake3.24/bin/cmake --build build -- -j16
     WORKDIR ..
     # --- Install torch
@@ -79,7 +89,7 @@ for PYTHON_VERSION in 3.9; do
     RUN pip install build wheel
     RUN git clone -b mau.baspacho_revamp_exp https://github.com/facebookresearch/theseus.git
     WORKDIR theseus
-    CMD BASPACHO_ROOT_DIR=/baspacho THESEUS_ENABLE_CUDA=${ENABLE_CUDA} python3 -m build --no-isolation
+    CMD BASPACHO_ROOT_DIR=/baspacho THESEUS_ENABLE_CUDA=${ENABLE_CUDA} TORCH_CUDA_ARCH_LIST='${TORCH_CUDA_ARCH_LIST}' python3 -m build --no-isolation
     """ > ${DOCKER_DIR}/Dockerfile
 
     # Run the container
@@ -87,14 +97,7 @@ for PYTHON_VERSION in 3.9; do
     echo $(pwd)
     DOCKER_NAME=theseus_${PYTHON_VERSION}
     sudo docker build -t "${DOCKER_NAME}_img" .
-		echo TEST1
-		sudo docker image ls
-		sudo docker container ls
-    sudo docker run --name ${DOCKER_NAME} ${DOCKER_NAME}_img
-		# sudo docker run --name ${DOCKER_NAME} ${DOCKER_NAME}_img
-		echo TEST2
-		sudo docker image ls
-		sudo docker container ls
+    sudo docker run ${GPU_ARGS} --name ${DOCKER_NAME} ${DOCKER_NAME}_img
 
     # Copy the wheel to host
     CP_STR="cp"$(echo ${PYTHON_VERSION} | sed 's/[.]//g')
@@ -113,7 +116,6 @@ for PYTHON_VERSION in 3.9; do
         HOST_WHL="theseus_ai-${TAG}${PLUS_CU_TAG}-${CP_STR}-${CP_STR}-manylinux_2_17_x86_64.whl"
     fi
 
-    sudo docker cp "${DOCKER_NAME}:theseus" "whole_theseus"
     sudo docker cp "${DOCKER_NAME}:theseus/dist/theseus-ai-${TAG}.tar.gz" "theseus-ai-${TAG}.tar.gz"
     sudo docker cp "${DOCKER_NAME}:${DOCKER_WHL}" ${HOST_WHL}
     sudo docker rm ${DOCKER_NAME}

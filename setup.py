@@ -12,6 +12,12 @@ import sys
 try:
     import torch
     from torch.utils import cpp_extension as torch_cpp_ext
+
+    # This is a hack to get CUDAExtension to compile with
+    #   -ltorch_cuda
+    # instead of split
+    #   -ltorch_cuda_cu -ltorch_cuda_cpp
+    torch_cpp_ext.BUILD_SPLIT_CUDA = False
 except ModuleNotFoundError:
     print("Theseus installation requires torch.")
     sys.exit(1)

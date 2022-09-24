@@ -84,12 +84,12 @@ for PYTHON_VERSION in 3.9; do
     RUN mkdir /opt/cmake3.24
     RUN /bin/bash ~/cmake3.24.sh --prefix=/opt/cmake3.24 --skip-license
     RUN yum makecache
-    RUN yum -y install openblas-devel
+    RUN yum -y install openblas-static
 
     # --- Install baspacho
     RUN git clone https://github.com/facebookresearch/baspacho.git
     WORKDIR baspacho
-    RUN /opt/cmake3.24/bin/cmake -S . -B build -DCMAKE_BUILD_TYPE=Release -DCMAKE_CUDA_COMPILER=/usr/local/cuda-${CUDA_VERSION}/bin/nvcc -DBUILD_SHARED_LIBS=OFF -DBASPACHO_CUDA_ARCHS='${BASPACHO_CUDA_ARCHS}'
+    RUN /opt/cmake3.24/bin/cmake -S . -B build -DCMAKE_BUILD_TYPE=Release -DBLA_STATIC=ON -DCMAKE_CUDA_COMPILER=/usr/local/cuda-${CUDA_VERSION}/bin/nvcc -DBUILD_SHARED_LIBS=OFF -DBASPACHO_CUDA_ARCHS='${BASPACHO_CUDA_ARCHS}'
     RUN /opt/cmake3.24/bin/cmake --build build -- -j16
     WORKDIR ..
 

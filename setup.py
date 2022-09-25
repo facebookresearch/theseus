@@ -40,9 +40,8 @@ def get_baspacho_info(baspacho_root_dir, has_cuda):
     ]
     library_dirs = [
         str(baspacho_build_dir / "baspacho" / "baspacho"),
-        str(baspacho_build_dir / "_deps" / "dispenso-build" / "dispenso"),
     ]
-    libraries = ["BaSpaCho", "dispenso"]
+    libraries = ["BaSpaCho"]
     if has_cuda:
         libraries.append("cusolver")
         libraries.append("cublas")

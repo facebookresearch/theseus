@@ -87,9 +87,12 @@ for PYTHON_VERSION in 3.9; do
     RUN yum -y install openblas-static
 
     # --- Install baspacho
-    RUN git clone https://github.com/facebookresearch/baspacho.git
+    RUN git clone -b bundled_static_lib https://github.com/facebookresearch/baspacho.git
     WORKDIR baspacho
-    RUN /opt/cmake3.24/bin/cmake -S . -B build -DCMAKE_BUILD_TYPE=Release -DBLA_STATIC=ON -DCMAKE_CUDA_COMPILER=/usr/local/cuda-${CUDA_VERSION}/bin/nvcc -DBUILD_SHARED_LIBS=OFF -DBASPACHO_CUDA_ARCHS='${BASPACHO_CUDA_ARCHS}'
+    RUN /opt/cmake3.24/bin/cmake -S . -B build -DCMAKE_BUILD_TYPE=Release -DBLA_STATIC=ON \
+        -DCMAKE_CUDA_COMPILER=/usr/local/cuda-${CUDA_VERSION}/bin/nvcc \
+        -DBUILD_SHARED_LIBS=OFF -DBASPACHO_CUDA_ARCHS='${BASPACHO_CUDA_ARCHS}' \
+        -DBASPACHO_BUILD_TESTS=OFF -DBASPACHO_BUILD_EXAMPLES=OFF
     RUN /opt/cmake3.24/bin/cmake --build build -- -j16
     WORKDIR ..
 

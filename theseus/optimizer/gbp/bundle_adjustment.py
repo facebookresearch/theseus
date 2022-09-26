@@ -37,14 +37,53 @@ GBP_SCHEDULE = {
     "synchronous": GBPSchedule.SYNCHRONOUS,
 }
 
+BACKWARD_MODE = {
+    "full": th.BackwardMode.FULL,
+    "implicit": th.BackwardMode.IMPLICIT,
+    "truncated": th.BackwardMode.TRUNCATED,
+    "dlm": th.BackwardMode.DLM,
+}
 
-def save_res_loss_rad(save_dir, cfg, sweep_radii, sweep_losses, radius_vals, losses):
+
+def start_timing():
+    if torch.cuda.is_available():
+        torch.cuda.synchronize()
+        start = torch.cuda.Event(enable_timing=True)
+        end = torch.cuda.Event(enable_timing=True)
+        start.record()
+    else:
+        start = time.perf_counter()
+        end = None
+    return start, end
+
+
+def end_timing(start, end):
+    if torch.cuda.is_available():
+        torch.cuda.synchronize()
+        end.record()
+        # Waits for everything to finish running
+        torch.cuda.synchronize()
+        elapsed_time = start.elapsed_time(end)
+    else:
+        end = time.perf_counter()
+        elapsed_time = end - start
+        # Convert to milliseconds to have the same units
+        # as torch.cuda.Event.elapsed_time
+        elapsed_time = elapsed_time * 1000
+    return elapsed_time
+
+
+def save_res_loss_rad(
+    save_dir, cfg, radius_vals, losses, sweep_radii=None, sweep_losses=None
+):
     with open(f"{save_dir}/config.txt", "w") as f:
         json.dump(cfg, f, indent=4)
 
     # sweep values
-    np.savetxt(f"{save_dir}/sweep_radius.txt", sweep_radii)
-    np.savetxt(f"{save_dir}/sweep_loss.txt", sweep_losses)
+    if sweep_radii is not None:
+        np.savetxt(f"{save_dir}/sweep_radius.txt", sweep_radii)
+    if sweep_losses is not None:
+        np.savetxt(f"{save_dir}/sweep_loss.txt", sweep_losses)
 
     # optim trajectory
     np.savetxt(f"{save_dir}/optim_radius.txt", radius_vals)
@@ -241,7 +280,8 @@ def setup_layer(cfg: omegaconf.OmegaConf):
         "track_err_history": True,
         "track_state_history": cfg["optim"]["track_state_history"],
         "verbose": True,
-        "backward_mode": th.BackwardMode.FULL,
+        "backward_mode": BACKWARD_MODE[cfg["optim"]["backward_mode"]],
+        "backward_num_iterations": cfg["optim"]["backward_num_iterations"],
     }
     if isinstance(optimizer, GaussianBeliefPropagation):
         gbp_args = cfg["optim"]["gbp_settings"].copy()
@@ -305,7 +345,7 @@ def run_inner(
     """
     Save for nesterov experiments
     """
-    save_dir = os.getcwd() + "/outputs/nesterov/bal/"
+    save_dir = os.getcwd() + "/outputs/nesterov/synthetic_large/"
     if cfg["optim"]["gbp_settings"]["nesterov"]:
         save_dir += "1/"
     else:
@@ -362,7 +402,13 @@ def run_inner(
     #         np.savetxt(save_file, np.array(ares))
 
 
-def run_outer(cfg: omegaconf.OmegaConf):
+def run_outer(cfg: omegaconf.OmegaConf, out_dir=None, do_sweep=False):
+
+    torch.manual_seed(cfg["seed"])
+    np.random.seed(cfg["seed"])
+    random.seed(cfg["seed"])
+
+    print(f"\nRunning experiment. Save directory: {out_dir}\n")
 
     (
         theseus_optim,
@@ -387,55 +433,80 @@ def run_outer(cfg: omegaconf.OmegaConf):
     print(f"CAMERA LOSS (no learning):  {camera_loss_ref: .3f}")
     print_histogram(ba, theseus_inputs, "Input histogram:")
 
-    import matplotlib.pylab as plt
+    # import matplotlib.pylab as plt
+    sweep_radii, sweep_losses = None, None
+    if do_sweep:
+        sweep_radii = torch.linspace(0.01, 5.0, 20, dtype=torch.float64)
+        sweep_losses = []
+        sweep_arg = optim_arg.copy()
+        sweep_arg["verbose"] = False
+        with torch.set_grad_enabled(False):
+            for radius in sweep_radii:
+                radius = radius.to(cfg["device"])
+                theseus_inputs["log_loss_radius"] = radius.unsqueeze(0).unsqueeze(0)
 
-    sweep_radii = torch.linspace(0.01, 5.0, 20)
-    sweep_losses = []
-    with torch.set_grad_enabled(False):
-        for r in sweep_radii:
-            theseus_inputs["log_loss_radius"][0] = r
+                theseus_outputs, info = theseus_optim.forward(
+                    input_tensors=theseus_inputs,
+                    optimizer_kwargs=sweep_arg,
+                )
+                cam_loss = camera_loss(ba, camera_pose_vars)
+                loss = (cam_loss - camera_loss_ref) / camera_loss_ref
+                sweep_losses.append(torch.sum(loss.detach()).item())
+                print(
+                    f"SWEEP radius {radius}, camera loss {cam_loss.detach().item():.3f},"
+                    f" loss {sweep_losses[-1]:.3f}, ref loss {camera_loss_ref:.3f}"
+                )
 
-            print(theseus_inputs["log_loss_radius"])
-
-            theseus_outputs, info = theseus_optim.forward(
-                input_tensors=theseus_inputs,
-                optimizer_kwargs=optim_arg,
-            )
-            cam_loss = camera_loss(ba, camera_pose_vars)
-            loss = (cam_loss - camera_loss_ref) / camera_loss_ref
-            sweep_losses.append(torch.sum(loss.detach()).item())
-
-    plt.plot(sweep_radii, sweep_losses)
-    plt.xlabel("Log loss radius")
-    plt.ylabel("(Camera loss - reference loss) / reference loss")
+        # plt.plot(sweep_radii, sweep_losses)
+        # plt.xlabel("Log loss radius")
+        # plt.ylabel("(Camera loss - reference loss) / reference loss")
+        # plt.show()
 
     losses = []
     radius_vals = []
-    theseus_inputs["log_loss_radius"] = loss_radius_tensor.unsqueeze(1).clone()
+    theseus_inputs["log_loss_radius"] = (
+        loss_radius_tensor.unsqueeze(1).clone().to(cfg["device"])
+    )
+
+    times: Dict = {"fwd": [], "bwd": []}
+    memory: Dict = {"fwd": [], "bwd": []}
 
     for epoch in range(cfg["outer"]["num_epochs"]):
         print(f" ******************* EPOCH {epoch} ******************* ")
         start_time = time.time_ns()
         model_optimizer.zero_grad()
-        theseus_inputs["log_loss_radius"] = loss_radius_tensor.unsqueeze(1).clone()
+        theseus_inputs["log_loss_radius"] = (
+            loss_radius_tensor.unsqueeze(1).clone().to(cfg["device"])
+        )
 
+        start, end = start_timing()
+        torch.cuda.reset_peak_memory_stats()
         theseus_outputs, info = theseus_optim.forward(
             input_tensors=theseus_inputs,
             optimizer_kwargs=optim_arg,
         )
+        times["fwd"].append(end_timing(start, end))
+        memory["fwd"].append(torch.cuda.max_memory_allocated() / 1048576)
 
         cam_loss = camera_loss(ba, camera_pose_vars)
         loss = (cam_loss - camera_loss_ref) / camera_loss_ref
+
+        start, end = start_timing()
+        torch.cuda.reset_peak_memory_stats()
         loss.backward()
+        times["bwd"].append(end_timing(start, end))
+        memory["bwd"].append(torch.cuda.max_memory_allocated() / 1048576)
         radius_vals.append(loss_radius_tensor.data.item())
-        print(loss_radius_tensor.grad)
+        # correct for implicit gradients step size != 1
+        if cfg["optim"]["backward_mode"] == "implicit":
+            loss_radius_tensor.grad /= theseus_optim.optimizer.implicit_step_size
         model_optimizer.step()
         loss_value = torch.sum(loss.detach()).item()
         losses.append(loss_value)
         end_time = time.time_ns()
 
         # print_histogram(ba, theseus_outputs, "Output histogram:")
-        print(f"camera loss {cam_loss} and ref loss {camera_loss_ref}")
+        print(f"camera loss {cam_loss.detach().item()} and ref loss {camera_loss_ref}")
         print(
             f"Epoch: {epoch} Loss: {loss_value} "
             # f"Lin system damping {lin_system_damping}"
@@ -447,24 +518,54 @@ def run_outer(cfg: omegaconf.OmegaConf):
     print("Loss values:", losses)
 
     now = datetime.now()
-    time_str = now.strftime("%m-%d-%y_%H-%M-%S")
-    save_dir = os.getcwd() + "/outputs/loss_radius_exp/" + time_str
+    if out_dir is None:
+        out_dir = now.strftime("%m-%d-%y_%H-%M-%S")
+    save_dir = os.getcwd() + "/outputs/loss_radius_exp/" + out_dir
     os.mkdir(save_dir)
+    with open(f"{save_dir}/config.txt", "w") as f:
+        json.dump(cfg, f, indent=4)
 
-    save_res_loss_rad(save_dir, cfg, sweep_radii, sweep_losses, radius_vals, losses)
+    print("\n=== Runtimes")
+    k1, k2 = "fwd", "bwd"
+    print(f"Forward: {np.mean(times[k1]):.2e} s +/- {np.std(times[k1]):.2e} s")
+    print(f"Backward (FULL): {np.mean(times[k2]):.2e} s +/- {np.std(times[k2]):.2e} s")
 
-    plt.scatter(radius_vals, losses, c=range(len(losses)), cmap=plt.get_cmap("viridis"))
-    plt.title(cfg["optim"]["optimizer_cls"] + " - " + time_str)
-    plt.show()
+    print("\n=== Memory")
+    k1, k2 = "fwd", "bwd"
+    print(f"Forward: {np.mean(memory[k1]):.2e} MB +/- {np.std(memory[k1]):.2e} MB")
+    print(
+        f"Backward (FULL): {np.mean(memory[k2]):.2e} MB +/- {np.std(memory[k2]):.2e} MB"
+    )
+
+    with open(f"{save_dir}/timings.txt", "w") as f:
+        json.dump(times, f, indent=4)
+    with open(f"{save_dir}/memory.txt", "w") as f:
+        json.dump(memory, f, indent=4)
+
+    with open(f"{save_dir}/ref_loss.txt", "w") as f:
+        f.write(f"{camera_loss_ref:.5f}")
+
+    save_res_loss_rad(
+        save_dir,
+        cfg,
+        radius_vals,
+        losses,
+        sweep_radii=sweep_radii,
+        sweep_losses=sweep_losses,
+    )
+
+    # plt.scatter(radius_vals, losses, c=range(len(losses)), cmap=plt.get_cmap("viridis"))
+    # plt.title(cfg["optim"]["optimizer_cls"] + " - " + dir_name)
+    # plt.show()
 
 
 if __name__ == "__main__":
 
-    cfg = {
+    cfg: Dict = {
         "seed": 1,
-        "device": "cpu",
-        # "bal_file": None,
-        "bal_file": "/mnt/sda/bal/problem-21-11315-pre.txt",
+        "device": "cuda",
+        "bal_file": None,
+        # "bal_file": "/mnt/sda/bal/problem-21-11315-pre.txt",
         "synthetic": {
             "num_cameras": 10,
             "num_points": 100,
@@ -472,11 +573,13 @@ if __name__ == "__main__":
             "track_locality": 0.2,
         },
         "optim": {
-            "max_iters": 300,
+            "max_iters": 100,
             "vectorize": True,
             "optimizer_cls": "gbp",
             # "optimizer_cls": "gauss_newton",
             # "optimizer_cls": "levenberg_marquardt",
+            "backward_mode": "implicit",
+            "backward_num_iterations": 10,
             "track_state_history": True,
             "regularize": True,
             "ratio_known_cameras": 0.1,
@@ -487,21 +590,43 @@ if __name__ == "__main__":
                 "dropout": 0.0,
                 "schedule": "synchronous",
                 "lin_system_damping": 1.0e-2,
-                "nesterov": True,
+                "nesterov": False,
             },
         },
         "outer": {
-            "num_epochs": 15,
-            "lr": 1e2,  # 5.0e-1,
+            "num_epochs": 20,
+            "lr": 5.0e1,  # 5.0e-1,
             "optimizer": "sgd",
         },
     }
 
-    torch.manual_seed(cfg["seed"])
-    np.random.seed(cfg["seed"])
-    random.seed(cfg["seed"])
+    # args = setup_layer(cfg)
+    # run_inner(*args)
 
-    args = setup_layer(cfg)
-    run_inner(*args)
+    # run_outer(cfg, "implicit_test", do_sweep=False)
 
-    # run_outer(cfg)
+    for max_iters in [25, 50, 100, 150, 200, 500]:
+        for backward_mode in ["implicit"]:
+            cfg_copy = cfg.copy()
+            cfg_copy["optim"]["max_iters"] = max_iters
+            cfg_copy["optim"]["backward_mode"] = backward_mode
+
+            dir_name = str(max_iters) + "_" + backward_mode
+
+            if backward_mode == "truncated":
+                for backward_num_iterations in [5, 10]:
+                    cfg_copy["optim"][
+                        "backward_num_iterations"
+                    ] = backward_num_iterations
+                    dir_name = (
+                        str(max_iters)
+                        + "_"
+                        + backward_mode
+                        + "_"
+                        + str(cfg["optim"]["backward_num_iterations"])
+                    )
+
+                    run_outer(cfg_copy, dir_name)
+            else:
+                do_sweep = True if backward_mode == "full" else False
+                run_outer(cfg_copy, dir_name, do_sweep=do_sweep)

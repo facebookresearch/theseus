@@ -185,7 +185,7 @@ class Factor:
             self.batch_size, device=device, dtype=torch.int
         )
 
-        self.lm_damping = lin_system_damping.repeat(self.batch_size)
+        self.lm_damping = lin_system_damping.repeat(self.batch_size).to(device)
         self.min_damping = torch.Tensor([1e-4]).to(dtype=dtype, device=device)
         self.max_damping = torch.Tensor([1e2]).to(dtype=dtype, device=device)
         self.last_err: torch.Tensor = None
@@ -263,7 +263,7 @@ class Factor:
             # damp precision matrix
             damped_D = self.lm_damping[:, None, None] * torch.eye(
                 lam.shape[1], device=lam.device, dtype=lam.dtype
-            ).unsqueeze(0).repeat(self.batch_size, 1, 1)
+            ).unsqueeze(0).repeat(self.batch_size, 1, 1).to(self.lm_damping.device)
             lam = lam + damped_D
 
             self.potential_eta[do_lin] = eta[do_lin]
@@ -1071,6 +1071,7 @@ class GaussianBeliefPropagation(Optimizer, abc.ABC):
         schedule: GBPSchedule = GBPSchedule.SYNCHRONOUS,
         lin_system_damping: torch.Tensor = torch.Tensor([1e-4]),
         nesterov: bool = False,
+        implicit_step_size: float = 1e-4,
         **kwargs,
     ) -> NonlinearOptimizerInfo:
         with torch.no_grad():
@@ -1107,6 +1108,11 @@ class GaussianBeliefPropagation(Optimizer, abc.ABC):
                 f"GBP optimizer. Iteration: 0. " f"Error: {info.last_err.mean().item()}"
             )
 
+        assert backward_mode in [
+            BackwardMode.FULL,
+            BackwardMode.IMPLICIT,
+            BackwardMode.TRUNCATED,
+        ]
         if backward_mode == BackwardMode.FULL:
             self._optimize_loop(
                 num_iter=self.params.max_iterations,
@@ -1130,7 +1136,7 @@ class GaussianBeliefPropagation(Optimizer, abc.ABC):
 
         elif backward_mode in [BackwardMode.IMPLICIT, BackwardMode.TRUNCATED]:
             if backward_mode == BackwardMode.IMPLICIT:
-                backward_num_iterations = 1
+                backward_num_iterations = 0
             else:
                 if "backward_num_iterations" not in kwargs:
                     raise ValueError(
@@ -1167,23 +1173,41 @@ class GaussianBeliefPropagation(Optimizer, abc.ABC):
             grad_loop_info = self._init_info(
                 track_best_solution, track_err_history, track_state_history
             )
-            grad_iters_done = self._optimize_loop(
-                num_iter=backward_num_iterations,
-                info=grad_loop_info,
-                verbose=verbose,
-                truncated_grad_loop=True,
-                relin_threshold=relin_threshold,
-                ftov_msg_damping=ftov_msg_damping,
-                dropout=dropout,
-                schedule=schedule,
-                lin_system_damping=lin_system_damping,
-                nesterov=nesterov,
-                clear_messages=False,
-                **kwargs,
-            )
-
-            # Adds grad_loop_info results to original info
-            self._merge_infos(grad_loop_info, no_grad_iters_done, grad_iters_done, info)
+            if backward_mode == BackwardMode.TRUNCATED:
+                grad_iters_done = self._optimize_loop(
+                    num_iter=backward_num_iterations,
+                    info=grad_loop_info,
+                    verbose=verbose,
+                    truncated_grad_loop=True,
+                    relin_threshold=relin_threshold,
+                    ftov_msg_damping=ftov_msg_damping,
+                    dropout=dropout,
+                    schedule=schedule,
+                    lin_system_damping=lin_system_damping,
+                    nesterov=nesterov,
+                    clear_messages=False,
+                    **kwargs,
+                )
+                # Adds grad_loop_info results to original info
+                self._merge_infos(
+                    grad_loop_info, no_grad_iters_done, grad_iters_done, info
+                )
+            else:
+                # use Gauss-Newton update to compute implicit gradient
+                self.implicit_step_size = implicit_step_size
+                gauss_newton_optimizer = th.GaussNewton(self.objective)
+                gauss_newton_optimizer.linear_solver.linearization.linearize()
+                delta = gauss_newton_optimizer.linear_solver.solve()
+                self.objective.retract_optim_vars(
+                    delta * implicit_step_size,
+                    gauss_newton_optimizer.linear_solver.linearization.ordering,
+                    force_update=True,
+                )
+                if verbose:
+                    err = self.objective.error_squared_norm() / 2
+                    print(
+                        f"Nonlinear optimizer implcit step. Error: {err.mean().item()}"
+                    )
 
             return info
         else:

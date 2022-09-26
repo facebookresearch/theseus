@@ -172,6 +172,7 @@ def gbp_solve_pgo(backward_mode, max_iterations=20):
         "damping": 0.0,
         "dropout": 0.0,
         "schedule": GBPSchedule.SYNCHRONOUS,
+        "implicit_step_size": 1e-5,
     }
 
     outputs_gbp, info = theseus_optim.forward(inputs, optim_arg)
@@ -179,6 +180,8 @@ def gbp_solve_pgo(backward_mode, max_iterations=20):
     out_gbp_tensor = torch.cat(list(outputs_gbp.values()))
     loss = torch.norm(gt_poses_tensor - out_gbp_tensor)
     loss.backward()
+    if backward_mode == th.BackwardMode.IMPLICIT:
+        meas_std_tensor.grad /= optimizer.implicit_step_size
 
     print("loss", loss.item())
     print("grad", meas_std_tensor.grad.item())
@@ -191,3 +194,5 @@ linear_solve_pgo()
 gbp_solve_pgo(backward_mode=th.BackwardMode.FULL, max_iterations=20)
 
 gbp_solve_pgo(backward_mode=th.BackwardMode.TRUNCATED, max_iterations=20)
+
+gbp_solve_pgo(backward_mode=th.BackwardMode.IMPLICIT, max_iterations=20)

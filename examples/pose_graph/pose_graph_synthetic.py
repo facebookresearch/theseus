@@ -24,12 +24,6 @@ import theseus.utils.examples as theg
 from theseus.optimizer.linear import LinearSolver
 from theseus.optimizer.linearization import Linearization
 
-BACKWARD_MODE = {
-    "implicit": th.BackwardMode.IMPLICIT,
-    "full": th.BackwardMode.FULL,
-    "truncated": th.BackwardMode.TRUNCATED,
-}
-
 LINEARIZATION_MODE: Dict[str, Type[Linearization]] = {
     "sparse": th.SparseLinearization,
     "dense": th.DenseLinearization,
@@ -97,12 +91,6 @@ def run(
     device = torch.device("cuda")
     dtype = torch.float64
     pr = cProfile.Profile()
-
-    BACKWARD_MODE = {
-        "implicit": th.BackwardMode.IMPLICIT,
-        "full": th.BackwardMode.FULL,
-        "truncated": th.BackwardMode.TRUNCATED,
-    }
 
     LINEARIZATION_MODE: Dict[str, Type[Linearization]] = {
         "sparse": th.SparseLinearization,
@@ -232,7 +220,7 @@ def run(
             optimizer_kwargs={
                 "verbose": cfg.inner_optim.verbose,
                 "track_err_history": cfg.inner_optim.track_err_history,
-                "backward_mode": BACKWARD_MODE[cfg.inner_optim.backward_mode],
+                "backward_mode": cfg.inner_optim.backward_mode,
                 "__keep_final_step_size__": cfg.inner_optim.keep_step_size,
             },
         )

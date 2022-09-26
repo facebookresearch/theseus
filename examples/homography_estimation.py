@@ -32,11 +32,6 @@ FONT = cv2.FONT_HERSHEY_DUPLEX
 FONT_SZ = 0.5
 FONT_PT = (5, 15)
 
-BACKWARD_MODE = {
-    "implicit": th.BackwardMode.IMPLICIT,
-    "full": th.BackwardMode.FULL,
-    "truncated": th.BackwardMode.TRUNCATED,
-}
 
 # Logger
 logger = logging.getLogger(__name__)
@@ -406,7 +401,7 @@ def run(
                     "verbose": verbose,
                     "track_err_history": True,
                     "track_state_history": True,
-                    "backward_mode": BACKWARD_MODE["implicit"],
+                    "backward_mode": "implicit",
                 },
             )
             end_event.record()

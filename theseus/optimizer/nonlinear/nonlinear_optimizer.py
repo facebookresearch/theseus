@@ -8,7 +8,7 @@ import math
 import warnings
 from dataclasses import dataclass
 from enum import Enum
-from typing import Any, Callable, Dict, NoReturn, Optional, Type
+from typing import Any, Callable, Dict, NoReturn, Optional, Type, Union
 
 import numpy as np
 import torch
@@ -57,6 +57,23 @@ class BackwardMode(Enum):
     IMPLICIT = 1
     TRUNCATED = 2
     DLM = 3
+
+    @staticmethod
+    def resolve(key: Union[str, "BackwardMode"]) -> "BackwardMode":
+        if isinstance(key, BackwardMode):
+            return key
+
+        if not isinstance(key, str):
+            raise ValueError("Backward mode must be th.BackwardMode or string.")
+
+        try:
+            backward_mode = BackwardMode[key.upper()]
+        except KeyError:
+            raise ValueError(
+                f"Unrecognized backward mode f{key}."
+                f"Valid choices are full, implicit, truncated, dlm."
+            )
+        return backward_mode
 
 
 EndIterCallbackType = Callable[
@@ -351,10 +368,11 @@ class NonlinearOptimizer(Optimizer, abc.ABC):
         track_err_history: bool = False,
         track_state_history: bool = False,
         verbose: bool = False,
-        backward_mode: BackwardMode = BackwardMode.FULL,
+        backward_mode: Union[str, BackwardMode] = BackwardMode.FULL,
         end_iter_callback: Optional[EndIterCallbackType] = None,
         **kwargs,
     ) -> OptimizerInfo:
+        backward_mode = BackwardMode.resolve(backward_mode)
         with torch.no_grad():
             info = self._init_info(
                 track_best_solution, track_err_history, track_state_history

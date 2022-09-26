@@ -17,13 +17,6 @@ import torch
 import theseus as th
 import theseus.utils.examples as theg
 
-BACKWARD_MODE = {
-    "implicit": th.BackwardMode.IMPLICIT,
-    "full": th.BackwardMode.FULL,
-    "truncated": th.BackwardMode.TRUNCATED,
-}
-
-
 # Logger
 log = logging.getLogger(__name__)
 
@@ -211,7 +204,7 @@ def run(cfg: omegaconf.OmegaConf, results_path: pathlib.Path):
             optimizer_kwargs={
                 "verbose": cfg.inner_optim.verbose,
                 "track_err_history": cfg.inner_optim.track_err_history,
-                "backward_mode": BACKWARD_MODE[cfg.inner_optim.backward_mode],
+                "backward_mode": cfg.inner_optim.backward_mode,
                 "__keep_final_step_size__": cfg.inner_optim.keep_step_size,
             },
         )

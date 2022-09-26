@@ -97,7 +97,7 @@ def test_backward_pass_se3_runs():
             out, _ = layer.forward(
                 {"target": target_data},
                 optimizer_kwargs={
-                    "backward_mode": th.BackwardMode.DLM,
+                    "backward_mode": "dlm",
                     "verbose": False,
                 },
             )

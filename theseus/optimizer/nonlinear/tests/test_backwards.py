@@ -85,7 +85,7 @@ def test_backwards():
         optimizer_kwargs={
             "track_best_solution": True,
             "verbose": False,
-            "backward_mode": "full",
+            "backward_mode": "unroll",
         },
     )
     da_dx_full = torch.autograd.grad(updated_inputs["a"], data_x, retain_graph=True)[

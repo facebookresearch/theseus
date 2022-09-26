@@ -53,14 +53,22 @@ class NonlinearOptimizerInfo(OptimizerInfo):
 
 
 class BackwardMode(Enum):
-    FULL = 0
+    UNROLL = 0
     IMPLICIT = 1
     TRUNCATED = 2
     DLM = 3
+    FULL = -1
 
     @staticmethod
     def resolve(key: Union[str, "BackwardMode"]) -> "BackwardMode":
         if isinstance(key, BackwardMode):
+            if key == BackwardMode.FULL:
+                warnings.warn(
+                    "BackwardMode.FULL is deprecated and will be "
+                    "replaced by BackwardMode.UNROLL in future versions.",
+                    DeprecationWarning,
+                )
+                return BackwardMode.UNROLL
             return key
 
         if not isinstance(key, str):
@@ -368,7 +376,7 @@ class NonlinearOptimizer(Optimizer, abc.ABC):
         track_err_history: bool = False,
         track_state_history: bool = False,
         verbose: bool = False,
-        backward_mode: Union[str, BackwardMode] = BackwardMode.FULL,
+        backward_mode: Union[str, BackwardMode] = BackwardMode.UNROLL,
         end_iter_callback: Optional[EndIterCallbackType] = None,
         **kwargs,
     ) -> OptimizerInfo:
@@ -384,7 +392,7 @@ class NonlinearOptimizer(Optimizer, abc.ABC):
                 f"Error: {info.last_err.mean().item()}"
             )
 
-        if backward_mode in [BackwardMode.FULL, BackwardMode.DLM]:
+        if backward_mode in [BackwardMode.UNROLL, BackwardMode.DLM]:
             self._optimize_loop(
                 start_iter=0,
                 num_iter=self.params.max_iterations,

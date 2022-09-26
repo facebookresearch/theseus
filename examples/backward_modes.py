@@ -82,7 +82,7 @@ updated_inputs, info = theseus_optim.forward(
     optimizer_kwargs={
         "track_best_solution": True,
         "verbose": False,
-        "backward_mode": "full",
+        "backward_mode": "unroll",
     },
 )
 
@@ -175,7 +175,7 @@ for trial in range(n_trials + 1):
         optimizer_kwargs={
             "track_best_solution": True,
             "verbose": False,
-            "backward_mode": "full",
+            "backward_mode": "unroll",
         },
     )
     times["fwd"].append(time.time() - start)

@@ -51,9 +51,9 @@ class TheseusLayer(nn.Module):
                 "currently not supported."
             )
         optimizer_kwargs = optimizer_kwargs or {}
-        # Defaults to "full" to avoid error, we only care to see if it's not dlm.
+        # Defaults to "unroll" to avoid error, we only care to see if it's not dlm.
         backward_mode = BackwardMode.resolve(
-            optimizer_kwargs.get("backward_mode", "full")
+            optimizer_kwargs.get("backward_mode", "unroll")
         )
         if backward_mode == BackwardMode.DLM:
             dlm_epsilon = optimizer_kwargs.get(

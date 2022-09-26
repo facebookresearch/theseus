@@ -21,7 +21,7 @@ from PIL import Image
 from torch.utils.data import DataLoader, Dataset
 
 import theseus as th
-from theseus.core.cost_function import AutogradMode, ErrFnType
+from theseus.core.cost_function import ErrFnType
 from theseus.third_party.easyaug import GeoAugParam, RandomGeoAug, RandomPhotoAug
 from theseus.third_party.utils import grid_sample
 
@@ -286,7 +286,7 @@ def run(
     outer_lr: float = 1e-4,
     max_iterations: int = 50,
     step_size: float = 0.1,
-    autograd_mode: AutogradMode = AutogradMode.VMAP,
+    autograd_mode: str = "vmap",
 ):
     logger.info(
         "==============================================================="
@@ -479,18 +479,12 @@ def run(
 
 @hydra.main(config_path="./configs/", config_name="homography_estimation")
 def main(cfg):
-    autograd_modes = {
-        "dense": AutogradMode.DENSE,
-        "loop_batch": AutogradMode.LOOP_BATCH,
-        "vmap": AutogradMode.VMAP,
-    }
-
     num_epochs: int = cfg.outer_optim.num_epochs
     batch_size: int = cfg.outer_optim.batch_size
     outer_lr: float = cfg.outer_optim.lr
     max_iterations: int = cfg.inner_optim.max_iters
     step_size: float = cfg.inner_optim.step_size
-    autograd_mode = autograd_modes[cfg.autograd_mode]
+    autograd_mode = cfg.autograd_mode
 
     run(
         batch_size=batch_size,

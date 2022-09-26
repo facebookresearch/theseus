@@ -4,7 +4,7 @@
 # LICENSE file in the root directory of this source tree.
 
 import abc
-from typing import Callable, List, Optional, Sequence, Tuple, cast
+from typing import Callable, List, Optional, Sequence, Tuple, Union, cast
 from enum import Enum
 
 import torch
@@ -101,6 +101,22 @@ class AutogradMode(Enum):
     LOOP_BATCH = 1
     VMAP = 2
 
+    @staticmethod
+    def resolve(key: Union[str, "AutogradMode"]) -> "AutogradMode":
+        if isinstance(key, AutogradMode):
+            return key
+        if not isinstance(key, str):
+            raise ValueError("Autograd mode must be of type th.AutogradMode or string.")
+
+        try:
+            mode = AutogradMode[key.upper()]
+        except KeyError:
+            raise ValueError(
+                f"Invalid autograd mode {key}. "
+                "Valid options are dense, loop_batch, and vmap."
+            )
+        return mode
+
 
 # The error function is assumed to receive variables in the format
 #    err_fn(
@@ -120,7 +136,7 @@ class AutoDiffCostFunction(CostFunction):
         name: Optional[str] = None,
         autograd_strict: bool = False,
         autograd_vectorize: bool = False,
-        autograd_mode: AutogradMode = AutogradMode.DENSE,
+        autograd_mode: Union[str, AutogradMode] = AutogradMode.DENSE,
     ):
         if cost_weight is None:
             cost_weight = ScaleCostWeight(1.0)
@@ -147,7 +163,7 @@ class AutoDiffCostFunction(CostFunction):
         self._tmp_optim_vars_for_loop = None
         self._tmp_aux_vars_for_loop = None
 
-        self._autograd_mode = autograd_mode
+        self._autograd_mode = AutogradMode.resolve(autograd_mode)
 
         if self._autograd_mode == AutogradMode.LOOP_BATCH:
             self._tmp_optim_vars_for_loop = tuple(v.copy() for v in optim_vars)

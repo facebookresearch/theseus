@@ -57,9 +57,8 @@ def test_default_name_and_ids():
     assert len(seen_ids) == reps
 
 
-@pytest.mark.parametrize(
-    "autograd_mode", [AutogradMode.DENSE, AutogradMode.LOOP_BATCH, AutogradMode.VMAP]
-)
+# Adding three formatting options to include coverage for autograd mode resolution
+@pytest.mark.parametrize("autograd_mode", ["DENSE", "loop_batch", AutogradMode.VMAP])
 def test_autodiff_cost_function_error_and_jacobians_shape(autograd_mode):
     rng = torch.Generator()
     rng.manual_seed(0)

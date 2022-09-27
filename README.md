@@ -141,7 +141,7 @@ outer_optimizer = torch.optim.RMSprop([phi], lr=0.001)
 for epoch in range(10):
     solution, info = layer.forward(
         input_tensors={"x": phi.clone(), "v": torch.ones(1, 1)},
-        optimizer_kwargs={"backward_mode": th.BackwardMode.IMPLICIT})
+        optimizer_kwargs={"backward_mode": "implicit"})
     outer_loss = torch.nn.functional.mse_loss(solution["v"], v_true)
     outer_loss.backward()
     outer_optimizer.step()

@@ -82,7 +82,7 @@ updated_inputs, info = theseus_optim.forward(
     optimizer_kwargs={
         "track_best_solution": True,
         "verbose": False,
-        "backward_mode": th.BackwardMode.FULL,
+        "backward_mode": "unroll",
     },
 )
 
@@ -103,7 +103,7 @@ updated_inputs, info = theseus_optim.forward(
     optimizer_kwargs={
         "track_best_solution": True,
         "verbose": False,
-        "backward_mode": th.BackwardMode.IMPLICIT,
+        "backward_mode": "implicit",
     },
 )
 
@@ -117,7 +117,7 @@ updated_inputs, info = theseus_optim.forward(
     optimizer_kwargs={
         "track_best_solution": True,
         "verbose": False,
-        "backward_mode": th.BackwardMode.TRUNCATED,
+        "backward_mode": "truncated",
         "backward_num_iterations": 5,
     },
 )
@@ -134,7 +134,7 @@ updated_inputs, info = theseus_optim.forward(
     optimizer_kwargs={
         "track_best_solution": True,
         "verbose": False,
-        "backward_mode": th.BackwardMode.DLM,
+        "backward_mode": "dlm",
         "dlm_epsilon": 1e-3,
     },
 )
@@ -175,7 +175,7 @@ for trial in range(n_trials + 1):
         optimizer_kwargs={
             "track_best_solution": True,
             "verbose": False,
-            "backward_mode": th.BackwardMode.FULL,
+            "backward_mode": "unroll",
         },
     )
     times["fwd"].append(time.time() - start)
@@ -191,7 +191,7 @@ for trial in range(n_trials + 1):
         optimizer_kwargs={
             "track_best_solution": True,
             "verbose": False,
-            "backward_mode": th.BackwardMode.IMPLICIT,
+            "backward_mode": "implicit",
         },
     )
     start = time.time()
@@ -205,7 +205,7 @@ for trial in range(n_trials + 1):
         optimizer_kwargs={
             "track_best_solution": True,
             "verbose": False,
-            "backward_mode": th.BackwardMode.TRUNCATED,
+            "backward_mode": "truncated",
             "backward_num_iterations": 5,
         },
     )
@@ -220,7 +220,7 @@ for trial in range(n_trials + 1):
         optimizer_kwargs={
             "track_best_solution": True,
             "verbose": False,
-            "backward_mode": th.BackwardMode.DLM,
+            "backward_mode": "dlm",
             "dlm_epsilon": 1e-3,
         },
     )

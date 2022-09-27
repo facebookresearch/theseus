@@ -192,7 +192,7 @@ class TactilePushingTrainer:
             logger.info("Forcing IMPLICIT backward mode.")
             return th.BackwardMode.IMPLICIT
         else:
-            return getattr(th.BackwardMode, self.cfg.inner_optim.backward_mode)
+            return self.cfg.inner_optim.backward_mode
 
     def compute_loss(
         self, epoch: int, update: bool = True

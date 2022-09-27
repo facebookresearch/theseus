@@ -51,6 +51,8 @@ def test_ellipsoidal_damping_compatibility(mock_objective):
 
 @pytest.mark.cudaext
 def test_ellipsoidal_damping_compatibility_cuda(mock_objective):
+    if not torch.cuda.is_available():
+        return
     mock_objective.to(device="cuda", dtype=torch.double)
     batch_size = 2
     mock_objective.update(

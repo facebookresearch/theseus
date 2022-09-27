@@ -12,7 +12,7 @@ authors:
   - family-names: "Sodhi"
     given-names: "Paloma"
   - family-names: "Chen"
-    given-names: "Ricky"
+    given-names: "Ricky T. Q."
   - family-names: "Ortiz"
     given-names: "Joseph"
   - family-names: "DeTone"
@@ -31,7 +31,7 @@ title: "Theseus: A Library for Differentiable Nonlinear Optimization"
 url: "https://github.com/facebookresearch/theseus"
 preferred-citation:
   type: article
-  journal: arXiv preprint arXiv:2207.09442
+  journal: Advances in Neural Information Processing Systems
   title: "Theseus: A Library for Differentiable Nonlinear Optimization"
   url: "https://arxiv.org/abs/2207.09442"
   year: 2022
@@ -47,7 +47,7 @@ preferred-citation:
   - family-names: "Sodhi"
     given-names: "Paloma"
   - family-names: "Chen"
-    given-names: "Ricky"
+    given-names: "Ricky T. Q."
   - family-names: "Ortiz"
     given-names: "Joseph"
   - family-names: "DeTone"

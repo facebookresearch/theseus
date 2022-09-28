@@ -139,7 +139,7 @@ objective.add(cost_function)
 layer = th.TheseusLayer(th.GaussNewton(objective, max_iterations=10))
 
 phi = torch.nn.Parameter(x_true + 0.1 * torch.ones_like(x_true))
-outer_optimizer = torch.optim.RMSprop([phi], lr=0.001)
+outer_optimizer = torch.optim.Adam([phi], lr=0.001)
 for epoch in range(10):
     solution, info = layer.forward(
         input_tensors={"x": phi.clone(), "v": torch.ones(1, 1)},

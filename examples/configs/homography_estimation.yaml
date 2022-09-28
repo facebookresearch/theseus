@@ -1,4 +1,5 @@
 autograd_mode: vmap
+benchmarking_costs: true
 
 outer_optim:
   num_epochs: 999

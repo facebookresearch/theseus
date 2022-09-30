@@ -9,7 +9,7 @@ from .nonlinear_least_squares import NonlinearLeastSquares
 from .nonlinear_optimizer import (
     BackwardMode,
     NonlinearOptimizer,
+    NonlinearOptimizerInfo,
     NonlinearOptimizerParams,
     NonlinearOptimizerStatus,
-    NonlinearOptimizerInfo,
 )

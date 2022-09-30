@@ -13,6 +13,7 @@ from theseus.core.tests.common import check_copy_var
 from theseus.utils import numeric_jacobian
 
 from .common import (
+    BATCH_SIZES_TO_TEST,
     check_adjoint,
     check_compose,
     check_exp_map,
@@ -25,7 +26,6 @@ from .common import (
     check_projection_for_inverse,
     check_projection_for_log_map,
     check_projection_for_rotate_and_transform,
-    BATCH_SIZES_TO_TEST,
 )
 
 

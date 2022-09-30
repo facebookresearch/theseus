@@ -11,6 +11,7 @@ import torch
 
 from theseus.constants import _CHECK_DTYPE_SUPPORTED
 from theseus.core.variable import Variable
+
 from .lie_group_check import _LieGroupCheckContext
 
 OptionalJacobians = Optional[List[torch.Tensor]]

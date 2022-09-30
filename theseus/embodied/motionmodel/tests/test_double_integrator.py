@@ -12,8 +12,8 @@ import torch
 import theseus as th
 from theseus.core import Variable
 from theseus.core.tests.common import (
-    check_another_theseus_function_is_copy,
     BATCH_SIZES_TO_TEST,
+    check_another_theseus_function_is_copy,
 )
 from theseus.utils import numeric_jacobian
 

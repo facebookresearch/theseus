@@ -11,8 +11,8 @@ import theseus as th
 from theseus.core.tests.common import BATCH_SIZES_TO_TEST
 from theseus.embodied.collision.tests.utils import (
     random_origin,
-    random_sdf_data,
     random_scalar,
+    random_sdf_data,
 )
 from theseus.geometry.tests.test_se2 import create_random_se2
 from theseus.utils import numeric_jacobian

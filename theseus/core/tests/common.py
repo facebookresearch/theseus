@@ -9,7 +9,6 @@ import torch
 
 import theseus as th
 
-
 BATCH_SIZES_TO_TEST = (1, 10)
 
 

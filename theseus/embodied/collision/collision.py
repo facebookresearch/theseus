@@ -9,7 +9,7 @@ import torch
 
 from theseus.core import CostFunction, CostWeight, Variable, as_variable
 from theseus.embodied.kinematics import IdentityModel, KinematicsModel
-from theseus.geometry import Point2, SE2
+from theseus.geometry import SE2, Point2
 
 from .signed_distance_field import SignedDistanceField2D
 

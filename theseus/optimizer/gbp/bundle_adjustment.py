@@ -172,7 +172,8 @@ def load_problem(cfg: omegaconf.OmegaConf):
 def setup_layer(cfg: omegaconf.OmegaConf):
     ba = load_problem(cfg)
 
-    print("Optimizer:", cfg["optim"]["optimizer_cls"], "\n")
+    print("Optimizer:", cfg["optim"]["optimizer_cls"])
+    print("Backward mode:", cfg["optim"]["backward_mode"], "\n")
 
     # param that control transition from squared loss to huber
     radius_tensor = torch.tensor([1.0], dtype=torch.float64)
@@ -499,7 +500,9 @@ def run_outer(cfg: omegaconf.OmegaConf, out_dir=None, do_sweep=False):
         radius_vals.append(loss_radius_tensor.data.item())
         # correct for implicit gradients step size != 1
         if cfg["optim"]["backward_mode"] == "implicit":
-            loss_radius_tensor.grad /= theseus_optim.optimizer.implicit_step_size
+            if theseus_optim.optimizer.implicit_method == "gauss_newton":
+                loss_radius_tensor.grad /= theseus_optim.optimizer.implicit_step_size
+        print("\ngrad is: ", loss_radius_tensor.grad, "\n")
         model_optimizer.step()
         loss_value = torch.sum(loss.detach()).item()
         losses.append(loss_value)
@@ -573,7 +576,7 @@ if __name__ == "__main__":
             "track_locality": 0.2,
         },
         "optim": {
-            "max_iters": 100,
+            "max_iters": 200,
             "vectorize": True,
             "optimizer_cls": "gbp",
             # "optimizer_cls": "gauss_newton",
@@ -591,6 +594,7 @@ if __name__ == "__main__":
                 "schedule": "synchronous",
                 "lin_system_damping": 1.0e-2,
                 "nesterov": False,
+                "implicit_method": "gbp",
             },
         },
         "outer": {
@@ -605,7 +609,7 @@ if __name__ == "__main__":
 
     # run_outer(cfg, "implicit_test", do_sweep=False)
 
-    for max_iters in [25, 50, 100, 150, 200, 500]:
+    for max_iters in [150, 200, 500]:  # 25, 50, 100,
         for backward_mode in ["implicit"]:
             cfg_copy = cfg.copy()
             cfg_copy["optim"]["max_iters"] = max_iters

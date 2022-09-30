@@ -235,7 +235,6 @@ class Factor:
 
         if torch.sum(do_lin) > 0:  # if any factor in the batch needs relinearization
             J, error = self.cf.weighted_jacobians_error()
-
             J_stk = torch.cat(J, dim=-1)
 
             lam = torch.bmm(J_stk.transpose(-2, -1), J_stk)
@@ -936,6 +935,8 @@ class GaussianBeliefPropagation(Optimizer, abc.ABC):
                 "We require at least one unary cost function to act as a prior."
                 "This is because Gaussian Belief Propagation is performing Bayesian inference."
             )
+        if self.objective.vectorized:
+            self.objective.update_vectorization_if_needed()
         self._linearize_factors()
 
         self.n_individual_factors = (
@@ -963,17 +964,21 @@ class GaussianBeliefPropagation(Optimizer, abc.ABC):
         lin_system_damping: torch.Tensor,
         nesterov: bool,
         clear_messages: bool = True,
+        implicit_gbp_loop: bool = False,
         **kwargs,
     ):
         # we only create the factors and beliefs right before runnig GBP as they are
         # not automatically updated when objective.update is called.
         if clear_messages:
             self._create_factors_beliefs(lin_system_damping)
+        if implicit_gbp_loop:
+            relin_threshold = 1e10  # no relinearisation
+            if self.objective.vectorized:
+                self.objective.update_vectorization_if_needed()
+            self._linearize_factors()
 
         if schedule == GBPSchedule.SYNCHRONOUS:
-            ftov_schedule = synchronous_schedule(
-                self.params.max_iterations, self.n_edges
-            )
+            ftov_schedule = synchronous_schedule(num_iter, self.n_edges)
 
         if nesterov:
             nest_lambda, nest_gamma = next_nesterov_params(0.0)
@@ -1072,6 +1077,7 @@ class GaussianBeliefPropagation(Optimizer, abc.ABC):
         lin_system_damping: torch.Tensor = torch.Tensor([1e-4]),
         nesterov: bool = False,
         implicit_step_size: float = 1e-4,
+        implicit_method: str = "gbp",
         **kwargs,
     ) -> NonlinearOptimizerInfo:
         with torch.no_grad():
@@ -1136,6 +1142,13 @@ class GaussianBeliefPropagation(Optimizer, abc.ABC):
 
         elif backward_mode in [BackwardMode.IMPLICIT, BackwardMode.TRUNCATED]:
             if backward_mode == BackwardMode.IMPLICIT:
+                self.implicit_method = implicit_method
+                implicit_methods = ["gauss_newton", "gbp"]
+                if implicit_method not in implicit_methods:
+                    raise ValueError(
+                        f"implicit_method must be one of {implicit_methods}, "
+                        f"but got {implicit_method}"
+                    )
                 backward_num_iterations = 0
             else:
                 if "backward_num_iterations" not in kwargs:
@@ -1192,7 +1205,7 @@ class GaussianBeliefPropagation(Optimizer, abc.ABC):
                 self._merge_infos(
                     grad_loop_info, no_grad_iters_done, grad_iters_done, info
                 )
-            else:
+            elif implicit_method == "gauss_newton":
                 # use Gauss-Newton update to compute implicit gradient
                 self.implicit_step_size = implicit_step_size
                 gauss_newton_optimizer = th.GaussNewton(self.objective)
@@ -1208,6 +1221,24 @@ class GaussianBeliefPropagation(Optimizer, abc.ABC):
                     print(
                         f"Nonlinear optimizer implcit step. Error: {err.mean().item()}"
                     )
+            elif implicit_method == "gbp":
+                # solve normal equation in a distributed way
+                max_lin_solve_iters = 1000
+                grad_iters_done = self._optimize_loop(
+                    num_iter=max_lin_solve_iters,
+                    info=grad_loop_info,
+                    verbose=verbose,
+                    truncated_grad_loop=True,
+                    relin_threshold=1e10,
+                    ftov_msg_damping=ftov_msg_damping,
+                    dropout=dropout,
+                    schedule=schedule,
+                    lin_system_damping=lin_system_damping,
+                    nesterov=nesterov,
+                    clear_messages=False,
+                    implicit_gbp_loop=True,
+                    **kwargs,
+                )
 
             return info
         else:

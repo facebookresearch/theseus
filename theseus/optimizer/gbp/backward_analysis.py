@@ -85,10 +85,15 @@ def plot_loss_traj(root, ref_loss=None):
     exps = ["full", "implicit", "truncated_5", "truncated_10"]
     labels = ["Unroll", "Implicit", "Trunc-5", "Trunc-10"]
     colors = ["C0", "C1", "C2", "C3"]
-    inner_iters = [25, 50, 100, 150, 200, 500]
+    inner_iters = [150, 200, 500]  # [25, 50, 100, 150, 200, 500]
 
     fig_loss, ax_loss = plt.subplots(nrows=1, ncols=len(inner_iters), figsize=(20, 3))
     fig_loss.subplots_adjust(hspace=0.0, wspace=0.5)
+
+    fig_loss_t, ax_loss_t = plt.subplots(
+        nrows=1, ncols=len(inner_iters), figsize=(20, 3)
+    )
+    fig_loss_t.subplots_adjust(hspace=0.0, wspace=0.5)
 
     fig_traj, ax_traj = plt.subplots(nrows=len(inner_iters), ncols=4, figsize=(20, 15))
     fig_traj.subplots_adjust(hspace=0.75, wspace=0.4)
@@ -116,26 +121,50 @@ def plot_loss_traj(root, ref_loss=None):
                 cmap=plt.get_cmap("viridis"),
             )
 
-            # plot loss over epochs
+            # plot loss over epochs or over total time
             label = labels[j] if i == 0 else None
             if ref_loss is not None:
                 loss_traj = np.array(loss_traj) * ref_loss + ref_loss
+            with open(os.path.join(root, direc, "timings.txt"), "r") as f:
+                timings = json.load(f)
+            step_times = [
+                timings["fwd"][i] + timings["bwd"][i]
+                for i in range(len(timings["fwd"]))
+            ]
+            step_times = np.array(step_times) / 1000
+            cum_times = np.cumsum(step_times)
             ax_loss[i].plot(loss_traj, color=colors[j], marker=None, label=label)
+            ax_loss_t[i].plot(
+                cum_times, loss_traj, color=colors[j], marker=None, label=label
+            )
 
-    ax_loss[0].legend(
-        loc="lower center",
-        bbox_to_anchor=(3.5, -0.5),
-        fancybox=True,
-        ncol=4,
-        fontsize=10,
-    )
+    for ax in [ax_loss, ax_loss_t]:
+        ax[0].legend(
+            loc="lower center",
+            bbox_to_anchor=(2.0, -0.5),  # (3.5, -0.5)
+            fancybox=True,
+            ncol=4,
+            fontsize=10,
+        )
+
+    # align y axes
+    ymin, ymax = 1e10, -1e10
+    for ax in ax_loss:
+        ymin = min(ymin, ax.get_ylim()[0])
+        ymax = max(ymax, ax.get_ylim()[1])
+    for ax in ax_loss:
+        ax.set_ylim((ymin, ymax))
+    for ax in ax_loss_t:
+        ax.set_ylim((ymin, ymax))
 
     title_fontsize = 11
     for i, iters in enumerate(inner_iters):
-        ax_loss[i].title.set_text(f"Train loss ({iters} inner GBP steps)")
-        ax_loss[i].title.set_size(title_fontsize)
+        for ax in [ax_loss, ax_loss_t]:
+            ax[i].title.set_text(f"Train loss ({iters} inner GBP steps)")
+            ax[i].title.set_size(title_fontsize)
+            ax[i].set_ylabel("Camera Loss")
         ax_loss[i].set_xlabel("Epoch")
-        ax_loss[i].set_ylabel("Camera Loss")
+        ax_loss_t[i].set_xlabel("Time (seconds)")
 
         for j in range(4):
             ax_traj[i, j].set_xlabel("Huber loss radius")
@@ -145,16 +174,17 @@ def plot_loss_traj(root, ref_loss=None):
                 ax_traj[i, j].set_ylabel("Camera Loss")
 
     fig_loss.subplots_adjust(bottom=0.3)
+    fig_loss_t.subplots_adjust(bottom=0.3)
     plt.show()
 
 
 if __name__ == "__main__":
 
     root = (
-        "/home/joe/projects/mpSLAM/theseus/theseus/optimizer/gbp/"
+        "/home/joe/projects/theseus/theseus/optimizer/gbp/"
         + "outputs/loss_radius_exp/backward_analysis/"
     )
 
-    plot_timing_memory(root)
+    # plot_timing_memory(root)
 
-    plot_loss_traj(root, ref_loss=None)  # 49.87
+    plot_loss_traj(root, ref_loss=None)

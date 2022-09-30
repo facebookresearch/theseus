@@ -4,14 +4,13 @@
 # LICENSE file in the root directory of this source tree.
 
 import abc
-from typing import Callable, List, Optional, Sequence, Tuple, Union, cast
 from enum import Enum
+from typing import Callable, List, Optional, Sequence, Tuple, Union, cast
 
 import torch
 import torch.autograd.functional as autogradF
+from functorch import jacrev, vmap
 from typing_extensions import Protocol
-
-from functorch import vmap, jacrev
 
 from theseus.geometry import Manifold
 from theseus.geometry.lie_group_check import no_lie_group_check

@@ -232,7 +232,7 @@ def write_gif_batch(log_dir, img1, img2, H_hist, Hgt_1_2, err_hist):
         img1 = img1[0][None, ...]
         img2 = img2[0][None, ...]
         img1_dsts = warp_perspective_norm(H_1_2_mat, img1)
-        path = os.path.join(log_dir, f"{anim_dir}/{it:05d}.png")
+        path = os.path.join(anim_dir, f"{it:05d}.png")
         viz_warp(path, img1[0], img2[0], img1_dsts[0], it, err=err, fc_err=fc_err)
     anim_path = os.path.join(log_dir, "animation.gif")
     cmd = f"convert -delay 10 -loop 0 {anim_dir}/*.png {anim_path}"

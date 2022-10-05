@@ -125,6 +125,7 @@ def create_qf_theseus_layer(
                 th.Vector(cost_weight_dim, name="learnable_err_param", tensor=cw_data)
             ],
             autograd_vectorize=True,
+            autograd_mode="dense",
         )
         objective.add(learnable_cost_function)
     else:

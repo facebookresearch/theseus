@@ -135,7 +135,7 @@ class AutoDiffCostFunction(CostFunction):
         name: Optional[str] = None,
         autograd_strict: bool = False,
         autograd_vectorize: bool = False,
-        autograd_mode: Union[str, AutogradMode] = AutogradMode.DENSE,
+        autograd_mode: Union[str, AutogradMode] = AutogradMode.VMAP,
     ):
         if cost_weight is None:
             cost_weight = ScaleCostWeight(1.0)

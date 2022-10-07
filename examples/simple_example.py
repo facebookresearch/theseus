@@ -11,7 +11,7 @@ import theseus as th
 
 
 def y_model(x, c):
-    return torch.exp(c * x)
+    return c * torch.exp(x)
 
 
 def generate_data(num_points=10, c=0.5):

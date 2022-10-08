@@ -53,8 +53,8 @@ else
     # available in the compilation host (or is not available in the docker container)
     if [[ "${NO_CUDA_ON_HOST}" -eq '1' ]]; then
         # no detection, a default selection of architectures is specified
-        BASPACHO_CUDA_ARCHS='60;70;75;80'
-        TORCH_CUDA_ARCH_LIST='6.0;7.0;7.5;8.0'
+        BASPACHO_CUDA_ARCHS='37;50;60;70;75;80'
+        TORCH_CUDA_ARCH_LIST='3.7;5.0;6.0;7.0;7.5;8.0'
         GPU_ARGS=''
     else
         # will compile for all architectures supported by torch (>6.0 for baspacho)

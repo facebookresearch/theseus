@@ -105,6 +105,11 @@ pip install -e ".[dev]"
 ```
 and follow the more detailed instructions in [CONTRIBUTING](https://github.com/facebookresearch/theseus/blob/main/CONTRIBUTING.md).
 
+Compilation from source supports is affected by the following enviroment variables:
+* `BASPACHO_ROOT_DIR`: root dir of [BaSpaCho](https://github.com/facebookresearch/baspacho) sparse solver, which must be already
+  built with binaries in the subdirectory `build`.
+* `THESEUS_ENABLE_CUDA`: (1 or 0, or unset), forces enabling or disabling Cuda support regardless of system's `torch.cuda.is_available()`.
+
 ### Running unit tests (requires `dev` installation)
 ```bash
 python -m pytest theseus

@@ -17,6 +17,9 @@
 #    ./build_scripts/build_wheel.sh . 0.1.0 10.2
 #   
 #   will run and store results under ./theseus_docker_3.9
+#
+# env var `THESEUS_ENABLE_CUDA` allows you to compile for Cuda even if Cuda is not
+# available on the system (or cannot be exported to the docker container)
 # -----------------
 
 # Ensure that 3 arguments (ROOT_DIR, TAG, CUDA_VERSION) are provided
@@ -39,21 +42,26 @@ if [[ ${CUDA_VERSION} == "cpu" ]]
 then
     DEVICE_TAG=cpu
     IMAGE_NAME="pytorch/manylinux-cuda102"
-		ENABLE_CUDA=0
-		GPU_ARGS=''
+    ENABLE_CUDA=0
+    GPU_ARGS=''
 else
     DEVICE_TAG="cu${CUDA_SUFFIX}"
     IMAGE_NAME="pytorch/manylinux-cuda${CUDA_SUFFIX}"
-		ENABLE_CUDA=1
-		if [[ "${NO_CUDA_ON_HOST}" -eq '1' ]]; then
-				BASPACHO_CUDA_ARCHS='60;70;75;80'
-				TORCH_CUDA_ARCH_LIST='6.0;7.0;7.5;8.0'
-				GPU_ARGS=''
-		else
-				BASPACHO_CUDA_ARCHS='torch'
-				TORCH_CUDA_ARCH_LIST=''
-				GPU_ARGS='--gpus all'
-		fi
+    ENABLE_CUDA=1
+
+    # this switch is in order to allow compilation for a CUDA target even when CUDA is not
+    # available in the compilation host (or is not available in the docker container)
+    if [[ "${NO_CUDA_ON_HOST}" -eq '1' ]]; then
+        # no detection, a default selection of architectures is specified
+        BASPACHO_CUDA_ARCHS='60;70;75;80'
+        TORCH_CUDA_ARCH_LIST='6.0;7.0;7.5;8.0'
+        GPU_ARGS=''
+    else
+        # will compile for all architectures supported by torch (>6.0 for baspacho)
+        BASPACHO_CUDA_ARCHS='torch'
+        TORCH_CUDA_ARCH_LIST=''
+        GPU_ARGS='--gpus all'
+    fi
 fi
 
 for PYTHON_VERSION in 3.9; do
@@ -87,8 +95,10 @@ for PYTHON_VERSION in 3.9; do
     RUN yum -y install openblas-static
 
     # --- Install baspacho
-    RUN git clone -b bundled_static_lib https://github.com/facebookresearch/baspacho.git
+    RUN git clone https://github.com/facebookresearch/baspacho.git
     WORKDIR baspacho
+
+    # Note: to use static BLAS the option is really BLA_STATIC (https://cmake.org/cmake/help/latest/module/FindBLAS.html)
     RUN /opt/cmake3.24/bin/cmake -S . -B build -DCMAKE_BUILD_TYPE=Release -DBLA_STATIC=ON \
         -DCMAKE_CUDA_COMPILER=/usr/local/cuda-${CUDA_VERSION}/bin/nvcc \
         -DBUILD_SHARED_LIBS=OFF -DBASPACHO_CUDA_ARCHS='${BASPACHO_CUDA_ARCHS}' \

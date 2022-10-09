@@ -146,8 +146,21 @@ def _check_nonlinear_least_squares_fit(
     optimizer = nonlinear_optim_cls(objective)
     assert isinstance(optimizer.linear_solver, th.CholeskyDenseSolver)
     optimizer.set_params(max_iterations=max_iterations)
+
+    callback_expected_iter = [0]
+
+    def callback(opt_, info_, delta_, it_):
+        assert opt_ is optimizer
+        assert isinstance(info_, th.optimizer.OptimizerInfo)
+        assert isinstance(delta_, torch.Tensor)
+        assert it_ == callback_expected_iter[0]
+        callback_expected_iter[0] += 1
+
     info = optimizer.optimize(
-        track_best_solution=True, track_err_history=True, **optimize_kwargs
+        track_best_solution=True,
+        track_err_history=True,
+        end_iter_callback=callback,
+        **optimize_kwargs,
     )
     # Solution must now match the true coefficients
     assert variables[0].tensor.allclose(true_coeffs.repeat(batch_size, 1), atol=1e-6)

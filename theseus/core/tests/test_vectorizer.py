@@ -8,6 +8,7 @@ import pytest  # noqa: F401
 import torch
 
 import theseus as th
+from theseus.core.tests.common import BATCH_SIZES_TO_TEST
 from theseus.core.vectorizer import _CostFunctionWrapper
 
 
@@ -207,7 +208,7 @@ def test_vectorized_retract():
         variables = []
         deltas = []
         batch_size = rng.choice(range(1, 11))
-        n_vars = rng.choice([1, 10, 100])
+        n_vars = rng.choice(BATCH_SIZES_TO_TEST)
         for _ in range(n_vars):
             var_type: th.LieGroup = rng.choice(
                 [th.Vector, th.SE2, th.SE3, th.SO2, th.SO3]

@@ -105,11 +105,12 @@ for PYTHON_VERSION in 3.9; do
         -DBASPACHO_BUILD_TESTS=OFF -DBASPACHO_BUILD_EXAMPLES=OFF
     RUN /opt/cmake3.24/bin/cmake --build build -- -j16
     WORKDIR ..
-
     # --- Compile theseus wheel
     RUN pip install build wheel
     RUN git clone -b mau.baspacho_revamp_exp https://github.com/facebookresearch/theseus.git
     WORKDIR theseus
+    RUN git fetch --all --tags
+    RUN git checkout -b tmp_build --track origin/${TAG}
     CMD BASPACHO_ROOT_DIR=/baspacho THESEUS_ENABLE_CUDA=${ENABLE_CUDA} TORCH_CUDA_ARCH_LIST='${TORCH_CUDA_ARCH_LIST}' python3 -m build --no-isolation
     """ > ${DOCKER_DIR}/Dockerfile
 

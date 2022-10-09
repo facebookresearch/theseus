@@ -10,6 +10,7 @@ import theseus as th
 from theseus.core.tests.common import (
     check_another_theseus_function_is_copy,
     check_another_theseus_tensor_is_copy,
+    BATCH_SIZES_TO_TEST,
 )
 from theseus.utils import numeric_jacobian
 
@@ -18,7 +19,7 @@ def evaluate_numerical_jacobian_between(Group, tol):
     rng = torch.Generator()
     rng.manual_seed(0)
     cost_weight = th.ScaleCostWeight(1)
-    for batch_size in [1, 10, 100]:
+    for batch_size in BATCH_SIZES_TO_TEST:
         v0 = Group.rand(batch_size, dtype=torch.float64, generator=rng)
         v1 = Group.rand(batch_size, dtype=torch.float64, generator=rng)
         measurement = Group.rand(batch_size, dtype=torch.float64, generator=rng)
@@ -69,7 +70,7 @@ def test_error_between_point2():
     rng = torch.Generator()
     rng.manual_seed(0)
     cost_weight = th.ScaleCostWeight(1)
-    for batch_size in [1, 10, 100]:
+    for batch_size in BATCH_SIZES_TO_TEST:
         p1 = th.Point2(torch.randn(batch_size, 2, generator=rng))
         p2 = th.Point2(torch.randn(batch_size, 2, generator=rng))
         measurement = th.Point2(torch.randn(batch_size, 2, generator=rng))
@@ -130,7 +131,7 @@ def test_error_between_se2():
 
 
 def test_jacobian_between_se3():
-    for batch_size in [1, 20, 100]:
+    for batch_size in BATCH_SIZES_TO_TEST:
         aux_id = torch.arange(batch_size)
         se3_1 = th.SE3.rand(batch_size, dtype=torch.float64)
         se3_2 = th.SE3.rand(batch_size, dtype=torch.float64)

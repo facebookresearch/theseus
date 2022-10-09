@@ -6,6 +6,7 @@ scripts are available, with reference to corresponding figure in our white paper
  - `pose_graph_synthetic.sh`: Same as above, but can change linear solver and problem size (Fig. 2).
  - `pose_graph_cube.sh`: Same as above, but using the cube data for Ceres comparison (Fig. 3). 
  - `backward_modes_tactile.sh`: Runs tactile state estimation with different backward modes (Fig. 4).
+ - `autodiff_cost_function_ablation.sh`: Runs homography estimation with different autograd modes.
 
 Some other relevant files to look at:
 
@@ -22,3 +23,6 @@ Some other relevant files to look at:
 * Motion Planning:
     - `theseus/utils/examples/motion_planning/motion_planner.py`: Puts together optimization layer.
     - `examples/motion_planning_2d.py`: Implements outer loop.
+
+* Homography Estimation:
+    - `examples/homography_estimation.py`: Puts together optimization layer and implements outer loop.

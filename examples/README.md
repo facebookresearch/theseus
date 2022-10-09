@@ -43,9 +43,10 @@ The backward modes example requires `numdifftools`, which you can install with
 pip install numdifftools
 ```
 
-The homography example requires `kornia` and `OpenCV`, which you can install with
+The homography example requires `hydra`, `kornia` and `OpenCV`, which you can install with
 
 ```bash
+pip install hydra-core
 pip install kornia
 pip install opencv-python
 ```

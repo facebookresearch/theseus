@@ -7,7 +7,7 @@ from typing import List, Optional, Tuple, Union, cast
 
 import torch
 
-from theseus.core import CostFunction, CostWeight, Variable
+from theseus.core import CostFunction, CostWeight, Variable, as_variable
 from theseus.geometry import LieGroup, Vector
 
 
@@ -28,12 +28,7 @@ class DoubleIntegrator(CostFunction):
             raise ValueError(
                 "All variables for a DoubleIntegrator must have the same dimension."
             )
-        if not isinstance(dt, Variable):
-            if not isinstance(dt, torch.Tensor):
-                dt = torch.tensor(dt)
-            self.dt = Variable(dt)
-        else:
-            self.dt = dt
+        self.dt = as_variable(dt)
         if self.dt.tensor.squeeze().ndim > 1:
             raise ValueError(
                 "dt data must be a 0-D or 1-D tensor with numel in {1, batch_size}."
@@ -106,17 +101,13 @@ class GPCostWeight(CostWeight):
         name: Optional[str] = None,
     ):
         super().__init__(name=name)
-        if not isinstance(dt, Variable):
-            if not isinstance(dt, torch.Tensor):
-                dt = torch.tensor(dt)
-            dt = Variable(dt)
+        dt = as_variable(dt)
         if dt.tensor.squeeze().ndim > 1:
             raise ValueError("dt must be a 0-D or 1-D tensor.")
         self.dt = dt
         self.dt.tensor = self.dt.tensor.view(-1, 1)
 
-        if not isinstance(Qc_inv, Variable):
-            Qc_inv = Variable(Qc_inv)
+        Qc_inv = as_variable(Qc_inv)
         if Qc_inv.ndim not in [2, 3]:
             raise ValueError("Qc_inv must be a single matrix or a batch of matrices.")
         if not Qc_inv.shape[-2] == Qc_inv.shape[-1]:
@@ -191,12 +182,7 @@ class GPMotionModel(DoubleIntegrator):
                 "GPMotionModel only accepts cost weights of type GPCostWeight. "
                 "For other weight types, consider using DoubleIntegrator instead."
             )
-        if not isinstance(dt, Variable):
-            if not isinstance(dt, torch.Tensor):
-                dt = torch.tensor(dt)
-            self.dt = Variable(dt)
-        else:
-            self.dt = dt
+        self.dt = as_variable(dt)
         if self.dt.tensor.squeeze().ndim > 1:
             raise ValueError("dt must be a 0-D or 1-D tensor.")
         self.dt.tensor = self.dt.tensor.view(-1, 1)

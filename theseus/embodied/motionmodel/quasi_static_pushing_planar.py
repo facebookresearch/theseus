@@ -7,7 +7,7 @@ from typing import List, Optional, Tuple, Union, cast
 
 import torch
 
-from theseus.core import CostFunction, CostWeight, Variable
+from theseus.core import CostFunction, CostWeight, Variable, as_variable
 from theseus.geometry import SE2, OptionalJacobians
 from theseus.geometry.so2 import SO2
 
@@ -34,10 +34,7 @@ class QuasiStaticPushingPlanar(CostFunction):
         self.eff2 = eff2
         self.register_optim_vars(["obj1", "obj2", "eff1", "eff2"])
 
-        if not isinstance(c_square, Variable):
-            if isinstance(c_square, float):
-                c_square = torch.tensor(c_square, dtype=self.obj1.dtype).view(1, 1)
-            c_square = Variable(c_square, name=f"csquare_{name}")
+        c_square = as_variable(c_square, dtype=self.obj1.dtype, name=f"csquare_{name}")
         if c_square.tensor.squeeze().ndim > 1:
             raise ValueError("dt must be a 0-D or 1-D tensor.")
         self.c_square = c_square

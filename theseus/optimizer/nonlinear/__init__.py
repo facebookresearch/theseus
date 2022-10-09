@@ -11,4 +11,5 @@ from .nonlinear_optimizer import (
     NonlinearOptimizer,
     NonlinearOptimizerParams,
     NonlinearOptimizerStatus,
+    NonlinearOptimizerInfo,
 )

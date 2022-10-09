@@ -13,12 +13,13 @@ from .common import (
     check_jacobian_for_local,
     check_projection_for_exp_map,
     check_projection_for_log_map,
+    BATCH_SIZES_TO_TEST,
 )
 
 
 def test_xy_point2():
     for _ in range(100):
-        for batch_size in [1, 10, 100]:
+        for batch_size in BATCH_SIZES_TO_TEST:
             point = th.Point2(tensor=torch.randn(batch_size, 2))
             assert point.x().allclose(point.tensor[:, 0])
             assert point.y().allclose(point.tensor[:, 1])
@@ -26,7 +27,7 @@ def test_xy_point2():
 
 def test_xyz_point3():
     for _ in range(100):
-        for batch_size in [1, 10, 100]:
+        for batch_size in BATCH_SIZES_TO_TEST:
             point = th.Point3(tensor=torch.randn(batch_size, 3))
             assert point.x().allclose(point.tensor[:, 0])
             assert point.y().allclose(point.tensor[:, 1])
@@ -70,7 +71,7 @@ def test_exp_map():
     rng = torch.Generator()
     rng.manual_seed(0)
 
-    for batch_size in [1, 20, 100]:
+    for batch_size in BATCH_SIZES_TO_TEST:
         tangent_vector = torch.rand(batch_size, 2, generator=rng).double() - 0.5
         ret = th.Point2.exp_map(tangent_vector)
 
@@ -79,7 +80,7 @@ def test_exp_map():
             tangent_vector, Group=th.Point2, is_projected=False
         )
 
-    for batch_size in [1, 20, 100]:
+    for batch_size in BATCH_SIZES_TO_TEST:
         tangent_vector = torch.rand(batch_size, 3, generator=rng).double() - 0.5
         ret = th.Point3.exp_map(tangent_vector)
 
@@ -93,7 +94,7 @@ def test_log_map():
     rng = torch.Generator()
     rng.manual_seed(0)
 
-    for batch_size in [1, 20, 100]:
+    for batch_size in BATCH_SIZES_TO_TEST:
         group = th.Point2.rand(batch_size)
         ret = group.log_map()
 
@@ -102,7 +103,7 @@ def test_log_map():
             tangent_vector=ret, Group=th.Point2, is_projected=False
         )
 
-    for batch_size in [1, 20, 100]:
+    for batch_size in BATCH_SIZES_TO_TEST:
         group = th.Point3.rand(batch_size)
         ret = group.log_map()
 
@@ -116,13 +117,13 @@ def test_local_map():
     rng = torch.Generator()
     rng.manual_seed(0)
 
-    for batch_size in [1, 20, 100]:
+    for batch_size in BATCH_SIZES_TO_TEST:
         group0 = th.Point2.rand(batch_size)
         group1 = th.Point2.rand(batch_size)
 
         check_jacobian_for_local(group0, group1, Group=th.Point2, is_projected=False)
 
-    for batch_size in [1, 20, 100]:
+    for batch_size in BATCH_SIZES_TO_TEST:
         group0 = th.Point3.rand(batch_size)
         group1 = th.Point3.rand(batch_size)
 

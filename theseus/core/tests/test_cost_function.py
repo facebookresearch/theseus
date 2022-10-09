@@ -10,6 +10,7 @@ import pytest  # noqa: F401
 import torch
 
 import theseus as th
+from theseus.core.cost_function import AutogradMode
 from theseus.core.cost_weight import ScaleCostWeight
 
 from .common import (
@@ -56,11 +57,10 @@ def test_default_name_and_ids():
     assert len(seen_ids) == reps
 
 
-@pytest.mark.parametrize("autograd_loop_over_batch", [True, False])
-@pytest.mark.parametrize("autograd_functorch", [True, False])
-def test_autodiff_cost_function_error_and_jacobians_shape(
-    autograd_loop_over_batch, autograd_functorch
-):
+@pytest.mark.parametrize(
+    "autograd_mode", [AutogradMode.DENSE, AutogradMode.LOOP_BATCH, AutogradMode.VMAP]
+)
+def test_autodiff_cost_function_error_and_jacobians_shape(autograd_mode):
     rng = torch.Generator()
     rng.manual_seed(0)
     for i in range(100):
@@ -108,7 +108,7 @@ def test_autodiff_cost_function_error_and_jacobians_shape(
             for i, arg in enumerate(all_vars):
                 assert isinstance(arg, th.Variable)
                 assert arg.shape == (batch_size, i + 1) or arg.shape == (1, i + 1)
-                if not autograd_functorch:
+                if autograd_mode != AutogradMode.VMAP:
                     assert arg.tensor.allclose(
                         variable_values[i] * torch.ones_like(arg.tensor)
                     )
@@ -135,8 +135,7 @@ def test_autodiff_cost_function_error_and_jacobians_shape(
                 err_dim,
                 cost_weight=cost_weight,
                 aux_vars=aux_vars,
-                autograd_loop_over_batch=autograd_loop_over_batch,
-                autograd_functorch=autograd_functorch,
+                autograd_mode=autograd_mode,
             )
             err = cost_function.error()
             assert err.allclose(
@@ -152,11 +151,10 @@ def test_autodiff_cost_function_error_and_jacobians_shape(
                 assert jacobians[i].shape == (batch_size, err_dim, i + 1)
 
 
-@pytest.mark.parametrize("autograd_loop_over_batch", [True, False])
-@pytest.mark.parametrize("autograd_functorch", [True, False])
-def test_autodiff_cost_function_cost_weight(
-    autograd_loop_over_batch, autograd_functorch
-):
+@pytest.mark.parametrize(
+    "autograd_mode", [AutogradMode.DENSE, AutogradMode.LOOP_BATCH, AutogradMode.VMAP]
+)
+def test_autodiff_cost_function_cost_weight(autograd_mode):
     batch_size = 10
     optim_vars = []
     aux_vars = []
@@ -187,8 +185,7 @@ def test_autodiff_cost_function_cost_weight(
         error_fn,
         1,
         aux_vars=aux_vars,
-        autograd_loop_over_batch=autograd_loop_over_batch,
-        autograd_functorch=autograd_functorch,
+        autograd_mode=autograd_mode,
     )
     assert isinstance(cost_function.weight, ScaleCostWeight)
     assert torch.allclose(cost_function.weight.scale.tensor, torch.ones(1, 1))
@@ -215,9 +212,10 @@ def test_autodiff_cost_function_cost_weight(
         assert torch.allclose(weighted_error, direct_error_computation)
 
 
-@pytest.mark.parametrize("autograd_loop_over_batch", [True, False])
-@pytest.mark.parametrize("autograd_functorch", [True, False])
-def test_autodiff_cost_function_to(autograd_loop_over_batch, autograd_functorch):
+@pytest.mark.parametrize(
+    "autograd_mode", [AutogradMode.DENSE, AutogradMode.LOOP_BATCH, AutogradMode.VMAP]
+)
+def test_autodiff_cost_function_to(autograd_mode):
     batch_size = 10
     optim_vars = []
     aux_vars = []
@@ -250,8 +248,7 @@ def test_autodiff_cost_function_to(autograd_loop_over_batch, autograd_functorch)
         error_fn,
         1,
         aux_vars=aux_vars,
-        autograd_loop_over_batch=autograd_loop_over_batch,
-        autograd_functorch=autograd_functorch,
+        autograd_mode=autograd_mode,
     )
 
     for var in optim_vars:
@@ -266,11 +263,10 @@ def test_autodiff_cost_function_to(autograd_loop_over_batch, autograd_functorch)
     cost_function.jacobians()
 
 
-@pytest.mark.parametrize("autograd_loop_over_batch", [True, False])
-@pytest.mark.parametrize("autograd_functorch", [True, False])
-def test_autodiff_cost_function_error_and_jacobians_shape_on_SO3(
-    autograd_loop_over_batch, autograd_functorch
-):
+@pytest.mark.parametrize(
+    "autograd_mode", [AutogradMode.DENSE, AutogradMode.LOOP_BATCH, AutogradMode.VMAP]
+)
+def test_autodiff_cost_function_error_and_jacobians_shape_on_SO3(autograd_mode):
     for i in range(100):
         num_vars = np.random.randint(0, 5)
         batch_size = np.random.randint(1, 10)
@@ -318,8 +314,7 @@ def test_autodiff_cost_function_error_and_jacobians_shape_on_SO3(
                 err_dim,
                 cost_weight=cost_weight,
                 aux_vars=aux_vars,
-                autograd_loop_over_batch=autograd_loop_over_batch,
-                autograd_functorch=autograd_functorch,
+                autograd_mode=autograd_mode,
             )
             err = cost_function.error()
 
@@ -332,11 +327,10 @@ def test_autodiff_cost_function_error_and_jacobians_shape_on_SO3(
                 assert jacobians[i].shape == (batch_size, err_dim, 3)
 
 
-@pytest.mark.parametrize("autograd_loop_over_batch", [True, False])
-@pytest.mark.parametrize("autograd_functorch", [True, False])
-def test_autodiff_cost_function_error_and_jacobians_value_on_SO3(
-    autograd_loop_over_batch, autograd_functorch
-):
+@pytest.mark.parametrize(
+    "autograd_mode", [AutogradMode.DENSE, AutogradMode.LOOP_BATCH, AutogradMode.VMAP]
+)
+def test_autodiff_cost_function_error_and_jacobians_value_on_SO3(autograd_mode):
     for i in range(100):
         num_vars = np.random.randint(0, 5)
         batch_size = np.random.randint(1, 10)
@@ -384,8 +378,7 @@ def test_autodiff_cost_function_error_and_jacobians_value_on_SO3(
                 err_dim,
                 cost_weight=cost_weight,
                 aux_vars=aux_vars,
-                autograd_loop_over_batch=autograd_loop_over_batch,
-                autograd_functorch=autograd_functorch,
+                autograd_mode=autograd_mode,
             )
             jac_actual, err_actual = cost_function.jacobians()
 

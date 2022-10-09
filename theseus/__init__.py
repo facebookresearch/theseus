@@ -15,9 +15,11 @@ from .core import (
     Vectorize,
     RobustLoss,
     AutoDiffCostFunction,
+    AutogradMode,
     RobustCostFunction,
     HuberLoss,
     WelschLoss,
+    as_variable,
 )
 from .geometry import (
     SE2,
@@ -80,6 +82,7 @@ from .optimizer.nonlinear import (
     NonlinearLeastSquares,
     NonlinearOptimizerParams,
     NonlinearOptimizerStatus,
+    NonlinearOptimizerInfo,
     BackwardMode,
 )
 from .theseus_layer import TheseusLayer

@@ -82,7 +82,6 @@ for PYTHON_VERSION in 3.9; do
     # --- Install torch
     ENV CUDA_HOME /usr/local/cuda-${CUDA_VERSION}
     RUN pip install torch --extra-index-url https://download.pytorch.org/whl/${DEVICE_TAG}
-    RUN python -c 'import torch; print([torch.cuda.is_available(), torch.cuda.get_arch_list()])'
 
     # --- Install sparse suitesparse
     RUN conda install -c conda-forge suitesparse
@@ -107,7 +106,7 @@ for PYTHON_VERSION in 3.9; do
     WORKDIR ..
     # --- Compile theseus wheel
     RUN pip install build wheel
-    RUN git clone -b mau.baspacho_revamp_exp https://github.com/facebookresearch/theseus.git
+    RUN git clone https://github.com/facebookresearch/theseus.git
     WORKDIR theseus
     RUN git fetch --all --tags
     RUN git checkout tags/${TAG} -b tmp_build

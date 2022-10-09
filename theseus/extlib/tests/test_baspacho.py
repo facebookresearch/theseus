@@ -19,7 +19,7 @@ def check_baspacho(
     assert num_rows >= num_cols
 
     from theseus.extlib.baspacho_solver import SymbolicDecomposition
-    
+
     A_skel = random_sparse_binary_matrix(
         num_rows, num_cols, fill, min_entries_per_col=3
     )

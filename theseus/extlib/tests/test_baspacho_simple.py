@@ -49,7 +49,7 @@ def check_simple(verbose=False, dev="cpu"):
             -.3, .6,              3, #
                .3, -.2,            3, #
          1,                           3, #
-      -.4,                               3, #    
+      -.4,                               3, #
    ],
    [
       5, #
@@ -63,7 +63,7 @@ def check_simple(verbose=False, dev="cpu"):
             .7, -1,            5, #
                .3, .4,           5, #
          1,                          5, #
-      .8,                               5, #    
+      .8,                               5, #
    ]
    ]
    ms = [
@@ -99,7 +99,7 @@ def check_simple(verbose=False, dev="cpu"):
                       dtype=torch.double)
    if verbose:
       print("M*x:", Mx)
-   
+
    residuals = b - Mx
    if verbose:
       print("residuals:", residuals)

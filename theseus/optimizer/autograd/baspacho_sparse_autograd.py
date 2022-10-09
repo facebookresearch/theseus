@@ -98,7 +98,7 @@ class BaspachoSolveFunction(torch.autograd.Function):
 
         print(f"BASPACHO TIMINGS:\n  SETUP: {t1-t0}\n  MtxM: {t2-t1}\n  DAMP: {t3-t2}\n"+
               f"  FACTR: {t4-t3}\n  MxVEC: {t5-t4}\n  SOLVE: {t6-t5}")
-        
+
         ctx.b = b
         ctx.x = x
         ctx.A_val = A_val

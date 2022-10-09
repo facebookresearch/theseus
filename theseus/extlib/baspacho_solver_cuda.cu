@@ -84,7 +84,7 @@ void NumericDecomposition::add_M_cuda(const torch::Tensor& val,
 	dim3 wgs(8, 4);
     while(wgs.y / 2 >= batchSize) { wgs.y /= 2; wgs.x *= 2; }
 	dim3 numBlocks((maxQ + wgs.x - 1) / wgs.x, (batchSize + wgs.y - 1) / wgs.y);
-    add_M_kernel<<<numBlocks, wgs>>>(accessor, pData, factorBatchStride, 
+    add_M_kernel<<<numBlocks, wgs>>>(accessor, pData, factorBatchStride,
                                      pPtrs, pInds,
                                      pToParamIndex, pParamStart,
                                      pVal, valBatchStride,
@@ -164,7 +164,7 @@ void NumericDecomposition::add_MtM_cuda(const torch::Tensor& val,
 	dim3 wgs(8, 4);
     while(wgs.y / 2 >= batchSize) { wgs.y /= 2; wgs.x *= 2; }
 	dim3 numBlocks((maxQ + wgs.x - 1) / wgs.x, (batchSize + wgs.y - 1) / wgs.y);
-    add_MtM_kernel<<<numBlocks, wgs>>>(accessor, pData, factorBatchStride, 
+    add_MtM_kernel<<<numBlocks, wgs>>>(accessor, pData, factorBatchStride,
                                        pPtrs, pInds,
                                        pToParamIndex, pParamStart,
                                        pVal, valBatchStride,

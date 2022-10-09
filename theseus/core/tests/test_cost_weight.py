@@ -11,9 +11,9 @@ import torch
 import theseus as th
 
 from .common import (
+    BATCH_SIZES_TO_TEST,
     check_another_theseus_function_is_copy,
     check_another_theseus_tensor_is_copy,
-    BATCH_SIZES_TO_TEST,
 )
 
 

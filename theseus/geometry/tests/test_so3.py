@@ -13,19 +13,19 @@ from theseus.geometry.lie_group_check import set_lie_group_check_enabled
 from theseus.utils import numeric_jacobian
 
 from .common import (
+    BATCH_SIZES_TO_TEST,
     check_adjoint,
     check_compose,
     check_exp_map,
-    check_log_map,
     check_inverse,
     check_jacobian_for_local,
+    check_log_map,
     check_projection_for_compose,
     check_projection_for_exp_map,
     check_projection_for_inverse,
     check_projection_for_log_map,
     check_projection_for_rotate_and_transform,
     check_so3_se3_normalize,
-    BATCH_SIZES_TO_TEST,
 )
 
 

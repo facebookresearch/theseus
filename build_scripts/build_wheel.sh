@@ -110,7 +110,7 @@ for PYTHON_VERSION in 3.9; do
     RUN git clone -b mau.baspacho_revamp_exp https://github.com/facebookresearch/theseus.git
     WORKDIR theseus
     RUN git fetch --all --tags
-    RUN git checkout -b tmp_build --track origin/${TAG}
+    RUN git checkout tags/${TAG} -b tmp_build
     CMD BASPACHO_ROOT_DIR=/baspacho THESEUS_ENABLE_CUDA=${ENABLE_CUDA} TORCH_CUDA_ARCH_LIST='${TORCH_CUDA_ARCH_LIST}' python3 -m build --no-isolation
     """ > ${DOCKER_DIR}/Dockerfile
 

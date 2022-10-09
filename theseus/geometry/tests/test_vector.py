@@ -12,10 +12,10 @@ from theseus.constants import EPS
 from theseus.core.tests.common import check_copy_var
 
 from .common import (
+    BATCH_SIZES_TO_TEST,
     check_jacobian_for_local,
     check_projection_for_exp_map,
     check_projection_for_log_map,
-    BATCH_SIZES_TO_TEST,
 )
 
 torch.manual_seed(0)

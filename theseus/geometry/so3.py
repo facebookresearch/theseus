@@ -3,16 +3,16 @@
 # This source code is licensed under the MIT license found in the
 # LICENSE file in the root directory of this source tree.
 
-from typing import List, Optional, Union, cast
 import warnings
+from typing import List, Optional, Union, cast
 
 import torch
 
 import theseus.constants
 
 from .lie_group import LieGroup
-from .point_types import Point3
 from .lie_group_check import _LieGroupCheckContext
+from .point_types import Point3
 
 
 class SO3(LieGroup):

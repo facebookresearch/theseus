@@ -71,7 +71,12 @@ def test_ik_optimization(robot_model, batch_size, ee_pose_target, is_grad_enable
     aux_vars = (ee_pose_target,)
 
     cost_function = th.AutoDiffCostFunction(
-        optim_vars, ee_pose_err_fn, 6, aux_vars=aux_vars, name="ee_pose_err_fn"
+        optim_vars,
+        ee_pose_err_fn,
+        6,
+        aux_vars=aux_vars,
+        name="ee_pose_err_fn",
+        autograd_mode="dense",
     )
     objective = th.Objective()
     objective.add(cost_function)

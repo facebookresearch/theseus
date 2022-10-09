@@ -6,10 +6,11 @@
 import glob
 import logging
 import os
+import pathlib
 import shutil
 import sys
 import warnings
-from typing import Dict, List, Tuple, cast
+from typing import Any, Dict, List, Tuple, cast
 
 import cv2
 import hydra
@@ -21,7 +22,7 @@ from PIL import Image
 from torch.utils.data import DataLoader, Dataset
 
 import theseus as th
-from theseus.core.cost_function import AutogradMode, ErrFnType
+from theseus.core.cost_function import ErrFnType
 from theseus.third_party.easyaug import GeoAugParam, RandomGeoAug, RandomPhotoAug
 from theseus.third_party.utils import grid_sample
 
@@ -32,11 +33,6 @@ FONT = cv2.FONT_HERSHEY_DUPLEX
 FONT_SZ = 0.5
 FONT_PT = (5, 15)
 
-BACKWARD_MODE = {
-    "implicit": th.BackwardMode.IMPLICIT,
-    "full": th.BackwardMode.FULL,
-    "truncated": th.BackwardMode.TRUNCATED,
-}
 
 # Logger
 logger = logging.getLogger(__name__)
@@ -236,7 +232,7 @@ def write_gif_batch(log_dir, img1, img2, H_hist, Hgt_1_2, err_hist):
         img1 = img1[0][None, ...]
         img2 = img2[0][None, ...]
         img1_dsts = warp_perspective_norm(H_1_2_mat, img1)
-        path = os.path.join(log_dir, f"{anim_dir}/{it:05d}.png")
+        path = os.path.join(anim_dir, f"{it:05d}.png")
         viz_warp(path, img1[0], img2[0], img1_dsts[0], it, err=err, fc_err=fc_err)
     anim_path = os.path.join(log_dir, "animation.gif")
     cmd = f"convert -delay 10 -loop 0 {anim_dir}/*.png {anim_path}"
@@ -286,8 +282,9 @@ def run(
     outer_lr: float = 1e-4,
     max_iterations: int = 50,
     step_size: float = 0.1,
-    autograd_mode: AutogradMode = AutogradMode.VMAP,
-):
+    autograd_mode: str = "vmap",
+    benchmarking_costs: bool = False,
+) -> List[List[Dict[str, Any]]]:
     logger.info(
         "==============================================================="
         "==========================="
@@ -370,13 +367,17 @@ def run(
         "---------------------------------------------------------------"
         "---------------------------"
     )
+    # benchmark_results[i][j] has the results (time/mem) for epoch i and batch j
+    benchmark_results: List[List[Dict[str, Any]]] = []
     for epoch in range(num_epochs):
+        benchmark_results.append([])
         forward_times: List[float] = []
         forward_mems: List[float] = []
         backward_times: List[float] = []
         backward_mems: List[float] = []
 
         for _, data in enumerate(dataloader):
+            benchmark_results[-1].append({})
             outer_optim.zero_grad()
 
             img1 = data["img1"].to(device)
@@ -400,21 +401,31 @@ def run(
             }
             start_event.record()
             torch.cuda.reset_peak_memory_stats()
-            _, info = theseus_layer.forward(
-                inputs,
-                optimizer_kwargs={
-                    "verbose": verbose,
-                    "track_err_history": True,
-                    "track_state_history": True,
-                    "backward_mode": BACKWARD_MODE["implicit"],
-                },
-            )
+
+            if benchmarking_costs:
+                objective.update(inputs)
+                inner_optim.linear_solver.linearization.linearize()
+            else:
+                _, info = theseus_layer.forward(
+                    inputs,
+                    optimizer_kwargs={
+                        "verbose": verbose,
+                        "track_err_history": True,
+                        "track_state_history": True,
+                        "backward_mode": "implicit",
+                    },
+                )
             end_event.record()
             torch.cuda.synchronize()
             forward_time = start_event.elapsed_time(end_event)
             forward_mem = torch.cuda.max_memory_allocated() / 1024 / 1024
             forward_times.append(forward_time)
             forward_mems.append(forward_mem)
+            benchmark_results[-1][-1]["ftime"] = forward_time
+            benchmark_results[-1][-1]["fmem"] = forward_mem
+
+            if benchmarking_costs:
+                continue
 
             optimizer_info: th.NonlinearOptimizerInfo = cast(
                 th.NonlinearOptimizerInfo, info
@@ -447,6 +458,8 @@ def run(
 
             backward_times.append(backward_time)
             backward_mems.append(backward_mem)
+            benchmark_results[-1][-1]["btime"] = backward_time
+            benchmark_results[-1][-1]["bmem"] = backward_mem
 
             outer_optim.step()
             logger.info(
@@ -469,37 +482,30 @@ def run(
         )
         logger.info(f"Forward pass took {sum(forward_times)} ms/epoch.")
         logger.info(f"Forward pass took {sum(forward_mems)/len(forward_mems)} MBs.")
-        logger.info(f"Backward pass took {sum(backward_times)} ms/epoch.")
-        logger.info(f"Backward pass took {sum(backward_mems)/len(backward_mems)} MBs.")
+        if not benchmarking_costs:
+            logger.info(f"Backward pass took {sum(backward_times)} ms/epoch.")
+            logger.info(
+                f"Backward pass took {sum(backward_mems)/len(backward_mems)} MBs."
+            )
         logger.info(
             "---------------------------------------------------------------"
             "---------------------------"
         )
+    return benchmark_results
 
 
 @hydra.main(config_path="./configs/", config_name="homography_estimation")
 def main(cfg):
-    autograd_modes = {
-        "dense": AutogradMode.DENSE,
-        "loop_batch": AutogradMode.LOOP_BATCH,
-        "vmap": AutogradMode.VMAP,
-    }
-
-    num_epochs: int = cfg.outer_optim.num_epochs
-    batch_size: int = cfg.outer_optim.batch_size
-    outer_lr: float = cfg.outer_optim.lr
-    max_iterations: int = cfg.inner_optim.max_iters
-    step_size: float = cfg.inner_optim.step_size
-    autograd_mode = autograd_modes[cfg.autograd_mode]
-
-    run(
-        batch_size=batch_size,
-        outer_lr=outer_lr,
-        num_epochs=num_epochs,
-        max_iterations=max_iterations,
-        step_size=step_size,
-        autograd_mode=autograd_mode,
+    benchmark_results = run(
+        batch_size=cfg.outer_optim.batch_size,
+        outer_lr=cfg.outer_optim.lr,
+        num_epochs=cfg.outer_optim.num_epochs,
+        max_iterations=cfg.inner_optim.max_iters,
+        step_size=cfg.inner_optim.step_size,
+        autograd_mode=cfg.autograd_mode,
+        benchmarking_costs=cfg.benchmarking_costs,
     )
+    torch.save(benchmark_results, pathlib.Path(os.getcwd()) / "benchmark_results.pt")
 
 
 if __name__ == "__main__":

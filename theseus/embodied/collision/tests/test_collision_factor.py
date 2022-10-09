@@ -8,13 +8,14 @@ import torch
 
 import theseus as th
 from theseus.core.tests.common import (
+    BATCH_SIZES_TO_TEST,
     check_another_theseus_function_is_copy,
     check_another_theseus_tensor_is_copy,
     check_another_torch_tensor_is_copy,
-    BATCH_SIZES_TO_TEST,
 )
 from theseus.utils import numeric_jacobian
-from .utils import random_scalar, random_origin, random_sdf_data
+
+from .utils import random_origin, random_scalar, random_sdf_data
 
 
 def test_collision2d_error_shapes():

@@ -63,7 +63,7 @@ Our implementation provides an easy to use interface to build custom optimizatio
     - Gauss-Newton, Levenberg–Marquardt
 - [Linear solvers](https://github.com/facebookresearch/theseus/tree/main/theseus/optimizer/linear)
     - Dense: Cholesky, LU; Sparse: CHOLMOD, LU
-- [Commonly used costs](https://github.com/facebookresearch/theseus/tree/main/theseus/embodied), [AutoDiffCostFunction](https://github.com/facebookresearch/theseus/blob/main/theseus/core/cost_function.py)
+- [Commonly used costs](https://github.com/facebookresearch/theseus/tree/main/theseus/embodied), [AutoDiffCostFunction](https://github.com/facebookresearch/theseus/blob/main/theseus/core/cost_function.py), [RobustCostFunction](https://github.com/facebookresearch/theseus/blob/main/theseus/core/robust_cost_function.py)
 - [Lie groups](https://github.com/facebookresearch/theseus/tree/main/theseus/geometry)
 - [Robot kinematics](https://github.com/facebookresearch/theseus/blob/main/theseus/embodied/kinematics/kinematics_model.py)
 
@@ -72,7 +72,8 @@ We support several features that improve computation times and memory consumptio
 - [Sparse linear solvers](https://github.com/facebookresearch/theseus/tree/main/theseus/optimizer/linear)
 - Batching and GPU acceleration
 - [Automatic vectorization](https://github.com/facebookresearch/theseus/blob/main/theseus/core/vectorizer.py)
-- [Backward modes](https://github.com/facebookresearch/theseus/blob/main/theseus/optimizer/nonlinear/nonlinear_optimizer.py): Implicit, Truncated, Direct Loss Minimization ([DLM](https://github.com/facebookresearch/theseus/blob/main/theseus/theseus_layer.py)), Sampling ([LEO](https://github.com/facebookresearch/theseus/blob/main/examples/state_estimation_2d.py))
+- [Backward modes](https://github.com/facebookresearch/theseus/blob/main/theseus/optimizer/nonlinear/nonlinear_optimizer.py)
+    - Implicit, Truncated, Direct Loss Minimization ([DLM](https://github.com/facebookresearch/theseus/blob/main/theseus/theseus_layer.py)), Sampling ([LEO](https://github.com/facebookresearch/theseus/blob/main/examples/state_estimation_2d.py))
 
 
 ## Getting Started
@@ -86,6 +87,7 @@ We support several features that improve computation times and memory consumptio
     - `conda install -c conda-forge suitesparse` (Mac).
     
 ### Installing
+
 #### **pypi**
 ```bash
 pip install theseus-ai
@@ -142,11 +144,11 @@ objective.add(cost_function)
 layer = th.TheseusLayer(th.GaussNewton(objective, max_iterations=10))
 
 phi = torch.nn.Parameter(x_true + 0.1 * torch.ones_like(x_true))
-outer_optimizer = torch.optim.RMSprop([phi], lr=0.001)
+outer_optimizer = torch.optim.Adam([phi], lr=0.001)
 for epoch in range(10):
     solution, info = layer.forward(
         input_tensors={"x": phi.clone(), "v": torch.ones(1, 1)},
-        optimizer_kwargs={"backward_mode": th.BackwardMode.IMPLICIT})
+        optimizer_kwargs={"backward_mode": "implicit"})
     outer_loss = torch.nn.functional.mse_loss(solution["v"], v_true)
     outer_loss.backward()
     outer_optimizer.step()
@@ -162,8 +164,8 @@ If you use Theseus in your work, please cite the [paper](https://arxiv.org/abs/2
 ```bibtex
 @article{pineda2022theseus,
   title   = {{Theseus: A Library for Differentiable Nonlinear Optimization}},
-  author  = {Luis Pineda and Taosha Fan and Maurizio Monge and Shobha Venkataraman and Paloma Sodhi and Ricky Chen and Joseph Ortiz and Daniel DeTone and Austin Wang and Stuart Anderson and Jing Dong and Brandon Amos and Mustafa Mukadam},
-  journal = {arXiv preprint arXiv:2207.09442},
+  author  = {Luis Pineda and Taosha Fan and Maurizio Monge and Shobha Venkataraman and Paloma Sodhi and Ricky TQ Chen and Joseph Ortiz and Daniel DeTone and Austin Wang and Stuart Anderson and Jing Dong and Brandon Amos and Mustafa Mukadam},
+  journal = {Advances in Neural Information Processing Systems},
   year    = {2022}
 }
 ```

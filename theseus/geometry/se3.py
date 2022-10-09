@@ -3,8 +3,8 @@
 # This source code is licensed under the MIT license found in the
 # LICENSE file in the root directory of this source tree.
 
-from typing import List, Optional, Union, cast
 import warnings
+from typing import List, Optional, Union, cast
 
 import torch
 
@@ -12,9 +12,9 @@ import theseus
 import theseus.constants
 
 from .lie_group import LieGroup
+from .lie_group_check import _LieGroupCheckContext, no_lie_group_check
 from .point_types import Point3
 from .so3 import SO3
-from .lie_group_check import _LieGroupCheckContext, no_lie_group_check
 
 
 class SE3(LieGroup):

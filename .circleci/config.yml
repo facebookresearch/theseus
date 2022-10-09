@@ -112,12 +112,47 @@ install_functorch: &install_functorch
       command: |
         pip install functorch
 
+install_recent_cmake_2004: &install_recent_cmake_2004
+  - run:
+      name: Installing recent CMake
+      working_directory: ~/
+      command: |
+        wget -O - https://apt.kitware.com/keys/kitware-archive-latest.asc 2>/dev/null | gpg --dearmor - | sudo tee /etc/apt/trusted.gpg.d/kitware.gpg >/dev/null
+        sudo apt-add-repository 'deb https://apt.kitware.com/ubuntu/ focal main'
+        sudo apt-get update
+        sudo apt-get install -y cmake
+
+build_baspacho_cpu: &build_baspacho_cpu
+  - run:
+      name: Install BaSpaCho (CPU)
+      working_directory: ~/
+      command: |
+        git clone https://github.com/facebookresearch/baspacho.git
+        cd baspacho
+        cmake -S . -B build -DCMAKE_BUILD_TYPE=Release -DBLA_STATIC=ON \
+          -DBASPACHO_USE_CUBLAS=0 -DBUILD_SHARED_LIBS=OFF \
+          -DBASPACHO_BUILD_TESTS=OFF -DBASPACHO_BUILD_EXAMPLES=OFF
+        cmake --build build -- -j16
+
+build_baspacho_cuda: &build_baspacho_cuda
+  - run:
+      name: Install BaSpaCho (CPU)
+      working_directory: ~/
+      command: |
+        git clone https://github.com/facebookresearch/baspacho.git
+        cd baspacho
+        cmake -S . -B build -DCMAKE_BUILD_TYPE=Release -DBLA_STATIC=ON \
+          -DCMAKE_CUDA_COMPILER=/usr/local/cuda-${CUDA_VERSION}/bin/nvcc \
+          -DBUILD_SHARED_LIBS=OFF -DBASPACHO_CUDA_ARCHS='detect' \
+          -DBASPACHO_BUILD_TESTS=OFF -DBASPACHO_BUILD_EXAMPLES=OFF
+        cmake --build build -- -j16
+
 setup_project: &setup_project
   - run:
       name: Setting up project for cuda11
       working_directory: ~/project
       command: |
-        pip install --progress-bar off -e .
+        BASPACHO_ROOT_DIR=~/baspacho pip install --progress-bar off -e .
         pip install -r requirements/dev.txt
 
 run_tests: &run_tests
@@ -187,6 +222,8 @@ jobs:
       - <<: *setup_environment
       - <<: *install_torch_cuda10
       - <<: *install_functorch
+      - <<: *install_recent_cmake_2004
+      - <<: *build_baspacho_cuda
       - <<: *setup_project
       - <<: *run_tests
 
@@ -200,6 +237,8 @@ jobs:
       - <<: *setup_environment
       - <<: *install_torch_cuda11
       - <<: *install_functorch
+      - <<: *install_recent_cmake_2004
+      - <<: *build_baspacho_cuda
       - <<: *setup_project
       - <<: *run_tests
 

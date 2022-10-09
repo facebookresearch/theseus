@@ -112,15 +112,7 @@ install_functorch: &install_functorch
       command: |
         pip install functorch
 
-setup_project_cuda10: &setup_project_cuda10
-  - run:
-      name: Setting up project for cuda10
-      working_directory: ~/project
-      command: |
-        CXX=g++-7 CC=gcc-7 LD=g++-7 pip install --progress-bar off -e .
-        CXX=g++-7 CC=gcc-7 LD=g++-7 pip install -r requirements/dev.txt
-
-setup_project_cuda11: &setup_project_cuda11
+setup_project: &setup_project
   - run:
       name: Setting up project for cuda11
       working_directory: ~/project
@@ -195,7 +187,7 @@ jobs:
       - <<: *setup_environment
       - <<: *install_torch_cuda10
       - <<: *install_functorch
-      - <<: *setup_project_cuda10
+      - <<: *setup_project
       - <<: *run_tests
 
   unittests_gpu17_cuda11:
@@ -208,7 +200,7 @@ jobs:
       - <<: *setup_environment
       - <<: *install_torch_cuda11
       - <<: *install_functorch
-      - <<: *setup_project_cuda11
+      - <<: *setup_project
       - <<: *run_tests
 
 workflows:

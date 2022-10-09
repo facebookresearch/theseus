@@ -9,31 +9,38 @@ from ..linear_system import SparseStructure
 
 from scipy.sparse import csr_matrix, csc_matrix
 import numpy as np
-from time import time
 
 
 def mat_vec_cpu(batch_size, num_cols, A_rowPtr, A_colInd, A_val, v):
     assert batch_size == A_val.shape[0]
     num_rows = len(A_rowPtr) - 1
-    retv_data = np.array([
-        csr_matrix( (A_val[i].numpy(), A_colInd, A_rowPtr), (num_rows, num_cols) ) * v[i]
-        for i in range(batch_size)
-    ], dtype=np.float64)
+    retv_data = np.array(
+        [
+            csr_matrix((A_val[i].numpy(), A_colInd, A_rowPtr), (num_rows, num_cols))
+            * v[i]
+            for i in range(batch_size)
+        ],
+        dtype=np.float64,
+    )
     return torch.tensor(retv_data, dtype=torch.float64)
 
 
 def tmat_vec_cpu(batch_size, num_cols, A_rowPtr, A_colInd, A_val, v):
     assert batch_size == A_val.shape[0]
     num_rows = len(A_rowPtr) - 1
-    retv_data = np.array([
-        csc_matrix( (A_val[i].numpy(), A_colInd, A_rowPtr), (num_cols, num_rows) ) * v[i]
-        for i in range(batch_size)
-    ], dtype=np.float64)
+    retv_data = np.array(
+        [
+            csc_matrix((A_val[i].numpy(), A_colInd, A_rowPtr), (num_cols, num_rows))
+            * v[i]
+            for i in range(batch_size)
+        ],
+        dtype=np.float64,
+    )
     return torch.tensor(retv_data, dtype=torch.float64)
 
 
 def mat_vec(batch_size, num_cols, A_rowPtr, A_colInd, A_val, v):
-    if A_rowPtr.device.type=="cuda":
+    if A_rowPtr.device.type == "cuda":
         try:
             from theseus.extlib.mat_mult import mat_vec as mat_vec_cuda
         except Exception as e:
@@ -49,7 +56,7 @@ def mat_vec(batch_size, num_cols, A_rowPtr, A_colInd, A_val, v):
 
 
 def tmat_vec(batch_size, num_cols, A_rowPtr, A_colInd, A_val, v):
-    if A_rowPtr.device.type=="cuda":
+    if A_rowPtr.device.type == "cuda":
         try:
             from theseus.extlib.mat_mult import tmat_vec as tmat_vec_cuda
         except Exception as e:
@@ -67,37 +74,31 @@ def tmat_vec(batch_size, num_cols, A_rowPtr, A_colInd, A_val, v):
 class BaspachoSolveFunction(torch.autograd.Function):
     @staticmethod
     def forward(ctx, *args, **kwargs):
-        t0 = time()
+        from theseus.extlib.baspacho_solver import SymbolicDecomposition
+
         A_val: torch.Tensor = args[0]
         b: torch.Tensor = args[1]
         sparse_structure: SparseStructure = args[2]
         A_rowPtr: torch.Tensor = args[3]
         A_colInd: torch.Tensor = args[4]
-        symbolic_decomposition: "BaspachoSymbolicDecomposition" = args[5]
+        symbolic_decomposition: SymbolicDecomposition = args[5]
         damping_alpha_beta: float = args[6]
 
         batch_size = A_val.shape[0]
 
-        numeric_decomposition = symbolic_decomposition.create_numeric_decomposition(batch_size)
-        t1 = time()
+        numeric_decomposition = symbolic_decomposition.create_numeric_decomposition(
+            batch_size
+        )
         numeric_decomposition.add_MtM(A_val, A_rowPtr, A_colInd)
-        t2 = time()
         if damping_alpha_beta is not None:
             numeric_decomposition.damp(*damping_alpha_beta)
-        t3 = time()
         numeric_decomposition.factor()
-        t4 = time()
 
         A_args = sparse_structure.num_cols, A_rowPtr, A_colInd, A_val
         Atb = tmat_vec(batch_size, *A_args, b)
-        t5 = time()
 
         x = Atb.clone()
         numeric_decomposition.solve(x)  # solve in place
-        t6 = time()
-
-        print(f"BASPACHO TIMINGS:\n  SETUP: {t1-t0}\n  MtxM: {t2-t1}\n  DAMP: {t3-t2}\n"+
-              f"  FACTR: {t4-t3}\n  MxVEC: {t5-t4}\n  SOLVE: {t6-t5}")
 
         ctx.b = b
         ctx.x = x

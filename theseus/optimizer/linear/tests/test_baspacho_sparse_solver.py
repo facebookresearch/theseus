@@ -24,7 +24,7 @@ def _build_sparse_mat(batch_size):
 
 def check_sparse_solver(dev="cpu"):
 
-    if dev=="cuda" and not torch.cuda.is_available():
+    if dev == "cuda" and not torch.cuda.is_available():
         return
 
     void_objective = th.Objective()
@@ -46,8 +46,8 @@ def check_sparse_solver(dev="cpu"):
     linearization.b = torch.randn((batch_size, num_rows), dtype=torch.double).to(dev)
 
     # also need: var dims and var_start_cols (because baspacho is blockwise)
-    linearization.var_dims = [2,1,3,1,2,1]
-    linearization.var_start_cols = [0,2,3,6,7,9]
+    linearization.var_dims = [2, 1, 3, 1, 2, 1]
+    linearization.var_start_cols = [0, 2, 3, 6, 7, 9]
 
     # Only need this line for the test since the objective is a mock
     solver.reset(dev=dev)

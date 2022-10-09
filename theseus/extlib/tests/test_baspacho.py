@@ -10,11 +10,10 @@ from scipy.sparse import csr_matrix, tril
 
 from theseus.utils import random_sparse_binary_matrix
 
+
 # ideally we would like to support batch_size <= init_batch_size, but
 # because of limitations of cublas those have to be always identical
-def check_baspacho(
-    batch_size, num_rows, num_cols, fill, dev="cpu", verbose=False
-):
+def check_baspacho(batch_size, num_rows, num_cols, fill, dev="cpu", verbose=False):
     # this is necessary assumption, so that the hessian is full rank
     assert num_rows >= num_cols
 
@@ -40,11 +39,9 @@ def check_baspacho(
     nParams = len(paramSizes)
     paramStarts = np.cumsum([0, *paramSizes])
     to_blocks = csr_matrix(
-            (np.ones(num_cols), np.arange(num_cols), paramStarts),
-            (nParams, num_cols)
-        )
+        (np.ones(num_cols), np.arange(num_cols), paramStarts), (nParams, num_cols)
+    )
     A_blk = A_skel @ to_blocks.T
-    AtA = tril(A_skel.T @ A_skel)
     AtA_blk = tril(A_blk.T @ A_blk).tocsr()
 
     A_csr = [
@@ -62,10 +59,12 @@ def check_baspacho(
     if verbose:
         print("AtA[0]:\n", AtA_csr[0].todense())
 
-    s = SymbolicDecomposition(torch.tensor(paramSizes, dtype=torch.int64),
-                              torch.tensor(AtA_blk.indptr, dtype=torch.int64),
-                              torch.tensor(AtA_blk.indices, dtype=torch.int64),
-                              dev)
+    s = SymbolicDecomposition(
+        torch.tensor(paramSizes, dtype=torch.int64),
+        torch.tensor(AtA_blk.indptr, dtype=torch.int64),
+        torch.tensor(AtA_blk.indices, dtype=torch.int64),
+        dev,
+    )
     f = s.create_numeric_decomposition(batch_size)
 
     f.add_MtM(A_val, A_rowPtr, A_colInd)
@@ -103,16 +102,12 @@ def test_baspacho_cpu_1():
 
 def test_baspacho_cpu_2():
     torch.manual_seed(2)
-    check_baspacho(
-        batch_size=5, num_rows=150, num_cols=60, fill=0.2
-    )
+    check_baspacho(batch_size=5, num_rows=150, num_cols=60, fill=0.2)
 
 
 def test_baspacho_cpu_3():
     torch.manual_seed(3)
-    check_baspacho(
-        batch_size=10, num_rows=300, num_cols=90, fill=0.2
-    )
+    check_baspacho(batch_size=10, num_rows=300, num_cols=90, fill=0.2)
 
 
 def test_baspacho_cpu_4():
@@ -122,15 +117,11 @@ def test_baspacho_cpu_4():
 
 def test_baspacho_cpu_5():
     torch.manual_seed(5)
-    check_baspacho(
-        batch_size=5, num_rows=150, num_cols=60, fill=0.1
-    )
+    check_baspacho(batch_size=5, num_rows=150, num_cols=60, fill=0.1)
 
 
 def test_baspacho_cpu_6():
-    check_baspacho(
-        batch_size=10, num_rows=300, num_cols=90, fill=0.1
-    )
+    check_baspacho(batch_size=10, num_rows=300, num_cols=90, fill=0.1)
 
 
 def test_baspacho_cuda_0():
@@ -145,16 +136,12 @@ def test_baspacho_cuda_1():
 
 def test_baspacho_cuda_2():
     torch.manual_seed(2)
-    check_baspacho(
-        batch_size=5, num_rows=150, num_cols=60, fill=0.2, dev="cuda"
-    )
+    check_baspacho(batch_size=5, num_rows=150, num_cols=60, fill=0.2, dev="cuda")
 
 
 def test_baspacho_cuda_3():
     torch.manual_seed(3)
-    check_baspacho(
-        batch_size=10, num_rows=300, num_cols=90, fill=0.2, dev="cuda"
-    )
+    check_baspacho(batch_size=10, num_rows=300, num_cols=90, fill=0.2, dev="cuda")
 
 
 def test_baspacho_cuda_4():
@@ -164,12 +151,8 @@ def test_baspacho_cuda_4():
 
 def test_baspacho_cuda_5():
     torch.manual_seed(5)
-    check_baspacho(
-        batch_size=5, num_rows=150, num_cols=60, fill=0.1, dev="cuda"
-    )
+    check_baspacho(batch_size=5, num_rows=150, num_cols=60, fill=0.1, dev="cuda")
 
 
 def test_baspacho_cuda_6():
-    check_baspacho(
-        batch_size=10, num_rows=300, num_cols=90, fill=0.1, dev="cuda"
-    )
+    check_baspacho(batch_size=10, num_rows=300, num_cols=90, fill=0.1, dev="cuda")

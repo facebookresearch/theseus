@@ -44,13 +44,13 @@ def check_sparse_backward_step(dev="cpu"):
     linearization.A_val = data.to(dev)
     linearization.A_col_ind = col_ind
     linearization.A_row_ptr = row_ptr
-    linearization.b = torch.randn(
-        size=(batch_size, num_rows), dtype=torch.double
-    ).to(dev)
+    linearization.b = torch.randn(size=(batch_size, num_rows), dtype=torch.double).to(
+        dev
+    )
 
     # also need: var dims and var_start_cols (because baspacho is blockwise)
-    linearization.var_dims = [2,1,3,1,2,1]
-    linearization.var_start_cols = [0,2,3,6,7,9]
+    linearization.var_dims = [2, 1, 3, 1, 2, 1]
+    linearization.var_start_cols = [0, 2, 3, 6, 7, 9]
 
     linearization.A_val.requires_grad = True
     linearization.b.requires_grad = True
@@ -64,7 +64,7 @@ def check_sparse_backward_step(dev="cpu"):
         solver.A_rowPtr,
         solver.A_colInd,
         solver.symbolic_decomposition,
-        damping_alpha_beta
+        damping_alpha_beta,
     )
 
     assert gradcheck(BaspachoSolveFunction.apply, inputs, eps=3e-4, atol=1e-3)

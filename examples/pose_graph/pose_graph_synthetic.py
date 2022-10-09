@@ -90,7 +90,11 @@ def run(
     LINEAR_SOLVER_MODE: Dict[str, Type[LinearSolver]] = {
         "sparse": cast(
             Type[LinearSolver],
-            (th.BaspachoSparseSolver if cast(str, cfg.solver_type) == "baspacho" else th.LUCudaSparseSolver)
+            (
+                th.BaspachoSparseSolver
+                if cast(str, cfg.solver_type) == "baspacho"
+                else th.LUCudaSparseSolver
+            )
             if cast(str, cfg.solver_device) == "cuda"
             else th.CholmodSparseSolver,
         ),

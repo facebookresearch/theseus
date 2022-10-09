@@ -58,6 +58,10 @@ setup_cuda10_libs: &setup_cuda10_libs
         sudo update-alternatives --install /usr/bin/gcc gcc /usr/bin/gcc-8 20
         sudo update-alternatives --install /usr/bin/g++ g++ /usr/bin/g++-9 10
         sudo update-alternatives --install /usr/bin/g++ g++ /usr/bin/g++-8 20
+        sudo update-alternatives --install /usr/bin/x86_64-linux-gnu-gcc x86_64-linux-gnu-gcc /usr/bin/x86_64-linux-gnu-gcc-9 10
+        sudo update-alternatives --install /usr/bin/x86_64-linux-gnu-gcc x86_64-linux-gnu-gcc /usr/bin/x86_64-linux-gnu-gcc-8 20
+        sudo update-alternatives --install /usr/bin/x86_64-linux-gnu-g++ x86_64-linux-gnu-g++ /usr/bin/x86_64-linux-gnu-g++-9 10
+        sudo update-alternatives --install /usr/bin/x86_64-linux-gnu-g++ x86_64-linux-gnu-g++ /usr/bin/x86_64-linux-gnu-g++-8 20
         # download and install nvidia drivers, cuda, etc
         wget --quiet --no-clobber -P ~/nvidia-downloads https://developer.download.nvidia.com/compute/cuda/10.2/Prod/local_installers/cuda_10.2.89_440.33.01_linux.run
         time sudo /bin/bash nvidia-downloads/cuda_10.2.89_440.33.01_linux.run --no-drm --silent --driver --toolkit
@@ -146,7 +150,7 @@ build_baspacho_cuda: &build_baspacho_cuda
         g++ --version
         ls -l /usr/local
         cmake -S . -B build -DCMAKE_BUILD_TYPE=Release -DBLA_STATIC=ON \
-          -DCMAKE_CUDA_COMPILER=/usr/local/cuda-${CUDA_VERSION}/bin/nvcc \
+          -DCMAKE_CUDA_COMPILER=/usr/local/cuda/bin/nvcc \
           -DBUILD_SHARED_LIBS=OFF -DBASPACHO_CUDA_ARCHS='detect' \
           -DBASPACHO_BUILD_TESTS=OFF -DBASPACHO_BUILD_EXAMPLES=OFF
         cmake --build build -- -j16
@@ -156,8 +160,10 @@ setup_project: &setup_project
       name: Setting up project
       working_directory: ~/project
       command: |
-        BASPACHO_ROOT_DIR=~/baspacho pip install --progress-bar off -e .
         pip install -r requirements/dev.txt
+        gcc --version
+        g++ --version
+        BASPACHO_ROOT_DIR=~/baspacho pip install --progress-bar off -e .
 
 run_tests: &run_tests
   - run:

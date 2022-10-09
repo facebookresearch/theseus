@@ -4,7 +4,6 @@
 # LICENSE file in the root directory of this source tree.
 
 from scipy.sparse import csr_matrix, tril
-from theseus.extlib.baspacho_solver import SymbolicDecomposition
 import torch
 import numpy as np
 import pytest  # noqa: F401
@@ -12,53 +11,55 @@ import pytest  # noqa: F401
 # fmt: off
 mRowPtr = [ 0, 1, 3, 5, 8, 11, 13, 15, 17, 20, 23, 25, 27 ]
 mColInd = [
-   0, #
-   0, 1, #
-      1, 2, #
-   0,    2, 3, #
-      1,    3, 4, #
-         2,       5, #
-            3,       6, #
+    0, #
+    0, 1, #
+       1, 2, #
+    0,    2, 3, #
+       1,    3, 4, #
+          2,       5, #
+             3,       6, #
                4,       7, #
-         2, 3,             8, #
-            3, 4,            9, #
-      1,                       10, #
-   0,                             11, #
+          2, 3,             8, #
+             3, 4,            9, #
+      1,                        10, #
+    0,                             11, #
 ]
 mVals = [
-   [
-      3, #
-      .2, 3, #
-         -.4,  3, #
-      -.7,    -1,  3, #
-         .7,       -1, 3, #
-            .5,          3, #
-               -1,          3, #
-                  1,         3, #
+    [
+        3, #
+        .2, 3, #
+            -.4,  3, #
+        -.7,    -1,  3, #
+            .7,      -1, 3, #
+                .5,        3, #
+                -1,          3, #
+                    1,         3, #
             -.3, .6,              3, #
-               .3, -.2,            3, #
-         1,                           3, #
-      -.4,                               3, #
-   ],
-   [
+                .3, -.2,             3, #
+            1,                           3, #
+        -.4,                               3, #
+    ],
+    [
       5, #
       .4, 5, #
          1,  5, #
       .7,   -1, 5, #
          1,     3, 5, #
-            -.8,      5, #
-               -1,       5, #
-                  1,       5, #
+            -.8,       5, #
+               -1,        5, #
+                  1,        5, #
             .7, -1,            5, #
-               .3, .4,           5, #
+               .3, .4,            5, #
          1,                          5, #
       .8,                               5, #
-   ]
+    ]
 ]
 # fmt: on
 
 
 def check_simple(verbose=False, dev="cpu"):
+    from theseus.extlib.baspacho_solver import SymbolicDecomposition
+
     param_sizes = torch.tensor([2, 3, 5, 2], dtype=torch.int64)
     ss_inds = torch.tensor([0, 0, 1, 1, 2, 0, 3], dtype=torch.int64)
     ss_ptrs = torch.tensor([0, 1, 3, 5, 7], dtype=torch.int64)

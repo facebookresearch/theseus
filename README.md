@@ -116,7 +116,9 @@ Compilation from source supports is affected by the following enviroment variabl
 ```bash
 python -m pytest theseus
 ```
-By default, unit tests include tests for our CUDA extensions. You can add the option `-m "not cudaext"` to skip them when installing without CUDA support.
+By default, unit tests include tests for our CUDA extensions, and for BaSpaCho sparse solver. You can add the option `-m "not cudaext"`
+to skip them when installing without CUDA support, or `-m "not baspacho"` installing without BaSpaCho (or
+`-m "(not cudaext) and (not baspacho)"` to disable both).
 
 
 ## Examples

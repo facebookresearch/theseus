@@ -21,4 +21,4 @@ def mypy_and_tests(session):
     session.install("-r", "requirements/dev.txt")
     session.run("mypy", "theseus")
     session.install("-e", ".")
-    session.run("pytest", "theseus", "-m", "not cudaext")
+    session.run("pytest", "theseus", "-m", "(not cudaext) and (not baspacho)")

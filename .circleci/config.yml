@@ -49,11 +49,10 @@ install_suitesparse: &install_suitesparse
 
 setup_cuda10_libs: &setup_cuda10_libs
   - run:
-      name: Setup CUDA drivers and libraries
+      name: Setup CUDA 10 drivers and libraries
       working_directory: ~/
       command: |
         # ubuntu's default gcc9.3 is too recent for cuda10.2
-        sudo apt-get install -y gcc-7 g++-7
         sudo apt-get install -y gcc-8 g++-8
         sudo update-alternatives --install /usr/bin/gcc gcc /usr/bin/gcc-9 10
         sudo update-alternatives --install /usr/bin/gcc gcc /usr/bin/gcc-8 20
@@ -68,7 +67,7 @@ setup_cuda10_libs: &setup_cuda10_libs
 
 setup_cuda11_libs: &setup_cuda11_libs
   - run:
-      name: Setup CUDA drivers and libraries
+      name: Setup CUDA 11 drivers and libraries
       working_directory: ~/
       command: |
         # download and install nvidia drivers, cuda, etc
@@ -137,12 +136,15 @@ build_baspacho_cpu: &build_baspacho_cpu
 
 build_baspacho_cuda: &build_baspacho_cuda
   - run:
-      name: Install BaSpaCho (CPU)
+      name: Install BaSpaCho (CUDA)
       working_directory: ~/
       command: |
         sudo apt-get install -y libopenblas-pthread-dev
         git clone https://github.com/facebookresearch/baspacho.git
         cd baspacho
+        gcc --version
+        g++ --version
+        ls -l /usr/local
         cmake -S . -B build -DCMAKE_BUILD_TYPE=Release -DBLA_STATIC=ON \
           -DCMAKE_CUDA_COMPILER=/usr/local/cuda-${CUDA_VERSION}/bin/nvcc \
           -DBUILD_SHARED_LIBS=OFF -DBASPACHO_CUDA_ARCHS='detect' \
@@ -151,7 +153,7 @@ build_baspacho_cuda: &build_baspacho_cuda
 
 setup_project: &setup_project
   - run:
-      name: Setting up project for cuda11
+      name: Setting up project
       working_directory: ~/project
       command: |
         BASPACHO_ROOT_DIR=~/baspacho pip install --progress-bar off -e .

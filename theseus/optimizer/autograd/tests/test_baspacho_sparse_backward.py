@@ -70,10 +70,12 @@ def check_sparse_backward_step(dev="cpu"):
     assert gradcheck(BaspachoSolveFunction.apply, inputs, eps=3e-4, atol=1e-3)
 
 
+@pytest.mark.baspacho
 def test_sparse_backward_step_cpu():
     check_sparse_backward_step(dev="cpu")
 
 
 @pytest.mark.cudaext
+@pytest.mark.baspacho
 def test_sparse_backward_step_cuda():
     check_sparse_backward_step(dev="cuda")

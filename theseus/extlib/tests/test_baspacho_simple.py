@@ -108,10 +108,12 @@ def check_simple(verbose=False, dev="cpu"):
     assert all(np.linalg.norm(res) < 1e-10 for res in residuals)
 
 
+@pytest.mark.baspacho
 def test_simple_cpu():
     check_simple(dev="cpu")
 
 
 @pytest.mark.cudaext
+@pytest.mark.baspacho
 def test_simple_cuda():
     check_simple(dev="cuda")

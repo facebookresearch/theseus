@@ -90,69 +90,90 @@ def check_baspacho(batch_size, num_rows, num_cols, fill, dev="cpu", verbose=Fals
     assert all(np.linalg.norm(res) < 1e-10 for res in residuals)
 
 
+@pytest.mark.baspacho
 def test_baspacho_cpu_0():
     torch.manual_seed(0)
     check_baspacho(batch_size=2, num_rows=20, num_cols=10, fill=0.3)
 
 
+@pytest.mark.baspacho
 def test_baspacho_cpu_1():
     torch.manual_seed(1)
     check_baspacho(batch_size=5, num_rows=50, num_cols=30, fill=0.2)
 
 
+@pytest.mark.baspacho
 def test_baspacho_cpu_2():
     torch.manual_seed(2)
     check_baspacho(batch_size=5, num_rows=150, num_cols=60, fill=0.2)
 
 
+@pytest.mark.baspacho
 def test_baspacho_cpu_3():
     torch.manual_seed(3)
     check_baspacho(batch_size=10, num_rows=300, num_cols=90, fill=0.2)
 
 
+@pytest.mark.baspacho
 def test_baspacho_cpu_4():
     torch.manual_seed(4)
     check_baspacho(batch_size=5, num_rows=50, num_cols=30, fill=0.1)
 
 
+@pytest.mark.baspacho
 def test_baspacho_cpu_5():
     torch.manual_seed(5)
     check_baspacho(batch_size=5, num_rows=150, num_cols=60, fill=0.1)
 
 
+@pytest.mark.baspacho
 def test_baspacho_cpu_6():
     check_baspacho(batch_size=10, num_rows=300, num_cols=90, fill=0.1)
 
 
+@pytest.mark.cudaext
+@pytest.mark.baspacho
 def test_baspacho_cuda_0():
     torch.manual_seed(0)
     check_baspacho(batch_size=2, num_rows=20, num_cols=10, fill=0.3, dev="cuda")
 
 
+@pytest.mark.cudaext
+@pytest.mark.baspacho
 def test_baspacho_cuda_1():
     torch.manual_seed(1)
     check_baspacho(batch_size=5, num_rows=50, num_cols=30, fill=0.2, dev="cuda")
 
 
+@pytest.mark.cudaext
+@pytest.mark.baspacho
 def test_baspacho_cuda_2():
     torch.manual_seed(2)
     check_baspacho(batch_size=5, num_rows=150, num_cols=60, fill=0.2, dev="cuda")
 
 
+@pytest.mark.cudaext
+@pytest.mark.baspacho
 def test_baspacho_cuda_3():
     torch.manual_seed(3)
     check_baspacho(batch_size=10, num_rows=300, num_cols=90, fill=0.2, dev="cuda")
 
 
+@pytest.mark.cudaext
+@pytest.mark.baspacho
 def test_baspacho_cuda_4():
     torch.manual_seed(4)
     check_baspacho(batch_size=5, num_rows=50, num_cols=30, fill=0.1, dev="cuda")
 
 
+@pytest.mark.cudaext
+@pytest.mark.baspacho
 def test_baspacho_cuda_5():
     torch.manual_seed(5)
     check_baspacho(batch_size=5, num_rows=150, num_cols=60, fill=0.1, dev="cuda")
 
 
+@pytest.mark.cudaext
+@pytest.mark.baspacho
 def test_baspacho_cuda_6():
     check_baspacho(batch_size=10, num_rows=300, num_cols=90, fill=0.1, dev="cuda")

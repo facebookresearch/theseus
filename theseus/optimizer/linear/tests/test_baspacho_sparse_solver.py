@@ -68,10 +68,12 @@ def check_sparse_solver(dev="cpu"):
         assert max_offset < 1e-4
 
 
+@pytest.mark.baspacho
 def test_baspacho_solver_cpu():
     check_sparse_solver(dev="cpu")
 
 
 @pytest.mark.cudaext
+@pytest.mark.baspacho
 def test_baspacho_solver_cuda():
     check_sparse_solver(dev="cuda")

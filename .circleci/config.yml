@@ -53,15 +53,15 @@ setup_cuda10_libs: &setup_cuda10_libs
       working_directory: ~/
       command: |
         # ubuntu's default gcc9.3 is too recent for cuda10.2
-        sudo apt-get install -y gcc-7 g++-7
+        sudo apt-get install -y gcc-8 g++-8
         sudo update-alternatives --install /usr/bin/gcc gcc /usr/bin/gcc-9 10
-        sudo update-alternatives --install /usr/bin/gcc gcc /usr/bin/gcc-7 20
+        sudo update-alternatives --install /usr/bin/gcc gcc /usr/bin/gcc-8 20
         sudo update-alternatives --install /usr/bin/g++ g++ /usr/bin/g++-9 10
-        sudo update-alternatives --install /usr/bin/g++ g++ /usr/bin/g++-7 20
+        sudo update-alternatives --install /usr/bin/g++ g++ /usr/bin/g++-8 20
         sudo update-alternatives --install /usr/bin/x86_64-linux-gnu-gcc x86_64-linux-gnu-gcc /usr/bin/x86_64-linux-gnu-gcc-9 10
-        sudo update-alternatives --install /usr/bin/x86_64-linux-gnu-gcc x86_64-linux-gnu-gcc /usr/bin/x86_64-linux-gnu-gcc-7 20
+        sudo update-alternatives --install /usr/bin/x86_64-linux-gnu-gcc x86_64-linux-gnu-gcc /usr/bin/x86_64-linux-gnu-gcc-8 20
         sudo update-alternatives --install /usr/bin/x86_64-linux-gnu-g++ x86_64-linux-gnu-g++ /usr/bin/x86_64-linux-gnu-g++-9 10
-        sudo update-alternatives --install /usr/bin/x86_64-linux-gnu-g++ x86_64-linux-gnu-g++ /usr/bin/x86_64-linux-gnu-g++-7 20
+        sudo update-alternatives --install /usr/bin/x86_64-linux-gnu-g++ x86_64-linux-gnu-g++ /usr/bin/x86_64-linux-gnu-g++-8 20
         # download and install nvidia drivers, cuda, etc
         wget --quiet --no-clobber -P ~/nvidia-downloads https://developer.download.nvidia.com/compute/cuda/10.2/Prod/local_installers/cuda_10.2.89_440.33.01_linux.run
         time sudo /bin/bash nvidia-downloads/cuda_10.2.89_440.33.01_linux.run --no-drm --silent --driver --toolkit

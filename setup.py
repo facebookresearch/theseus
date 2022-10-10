@@ -18,6 +18,12 @@ try:
     # instead of split
     #   -ltorch_cuda_cu -ltorch_cuda_cpp
     torch_cpp_ext.BUILD_SPLIT_CUDA = False
+
+    # hack to be able to compile with gcc-8.4.0
+    torch_cpp_ext.CUDA_GCC_VERSIONS["10.2"] = (
+        torch_cpp_ext.MINIMUM_GCC_VERSION,
+        (8, 4, 99),
+    )
 except ModuleNotFoundError:
     print("Theseus installation requires torch.")
     sys.exit(1)

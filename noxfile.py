@@ -20,5 +20,5 @@ def mypy_and_tests(session):
     session.install("torch")
     session.install("-r", "requirements/dev.txt")
     session.run("mypy", "theseus")
-    session.install("-e", ".")
-    session.run("pytest", "theseus", "-m", "(not cudaext) and (not baspacho)")
+    session.install("-e", ".", env={'BASPACHO_ROOT_DIR': os.environ.get('BASPACHO_ROOT_DIR')})
+    session.run("pytest", "theseus", "-m", "(not cudaext) and (baspacho)")

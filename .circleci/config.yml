@@ -146,9 +146,6 @@ build_baspacho_cuda: &build_baspacho_cuda
         sudo apt-get install -y libopenblas-pthread-dev
         git clone https://github.com/facebookresearch/baspacho.git
         cd baspacho
-        gcc --version
-        g++ --version
-        ls -l /usr/local
         cmake -S . -B build -DCMAKE_BUILD_TYPE=Release -DBLA_STATIC=ON \
           -DCMAKE_CUDA_COMPILER=/usr/local/cuda/bin/nvcc \
           -DBUILD_SHARED_LIBS=OFF -DBASPACHO_CUDA_ARCHS='detect' \
@@ -161,8 +158,6 @@ setup_project: &setup_project
       working_directory: ~/project
       command: |
         pip install -r requirements/dev.txt
-        gcc --version
-        g++ --version
         BASPACHO_ROOT_DIR=~/baspacho pip install --progress-bar off -e .
 
 run_tests: &run_tests
@@ -184,13 +179,15 @@ jobs:
       - checkout
       - <<: *install_suitesparse
       - <<: *install_functorch
+      - <<: *install_recent_cmake_2004
+      - <<: *build_baspacho_cpu
       - <<: *install_nox
       - run:
           name: "Testing theseus"
           command: |
               export NOX_PYTHON_VERSIONS=3.7
               pip install nox==2020.8.22
-              nox
+              BASPACHO_ROOT_DIR=~/baspacho nox
 
   py38_linux:
     docker:
@@ -199,13 +196,15 @@ jobs:
       - checkout
       - <<: *install_suitesparse
       - <<: *install_functorch
+      - <<: *install_recent_cmake_2004
+      - <<: *build_baspacho_cpu
       - <<: *install_nox
       - run:
           name: "Testing theseus"
           command: |
               export NOX_PYTHON_VERSIONS=3.8
               pip install nox==2020.8.22
-              nox
+              BASPACHO_ROOT_DIR=~/baspacho nox
 
   py39_linux:
     docker:
@@ -214,13 +213,15 @@ jobs:
       - checkout
       - <<: *install_suitesparse
       - <<: *install_functorch
+      - <<: *install_recent_cmake_2004
+      - <<: *build_baspacho_cpu
       - <<: *install_nox
       - run:
           name: "Testing theseus"
           command: |
               export NOX_PYTHON_VERSIONS=3.9
               pip install nox==2020.8.22
-              nox
+              BASPACHO_ROOT_DIR=~/baspacho nox
 
   unittests_gpu17_cuda10:
     executor: gpu_cuda10

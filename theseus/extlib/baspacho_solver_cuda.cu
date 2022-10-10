@@ -36,7 +36,10 @@ __global__ void add_M_kernel(BaSpaCho::PermutedCoalescedAccessor accessor,
 
         // note if rParam == cParam then flip = false and
         // we write the lower half
-        auto [off, stride, flip] = accessor.blockOffset(rParam, cParam);
+        auto offStrideFlip = accessor.blockOffset(rParam, cParam);
+        auto off = std::get<0>(offStrideFlip);
+        auto stride = std::get<1>(offStrideFlip);
+        auto flip = std::get<2>(offStrideFlip);
         int64_t offsetInFactor =
             off + (flip ? stride * colInBlock + rowInBlock
                         : stride * rowInBlock + colInBlock)
@@ -117,7 +120,10 @@ __global__ void add_MtM_kernel(BaSpaCho::PermutedCoalescedAccessor accessor,
 
             // if cParam == rParam then flip == false and we write lower
             // half
-            auto [off, stride, flip] = accessor.blockOffset(rParam, cParam);
+            auto offStrideFlip = accessor.blockOffset(rParam, cParam);
+            auto off = std::get<0>(offStrideFlip);
+            auto stride = std::get<1>(offStrideFlip);
+            auto flip = std::get<2>(offStrideFlip);
             int64_t offsetInFactor =
                 off + (flip ? stride * colInBlock + rowInBlock
                             : stride * rowInBlock + colInBlock)

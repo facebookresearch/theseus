@@ -249,7 +249,13 @@ class AutoDiffCostFunction(CostFunction):
                 for t in tensors
             )
 
-        batch_size = max(t.shape[0] for t in chain(optim_tensors, aux_tensors))
+        batch_sizes = set(t.shape[0] for t in chain(optim_tensors, aux_tensors))
+        # Using an assert instead of exception because Objective already
+        # takes care of throwing an appropriate error message if this happens
+        assert len(batch_sizes) == 1 or (
+            len(batch_sizes) == 2 and min(batch_sizes) == 1
+        )
+        batch_size = max(batch_sizes)
         optim_tensors = _expand_all(optim_tensors, batch_size)
         aux_tensors = _expand_all(aux_tensors, batch_size)
         return vmap(jacrev(jac_fn, argnums=0))(optim_tensors, aux_tensors)

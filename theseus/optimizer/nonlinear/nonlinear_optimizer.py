@@ -336,6 +336,9 @@ class NonlinearOptimizer(Optimizer, abc.ABC):
             with torch.no_grad():
                 err = self.objective.error_squared_norm() / 2
                 self._update_info(info, it_, err, converged_indices)
+                self.update_optimizer_state(
+                    last_err=info.last_err, new_err=err, delta=delta
+                )
                 if verbose:
                     print(
                         f"Nonlinear optimizer. Iteration: {it_+1}. "
@@ -460,3 +463,16 @@ class NonlinearOptimizer(Optimizer, abc.ABC):
     def reset(self, **kwargs) -> None:
         pass
 
+    # Called at the end of every optimizer step to update any internal state
+    # of the optimizer
+    @torch.no_grad()
+    def update_optimizer_state(
+        self, last_err: torch.Tensor, new_err: torch.Tensor, delta: torch.Tensor
+    ) -> None:
+        self._update_state_impl(last_err, new_err, delta)
+
+    # Deliberately not abstract since, some optimizers might not need this
+    def _update_state_impl(
+        self, last_err: torch.Tensor, new_err: torch.Tensor, delta: torch.Tensor
+    ) -> None:
+        pass

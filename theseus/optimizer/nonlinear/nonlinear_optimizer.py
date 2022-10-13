@@ -279,6 +279,7 @@ class NonlinearOptimizer(Optimizer, abc.ABC):
         end_iter_callback: Optional[EndIterCallbackType] = None,
         **kwargs,
     ) -> int:
+        steps_tensor: torch.Tensor = None  # type: ignore
         converged_indices = torch.zeros_like(info.last_err).bool()
         iters_done = 0
         for it_ in range(num_iter):
@@ -315,17 +316,17 @@ class NonlinearOptimizer(Optimizer, abc.ABC):
                 # This is a "secret" option that is currently being tested in the
                 # context of implicit differentiation. Might be added as a supported
                 # kwarg in the future with a different name, or removed altogether.
-                if "__keep_final_step_size__" in kwargs:
-                    step_size = self.params.step_size
-                else:
-                    step_size = 1.0
+                if "__keep_final_step_size__" not in kwargs:
+                    steps_tensor = torch.ones_like(delta)
                 force_update = True
             else:
-                step_size = self.params.step_size
                 force_update = False
 
+            with torch.no_grad():
+                if steps_tensor is None:
+                    steps_tensor = torch.ones_like(delta) * self.params.step_size
             self.objective.retract_optim_vars(
-                delta * step_size,
+                delta * steps_tensor,
                 self.linear_solver.linearization.ordering,
                 ignore_mask=converged_indices,
                 force_update=force_update,

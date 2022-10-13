@@ -2,13 +2,13 @@
 #
 # This source code is licensed under the MIT license found in the
 # LICENSE file in the root directory of this source tree.
-
+import warnings
 from typing import Any, Dict, List, Optional, Sequence, Type, Union
 
 import torch
 
 from theseus.core import Objective
-from theseus.optimizer import Linearization
+from theseus.optimizer import DenseLinearization, Linearization
 from theseus.optimizer.linear import (
     CholeskyDenseSolver,
     LinearSolver,
@@ -82,6 +82,7 @@ class LevenbergMarquardt(NonlinearLeastSquares):
         self._damping: Union[float, torch.Tensor] = 0.001
         self._ellipsoidal_damping = False
         self._adaptive_damping = False
+        self._ACCEPT_EPS = 0.1
 
     def reset(
         self,
@@ -127,3 +128,32 @@ class LevenbergMarquardt(NonlinearLeastSquares):
             ellipsoidal_damping=self._ellipsoidal_damping,
             damping_eps=damping_eps,
         )
+
+    # Updates damping per batch element depending on whether the last step
+    # was successful in decreasing error or not.
+    # Based on https://people.duke.edu/~hpgavin/ce281/lm.pdf, Section 4.1
+    # We currently use method (1) from 4.1.1
+    def _update_state_impl(
+        self, last_err: torch.Tensor, new_err: torch.Tensor, delta: torch.Tensor
+    ) -> None:
+        if not self._adaptive_damping:
+            return
+        linearization = self.linear_solver.linearization
+        if not isinstance(linearization, DenseLinearization):
+            warnings.warn(
+                "Adaptive damping is currently only supported with "
+                "DenseLinearization. Damping will not update.",
+                RuntimeWarning,
+            )
+            return
+
+        damping = (
+            self._damping.view(-1, 1)
+            if isinstance(self._damping, torch.Tensor)
+            else self._damping
+        )
+        den = (delta * (damping * delta + linearization.Atb.squeeze(2))).sum(dim=1)
+        rho = (last_err - new_err) / den
+        good_idx = rho > self._ACCEPT_EPS
+        self._damping = torch.where(good_idx, self._damping / 9, self._damping * 11)
+        self._damping = self._damping.clamp(1.0e-7, 1.0e7)

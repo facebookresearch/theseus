@@ -14,6 +14,7 @@ from theseus.optimizer.linear import DenseSolver, LinearSolver, LUCudaSparseSolv
 from .nonlinear_least_squares import NonlinearLeastSquares
 
 _LM_ALLOWED_ELLIPS_DAMP_SOLVERS = [DenseSolver, LUCudaSparseSolver]
+_EDAMP_SOLVERS_STR = ",".join(c.__name__ for c in _LM_ALLOWED_ELLIPS_DAMP_SOLVERS)
 
 
 def _check_ellipsoidal_damping_cls(linear_solver: LinearSolver):
@@ -55,30 +56,37 @@ class LevenbergMarquardt(NonlinearLeastSquares):
             **kwargs,
         )
         self._allows_ellipsoidal = _check_ellipsoidal_damping_cls(self.linear_solver)
+        self._damping = 0.001
+        self._ellipsoidal_damping = False
 
-    def compute_delta(
+    def reset(
         self,
         damping: float = 1e-3,
         ellipsoidal_damping: bool = False,
-        damping_eps: Optional[float] = None,
         **kwargs,
-    ) -> torch.Tensor:
-
-        solvers_str = ",".join(c.__name__ for c in _LM_ALLOWED_ELLIPS_DAMP_SOLVERS)
+    ) -> None:
+        self._damping = damping
         if ellipsoidal_damping and not self._allows_ellipsoidal:
             raise NotImplementedError(
                 f"Ellipsoidal damping is only supported by solvers with type "
-                f"[{solvers_str}]."
+                f"[{_EDAMP_SOLVERS_STR}]."
             )
+        self._ellipsoidal_damping = ellipsoidal_damping
+
+    def compute_delta(
+        self,
+        damping_eps: Optional[float] = None,
+        **kwargs,
+    ) -> torch.Tensor:
         if damping_eps and not self._allows_ellipsoidal:
             raise NotImplementedError(
                 f"damping eps is only supported by solvers with type "
-                f"[{solvers_str}]."
+                f"[{_EDAMP_SOLVERS_STR}]."
             )
         damping_eps = damping_eps or 1e-8
 
         return self.linear_solver.solve(
-            damping=damping,
-            ellipsoidal_damping=ellipsoidal_damping,
+            damping=self._damping,
+            ellipsoidal_damping=self._ellipsoidal_damping,
             damping_eps=damping_eps,
         )

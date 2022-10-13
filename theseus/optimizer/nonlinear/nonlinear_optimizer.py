@@ -373,6 +373,7 @@ class NonlinearOptimizer(Optimizer, abc.ABC):
         end_iter_callback: Optional[EndIterCallbackType] = None,
         **kwargs,
     ) -> OptimizerInfo:
+        self.reset(**kwargs)
         backward_mode = BackwardMode.resolve(backward_mode)
         with torch.no_grad():
             info = self._init_info(
@@ -453,3 +454,9 @@ class NonlinearOptimizer(Optimizer, abc.ABC):
     @abc.abstractmethod
     def compute_delta(self, **kwargs) -> torch.Tensor:
         pass
+
+    # Resets any internal state needed by the optimizer for a new optimization
+    # problem. Optimizer loop will pass all optimizer kwargs to this method.
+    def reset(self, **kwargs) -> None:
+        pass
+

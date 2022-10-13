@@ -3,7 +3,7 @@
 # This source code is licensed under the MIT license found in the
 # LICENSE file in the root directory of this source tree.
 
-from typing import Any, Dict, List, Optional, Type
+from typing import Any, Dict, List, Optional, Type, Union
 
 import torch
 
@@ -90,17 +90,19 @@ class LUCudaSparseSolver(LinearSolver):
 
     def solve(
         self,
-        damping: Optional[float] = None,
+        damping: Optional[Union[float, torch.Tensor]] = None,
         ellipsoidal_damping: bool = True,
         damping_eps: float = 1e-8,
         **kwargs,
     ) -> torch.Tensor:
+        if damping is not None and not isinstance(damping, float):
+            raise ValueError("LUCudaSparseSolver only supports scalar damping.")
         if self._auto_reset:
             if self._solver_contexts[0].batch_size != self._objective.batch_size:
                 self.reset(self._objective.batch_size)
         if not isinstance(self.linearization, SparseLinearization):
             raise RuntimeError(
-                "CholmodSparseSolver only works with theseus.optimizer.SparseLinearization."
+                "LUCudaSparseSolver only works with theseus.optimizer.SparseLinearization."
             )
 
         self._last_solver_context = (

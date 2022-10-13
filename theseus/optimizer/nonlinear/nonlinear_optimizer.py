@@ -13,7 +13,6 @@ from typing import Any, Callable, Dict, NoReturn, Optional, Type, Union
 import numpy as np
 import torch
 
-import theseus.constants
 from theseus.core import Objective
 from theseus.optimizer import Linearization, Optimizer, OptimizerInfo
 from theseus.optimizer.linear import LinearSolver
@@ -91,8 +90,8 @@ class NonlinearOptimizer(Optimizer, abc.ABC):
         linearization_cls: Optional[Type[Linearization]] = None,
         linearization_kwargs: Optional[Dict[str, Any]] = None,
         linear_solver_kwargs: Optional[Dict[str, Any]] = None,
-        abs_err_tolerance: float = 1e-10,
-        rel_err_tolerance: float = 1e-8,
+        abs_err_tolerance: float = 1e-8,
+        rel_err_tolerance: float = 1e-5,
         max_iterations: int = 20,
         step_size: float = 1.0,
         **kwargs,
@@ -112,9 +111,9 @@ class NonlinearOptimizer(Optimizer, abc.ABC):
     def set_params(self, **kwargs):
         self.params.update(kwargs)
 
+    @torch.no_grad()
     def _check_convergence(self, err: torch.Tensor, last_err: torch.Tensor):
-        assert not torch.is_grad_enabled()
-        if err.abs().mean() < theseus.constants.EPS:
+        if err.abs().mean() < self.params.abs_err_tolerance:
             return torch.ones_like(err).bool()
 
         abs_error = (last_err - err).abs()
@@ -316,7 +315,10 @@ class NonlinearOptimizer(Optimizer, abc.ABC):
                 # This is a "secret" option that is currently being tested in the
                 # context of implicit differentiation. Might be added as a supported
                 # kwarg in the future with a different name, or removed altogether.
-                if "__keep_final_step_size__" not in kwargs:
+                # If the option is present and set to True, we don't use step size = 1
+                # 1 for the truncated steps, resulting in scaled gradients, but
+                # possibly better solution.
+                if not kwargs.get("__keep_final_step_size__", False):
                     steps_tensor = torch.ones_like(delta)
                 force_update = True
             else:

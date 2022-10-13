@@ -20,7 +20,7 @@ def mock_objective():
     return objective
 
 
-@pytest.mark.parametrize("damping", [0, 0.001, 0.01, 0.1])
+@pytest.mark.parametrize("damping", [0.0, 0.001, 0.01, 0.1])
 @pytest.mark.parametrize("ellipsoidal_damping", [True, False])
 @pytest.mark.parametrize("adaptive_damping", [True, False])
 def test_levenberg_marquardt(damping, ellipsoidal_damping, adaptive_damping):

@@ -31,12 +31,12 @@ class DCemSolver(abc.ABC):
         self,
         objective: Objective,
         ordering: VariableOrdering = None,
-        n_batch=1,
-        n_sample=20,
-        n_elite=10,
+        n_batch: int = 1,
+        n_sample: int = 20,
+        n_elite: int = 10,
         lb=None,
         ub=None,
-        temp=1.0,
+        temp: float = 1.0,
         normalize: bool = False,
         lml_verbose: bool = False,
         lml_eps: float = 1e-3,
@@ -53,6 +53,7 @@ class DCemSolver(abc.ABC):
         self.normalize = normalize
         self.lml_verbose = lml_verbose
         self.lml_eps = lml_eps
+        self.tot_dof = sum([x.dof() for x in self.ordering])
         self.sigma = {var.name: torch.ones(var.shape) for var in self.ordering}
 
     def solve(self):
@@ -62,25 +63,35 @@ class DCemSolver(abc.ABC):
 
         idx = 0
         for var in self.ordering:
-            mu[:, idx + var.dof()] = var.tensor
+            mu[:, slice(idx, idx + var.dof())] = var.tensor
             idx += var.dof()
 
+        # print("mu", mu)
+        # print("sigma", self.sigma)
+
         X_samples = []
-        for i in self.n_samples:
+        for i in range(self.n_samples):
             sample = {}
             for var in self.ordering:
-                sample[var.name] = Normal(var.tensor, self.sigma).rsample().to(device)
-                assert sample[var.name].size() == var.size()
+                sample[var.name] = (
+                    Normal(var.tensor, self.sigma[var.name]).rsample().to(device)
+                )
+                assert sample[var.name].size() == var.shape
                 sample[var.name] = sample[var.name].contiguous()
                 if self.lb is not None or self.ub is not None:
                     sample[var.name] = torch.clamp(sample[var.name], self.lb, self.ub)
+            # print("sample", sample)
             X_samples.append(sample)
 
         # TODO: Check that self.objective.error_squared_norm(X_samples[i]).size() == (n_batch,)
         fX = torch.stack(
-            [self.objective.error_squared_norm(X_samples[i]) for i in self.n_samples],
+            [
+                self.objective.error_squared_norm(X_samples[i])
+                for i in range(self.n_samples)
+            ],
             dim=1,
         )
+        # print("fx:", fX.shape)
 
         assert fX.shape == (self.n_batch, self.n_samples)
 
@@ -113,22 +124,30 @@ class DCemSolver(abc.ABC):
             I = I.unsqueeze(2)
         # I.shape should be (n_batch, n_sample, 1)
 
-        X = torch.zeros(
-            (self.n_batch, self.n_samples, sum([x.dof() for x in self.ordering]))
-        )
-        for i in self.n_samples:
+        X = torch.zeros((self.n_batch, self.n_samples, self.tot_dof))
+
+        for i in range(self.n_samples):
             sample = X_samples[i]
             idx = 0
-            for name, var in sample.items():
-                X[:, i, slice(idx, var.dof())] = var
+            for var in self.ordering:
+                X[:, i, slice(idx, idx + var.dof())] = sample[var.name]
                 idx += var.dof()
 
         assert I.shape[:2] == X.shape[:2]
-
+        # print("Samples:", X)
         X_I = I * X
         old_mu = mu.clone()
         mu = torch.sum(X_I, dim=1) / self.n_elite
-        self.sigma = ((I * (X - mu.unsqueeze(1)) ** 2).sum(dim=1) / self.n_elite).sqrt()
+
+        sigma = ((I * (X - mu.unsqueeze(1)) ** 2).sum(dim=1) / self.n_elite).sqrt()
+        # print("sigma_updates", sigma)
+
+        assert sigma.shape == (self.n_batch, self.tot_dof)
+
+        idx = 0
+        for var in self.ordering:
+            self.sigma[var.name] = sigma[:, slice(idx, idx + var.dof())]
+            idx += var.dof()
 
         # not sure about the detach
         return mu - old_mu.detach()
@@ -141,8 +160,8 @@ class DCem(Optimizer):
         cem_solver: Optional[abc.ABC] = DCemSolver,
         n_batch: int = 1,
         n_sample: int = 20,
-        n_elite: int = 10,
-        n_iter: int = 10,
+        n_elite: int = 5,
+        n_iter: int = 50,
         temp: float = 1.0,
         lb=None,
         ub=None,
@@ -151,20 +170,11 @@ class DCem(Optimizer):
         lml_verbose: bool = False,
         lml_eps: float = 1e-3,
         normalize: bool = True,
-        iter_eps=1e-4,
+        iter_eps: float = 1e-4,
         **kwargs,
     ) -> None:
         super().__init__(objective, vectorize=Vectorize, **kwargs)
-        self.params = NonlinearOptimizerParams(
-            n_batch,
-            n_sample,
-            n_elite,
-            n_iter,
-            temp,
-            lb,
-            ub,
-            iter_eps,
-        )
+        self.params = NonlinearOptimizerParams(iter_eps, iter_eps * 100, n_iter, 1e-2)
 
         self.ordering = VariableOrdering(objective)
         self.solver = cem_solver(
@@ -173,15 +183,23 @@ class DCem(Optimizer):
             n_batch,
             n_sample,
             n_elite,
-            n_iter,
-            temp,
             lb,
             ub,
+            temp,
+            normalize,
             lml_verbose,
             lml_eps,
-            normalize,
-            iter_eps,
         )
+
+    def _maybe_init_best_solution(
+        self, do_init: bool = False
+    ) -> Optional[Dict[str, torch.Tensor]]:
+        if not do_init:
+            return None
+        solution_dict = {}
+        for var in self.ordering:
+            solution_dict[var.name] = var.tensor.detach().clone().cpu()
+        return solution_dict
 
     def _init_info(
         self,
@@ -266,7 +284,7 @@ class DCem(Optimizer):
             assert info.best_err is not None
             good_indices = err < info.best_err
             info.best_iter[good_indices] = current_iter
-            for var in self.linear_solver.linearization.ordering:
+            for var in self.ordering:
                 info.best_solution[var.name][good_indices] = (
                     var.tensor.detach().clone()[good_indices].cpu()
                 )
@@ -295,8 +313,8 @@ class DCem(Optimizer):
             except RuntimeError as error:
                 raise RuntimeError(f"There is an error in update {error}")
 
-            self.objective.retract_optim_var(
-                delta, self.ordering, ignore_mask=converged_indices, force_upate=False
+            self.objective.retract_optim_vars(
+                delta, self.ordering, ignore_mask=converged_indices, force_update=False
             )
 
             # check for convergence

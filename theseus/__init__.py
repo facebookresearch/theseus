@@ -88,6 +88,7 @@ from .optimizer.nonlinear import (  # usort: skip
     BackwardMode,
     Dogleg,
     GaussNewton,
+    DCem,
     LevenbergMarquardt,
     NonlinearLeastSquares,
     NonlinearOptimizerInfo,

@@ -15,6 +15,9 @@ from .linear_solver import LinearSolver
 from scipy.sparse import csr_matrix
 import numpy as np
 
+# assuming the want to use cuda if supported and available
+DEFAULT_DEVICE = "cuda" if torch.cuda.is_available() else "cpu"
+
 
 class BaspachoSparseSolver(LinearSolver):
     def __init__(
@@ -23,7 +26,7 @@ class BaspachoSparseSolver(LinearSolver):
         linearization_cls: Optional[Type[Linearization]] = None,
         linearization_kwargs: Optional[Dict[str, Any]] = None,
         num_solver_contexts=1,
-        dev="cuda",
+        dev=DEFAULT_DEVICE,
         **kwargs,
     ):
         linearization_cls = linearization_cls or SparseLinearization
@@ -41,10 +44,11 @@ class BaspachoSparseSolver(LinearSolver):
         if self.linearization.structure().num_rows:
             self.reset(dev)
 
-    def reset(self, dev="cpu"):
+    def reset(self, dev=DEFAULT_DEVICE):
         if dev == "cuda" and not torch.cuda.is_available():
             raise RuntimeError(
-                "Cuda not available, BaspachoSparseSolver cannot be used"
+                "BaspachoSparseSolver: Cuda requested (dev='cuda') but not\n"
+                "available in torch, use dev='cpu' to create a Cpu-based solver"
             )
 
         try:

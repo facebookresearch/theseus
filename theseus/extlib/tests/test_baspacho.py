@@ -10,22 +10,41 @@ from scipy.sparse import csr_matrix, tril
 
 from theseus.utils import random_sparse_binary_matrix
 
-import theseus.extlib
+try:
+    import theseus.extlib.baspacho_solver  # noqa: F401
+
+    BASPACHO_EXT_NOT_AVAILABLE = False
+except ModuleNotFoundError:
+    BASPACHO_EXT_NOT_AVAILABLE = True
 
 requires_baspacho = pytest.mark.skipif(
-    not hasattr(theseus.extlib, "baspacho_solver"),
+    BASPACHO_EXT_NOT_AVAILABLE,
     reason="Baspacho solver not in theseus extension library",
 )
 
 
-def check_baspacho(batch_size, num_rows, num_cols, fill, dev="cpu", verbose=False):
-    # this is necessary assumption, so that the hessian is full rank
-    assert num_rows >= num_cols
+def check_baspacho(
+    batch_size,
+    rows_to_cols_ratio,
+    num_cols,
+    param_size_range,
+    fill,
+    dev="cpu",
+    verbose=False,
+):
+
+    # this is necessary assumption, so that the hessian can me full rank. actually we
+    # add some damping to At*A's diagonal, so not really necessary
+    assert rows_to_cols_ratio >= 1.0
+    num_rows = round(rows_to_cols_ratio * num_cols)
+
+    if isinstance(param_size_range, str):
+        param_size_range = [int(x) for x in param_size_range.split(":")]
 
     from theseus.extlib.baspacho_solver import SymbolicDecomposition
 
     A_skel = random_sparse_binary_matrix(
-        num_rows, num_cols, fill, min_entries_per_col=3
+        num_rows, num_cols, fill, min_entries_per_col=1
     )
     A_num_cols = num_cols
     A_rowPtr = torch.tensor(A_skel.indptr, dtype=torch.int64).to(dev)
@@ -38,7 +57,7 @@ def check_baspacho(batch_size, num_rows, num_cols, fill, dev="cpu", verbose=Fals
     paramSizes = []
     tot = 0
     while tot < num_cols:
-        newParam = min(np.random.randint(2, 5), num_cols - tot)
+        newParam = min(np.random.randint(*param_size_range), num_cols - tot)
         tot += newParam
         paramSizes.append(newParam)
     nParams = len(paramSizes)
@@ -47,7 +66,9 @@ def check_baspacho(batch_size, num_rows, num_cols, fill, dev="cpu", verbose=Fals
         (np.ones(num_cols), np.arange(num_cols), paramStarts), (nParams, num_cols)
     )
     A_blk = A_skel @ to_blocks.T
-    AtA_blk = tril(A_blk.T @ A_blk).tocsr()
+
+    # diagonal automatically assumed to be filled
+    AtA_blk = (tril(A_blk.T @ A_blk)).tocsr()
 
     A_csr = [
         csr_matrix(
@@ -73,6 +94,8 @@ def check_baspacho(batch_size, num_rows, num_cols, fill, dev="cpu", verbose=Fals
     f = s.create_numeric_decomposition(batch_size)
 
     f.add_MtM(A_val, A_rowPtr, A_colInd)
+    beta = 0.01
+    f.damp(0.0, beta)
     f.factor()
 
     b = torch.rand((batch_size, A_num_rows), dtype=torch.double).to(dev)
@@ -86,113 +109,51 @@ def check_baspacho(batch_size, num_rows, num_cols, fill, dev="cpu", verbose=Fals
     f.solve(sol)
 
     residuals = [
-        AtA_csr[i] @ sol[i].cpu().numpy() - Atb[i].cpu().numpy()
+        AtA_csr[i] @ sol[i].cpu().numpy()
+        + beta * sol[i].cpu().numpy()
+        - Atb[i].cpu().numpy()
         for i in range(batch_size)
     ]
     if verbose:
-        print("residual[0]:", residuals[0])
+        print("residuals:", [np.linalg.norm(res) for res in residuals])
 
     assert all(np.linalg.norm(res) < 1e-10 for res in residuals)
 
 
-@pytest.mark.baspacho
 @requires_baspacho
-def test_baspacho_cpu_0():
-    torch.manual_seed(0)
-    check_baspacho(batch_size=2, num_rows=20, num_cols=10, fill=0.3)
-
-
 @pytest.mark.baspacho
+@pytest.mark.parametrize("batch_size", [2, 8, 32])
+@pytest.mark.parametrize("rows_to_cols_ratio", [1.1, 1.7])
+@pytest.mark.parametrize("num_cols", [30, 70])
+@pytest.mark.parametrize("param_size_range", ["2:6", "1:13", "3:9"])
+@pytest.mark.parametrize("fill", [0.02, 0.05, 0.1])
+def test_baspacho_cpu(batch_size, rows_to_cols_ratio, num_cols, param_size_range, fill):
+    check_baspacho(
+        batch_size=batch_size,
+        rows_to_cols_ratio=rows_to_cols_ratio,
+        num_cols=num_cols,
+        param_size_range=param_size_range,
+        fill=fill,
+        dev="cpu",
+    )
+
+
 @requires_baspacho
-def test_baspacho_cpu_1():
-    torch.manual_seed(1)
-    check_baspacho(batch_size=5, num_rows=50, num_cols=30, fill=0.2)
-
-
-@pytest.mark.baspacho
-@requires_baspacho
-def test_baspacho_cpu_2():
-    torch.manual_seed(2)
-    check_baspacho(batch_size=5, num_rows=150, num_cols=60, fill=0.2)
-
-
-@pytest.mark.baspacho
-@requires_baspacho
-def test_baspacho_cpu_3():
-    torch.manual_seed(3)
-    check_baspacho(batch_size=10, num_rows=300, num_cols=90, fill=0.2)
-
-
-@pytest.mark.baspacho
-@requires_baspacho
-def test_baspacho_cpu_4():
-    torch.manual_seed(4)
-    check_baspacho(batch_size=5, num_rows=50, num_cols=30, fill=0.1)
-
-
-@pytest.mark.baspacho
-@requires_baspacho
-def test_baspacho_cpu_5():
-    torch.manual_seed(5)
-    check_baspacho(batch_size=5, num_rows=150, num_cols=60, fill=0.1)
-
-
-@pytest.mark.baspacho
-@requires_baspacho
-def test_baspacho_cpu_6():
-    check_baspacho(batch_size=10, num_rows=300, num_cols=90, fill=0.1)
-
-
 @pytest.mark.cudaext
 @pytest.mark.baspacho
-@requires_baspacho
-def test_baspacho_cuda_0():
-    torch.manual_seed(0)
-    check_baspacho(batch_size=2, num_rows=20, num_cols=10, fill=0.3, dev="cuda")
-
-
-@pytest.mark.cudaext
-@pytest.mark.baspacho
-@requires_baspacho
-def test_baspacho_cuda_1():
-    torch.manual_seed(1)
-    check_baspacho(batch_size=5, num_rows=50, num_cols=30, fill=0.2, dev="cuda")
-
-
-@pytest.mark.cudaext
-@pytest.mark.baspacho
-@requires_baspacho
-def test_baspacho_cuda_2():
-    torch.manual_seed(2)
-    check_baspacho(batch_size=5, num_rows=150, num_cols=60, fill=0.2, dev="cuda")
-
-
-@pytest.mark.cudaext
-@pytest.mark.baspacho
-@requires_baspacho
-def test_baspacho_cuda_3():
-    torch.manual_seed(3)
-    check_baspacho(batch_size=10, num_rows=300, num_cols=90, fill=0.2, dev="cuda")
-
-
-@pytest.mark.cudaext
-@pytest.mark.baspacho
-@requires_baspacho
-def test_baspacho_cuda_4():
-    torch.manual_seed(4)
-    check_baspacho(batch_size=5, num_rows=50, num_cols=30, fill=0.1, dev="cuda")
-
-
-@pytest.mark.cudaext
-@pytest.mark.baspacho
-@requires_baspacho
-def test_baspacho_cuda_5():
-    torch.manual_seed(5)
-    check_baspacho(batch_size=5, num_rows=150, num_cols=60, fill=0.1, dev="cuda")
-
-
-@pytest.mark.cudaext
-@pytest.mark.baspacho
-@requires_baspacho
-def test_baspacho_cuda_6():
-    check_baspacho(batch_size=10, num_rows=300, num_cols=90, fill=0.1, dev="cuda")
+@pytest.mark.parametrize("batch_size", [2, 8, 32])
+@pytest.mark.parametrize("rows_to_cols_ratio", [1.1, 1.7])
+@pytest.mark.parametrize("num_cols", [30, 70])
+@pytest.mark.parametrize("param_size_range", ["2:6", "1:13", "3:9"])
+@pytest.mark.parametrize("fill", [0.02, 0.05, 0.1])
+def test_baspacho_cuda(
+    batch_size, rows_to_cols_ratio, num_cols, param_size_range, fill
+):
+    check_baspacho(
+        batch_size=batch_size,
+        rows_to_cols_ratio=rows_to_cols_ratio,
+        num_cols=num_cols,
+        param_size_range=param_size_range,
+        fill=fill,
+        dev="cuda",
+    )

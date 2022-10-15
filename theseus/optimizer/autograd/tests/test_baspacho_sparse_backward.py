@@ -10,10 +10,15 @@ from theseus.optimizer.autograd import BaspachoSolveFunction
 
 import theseus as th
 
-import theseus.extlib
+try:
+    import theseus.extlib.baspacho_solver  # noqa: F401
+
+    BASPACHO_EXT_NOT_AVAILABLE = False
+except ModuleNotFoundError:
+    BASPACHO_EXT_NOT_AVAILABLE = True
 
 requires_baspacho = pytest.mark.skipif(
-    not hasattr(theseus.extlib, "baspacho_solver"),
+    BASPACHO_EXT_NOT_AVAILABLE,
     reason="Baspacho solver not in theseus extension library",
 )
 

@@ -8,6 +8,13 @@ import torch
 import numpy as np
 import pytest  # noqa: F401
 
+import theseus.extlib
+
+requires_baspacho = pytest.mark.skipif(
+    not hasattr(theseus.extlib, "baspacho_solver"),
+    reason="Baspacho solver not in theseus extension library",
+)
+
 # fmt: off
 mRowPtr = [ 0, 1, 3, 5, 8, 11, 13, 15, 17, 20, 23, 25, 27 ]
 mColInd = [
@@ -110,11 +117,13 @@ def check_simple(verbose=False, dev="cpu"):
 
 
 @pytest.mark.baspacho
+@requires_baspacho
 def test_simple_cpu():
     check_simple(dev="cpu")
 
 
 @pytest.mark.cudaext
 @pytest.mark.baspacho
+@requires_baspacho
 def test_simple_cuda():
     check_simple(dev="cuda")

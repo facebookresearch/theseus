@@ -8,6 +8,13 @@ import torch
 
 import theseus as th
 
+import theseus.extlib
+
+requires_baspacho = pytest.mark.skipif(
+    not hasattr(theseus.extlib, "baspacho_solver"),
+    reason="Baspacho solver not in theseus extension library",
+)
+
 
 def _build_sparse_mat(batch_size):
     all_cols = list(range(10))
@@ -69,11 +76,13 @@ def check_sparse_solver(dev="cpu"):
 
 
 @pytest.mark.baspacho
+@requires_baspacho
 def test_baspacho_solver_cpu():
     check_sparse_solver(dev="cpu")
 
 
 @pytest.mark.cudaext
 @pytest.mark.baspacho
+@requires_baspacho
 def test_baspacho_solver_cuda():
     check_sparse_solver(dev="cuda")

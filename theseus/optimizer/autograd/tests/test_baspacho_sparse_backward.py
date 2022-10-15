@@ -10,6 +10,13 @@ from theseus.optimizer.autograd import BaspachoSolveFunction
 
 import theseus as th
 
+import theseus.extlib
+
+requires_baspacho = pytest.mark.skipif(
+    not hasattr(theseus.extlib, "baspacho_solver"),
+    reason="Baspacho solver not in theseus extension library",
+)
+
 
 def _build_sparse_mat(batch_size):
     torch.manual_seed(37)
@@ -71,11 +78,13 @@ def check_sparse_backward_step(dev="cpu"):
 
 
 @pytest.mark.baspacho
+@requires_baspacho
 def test_sparse_backward_step_cpu():
     check_sparse_backward_step(dev="cpu")
 
 
 @pytest.mark.cudaext
 @pytest.mark.baspacho
+@requires_baspacho
 def test_sparse_backward_step_cuda():
     check_sparse_backward_step(dev="cuda")

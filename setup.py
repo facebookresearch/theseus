@@ -65,9 +65,6 @@ def maybe_create_baspacho_extension(has_cuda):
     if has_cuda:
         sources.append("theseus/extlib/baspacho_solver_cuda.cu")
         define_macros.append(("THESEUS_HAVE_CUDA", "1"))
-        # extra_compile_args = {"cxx": ["-std=c++17"]}  # , "nvcc": ["-std=c++17"]}
-        # else:
-        # extra_compile_args = ["-std=c++17"]
     include_dirs, library_dirs, libraries = get_baspacho_info(
         baspacho_root_dir, has_cuda
     )
@@ -75,7 +72,6 @@ def maybe_create_baspacho_extension(has_cuda):
         name="theseus.extlib.baspacho_solver",
         sources=sources,
         define_macros=define_macros,
-        # extra_compile_args=extra_compile_args,
         include_dirs=include_dirs,
         library_dirs=library_dirs,
         libraries=libraries,

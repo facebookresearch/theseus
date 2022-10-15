@@ -5,8 +5,11 @@
 
 import pytest  # noqa: F401
 import torch
+import numpy as np
 from torch.autograd import gradcheck
 from theseus.optimizer.autograd import BaspachoSolveFunction
+
+from theseus.utils import random_sparse_binary_matrix, split_into_param_sizes
 
 import theseus as th
 
@@ -23,23 +26,18 @@ requires_baspacho = pytest.mark.skipif(
 )
 
 
-def _build_sparse_mat(batch_size):
-    torch.manual_seed(37)
-    all_cols = list(range(10))
-    col_ind = []
-    row_ptr = [0]
-    for i in range(12):
-        start = max(0, i - 2)
-        end = min(i + 1, 10)
-        col_ind += all_cols[start:end]
-        row_ptr.append(len(col_ind))
-    data = torch.randn(size=(batch_size, len(col_ind)), dtype=torch.double)
-    return 12, 10, data, col_ind, row_ptr
+def check_sparse_backward_step(
+    batch_size, rows_to_cols_ratio, num_cols, param_size_range, fill, dev="cpu"
+):
+    torch.manual_seed(hash(str([batch_size, rows_to_cols_ratio, num_cols, fill])))
 
+    # this is necessary assumption, so that the hessian can be full rank. actually we
+    # add some damping to At*A's diagonal, so not really necessary
+    assert rows_to_cols_ratio >= 1.0
+    num_rows = round(rows_to_cols_ratio * num_cols)
 
-def check_sparse_backward_step(dev="cpu"):
-    if dev == "cuda" and not torch.cuda.is_available():
-        return
+    if isinstance(param_size_range, str):
+        param_size_range = [int(x) for x in param_size_range.split(":")]
 
     void_objective = th.Objective()
     void_ordering = th.VariableOrdering(void_objective, default_order=False)
@@ -48,27 +46,28 @@ def check_sparse_backward_step(dev="cpu"):
     )
     linearization = solver.linearization
 
-    batch_size = 4
+    A_skel = random_sparse_binary_matrix(
+        num_rows, num_cols, fill, min_entries_per_col=1
+    )
     void_objective._batch_size = batch_size
-    num_rows, num_cols, data, col_ind, row_ptr = _build_sparse_mat(batch_size)
     linearization.num_rows = num_rows
     linearization.num_cols = num_cols
-    linearization.A_val = data.to(dev)
-    linearization.A_col_ind = col_ind
-    linearization.A_row_ptr = row_ptr
-    linearization.b = torch.randn(size=(batch_size, num_rows), dtype=torch.double).to(
+    linearization.A_col_ind = A_skel.indices
+    linearization.A_row_ptr = A_skel.indptr
+    linearization.A_val = torch.rand((batch_size, A_skel.nnz), dtype=torch.double).to(
         dev
     )
+    linearization.b = torch.randn((batch_size, num_rows), dtype=torch.double).to(dev)
 
     # also need: var dims and var_start_cols (because baspacho is blockwise)
-    linearization.var_dims = [2, 1, 3, 1, 2, 1]
-    linearization.var_start_cols = [0, 2, 3, 6, 7, 9]
+    linearization.var_dims = split_into_param_sizes(num_cols, *param_size_range)
+    linearization.var_start_cols = np.cumsum([0, *linearization.var_dims[:-1]])
 
     linearization.A_val.requires_grad = True
     linearization.b.requires_grad = True
     # Only need this line for the test since the objective is a mock
     solver.reset(dev=dev)
-    damping_alpha_beta = (0.5, 1.3)
+    damping_alpha_beta = (0.023, 0.157)
     inputs = (
         linearization.A_val,
         linearization.b,
@@ -79,17 +78,45 @@ def check_sparse_backward_step(dev="cpu"):
         damping_alpha_beta,
     )
 
-    assert gradcheck(BaspachoSolveFunction.apply, inputs, eps=3e-4, atol=1e-3)
+    assert gradcheck(BaspachoSolveFunction.apply, inputs, eps=1e-5, atol=1e-5)
 
 
-@pytest.mark.baspacho
 @requires_baspacho
-def test_sparse_backward_step_cpu():
-    check_sparse_backward_step(dev="cpu")
+@pytest.mark.baspacho
+@pytest.mark.parametrize("batch_size", [2, 4])
+@pytest.mark.parametrize("rows_to_cols_ratio", [1.1, 1.7])
+@pytest.mark.parametrize("num_cols", [10, 20])
+@pytest.mark.parametrize("param_size_range", ["2:6", "1:13"])
+@pytest.mark.parametrize("fill", [0.02, 0.05])
+def test_sparse_backward_step_cpu(
+    batch_size, rows_to_cols_ratio, num_cols, param_size_range, fill
+):
+    check_sparse_backward_step(
+        batch_size=batch_size,
+        rows_to_cols_ratio=rows_to_cols_ratio,
+        num_cols=num_cols,
+        param_size_range=param_size_range,
+        fill=fill,
+        dev="cpu",
+    )
 
 
+@requires_baspacho
 @pytest.mark.cudaext
 @pytest.mark.baspacho
-@requires_baspacho
-def test_sparse_backward_step_cuda():
-    check_sparse_backward_step(dev="cuda")
+@pytest.mark.parametrize("batch_size", [2, 4])
+@pytest.mark.parametrize("rows_to_cols_ratio", [1.1, 1.7])
+@pytest.mark.parametrize("num_cols", [10, 20])
+@pytest.mark.parametrize("param_size_range", ["2:6", "1:13"])
+@pytest.mark.parametrize("fill", [0.02, 0.05])
+def test_sparse_backward_step_cuda(
+    batch_size, rows_to_cols_ratio, num_cols, param_size_range, fill
+):
+    check_sparse_backward_step(
+        batch_size=batch_size,
+        rows_to_cols_ratio=rows_to_cols_ratio,
+        num_cols=num_cols,
+        param_size_range=param_size_range,
+        fill=fill,
+        dev="cuda",
+    )

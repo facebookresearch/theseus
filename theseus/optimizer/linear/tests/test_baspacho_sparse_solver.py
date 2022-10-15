@@ -24,19 +24,6 @@ requires_baspacho = pytest.mark.skipif(
 )
 
 
-def _build_sparse_mat(batch_size):
-    all_cols = list(range(10))
-    col_ind = []
-    row_ptr = [0]
-    for i in range(12):
-        start = max(0, i - 2)
-        end = min(i + 1, 10)
-        col_ind += all_cols[start:end]
-        row_ptr.append(len(col_ind))
-    data = torch.randn((batch_size, len(col_ind)), dtype=torch.double)
-    return 12, 10, data, col_ind, row_ptr
-
-
 def check_sparse_solver(
     batch_size, rows_to_cols_ratio, num_cols, param_size_range, fill, dev="cpu"
 ):

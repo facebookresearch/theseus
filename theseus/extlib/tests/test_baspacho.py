@@ -18,8 +18,6 @@ requires_baspacho = pytest.mark.skipif(
 )
 
 
-# ideally we would like to support batch_size <= init_batch_size, but
-# because of limitations of cublas those have to be always identical
 def check_baspacho(batch_size, num_rows, num_cols, fill, dev="cpu", verbose=False):
     # this is necessary assumption, so that the hessian is full rank
     assert num_rows >= num_cols

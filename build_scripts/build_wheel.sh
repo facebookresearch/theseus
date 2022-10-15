@@ -18,8 +18,9 @@
 #   
 #   will run and store results under ./theseus_docker_3.9
 #
-# env var `THESEUS_ENABLE_CUDA` allows you to compile for Cuda even if Cuda is not
-# available on the system (or cannot be exported to the docker container)
+# env var `THESEUS_FORCE_CUDA` allows you to compile for Cuda even if Cuda is not
+# available on the system (or cannot be exported to the docker container). In this
+# way you don't need a GPU to generate a package targetting Cuda.
 # -----------------
 
 # Ensure that 3 arguments (ROOT_DIR, TAG, CUDA_VERSION) are provided
@@ -51,7 +52,7 @@ else
 
     # this switch is in order to allow compilation for a CUDA target even when CUDA is not
     # available in the compilation host (or is not available in the docker container)
-    if [[ "${NO_CUDA_ON_HOST}" -eq '1' ]]; then
+    if [[ "${THESEUS_FORCE_CUDA}" -eq '1' ]]; then
         # no detection, a default selection of architectures is specified
         BASPACHO_CUDA_ARCHS='37;50;60;70;75;80'
         TORCH_CUDA_ARCH_LIST='3.7;5.0;6.0;7.0;7.5;8.0'
@@ -110,7 +111,7 @@ for PYTHON_VERSION in 3.9; do
     WORKDIR theseus
     RUN git fetch --all --tags
     RUN git checkout tags/${TAG} -b tmp_build
-    CMD BASPACHO_ROOT_DIR=/baspacho THESEUS_ENABLE_CUDA=${ENABLE_CUDA} TORCH_CUDA_ARCH_LIST='${TORCH_CUDA_ARCH_LIST}' python3 -m build --no-isolation
+    CMD BASPACHO_ROOT_DIR=/baspacho THESEUS_FORCE_CUDA=${ENABLE_CUDA} TORCH_CUDA_ARCH_LIST='${TORCH_CUDA_ARCH_LIST}' python3 -m build --no-isolation
     """ > ${DOCKER_DIR}/Dockerfile
 
     # Run the container

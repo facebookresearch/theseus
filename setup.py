@@ -95,14 +95,14 @@ with open("README.md", "r") as fh:
     long_description = fh.read()
 
 # Add C++ and CUDA extensions
-compile_cuda_flag = os.environ.get("THESEUS_ENABLE_CUDA")
+compile_cuda_flag = os.environ.get("THESEUS_FORCE_CUDA")
 compile_cuda_support = (
     torch.cuda.is_available()
     if (compile_cuda_flag is None)
     else (compile_cuda_flag not in {"", "0", "False"})
 )
 cuda_detection_info = (
-    "detected" if compile_cuda_flag is None else "forced by THESEUS_ENABLE_CUDA env var"
+    "detected" if compile_cuda_flag is None else "forced by THESEUS_FORCE_CUDA env var"
 )
 print(f"Theseus CUDA support: {compile_cuda_support} ({cuda_detection_info})")
 

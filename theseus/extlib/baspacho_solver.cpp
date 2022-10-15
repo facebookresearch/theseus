@@ -343,7 +343,7 @@ SymbolicDecomposition::SymbolicDecomposition(
 
 NumericDecomposition SymbolicDecomposition::createNumericDecomposition(
     int64_t batchSize) {
-    return NumericDecomposition(dec, batchSize);  // TODO: CUDA/CPU flags
+    return NumericDecomposition(dec, batchSize);
 }
 
 PYBIND11_MODULE(baspacho_solver, m) {

@@ -32,8 +32,9 @@ def check_baspacho(
     dev="cpu",
     verbose=False,
 ):
+    torch.manual_seed(hash(str([batch_size, rows_to_cols_ratio, num_cols, fill])))
 
-    # this is necessary assumption, so that the hessian can me full rank. actually we
+    # this is necessary assumption, so that the hessian can be full rank. actually we
     # add some damping to At*A's diagonal, so not really necessary
     assert rows_to_cols_ratio >= 1.0
     num_rows = round(rows_to_cols_ratio * num_cols)

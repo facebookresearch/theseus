@@ -80,7 +80,7 @@ class BaspachoSparseSolver(LinearSolver):
             (
                 np.ones(num_cols),
                 np.arange(num_cols),
-                self.linearization.var_start_cols + [num_cols],
+                [*self.linearization.var_start_cols, num_cols],
             ),
             (num_vars, num_cols),
         )

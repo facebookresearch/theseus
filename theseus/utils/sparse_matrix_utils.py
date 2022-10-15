@@ -26,3 +26,15 @@ def random_sparse_binary_matrix(rows, cols, fill, min_entries_per_col) -> csr_ma
         retv[row, col] = 1.0
 
     return retv.tocsr()
+
+
+def split_into_param_sizes(n, param_size_range_min, param_size_range_max):
+    paramSizes = []
+    tot = 0
+    while tot < n:
+        newParam = min(
+            torch.randint(param_size_range_min, param_size_range_max, ()), n - tot
+        )
+        tot += newParam
+        paramSizes.append(newParam)
+    return paramSizes

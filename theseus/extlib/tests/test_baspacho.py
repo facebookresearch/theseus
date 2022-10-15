@@ -8,7 +8,7 @@ import pytest  # noqa: F401
 import torch  # needed for import of Torch C++ extensions to work
 from scipy.sparse import csr_matrix, tril
 
-from theseus.utils import random_sparse_binary_matrix
+from theseus.utils import random_sparse_binary_matrix, split_into_param_sizes
 
 try:
     import theseus.extlib.baspacho_solver  # noqa: F401
@@ -54,12 +54,7 @@ def check_baspacho(
     A_val = torch.rand((batch_size, A_nnz), dtype=torch.double).to(dev)
     b = torch.rand((batch_size, A_num_rows), dtype=torch.double).to(dev)
 
-    paramSizes = []
-    tot = 0
-    while tot < num_cols:
-        newParam = min(np.random.randint(*param_size_range), num_cols - tot)
-        tot += newParam
-        paramSizes.append(newParam)
+    paramSizes = split_into_param_sizes(num_cols, *param_size_range)
     nParams = len(paramSizes)
     paramStarts = np.cumsum([0, *paramSizes])
     to_blocks = csr_matrix(

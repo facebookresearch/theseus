@@ -53,10 +53,10 @@ With ``dev`` installation, you can run unit tests via
 
     python -m pytest theseus
 
-By default, unit tests include tests for our CUDA extensions. You can add the option ``-m "not cudaext"`` to
-skip them when installing without CUDA support, and ``-m "not baspacho"`` if not installing with support for
-BaSpaCho sparse solver.
-
+By default, unit tests include tests for our CUDA extensions. You can add the option `-m "not cudaext"`
+to skip them when installing without CUDA support.
+The tests for sparse solver BaSpaCho are automatically skipped when the extlib is not compiled, the marker
+`-m baspacho` can be used to select the tests depending on it.
 
 Tutorials
 ---------

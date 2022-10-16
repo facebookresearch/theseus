@@ -56,7 +56,7 @@ With ``dev`` installation, you can run unit tests via
 By default, unit tests include tests for our CUDA extensions. You can add the option `-m "not cudaext"`
 to skip them when installing without CUDA support.
 The tests for sparse solver BaSpaCho are automatically skipped when the extlib is not compiled, the marker
-`-m baspacho` can be used to select the tests depending on it.
+`-m baspacho` can be used to manually select/deselect the tests depending on it.
 
 Tutorials
 ---------

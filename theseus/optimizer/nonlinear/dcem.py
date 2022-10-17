@@ -157,11 +157,12 @@ class DCem(Optimizer):
     def __init__(
         self,
         objective: Objective,
+        vectorize: bool = False,
         cem_solver: Optional[abc.ABC] = DCemSolver,
+        max_iterations: int = 50,
         n_batch: int = 1,
-        n_sample: int = 20,
-        n_elite: int = 5,
-        n_iter: int = 50,
+        n_sample: int = 50,
+        n_elite: int = 10,
         temp: float = 1.0,
         lb=None,
         ub=None,
@@ -173,10 +174,15 @@ class DCem(Optimizer):
         iter_eps: float = 1e-4,
         **kwargs,
     ) -> None:
-        super().__init__(objective, vectorize=Vectorize, **kwargs)
-        self.params = NonlinearOptimizerParams(iter_eps, iter_eps * 100, n_iter, 1e-2)
+        super().__init__(objective, vectorize=vectorize, **kwargs)
+        self.params = NonlinearOptimizerParams(
+            iter_eps, iter_eps * 100, max_iterations, 1e-2
+        )
 
         self.ordering = VariableOrdering(objective)
+
+        if cem_solver is None:
+            cem_solver = DCemSolver
         self.solver = cem_solver(
             objective,
             self.ordering,

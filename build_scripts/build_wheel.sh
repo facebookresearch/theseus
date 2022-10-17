@@ -17,10 +17,6 @@
 #    ./build_scripts/build_wheel.sh . 0.1.0 10.2
 #   
 #   will run and store results under ./theseus_docker_3.9
-#
-# env var `THESEUS_FORCE_CUDA` allows you to compile for Cuda even if Cuda is not
-# available on the system (or cannot be exported to the docker container). In this
-# way you don't need a GPU to generate a package targetting Cuda.
 # -----------------
 
 # Ensure that 3 arguments (ROOT_DIR, TAG, CUDA_VERSION) are provided
@@ -39,32 +35,25 @@ CUDA_VERSION_SUPPORTED=$(echo "cpu 10.2 11.3 11.6" | grep -w ${CUDA_VERSION})
 
 CUDA_SUFFIX=$(echo ${CUDA_VERSION} | sed 's/[.]//g')
 
-if [[ ${CUDA_VERSION} == "cpu" ]] 
-then
+if [[ ${CUDA_VERSION} == "cpu" ]]
+then 
     DEVICE_TAG=cpu
     IMAGE_NAME="pytorch/manylinux-cuda102"
     ENABLE_CUDA=0
-    GPU_ARGS=''
-    BASPACHO_CUDA_OPTIONS="-DBASPACHO_USE_CUBLAS=0"
+    BASPACHO_CUDA_ARGS="-DBASPACHO_USE_CUBLAS=0"
 else
     DEVICE_TAG="cu${CUDA_SUFFIX}"
     IMAGE_NAME="pytorch/manylinux-cuda${CUDA_SUFFIX}"
     ENABLE_CUDA=1
 
-    # this switch is in order to allow compilation for a CUDA target even when CUDA is not
-    # available in the compilation host (or is not available in the docker container)
-    if [[ "${THESEUS_FORCE_CUDA}" -eq '1' ]]; then
-        # no detection, a default selection of architectures is specified
-        BASPACHO_CUDA_ARCHS='37;50;60;70;75;80'
-        TORCH_CUDA_ARCH_LIST='3.7;5.0;6.0;7.0;7.5;8.0'
-        GPU_ARGS=''
-    else
-        # will compile for all architectures supported by torch (>6.0 for baspacho)
-        BASPACHO_CUDA_ARCHS='torch'
-        TORCH_CUDA_ARCH_LIST=''
-        GPU_ARGS='--gpus all'
+    BASPACHO_CUDA_ARCHS="60;70;75"
+    TORCH_CUDA_ARCH_LIST="6.0;7.0;7.5"
+    if [[ ${CUDA_VERSION} != '10.2' ]]
+    then
+        BASPACHO_CUDA_ARCHS="${BASPACHO_CUDA_ARCHS};80"
+        TORCH_CUDA_ARCH_LIST="${TORCH_CUDA_ARCH_LIST};8.0"
     fi
-    BASPACHO_CUDA_OPTIONS="-DCMAKE_CUDA_COMPILER=/usr/local/cuda-${CUDA_VERSION}/bin/nvcc -DBASPACHO_CUDA_ARCHS='${BASPACHO_CUDA_ARCHS}'"
+    BASPACHO_CUDA_ARGS="-DCMAKE_CUDA_COMPILER=/usr/local/cuda-${CUDA_VERSION}/bin/nvcc -DBASPACHO_CUDA_ARCHS='${BASPACHO_CUDA_ARCHS}'"
 fi
 
 for PYTHON_VERSION in 3.9; do
@@ -101,12 +90,13 @@ for PYTHON_VERSION in 3.9; do
     WORKDIR baspacho
 
     # Note: to use static BLAS the option is really BLA_STATIC (https://cmake.org/cmake/help/latest/module/FindBLAS.html)
-    RUN /opt/cmake3.24/bin/cmake -S . -B build -DCMAKE_BUILD_TYPE=Release \
-        ${BASPACHO_CUDA_OPTIONS} \
-        -DBLA_STATIC=ON -DBUILD_SHARED_LIBS=OFF \
+    RUN /opt/cmake3.24/bin/cmake -S . -B build -DCMAKE_BUILD_TYPE=Release -DBLA_STATIC=ON \
+        ${BASPACHO_CUDA_ARGS} \
+        -DBUILD_SHARED_LIBS=OFF \
         -DBASPACHO_BUILD_TESTS=OFF -DBASPACHO_BUILD_EXAMPLES=OFF
     RUN /opt/cmake3.24/bin/cmake --build build -- -j16
     WORKDIR ..
+
     # --- Compile theseus wheel
     RUN pip install build wheel
     RUN git clone https://github.com/facebookresearch/theseus.git
@@ -121,24 +111,19 @@ for PYTHON_VERSION in 3.9; do
     echo $(pwd)
     DOCKER_NAME=theseus_${PYTHON_VERSION}
     sudo docker build -t "${DOCKER_NAME}_img" .
-    sudo docker run ${GPU_ARGS} --name ${DOCKER_NAME} ${DOCKER_NAME}_img
+    echo "sudo docker run --name ${DOCKER_NAME} ${DOCKER_NAME}_img"
+    sudo docker run --name ${DOCKER_NAME} ${DOCKER_NAME}_img
 
     # Copy the wheel to host
     CP_STR="cp"$(echo ${PYTHON_VERSION} | sed 's/[.]//g')
-    if [[ ${CUDA_VERSION} == "cpu" ]] 
+    DOCKER_WHL="theseus/dist/theseus_ai-${TAG}-${CP_STR}-${CP_STR}-linux_x86_64.whl"
+    if [[ ${CUDA_VERSION} == "10.2" ]]
     then
-        DOCKER_WHL="theseus/dist/theseus_ai-${TAG}-py3-none-any.whl"
-        HOST_WHL="theseus_ai-${TAG}-py3-none-any.whl"
+        PLUS_CU_TAG=""  # 10.2 will be the pypi version, so don't add +cu102
     else
-        DOCKER_WHL="theseus/dist/theseus_ai-${TAG}-${CP_STR}-${CP_STR}-linux_x86_64.whl"
-        if [[ ${CUDA_VERSION} == "10.2" ]]
-        then
-            PLUS_CU_TAG=""  # 10.2 will be the pypi version, so don't add +cu102
-        else
-            PLUS_CU_TAG="+${DEVICE_TAG}"
-        fi
-        HOST_WHL="theseus_ai-${TAG}${PLUS_CU_TAG}-${CP_STR}-${CP_STR}-manylinux_2_17_x86_64.whl"
+        PLUS_CU_TAG="+${DEVICE_TAG}"
     fi
+    HOST_WHL="theseus_ai-${TAG}${PLUS_CU_TAG}-${CP_STR}-${CP_STR}-manylinux_2_17_x86_64.whl"
 
     sudo docker cp "${DOCKER_NAME}:theseus/dist/theseus-ai-${TAG}.tar.gz" "theseus-ai-${TAG}.tar.gz"
     sudo docker cp "${DOCKER_NAME}:${DOCKER_WHL}" ${HOST_WHL}

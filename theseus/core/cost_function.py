@@ -5,6 +5,7 @@
 
 import abc
 from enum import Enum
+from itertools import chain
 from typing import Callable, List, Optional, Sequence, Tuple, Union, cast
 
 import torch
@@ -240,6 +241,23 @@ class AutoDiffCostFunction(CostFunction):
         aux_tensors: Tuple[torch.Tensor, ...],
         jac_fn: Callable,
     ) -> Tuple[torch.Tensor, ...]:
+        def _expand_all(
+            tensors: Tuple[torch.Tensor, ...], batch_size: int
+        ) -> Tuple[torch.Tensor, ...]:
+            return tuple(
+                t if t.shape[0] == batch_size else t.expand((batch_size,) + t.shape[1:])
+                for t in tensors
+            )
+
+        batch_sizes = set(t.shape[0] for t in chain(optim_tensors, aux_tensors))
+        # Using an assert instead of exception because Objective already
+        # takes care of throwing an appropriate error message if this happens
+        assert len(batch_sizes) == 1 or (
+            len(batch_sizes) == 2 and min(batch_sizes) == 1
+        )
+        batch_size = max(batch_sizes)
+        optim_tensors = _expand_all(optim_tensors, batch_size)
+        aux_tensors = _expand_all(aux_tensors, batch_size)
         return vmap(jacrev(jac_fn, argnums=0))(optim_tensors, aux_tensors)
 
     def jacobians(self) -> Tuple[List[torch.Tensor], torch.Tensor]:

@@ -45,6 +45,7 @@ then
     IMAGE_NAME="pytorch/manylinux-cuda102"
     ENABLE_CUDA=0
     GPU_ARGS=''
+    BASPACHO_CUDA_OPTIONS="-DBASPACHO_USE_CUBLAS=0"
 else
     DEVICE_TAG="cu${CUDA_SUFFIX}"
     IMAGE_NAME="pytorch/manylinux-cuda${CUDA_SUFFIX}"
@@ -63,6 +64,7 @@ else
         TORCH_CUDA_ARCH_LIST=''
         GPU_ARGS='--gpus all'
     fi
+    BASPACHO_CUDA_OPTIONS="-DCMAKE_CUDA_COMPILER=/usr/local/cuda-${CUDA_VERSION}/bin/nvcc -DBASPACHO_CUDA_ARCHS='${BASPACHO_CUDA_ARCHS}'"
 fi
 
 for PYTHON_VERSION in 3.9; do
@@ -99,9 +101,9 @@ for PYTHON_VERSION in 3.9; do
     WORKDIR baspacho
 
     # Note: to use static BLAS the option is really BLA_STATIC (https://cmake.org/cmake/help/latest/module/FindBLAS.html)
-    RUN /opt/cmake3.24/bin/cmake -S . -B build -DCMAKE_BUILD_TYPE=Release -DBLA_STATIC=ON \
-        -DCMAKE_CUDA_COMPILER=/usr/local/cuda-${CUDA_VERSION}/bin/nvcc \
-        -DBUILD_SHARED_LIBS=OFF -DBASPACHO_CUDA_ARCHS='${BASPACHO_CUDA_ARCHS}' \
+    RUN /opt/cmake3.24/bin/cmake -S . -B build -DCMAKE_BUILD_TYPE=Release \
+        ${BASPACHO_CUDA_OPTIONS} \
+        -DBLA_STATIC=ON -DBUILD_SHARED_LIBS=OFF \
         -DBASPACHO_BUILD_TESTS=OFF -DBASPACHO_BUILD_EXAMPLES=OFF
     RUN /opt/cmake3.24/bin/cmake --build build -- -j16
     WORKDIR ..

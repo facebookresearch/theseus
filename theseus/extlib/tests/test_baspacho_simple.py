@@ -117,6 +117,7 @@ def test_simple_cpu():
     check_simple(dev="cpu")
 
 
+@pytest.mark.cudaext
 @run_if_baspacho()
 def test_simple_cuda():
     check_simple(dev="cuda")

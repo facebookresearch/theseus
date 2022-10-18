@@ -111,7 +111,6 @@ for PYTHON_VERSION in 3.9; do
     echo $(pwd)
     DOCKER_NAME=theseus_${PYTHON_VERSION}
     sudo docker build -t "${DOCKER_NAME}_img" .
-    echo "sudo docker run --name ${DOCKER_NAME} ${DOCKER_NAME}_img"
     sudo docker run --name ${DOCKER_NAME} ${DOCKER_NAME}_img
 
     # Copy the wheel to host

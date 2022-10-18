@@ -8,7 +8,7 @@ import torch
 import numpy as np
 import pytest  # noqa: F401
 
-from theseus.constants import run_if_baspacho
+from theseus.extlib.tests.common import run_if_baspacho
 
 
 # fmt: off

@@ -54,21 +54,3 @@ _SE3_NEAR_PI_EPS = EPSDict(float32_eps=1e-2, float64_eps=1e-7)
 _SE3_NEAR_ZERO_EPS = EPSDict(float32_eps=1e-2, float64_eps=5e-3)
 
 _SE3_HAT_EPS = EPSDict(float32_eps=5e-6, float64_eps=5e-7)
-
-_BASPACHO_NOT_INSTALLED_MSG = "Baspacho solver not in theseus extension library."
-
-
-def run_if_baspacho():
-    # Not sure what's a better place to put this in
-    import pytest
-
-    try:
-        import theseus.extlib.baspacho_solver  # noqa: F401
-
-        BASPACHO_EXT_NOT_AVAILABLE = False
-    except ModuleNotFoundError:
-        BASPACHO_EXT_NOT_AVAILABLE = True
-
-    return pytest.mark.skipif(
-        BASPACHO_EXT_NOT_AVAILABLE, reason=_BASPACHO_NOT_INSTALLED_MSG
-    )

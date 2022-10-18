@@ -9,7 +9,7 @@ import torch  # needed for import of Torch C++ extensions to work
 from scipy.sparse import csr_matrix, tril
 
 
-from theseus.constants import run_if_baspacho
+from theseus.extlib.tests.common import run_if_baspacho
 from theseus.utils import random_sparse_binary_matrix, split_into_param_sizes
 
 

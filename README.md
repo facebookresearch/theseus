@@ -62,7 +62,7 @@ Our implementation provides an easy to use interface to build custom optimizatio
 - [Second-order nonlinear optimizers](https://github.com/facebookresearch/theseus/tree/main/theseus/optimizer/nonlinear)
     - Gauss-Newton, Levenberg–Marquardt
 - [Linear solvers](https://github.com/facebookresearch/theseus/tree/main/theseus/optimizer/linear)
-    - Dense: Cholesky, LU; Sparse: CHOLMOD, LU, [BaSpaCho](https://github.com/facebookresearch/baspacho)
+    - Dense: Cholesky, LU; Sparse: CHOLMOD, LU (GPU-only), [BaSpaCho](https://github.com/facebookresearch/baspacho)
 - [Commonly used costs](https://github.com/facebookresearch/theseus/tree/main/theseus/embodied), [AutoDiffCostFunction](https://github.com/facebookresearch/theseus/blob/main/theseus/core/cost_function.py), [RobustCostFunction](https://github.com/facebookresearch/theseus/blob/main/theseus/core/robust_cost_function.py)
 - [Lie groups](https://github.com/facebookresearch/theseus/tree/main/theseus/geometry)
 - [Robot kinematics](https://github.com/facebookresearch/theseus/blob/main/theseus/embodied/kinematics/kinematics_model.py)
@@ -88,39 +88,39 @@ We support several features that improve computation times and memory consumptio
     
 ### Installing
 
-#### **pypi**
-```bash
-pip install theseus-ai
-```
-We currently provide wheels with our CUDA extensions compiled using CUDA 10.2 and Python 3.9.
-For other CUDA versions, consider installing from source or using our 
-[build script](https://github.com/facebookresearch/theseus/blob/main/build_scripts/build_wheel.sh).
+- **pypi**
+    ```bash
+    pip install theseus-ai
+    ```
+    We currently provide wheels with our CUDA extensions compiled using CUDA 10.2 and Python 3.9.
+    For other CUDA versions, consider installing from source or using our 
+    [build script](https://github.com/facebookresearch/theseus/blob/main/build_scripts/build_wheel.sh).
 
-#### **From source**
-The simplest way to install Theseus from source is by running
-```bash
-git clone https://github.com/facebookresearch/theseus.git && cd theseus
-pip install -e .
-```
-If you are interested in contributing to Theseus, instead install
-```bash
-pip install -e ".[dev]"
-```
-and follow the more detailed instructions in [CONTRIBUTING](https://github.com/facebookresearch/theseus/blob/main/CONTRIBUTING.md).
-
-**Installing BaSpaCho extensions from source**
-
-By default, installing from source doesn't include our BaSpaCho sparse solver extension. For this, follow these steps:
-
-1. Compile BaSpaCho from source following instructions [here](https://github.com/facebookresearch/baspacho). We recommend using flags `-DBLA_STATIC=ON -DBUILD_SHARED_LIBS=OFF`.
-2. Run
-    
+- #### **From source**
+    The simplest way to install Theseus from source is by running the following (see further below to also include BaSpaCho)
     ```bash
     git clone https://github.com/facebookresearch/theseus.git && cd theseus
-    BASPACHO_ROOT_DIR=<path/to/root/baspacho/dir> pip install -e .
+    pip install -e .
     ```
-    
-    where the BaSpaCho root dir must have the binaries in the subdirectory `build`.
+    If you are interested in contributing to Theseus, instead install
+    ```bash
+    pip install -e ".[dev]"
+    ```
+    and follow the more detailed instructions in [CONTRIBUTING](https://github.com/facebookresearch/theseus/blob/main/CONTRIBUTING.md).
+
+- **Installing BaSpaCho extensions from source**
+
+    By default, installing from source doesn't include our BaSpaCho sparse solver extension. For this, follow these steps:
+
+    1. Compile BaSpaCho from source following instructions [here](https://github.com/facebookresearch/baspacho). We recommend using flags `-DBLA_STATIC=ON -DBUILD_SHARED_LIBS=OFF`.
+    2. Run
+        
+        ```bash
+        git clone https://github.com/facebookresearch/theseus.git && cd theseus
+        BASPACHO_ROOT_DIR=<path/to/root/baspacho/dir> pip install -e .
+        ```
+        
+        where the BaSpaCho root dir must have the binaries in the subdirectory `build`.
 
 ### Running unit tests (requires `dev` installation)
 ```bash

@@ -29,7 +29,7 @@ For other CUDA versions, consider installing from source or using our
 
 From source
 """""""""""
-The simplest way to install Theseus from source is by running
+The simplest way to install Theseus from source is by running the following (see further below to also include BaSpaCho)
 
 .. code-block:: bash
 

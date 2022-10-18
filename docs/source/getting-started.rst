@@ -29,7 +29,7 @@ For other CUDA versions, consider installing from source or using our
 
 From source
 """""""""""
-To install from source code, you can use
+The simplest way to install Theseus from source is by running
 
 .. code-block:: bash
 
@@ -45,6 +45,20 @@ If you are interested in contributing to ``theseus``, instead install using
 
 and follow the more detailed instructions in `CONTRIBUTING <https://github.com/facebookresearch/theseus/blob/main/CONTRIBUTING.md>`_.
 
+**Installing BaSpaCho extensions from source**
+By default, installing from source doesn't include our BaSpaCho sparse 
+solver extension. For this, follow these steps:
+
+1. Compile BaSpaCho from source following instructions `here <https://github.com/facebookresearch/baspacho>`_. We recommend using flags `-DBLA_STATIC=ON -DBUILD_SHARED_LIBS=OFF`.
+2. Run 
+
+    .. code-block:: bash
+
+    git clone https://github.com/facebookresearch/theseus.git && cd theseus
+    BASPACHO_ROOT_DIR=<path/to/root/baspacho/dir> pip install -e .
+
+    where the BaSpaCho root dir must have binaries in the subdirectory `build`.
+
 Unit tests
 """"""""""
 With ``dev`` installation, you can run unit tests via
@@ -54,9 +68,8 @@ With ``dev`` installation, you can run unit tests via
     python -m pytest theseus
 
 By default, unit tests include tests for our CUDA extensions. You can add the option `-m "not cudaext"`
-to skip them when installing without CUDA support.
-The tests for sparse solver BaSpaCho are automatically skipped when the extlib is not compiled, the marker
-`-m baspacho` can be used to manually select/deselect the tests depending on it.
+to skip them when installing without CUDA support. Additionally, the tests for sparse solver BaSpaCho are automatically 
+skipped when its extlib is not compiled.
 
 Tutorials
 ---------

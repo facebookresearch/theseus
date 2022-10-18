@@ -62,7 +62,7 @@ Our implementation provides an easy to use interface to build custom optimizatio
 - [Second-order nonlinear optimizers](https://github.com/facebookresearch/theseus/tree/main/theseus/optimizer/nonlinear)
     - Gauss-Newton, Levenberg–Marquardt
 - [Linear solvers](https://github.com/facebookresearch/theseus/tree/main/theseus/optimizer/linear)
-    - Dense: Cholesky, LU; Sparse: CHOLMOD, LU
+    - Dense: Cholesky, LU; Sparse: CHOLMOD, LU, [BaSpaCho](https://github.com/facebookresearch/baspacho)
 - [Commonly used costs](https://github.com/facebookresearch/theseus/tree/main/theseus/embodied), [AutoDiffCostFunction](https://github.com/facebookresearch/theseus/blob/main/theseus/core/cost_function.py), [RobustCostFunction](https://github.com/facebookresearch/theseus/blob/main/theseus/core/robust_cost_function.py)
 - [Lie groups](https://github.com/facebookresearch/theseus/tree/main/theseus/geometry)
 - [Robot kinematics](https://github.com/facebookresearch/theseus/blob/main/theseus/embodied/kinematics/kinematics_model.py)
@@ -97,6 +97,7 @@ For other CUDA versions, consider installing from source or using our
 [build script](https://github.com/facebookresearch/theseus/blob/main/build_scripts/build_wheel.sh).
 
 #### **From source**
+The simplest way to install Theseus from source is by running
 ```bash
 git clone https://github.com/facebookresearch/theseus.git && cd theseus
 pip install -e .
@@ -107,19 +108,27 @@ pip install -e ".[dev]"
 ```
 and follow the more detailed instructions in [CONTRIBUTING](https://github.com/facebookresearch/theseus/blob/main/CONTRIBUTING.md).
 
-Compilation from source supports is affected by the following enviroment variables:
-* `BASPACHO_ROOT_DIR`: root dir of [BaSpaCho](https://github.com/facebookresearch/baspacho) sparse solver, which must be already
-  built with binaries in the subdirectory `build`.
-* `THESEUS_FORCE_CUDA` (1 or 0): if set, forces enabling or disabling Cuda support regardless of system's `torch.cuda.is_available()`.
+**Installing BaSpaCho extensions from source**
+
+By default, installing from source doesn't include our BaSpaCho sparse solver extension. For this, follow these steps:
+
+1. Compile BaSpaCho from source following instructions [here](https://github.com/facebookresearch/baspacho). We recommend using flags `-DBLA_STATIC=ON -DBUILD_SHARED_LIBS=OFF`.
+2. Run
+    
+    ```bash
+    git clone https://github.com/facebookresearch/theseus.git && cd theseus
+    BASPACHO_ROOT_DIR=<path/to/root/baspacho/dir> pip install -e .
+    ```
+    
+    where the BaSpaCho root dir must have the binaries in the subdirectory `build`.
 
 ### Running unit tests (requires `dev` installation)
 ```bash
 python -m pytest theseus
 ```
 By default, unit tests include tests for our CUDA extensions. You can add the option `-m "not cudaext"`
-to skip them when installing without CUDA support.
-The tests for sparse solver BaSpaCho are automatically skipped when the extlib is not compiled, the marker
-`-m baspacho` can be used to manually select/deselect the tests depending on it.
+to skip them when installing without CUDA support. Additionally, the tests for sparse solver BaSpaCho are automatically 
+skipped when its extlib is not compiled.
 
 
 ## Examples

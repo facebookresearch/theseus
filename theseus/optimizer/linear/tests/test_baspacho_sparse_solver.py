@@ -9,19 +9,8 @@ import numpy as np
 
 import theseus as th
 
+from theseus.constants import run_if_baspacho
 from theseus.utils import random_sparse_binary_matrix, split_into_param_sizes
-
-try:
-    import theseus.extlib.baspacho_solver  # noqa: F401
-
-    BASPACHO_EXT_NOT_AVAILABLE = False
-except ModuleNotFoundError:
-    BASPACHO_EXT_NOT_AVAILABLE = True
-
-requires_baspacho = pytest.mark.skipif(
-    BASPACHO_EXT_NOT_AVAILABLE,
-    reason="Baspacho solver not in theseus extension library",
-)
 
 
 def check_sparse_solver(
@@ -84,9 +73,8 @@ def check_sparse_solver(
         assert max_offset < 1e-4
 
 
-@requires_baspacho
-@pytest.mark.baspacho
-@pytest.mark.parametrize("batch_size", [8, 32])
+@run_if_baspacho()
+@pytest.mark.parametrize("batch_size", [1, 32])
 @pytest.mark.parametrize("rows_to_cols_ratio", [1.1, 1.7])
 @pytest.mark.parametrize("num_cols", [30, 70])
 @pytest.mark.parametrize("param_size_range", ["2:6", "1:13"])
@@ -104,10 +92,9 @@ def test_baspacho_solver_cpu(
     )
 
 
-@requires_baspacho
+@run_if_baspacho()
 @pytest.mark.cudaext
-@pytest.mark.baspacho
-@pytest.mark.parametrize("batch_size", [8, 32])
+@pytest.mark.parametrize("batch_size", [1, 32])
 @pytest.mark.parametrize("rows_to_cols_ratio", [1.1, 1.7])
 @pytest.mark.parametrize("num_cols", [30, 70])
 @pytest.mark.parametrize("param_size_range", ["2:6", "1:13"])

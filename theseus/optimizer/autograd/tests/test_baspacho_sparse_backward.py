@@ -9,21 +9,10 @@ import numpy as np
 from torch.autograd import gradcheck
 from theseus.optimizer.autograd import BaspachoSolveFunction
 
+from theseus.constants import run_if_baspacho
 from theseus.utils import random_sparse_binary_matrix, split_into_param_sizes
 
 import theseus as th
-
-try:
-    import theseus.extlib.baspacho_solver  # noqa: F401
-
-    BASPACHO_EXT_NOT_AVAILABLE = False
-except ModuleNotFoundError:
-    BASPACHO_EXT_NOT_AVAILABLE = True
-
-requires_baspacho = pytest.mark.skipif(
-    BASPACHO_EXT_NOT_AVAILABLE,
-    reason="Baspacho solver not in theseus extension library",
-)
 
 
 def check_sparse_backward_step(
@@ -81,8 +70,7 @@ def check_sparse_backward_step(
     assert gradcheck(BaspachoSolveFunction.apply, inputs, eps=1e-5, atol=1e-5)
 
 
-@requires_baspacho
-@pytest.mark.baspacho
+@run_if_baspacho()
 @pytest.mark.parametrize("batch_size", [2, 4])
 @pytest.mark.parametrize("rows_to_cols_ratio", [1.5])
 @pytest.mark.parametrize("num_cols", [15, 20])
@@ -101,9 +89,8 @@ def test_sparse_backward_step_cpu(
     )
 
 
-@requires_baspacho
+@run_if_baspacho()
 @pytest.mark.cudaext
-@pytest.mark.baspacho
 @pytest.mark.parametrize("batch_size", [2, 4])
 @pytest.mark.parametrize("rows_to_cols_ratio", [1.5])
 @pytest.mark.parametrize("num_cols", [15, 20])

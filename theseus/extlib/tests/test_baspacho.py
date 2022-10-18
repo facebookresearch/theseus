@@ -8,19 +8,9 @@ import pytest  # noqa: F401
 import torch  # needed for import of Torch C++ extensions to work
 from scipy.sparse import csr_matrix, tril
 
+
+from theseus.constants import run_if_baspacho
 from theseus.utils import random_sparse_binary_matrix, split_into_param_sizes
-
-try:
-    import theseus.extlib.baspacho_solver  # noqa: F401
-
-    BASPACHO_EXT_NOT_AVAILABLE = False
-except ModuleNotFoundError:
-    BASPACHO_EXT_NOT_AVAILABLE = True
-
-requires_baspacho = pytest.mark.skipif(
-    BASPACHO_EXT_NOT_AVAILABLE,
-    reason="Baspacho solver not in theseus extension library",
-)
 
 
 def check_baspacho(
@@ -116,9 +106,8 @@ def check_baspacho(
     assert all(np.linalg.norm(res) < 1e-10 for res in residuals)
 
 
-@requires_baspacho
-@pytest.mark.baspacho
-@pytest.mark.parametrize("batch_size", [8, 32])
+@run_if_baspacho()
+@pytest.mark.parametrize("batch_size", [1, 32])
 @pytest.mark.parametrize("rows_to_cols_ratio", [1.1, 1.7])
 @pytest.mark.parametrize("num_cols", [30, 70])
 @pytest.mark.parametrize("param_size_range", ["2:6", "1:13"])
@@ -134,10 +123,9 @@ def test_baspacho_cpu(batch_size, rows_to_cols_ratio, num_cols, param_size_range
     )
 
 
-@requires_baspacho
+@run_if_baspacho()
 @pytest.mark.cudaext
-@pytest.mark.baspacho
-@pytest.mark.parametrize("batch_size", [8, 32])
+@pytest.mark.parametrize("batch_size", [1, 32])
 @pytest.mark.parametrize("rows_to_cols_ratio", [1.1, 1.7])
 @pytest.mark.parametrize("num_cols", [30, 70])
 @pytest.mark.parametrize("param_size_range", ["2:6", "1:13"])

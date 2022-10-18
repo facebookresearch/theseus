@@ -8,17 +8,8 @@ import torch
 import numpy as np
 import pytest  # noqa: F401
 
-try:
-    import theseus.extlib.baspacho_solver  # noqa: F401
+from theseus.constants import run_if_baspacho
 
-    BASPACHO_EXT_NOT_AVAILABLE = False
-except ModuleNotFoundError:
-    BASPACHO_EXT_NOT_AVAILABLE = True
-
-requires_baspacho = pytest.mark.skipif(
-    BASPACHO_EXT_NOT_AVAILABLE,
-    reason="Baspacho solver not in theseus extension library",
-)
 
 # fmt: off
 mRowPtr = [ 0, 1, 3, 5, 8, 11, 13, 15, 17, 20, 23, 25, 27 ]
@@ -121,14 +112,12 @@ def check_simple(verbose=False, dev="cpu"):
     assert all(np.linalg.norm(res) < 1e-10 for res in residuals)
 
 
-@pytest.mark.baspacho
-@requires_baspacho
+@run_if_baspacho()
 def test_simple_cpu():
     check_simple(dev="cpu")
 
 
 @pytest.mark.cudaext
-@pytest.mark.baspacho
-@requires_baspacho
+@run_if_baspacho()
 def test_simple_cuda():
     check_simple(dev="cuda")

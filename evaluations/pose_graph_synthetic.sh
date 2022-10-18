@@ -16,4 +16,4 @@ python examples/pose_graph/pose_graph_synthetic.py \
        dataset_size=32 \
        batch_size=32 \
        num_poses=4096 \
-       solver_type=baspacho
+       solver_type=lucuda

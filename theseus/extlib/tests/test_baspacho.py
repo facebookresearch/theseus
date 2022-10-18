@@ -118,11 +118,11 @@ def check_baspacho(
 
 @requires_baspacho
 @pytest.mark.baspacho
-@pytest.mark.parametrize("batch_size", [2, 8, 32])
+@pytest.mark.parametrize("batch_size", [8, 32])
 @pytest.mark.parametrize("rows_to_cols_ratio", [1.1, 1.7])
 @pytest.mark.parametrize("num_cols", [30, 70])
-@pytest.mark.parametrize("param_size_range", ["2:6", "1:13", "3:9"])
-@pytest.mark.parametrize("fill", [0.02, 0.05, 0.1])
+@pytest.mark.parametrize("param_size_range", ["2:6", "1:13"])
+@pytest.mark.parametrize("fill", [0.02, 0.05])
 def test_baspacho_cpu(batch_size, rows_to_cols_ratio, num_cols, param_size_range, fill):
     check_baspacho(
         batch_size=batch_size,
@@ -137,11 +137,11 @@ def test_baspacho_cpu(batch_size, rows_to_cols_ratio, num_cols, param_size_range
 @requires_baspacho
 @pytest.mark.cudaext
 @pytest.mark.baspacho
-@pytest.mark.parametrize("batch_size", [2, 8, 32])
+@pytest.mark.parametrize("batch_size", [8, 32])
 @pytest.mark.parametrize("rows_to_cols_ratio", [1.1, 1.7])
 @pytest.mark.parametrize("num_cols", [30, 70])
-@pytest.mark.parametrize("param_size_range", ["2:6", "1:13", "3:9"])
-@pytest.mark.parametrize("fill", [0.02, 0.05, 0.1])
+@pytest.mark.parametrize("param_size_range", ["2:6", "1:13"])
+@pytest.mark.parametrize("fill", [0.02, 0.05])
 def test_baspacho_cuda(
     batch_size, rows_to_cols_ratio, num_cols, param_size_range, fill
 ):

@@ -84,10 +84,10 @@ def check_sparse_backward_step(
 @requires_baspacho
 @pytest.mark.baspacho
 @pytest.mark.parametrize("batch_size", [2, 4])
-@pytest.mark.parametrize("rows_to_cols_ratio", [1.1, 1.7])
-@pytest.mark.parametrize("num_cols", [10, 20])
+@pytest.mark.parametrize("rows_to_cols_ratio", [1.5])
+@pytest.mark.parametrize("num_cols", [15, 20])
 @pytest.mark.parametrize("param_size_range", ["2:6", "1:13"])
-@pytest.mark.parametrize("fill", [0.02, 0.05])
+@pytest.mark.parametrize("fill", [0.04, 0.07])
 def test_sparse_backward_step_cpu(
     batch_size, rows_to_cols_ratio, num_cols, param_size_range, fill
 ):
@@ -105,10 +105,10 @@ def test_sparse_backward_step_cpu(
 @pytest.mark.cudaext
 @pytest.mark.baspacho
 @pytest.mark.parametrize("batch_size", [2, 4])
-@pytest.mark.parametrize("rows_to_cols_ratio", [1.1, 1.7])
-@pytest.mark.parametrize("num_cols", [10, 20])
+@pytest.mark.parametrize("rows_to_cols_ratio", [1.5])
+@pytest.mark.parametrize("num_cols", [15, 20])
 @pytest.mark.parametrize("param_size_range", ["2:6", "1:13"])
-@pytest.mark.parametrize("fill", [0.02, 0.05])
+@pytest.mark.parametrize("fill", [0.04, 0.07])
 def test_sparse_backward_step_cuda(
     batch_size, rows_to_cols_ratio, num_cols, param_size_range, fill
 ):

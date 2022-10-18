@@ -31,7 +31,6 @@ class DCemSolver(abc.ABC):
         self,
         objective: Objective,
         ordering: VariableOrdering = None,
-        n_batch: int = 1,
         n_sample: int = 20,
         n_elite: int = 10,
         lb=None,
@@ -44,7 +43,6 @@ class DCemSolver(abc.ABC):
     ) -> None:
         self.objective = objective
         self.ordering = ordering
-        self.n_batch = n_batch
         self.n_samples = n_sample
         self.n_elite = n_elite
         self.lb = lb
@@ -59,7 +57,10 @@ class DCemSolver(abc.ABC):
     def solve(self):
         device = self.objective.device
 
-        mu = torch.zeros((self.n_batch, sum([x.dof() for x in self.ordering])))
+        n_batch = self.ordering[0].shape[0]
+        mu = torch.zeros(
+            (n_batch, sum([x.dof() for x in self.ordering])), device=device
+        )
 
         idx = 0
         for var in self.ordering:
@@ -74,7 +75,9 @@ class DCemSolver(abc.ABC):
             sample = {}
             for var in self.ordering:
                 sample[var.name] = (
-                    Normal(var.tensor, self.sigma[var.name]).rsample().to(device)
+                    Normal(var.tensor, self.sigma[var.name].to(device))
+                    .rsample()
+                    .to(device)
                 )
                 assert sample[var.name].size() == var.shape
                 sample[var.name] = sample[var.name].contiguous()
@@ -93,9 +96,7 @@ class DCemSolver(abc.ABC):
         )
         # print("fx:", fX.shape)
 
-        assert fX.shape == (self.n_batch, self.n_samples)
-
-        # fX = fX.view(self.n_batch, self.n_samples)
+        # assert fX.shape == (n_batch, self.n_samples)
 
         if self.temp is not None and self.temp < np.infty:
             if self.normalize:
@@ -117,14 +118,14 @@ class DCemSolver(abc.ABC):
         else:
             I_vals = fX.argsort(dim=1)[:, : self.n_elite]
             # TODO: A scatter would be more efficient here.
-            I = torch.zeros(self.n_batch, self.n_samples, device=device)
-            for j in range(self.n_batch):
+            I = torch.zeros(n_batch, self.n_samples, device=device)
+            for j in range(n_batch):
                 for v in I_vals[j]:
                     I[j, v] = 1.0
             I = I.unsqueeze(2)
         # I.shape should be (n_batch, n_sample, 1)
 
-        X = torch.zeros((self.n_batch, self.n_samples, self.tot_dof))
+        X = torch.zeros((n_batch, self.n_samples, self.tot_dof), device=device)
 
         for i in range(self.n_samples):
             sample = X_samples[i]
@@ -142,7 +143,7 @@ class DCemSolver(abc.ABC):
         sigma = ((I * (X - mu.unsqueeze(1)) ** 2).sum(dim=1) / self.n_elite).sqrt()
         # print("sigma_updates", sigma)
 
-        assert sigma.shape == (self.n_batch, self.tot_dof)
+        assert sigma.shape == (n_batch, self.tot_dof)
 
         idx = 0
         for var in self.ordering:
@@ -160,7 +161,6 @@ class DCem(Optimizer):
         vectorize: bool = False,
         cem_solver: Optional[abc.ABC] = DCemSolver,
         max_iterations: int = 50,
-        n_batch: int = 1,
         n_sample: int = 50,
         n_elite: int = 10,
         temp: float = 1.0,
@@ -183,10 +183,9 @@ class DCem(Optimizer):
 
         if cem_solver is None:
             cem_solver = DCemSolver
-        self.solver = cem_solver(
+        self.linear_solver = cem_solver(
             objective,
             self.ordering,
-            n_batch,
             n_sample,
             n_elite,
             lb,
@@ -315,7 +314,7 @@ class DCem(Optimizer):
         for it_ in range(num_iter):
             iters_done += 1
             try:
-                delta = self.solver.solve()
+                delta = self.linear_solver.solve()
             except RuntimeError as error:
                 raise RuntimeError(f"There is an error in update {error}")
 

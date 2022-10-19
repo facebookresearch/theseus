@@ -462,6 +462,7 @@ class NonlinearOptimizer(Optimizer, abc.ABC):
 
     # Resets any internal state needed by the optimizer for a new optimization
     # problem. Optimizer loop will pass all optimizer kwargs to this method.
+    # Deliberately not abstract, since some optimizers might not need this
     def reset(self, **kwargs) -> None:
         pass
 
@@ -473,7 +474,7 @@ class NonlinearOptimizer(Optimizer, abc.ABC):
     ) -> None:
         self._update_state_impl(last_err, new_err, delta)
 
-    # Deliberately not abstract since, some optimizers might not need this
+    # Deliberately not abstract, since some optimizers might not need this
     def _update_state_impl(
         self, last_err: torch.Tensor, new_err: torch.Tensor, delta: torch.Tensor
     ) -> None:

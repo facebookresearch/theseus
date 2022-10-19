@@ -339,7 +339,7 @@ class NonlinearOptimizer(Optimizer, abc.ABC):
                 err = self.objective.error_squared_norm() / 2
                 self._update_info(info, it_, err, converged_indices)
                 self.update_optimizer_state(
-                    last_err=info.last_err, new_err=err, delta=delta
+                    last_err=info.last_err, new_err=err, delta=delta, **kwargs
                 )
                 if verbose:
                     print(
@@ -470,12 +470,20 @@ class NonlinearOptimizer(Optimizer, abc.ABC):
     # of the optimizer
     @torch.no_grad()
     def update_optimizer_state(
-        self, last_err: torch.Tensor, new_err: torch.Tensor, delta: torch.Tensor
+        self,
+        last_err: torch.Tensor,
+        new_err: torch.Tensor,
+        delta: torch.Tensor,
+        **kwargs,
     ) -> None:
-        self._update_state_impl(last_err, new_err, delta)
+        self._update_state_impl(last_err, new_err, delta, **kwargs)
 
     # Deliberately not abstract, since some optimizers might not need this
     def _update_state_impl(
-        self, last_err: torch.Tensor, new_err: torch.Tensor, delta: torch.Tensor
+        self,
+        last_err: torch.Tensor,
+        new_err: torch.Tensor,
+        delta: torch.Tensor,
+        **kwargs,
     ) -> None:
         pass

@@ -46,6 +46,9 @@ def _check_linear_solver(
 # See Nocedal and Wright, Numerical Optimization, pp. 258 - 261
 # https://www.csie.ntu.edu.tw/~r97002/temp/num_optimization.pdf
 class LevenbergMarquardt(NonlinearLeastSquares):
+    _MIN_DAMPING = 1.0e-7
+    _MAX_DAMPING = 1.0e7
+
     def __init__(
         self,
         objective: Objective,
@@ -82,7 +85,6 @@ class LevenbergMarquardt(NonlinearLeastSquares):
         self._damping: Union[float, torch.Tensor] = 0.001
         self._ellipsoidal_damping = False
         self._adaptive_damping = False
-        self._ACCEPT_EPS = 0.1
 
     def reset(
         self,
@@ -134,7 +136,14 @@ class LevenbergMarquardt(NonlinearLeastSquares):
     # Based on https://people.duke.edu/~hpgavin/ce281/lm.pdf, Section 4.1
     # We currently use method (1) from 4.1.1
     def _update_state_impl(
-        self, last_err: torch.Tensor, new_err: torch.Tensor, delta: torch.Tensor
+        self,
+        last_err: torch.Tensor,
+        new_err: torch.Tensor,
+        delta: torch.Tensor,
+        down_damping_ratio: float = 9.0,
+        up_damping_ratio: float = 11.0,
+        damping_accept: float = 0.1,
+        **kwargs,
     ) -> None:
         if not self._adaptive_damping:
             return
@@ -154,6 +163,12 @@ class LevenbergMarquardt(NonlinearLeastSquares):
         )
         den = (delta * (damping * delta + linearization.Atb.squeeze(2))).sum(dim=1)
         rho = (last_err - new_err) / den
-        good_idx = rho > self._ACCEPT_EPS
-        self._damping = torch.where(good_idx, self._damping / 9, self._damping * 11)
-        self._damping = self._damping.clamp(1.0e-7, 1.0e7)
+        good_idx = rho > damping_accept
+        self._damping = torch.where(
+            good_idx,
+            self._damping / down_damping_ratio,
+            self._damping * up_damping_ratio,
+        )
+        self._damping = self._damping.clamp(
+            LevenbergMarquardt._MIN_DAMPING, LevenbergMarquardt._MAX_DAMPING
+        )

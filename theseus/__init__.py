@@ -89,6 +89,7 @@ from .optimizer.nonlinear import (  # usort: skip
     Dogleg,
     GaussNewton,
     DCem,
+    DCemSolver,
     LevenbergMarquardt,
     NonlinearLeastSquares,
     NonlinearOptimizerInfo,

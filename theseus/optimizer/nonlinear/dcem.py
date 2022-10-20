@@ -49,10 +49,9 @@ class DCemSolver(abc.ABC):
         self.ub = ub
         self.temp = temp
         self.normalize = normalize
-        self.lml_verbose = lml_verbose
-        self.lml_eps = lml_eps
         self.tot_dof = sum([x.dof() for x in self.ordering])
         self.sigma = {var.name: torch.ones(var.shape) for var in self.ordering}
+        self.lml = LML(N=n_elite, verbose=lml_verbose, eps=lml_eps)
 
     def solve(self):
         device = self.objective.device
@@ -110,9 +109,7 @@ class DCemSolver(abc.ABC):
                 # I = LML(N=n_elite, verbose=lml_verbose, eps=lml_eps)(-_fX*temp)
                 I = torch.softmax(-_fX * self.temp, dim=1)
             else:
-                I = LML(N=self.n_elite, verbose=self.lml_verbose, eps=self.lml_eps)(
-                    -_fX * self.temp
-                )
+                I = self.lml(-_fX * self.temp)
             I = I.unsqueeze(2)
 
         else:

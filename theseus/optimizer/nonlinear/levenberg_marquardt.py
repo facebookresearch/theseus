@@ -83,22 +83,13 @@ class LevenbergMarquardt(NonlinearLeastSquares):
             self.linear_solver, _LM_ALLOWED_ADAPTIVE_DAMP_SOLVERS
         )
         self._damping: Union[float, torch.Tensor] = 0.001
-        self._ellipsoidal_damping = False
-        self._adaptive_damping = False
 
     def reset(
         self,
         damping: float = 1e-3,
-        ellipsoidal_damping: bool = False,
         adaptive_damping: bool = False,
         **kwargs,
     ) -> None:
-        if ellipsoidal_damping and not self._allows_ellipsoidal:
-            raise NotImplementedError(
-                f"Ellipsoidal damping is only supported by solvers with type "
-                f"[{_EDAMP_SOLVERS_STR}]."
-            )
-        self._ellipsoidal_damping = ellipsoidal_damping
         if adaptive_damping and not self._allows_adaptive:
             raise NotImplementedError(
                 f"Adaptive damping is only supported by solvers with type "
@@ -113,11 +104,19 @@ class LevenbergMarquardt(NonlinearLeastSquares):
         else:
             self._damping = damping
 
+    # This method uses self._damping rather than the one in kwargs,
+    # so that we can handle the adaptive case, which has memory
     def compute_delta(
         self,
+        ellipsoidal_damping: bool = False,
         damping_eps: Optional[float] = None,
         **kwargs,
     ) -> torch.Tensor:
+        if ellipsoidal_damping and not self._allows_ellipsoidal:
+            raise NotImplementedError(
+                f"Ellipsoidal damping is only supported by solvers with type "
+                f"[{_EDAMP_SOLVERS_STR}]."
+            )
         if damping_eps is not None and not self._allows_ellipsoidal:
             raise NotImplementedError(
                 f"damping eps is only supported by solvers with type "
@@ -127,7 +126,7 @@ class LevenbergMarquardt(NonlinearLeastSquares):
 
         return self.linear_solver.solve(
             damping=self._damping,
-            ellipsoidal_damping=self._ellipsoidal_damping,
+            ellipsoidal_damping=ellipsoidal_damping,
             damping_eps=damping_eps,
         )
 
@@ -140,12 +139,13 @@ class LevenbergMarquardt(NonlinearLeastSquares):
         last_err: torch.Tensor,
         new_err: torch.Tensor,
         delta: torch.Tensor,
+        adaptive_damping: bool = False,
         down_damping_ratio: float = 9.0,
         up_damping_ratio: float = 11.0,
         damping_accept: float = 0.1,
         **kwargs,
     ) -> None:
-        if not self._adaptive_damping:
+        if not adaptive_damping:
             return
         linearization = self.linear_solver.linearization
         if not isinstance(linearization, DenseLinearization):

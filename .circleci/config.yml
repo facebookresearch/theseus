@@ -49,16 +49,19 @@ install_suitesparse: &install_suitesparse
 
 setup_cuda10_libs: &setup_cuda10_libs
   - run:
-      name: Setup CUDA drivers and libraries
+      name: Setup CUDA 10 drivers and libraries
       working_directory: ~/
       command: |
         # ubuntu's default gcc9.3 is too recent for cuda10.2
-        sudo apt-get install -y gcc-7 g++-7
         sudo apt-get install -y gcc-8 g++-8
         sudo update-alternatives --install /usr/bin/gcc gcc /usr/bin/gcc-9 10
         sudo update-alternatives --install /usr/bin/gcc gcc /usr/bin/gcc-8 20
         sudo update-alternatives --install /usr/bin/g++ g++ /usr/bin/g++-9 10
         sudo update-alternatives --install /usr/bin/g++ g++ /usr/bin/g++-8 20
+        sudo update-alternatives --install /usr/bin/x86_64-linux-gnu-gcc x86_64-linux-gnu-gcc /usr/bin/x86_64-linux-gnu-gcc-9 10
+        sudo update-alternatives --install /usr/bin/x86_64-linux-gnu-gcc x86_64-linux-gnu-gcc /usr/bin/x86_64-linux-gnu-gcc-8 20
+        sudo update-alternatives --install /usr/bin/x86_64-linux-gnu-g++ x86_64-linux-gnu-g++ /usr/bin/x86_64-linux-gnu-g++-9 10
+        sudo update-alternatives --install /usr/bin/x86_64-linux-gnu-g++ x86_64-linux-gnu-g++ /usr/bin/x86_64-linux-gnu-g++-8 20
         # download and install nvidia drivers, cuda, etc
         wget --quiet --no-clobber -P ~/nvidia-downloads https://developer.download.nvidia.com/compute/cuda/10.2/Prod/local_installers/cuda_10.2.89_440.33.01_linux.run
         time sudo /bin/bash nvidia-downloads/cuda_10.2.89_440.33.01_linux.run --no-drm --silent --driver --toolkit
@@ -68,7 +71,7 @@ setup_cuda10_libs: &setup_cuda10_libs
 
 setup_cuda11_libs: &setup_cuda11_libs
   - run:
-      name: Setup CUDA drivers and libraries
+      name: Setup CUDA 11 drivers and libraries
       working_directory: ~/
       command: |
         # download and install nvidia drivers, cuda, etc
@@ -112,21 +115,50 @@ install_functorch: &install_functorch
       command: |
         pip install functorch
 
-setup_project_cuda10: &setup_project_cuda10
+install_recent_cmake_2004: &install_recent_cmake_2004
   - run:
-      name: Setting up project for cuda10
-      working_directory: ~/project
+      name: Installing recent CMake
+      working_directory: ~/
       command: |
-        CXX=g++-7 CC=gcc-7 LD=g++-7 pip install --progress-bar off -e .
-        CXX=g++-7 CC=gcc-7 LD=g++-7 pip install -r requirements/dev.txt
+        wget -O - https://apt.kitware.com/keys/kitware-archive-latest.asc 2>/dev/null | gpg --dearmor - | sudo tee /etc/apt/trusted.gpg.d/kitware.gpg >/dev/null
+        sudo apt-add-repository 'deb https://apt.kitware.com/ubuntu/ focal main'
+        sudo apt-get update
+        sudo apt-get install -y cmake
 
-setup_project_cuda11: &setup_project_cuda11
+build_baspacho_cpu: &build_baspacho_cpu
   - run:
-      name: Setting up project for cuda11
+      name: Install BaSpaCho (CPU)
+      working_directory: ~/
+      command: |
+        sudo apt-get install -y libopenblas-pthread-dev
+        git clone https://github.com/facebookresearch/baspacho.git
+        cd baspacho
+        cmake -S . -B build -DCMAKE_BUILD_TYPE=Release -DBLA_STATIC=ON \
+          -DBASPACHO_USE_CUBLAS=0 -DBUILD_SHARED_LIBS=OFF \
+          -DBASPACHO_BUILD_TESTS=OFF -DBASPACHO_BUILD_EXAMPLES=OFF
+        cmake --build build -- -j16
+
+build_baspacho_cuda: &build_baspacho_cuda
+  - run:
+      name: Install BaSpaCho (CUDA)
+      working_directory: ~/
+      command: |
+        sudo apt-get install -y libopenblas-pthread-dev
+        git clone https://github.com/facebookresearch/baspacho.git
+        cd baspacho
+        cmake -S . -B build -DCMAKE_BUILD_TYPE=Release -DBLA_STATIC=ON \
+          -DCMAKE_CUDA_COMPILER=/usr/local/cuda/bin/nvcc \
+          -DBUILD_SHARED_LIBS=OFF -DBASPACHO_CUDA_ARCHS='detect' \
+          -DBASPACHO_BUILD_TESTS=OFF -DBASPACHO_BUILD_EXAMPLES=OFF
+        cmake --build build -- -j16
+
+setup_project: &setup_project
+  - run:
+      name: Setting up project
       working_directory: ~/project
       command: |
-        pip install --progress-bar off -e .
         pip install -r requirements/dev.txt
+        BASPACHO_ROOT_DIR=~/baspacho pip install --progress-bar off -e .
 
 run_tests: &run_tests
   - run:
@@ -147,13 +179,15 @@ jobs:
       - checkout
       - <<: *install_suitesparse
       - <<: *install_functorch
+      - <<: *install_recent_cmake_2004
+      - <<: *build_baspacho_cpu
       - <<: *install_nox
       - run:
           name: "Testing theseus"
           command: |
               export NOX_PYTHON_VERSIONS=3.7
               pip install nox==2020.8.22
-              nox
+              BASPACHO_ROOT_DIR=~/baspacho nox
 
   py38_linux:
     docker:
@@ -162,13 +196,15 @@ jobs:
       - checkout
       - <<: *install_suitesparse
       - <<: *install_functorch
+      - <<: *install_recent_cmake_2004
+      - <<: *build_baspacho_cpu
       - <<: *install_nox
       - run:
           name: "Testing theseus"
           command: |
               export NOX_PYTHON_VERSIONS=3.8
               pip install nox==2020.8.22
-              nox
+              BASPACHO_ROOT_DIR=~/baspacho nox
 
   py39_linux:
     docker:
@@ -177,13 +213,15 @@ jobs:
       - checkout
       - <<: *install_suitesparse
       - <<: *install_functorch
+      - <<: *install_recent_cmake_2004
+      - <<: *build_baspacho_cpu
       - <<: *install_nox
       - run:
           name: "Testing theseus"
           command: |
               export NOX_PYTHON_VERSIONS=3.9
               pip install nox==2020.8.22
-              nox
+              BASPACHO_ROOT_DIR=~/baspacho nox
 
   unittests_gpu17_cuda10:
     executor: gpu_cuda10
@@ -195,7 +233,9 @@ jobs:
       - <<: *setup_environment
       - <<: *install_torch_cuda10
       - <<: *install_functorch
-      - <<: *setup_project_cuda10
+      - <<: *install_recent_cmake_2004
+      - <<: *build_baspacho_cuda
+      - <<: *setup_project
       - <<: *run_tests
 
   unittests_gpu17_cuda11:
@@ -208,7 +248,9 @@ jobs:
       - <<: *setup_environment
       - <<: *install_torch_cuda11
       - <<: *install_functorch
-      - <<: *setup_project_cuda11
+      - <<: *install_recent_cmake_2004
+      - <<: *build_baspacho_cuda
+      - <<: *setup_project
       - <<: *run_tests
 
 workflows:

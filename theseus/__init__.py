@@ -2,7 +2,7 @@
 #
 # This source code is licensed under the MIT license found in the
 # LICENSE file in the root directory of this source tree.
-__version__ = "0.1.1"
+__version__ = "0.1.2rc1"
 
 
 from .core import (  # usort: skip
@@ -68,6 +68,7 @@ from .optimizer import (  # usort: skip
     VariableOrdering,
 )
 from .optimizer.linear import (  # usort: skip
+    BaspachoSparseSolver,
     CholeskyDenseSolver,
     CholmodSparseSolver,
     DenseSolver,

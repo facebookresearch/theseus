@@ -88,21 +88,21 @@ CusolverLUSolver::CusolverLUSolver(int batchSize,
     const int *pA_rowPtr_cpu = A_rowPtr_cpu.data_ptr<int>();
     const int *pA_colInd_cpu = A_colInd_cpu.data_ptr<int>();
 
-    // we compute the permutation Q which allows 
+    // we compute the permutation Q which allows
     torch::Tensor Qperm = torch::empty(numRows, torch::TensorOptions(torch::kInt));
     int *pQperm = Qperm.data_ptr<int>();
 
     if (ordering == AMD) {
         CUSOLVER_CHECK(cusolverSpXcsrsymamdHost(cusolverSpH, numRows, nnz,
-                                                A_descr, pA_rowPtr_cpu, pA_colInd_cpu, 
+                                                A_descr, pA_rowPtr_cpu, pA_colInd_cpu,
                                                 pQperm));
     } else if (ordering == RCM) {
         CUSOLVER_CHECK(cusolverSpXcsrsymrcmHost(cusolverSpH, numRows, nnz,
-                                                A_descr, pA_rowPtr_cpu, pA_colInd_cpu, 
+                                                A_descr, pA_rowPtr_cpu, pA_colInd_cpu,
                                                 pQperm));
     } else if (ordering == MDQ) {
         CUSOLVER_CHECK(cusolverSpXcsrsymmdqHost(cusolverSpH, numRows, nnz,
-                                                A_descr, pA_rowPtr_cpu, pA_colInd_cpu, 
+                                                A_descr, pA_rowPtr_cpu, pA_colInd_cpu,
                                                 pQperm));
     } else {
         throw std::runtime_error("CusolverLUSolver: invalid value for ordering: " + std::to_string(ordering));
@@ -117,16 +117,16 @@ CusolverLUSolver::CusolverLUSolver(int batchSize,
     {
         size_t size_perm = 0;
         CUSOLVER_CHECK(cusolverSpXcsrperm_bufferSizeHost(cusolverSpH, numRows, numCols, nnz,
-                                                         A_descr, pB_rowPtr_cpu, pB_colInd_cpu, 
+                                                         A_descr, pB_rowPtr_cpu, pB_colInd_cpu,
                                                          pQperm, pQperm, &size_perm));
 
         torch::Tensor permBuffer = torch::empty(size_perm,
-                                                torch::TensorOptions(torch::kByte));  
+                                                torch::TensorOptions(torch::kByte));
         torch::Tensor permIndices = torch::empty(nnz, // unused
                                                  torch::TensorOptions(torch::kInt));
 
         CUSOLVER_CHECK(cusolverSpXcsrpermHost(cusolverSpH, numRows, numCols, nnz,
-                                              A_descr, pB_rowPtr_cpu, pB_colInd_cpu, 
+                                              A_descr, pB_rowPtr_cpu, pB_colInd_cpu,
                                               pQperm, pQperm,
                                               permIndices.data_ptr<int>(), permBuffer.data_ptr<uint8_t>()));
     }
@@ -140,7 +140,7 @@ CusolverLUSolver::CusolverLUSolver(int batchSize,
         CUSOLVER_CHECK(cusolverSpCreateCsrluInfoHost(&info));
 
         CUSOLVER_CHECK(cusolverSpXcsrluAnalysisHost(cusolverSpH, numRows, nnz,
-                                                    A_descr, pB_rowPtr_cpu, pB_colInd_cpu, 
+                                                    A_descr, pB_rowPtr_cpu, pB_colInd_cpu,
                                                     info));
 
         torch::Tensor B_val_cpu = torch::zeros(nnz, torch::TensorOptions(torch::kDouble));
@@ -155,7 +155,7 @@ CusolverLUSolver::CusolverLUSolver(int batchSize,
             }
         }
 
-        size_t size_internal = 0; 
+        size_t size_internal = 0;
         size_t size_lu  = 0;
         CUSOLVER_CHECK(cusolverSpDcsrluBufferInfoHost(cusolverSpH, numRows, nnz,
                                                       A_descr, pB_val_cpu, pB_rowPtr_cpu, pB_colInd_cpu,
@@ -213,7 +213,7 @@ CusolverLUSolver::CusolverLUSolver(int batchSize,
 
     // cusolverRf part
     const cusolverRfFactorization_t fact_alg = CUSOLVERRF_FACTORIZATION_ALG0; // default
-    const cusolverRfTriangularSolve_t solve_alg = CUSOLVERRF_TRIANGULAR_SOLVE_ALG1; // default  
+    const cusolverRfTriangularSolve_t solve_alg = CUSOLVERRF_TRIANGULAR_SOLVE_ALG1; // default
     double nzero = 0.0;
     double nboost = 0.0;
     CUSOLVER_CHECK(cusolverRfCreate(&cusolverRfH));

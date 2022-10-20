@@ -1,5 +1,6 @@
 seed: 1
 solver_device: "cuda"
+solver_type: "lucuda"
 
 num_poses: 256
 rotation_noise: 0.05

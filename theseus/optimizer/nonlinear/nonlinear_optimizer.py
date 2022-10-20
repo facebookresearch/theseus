@@ -57,18 +57,10 @@ class BackwardMode(Enum):
     IMPLICIT = 1
     TRUNCATED = 2
     DLM = 3
-    FULL = -1
 
     @staticmethod
     def resolve(key: Union[str, "BackwardMode"]) -> "BackwardMode":
         if isinstance(key, BackwardMode):
-            if key == BackwardMode.FULL:
-                warnings.warn(
-                    "BackwardMode.FULL is deprecated and will be "
-                    "replaced by BackwardMode.UNROLL in future versions.",
-                    DeprecationWarning,
-                )
-                return BackwardMode.UNROLL
             return key
 
         if not isinstance(key, str):
@@ -79,7 +71,7 @@ class BackwardMode(Enum):
         except KeyError:
             raise ValueError(
                 f"Unrecognized backward mode f{key}."
-                f"Valid choices are full, implicit, truncated, dlm."
+                f"Valid choices are unroll, implicit, truncated, dlm."
             )
         return backward_mode
 

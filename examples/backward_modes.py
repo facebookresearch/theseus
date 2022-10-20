@@ -4,7 +4,8 @@
 # This source code is licensed under the MIT license found in the
 # LICENSE file in the root directory of this source tree.
 #
-# This example illustrates the three backward modes (FULL, IMPLICIT, and TRUNCATED)
+# This example illustrates the four backward modes
+# (UNROLL, IMPLICIT, TRUNCATED, and DLM)
 # on a problem fitting a quadratic to data.
 
 import time
@@ -90,10 +91,10 @@ updated_inputs, info = theseus_optim.forward(
 # to obtain the adjoint derivatives of \hat a with respect
 # to other inputs or hyper-parameters, such as the data itself.
 # Here we compute the derivative of \hat a with respect to the data,
-# i.e. \partial a / \partial x using the full backward mode.
+# i.e. \partial a / \partial x using the unroll backward mode.
 da_dx = torch.autograd.grad(updated_inputs["a"], data_x, retain_graph=True)[0].squeeze()
 
-print("--- backward_mode=FULL")
+print("--- backward_mode=UNROLL")
 print(da_dx.numpy())
 
 # We can also compute this using implicit differentiation by calling
@@ -236,7 +237,7 @@ k = "fwd"
 print(f"Forward: {np.mean(times[k]):.2e} s +/- {np.std(times[k]):.2e} s")
 
 k = "bwd"
-print(f"Backward (FULL): {np.mean(times[k]):.2e} s +/- {np.std(times[k]):.2e} s")
+print(f"Backward (UNROLL): {np.mean(times[k]):.2e} s +/- {np.std(times[k]):.2e} s")
 
 k = "bwd_impl"
 print(f"Backward (IMPLICIT) {np.mean(times[k]):.2e} s +/- {np.std(times[k]):.2e} s")

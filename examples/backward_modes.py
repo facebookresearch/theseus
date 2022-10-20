@@ -5,7 +5,7 @@
 # LICENSE file in the root directory of this source tree.
 #
 # This example illustrates the four backward modes
-# (UNROLL, IMPLICIT, TRUNCATED, and DLM)
+# (unroll, implicit, truncated, and dlm)
 # on a problem fitting a quadratic to data.
 
 import time
@@ -94,7 +94,7 @@ updated_inputs, info = theseus_optim.forward(
 # i.e. \partial a / \partial x using the unroll backward mode.
 da_dx = torch.autograd.grad(updated_inputs["a"], data_x, retain_graph=True)[0].squeeze()
 
-print("--- backward_mode=UNROLL")
+print("--- backward_mode=unroll")
 print(da_dx.numpy())
 
 # We can also compute this using implicit differentiation by calling
@@ -109,7 +109,7 @@ updated_inputs, info = theseus_optim.forward(
 )
 
 da_dx = torch.autograd.grad(updated_inputs["a"], data_x, retain_graph=True)[0].squeeze()
-print("\n--- backward_mode=IMPLICIT")
+print("\n--- backward_mode=implicit")
 print(da_dx.numpy())
 
 # We can also use truncated unrolling to compute the derivative:
@@ -125,7 +125,7 @@ updated_inputs, info = theseus_optim.forward(
 
 da_dx = torch.autograd.grad(updated_inputs["a"], data_x, retain_graph=True)[0].squeeze()
 
-print("\n--- backward_mode=TRUNCATED, backward_num_iterations=5")
+print("\n--- backward_mode=truncated, backward_num_iterations=5")
 print(da_dx.numpy())
 
 
@@ -141,7 +141,7 @@ updated_inputs, info = theseus_optim.forward(
 )
 
 da_dx = torch.autograd.grad(updated_inputs["a"], data_x, retain_graph=True)[0].squeeze()
-print("\n--- backward_mode=DLM")
+print("\n--- backward_mode=dlm")
 print(da_dx.numpy())
 
 
@@ -237,15 +237,15 @@ k = "fwd"
 print(f"Forward: {np.mean(times[k]):.2e} s +/- {np.std(times[k]):.2e} s")
 
 k = "bwd"
-print(f"Backward (UNROLL): {np.mean(times[k]):.2e} s +/- {np.std(times[k]):.2e} s")
+print(f"Backward (unroll): {np.mean(times[k]):.2e} s +/- {np.std(times[k]):.2e} s")
 
 k = "bwd_impl"
-print(f"Backward (IMPLICIT) {np.mean(times[k]):.2e} s +/- {np.std(times[k]):.2e} s")
+print(f"Backward (implicit) {np.mean(times[k]):.2e} s +/- {np.std(times[k]):.2e} s")
 
 k = "bwd_trunc"
 print(
-    f"Backward (TRUNCATED, 5 steps) {np.mean(times[k]):.2e} s +/- {np.std(times[k]):.2e} s"
+    f"Backward (truncated, 5 steps) {np.mean(times[k]):.2e} s +/- {np.std(times[k]):.2e} s"
 )
 
 k = "bwd_dlm"
-print(f"Backward (DLM) {np.mean(times[k]):.2e} s +/- {np.std(times[k]):.2e} s")
+print(f"Backward (dlm) {np.mean(times[k]):.2e} s +/- {np.std(times[k]):.2e} s")

@@ -2,7 +2,7 @@
 
 # This script can be used to generate the results in Figure 4
 # Options that can be changed for values used in the paper:
-#  inner_optim.backward_mode: {FULL, IMPLICIT, TRUNCATED, DLM}
+#  inner_optim.backward_mode: {unroll, implicit, truncated, dlm}
 #  inner_optim.max_iters: {2, 5, 10, 20, 30, 40, 50}
 #
 # When using DLM, set inner_optim.dlm_epsilon=0.01
@@ -22,4 +22,4 @@ python examples/tactile_pose_estimation.py \
     inner_optim.max_iters=2 \
     inner_optim.dlm_epsilon=None \
     inner_optim.backward_num_iterations=None \
-    inner_optim.backward_mode=IMPLICIT
+    inner_optim.backward_mode=implicit

@@ -88,10 +88,10 @@ def test_backwards():
             "backward_mode": "unroll",
         },
     )
-    da_dx_full = torch.autograd.grad(updated_inputs["a"], data_x, retain_graph=True)[
+    da_dx_unroll = torch.autograd.grad(updated_inputs["a"], data_x, retain_graph=True)[
         0
     ].squeeze()
-    assert torch.allclose(da_dx_numeric, da_dx_full, atol=1e-3)
+    assert torch.allclose(da_dx_numeric, da_dx_unroll, atol=1e-3)
 
     updated_inputs, _ = theseus_optim.forward(
         theseus_inputs,

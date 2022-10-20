@@ -13,7 +13,7 @@ inner_optim:
   max_iters: 5
   optimizer: GaussNewton
   reg_w: 0
-  backward_mode: IMPLICIT
+  backward_mode: implicit
   backward_num_iterations: None # only needed by TRUNCATED backward mode
   dlm_epsilon: None # only needed by DLM backward mode
   force_implicit_by_epoch: 10000

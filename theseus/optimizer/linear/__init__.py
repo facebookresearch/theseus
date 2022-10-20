@@ -10,4 +10,4 @@ from .linear_optimizer import LinearOptimizer
 from .linear_solver import LinearSolver
 from .baspacho_sparse_solver import BaspachoSparseSolver
 from .lu_cuda_sparse_solver import LUCudaSparseSolver
-from .sparse_solver import CholmodSparseSolver
+from .cholmod_sparse_solver import CholmodSparseSolver

@@ -5,7 +5,7 @@
 
 from .baspacho_sparse_autograd import BaspachoSolveFunction
 from .lu_cuda_sparse_autograd import LUCudaSolveFunction
-from .sparse_autograd import CholmodSolveFunction
+from .cholmod_sparse_autograd import CholmodSolveFunction
 
 __all__ = [
     "BaspachoSolveFunction",

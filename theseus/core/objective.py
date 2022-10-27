@@ -574,7 +574,7 @@ class Objective:
             delta, ordering, ignore_mask=ignore_mask, force_update=force_update
         )
         # Updating immediately is useful, since it will keep grad history if
-        # needed. Otherwise, with lazy waitng we can be in a situation were
+        # needed. Otherwise, with lazy waitng we can be in a situation where
         # vectorization is updated with torch.no_grad() (e.g., for error logging),
         # and then it has to be run again later when grad is back on.
         self.update_vectorization_if_needed()

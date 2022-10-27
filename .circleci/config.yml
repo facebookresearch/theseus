@@ -179,7 +179,6 @@ jobs:
       - checkout
       - <<: *install_suitesparse
       - <<: *install_functorch
-      - <<: *install_recent_cmake_2004
       - <<: *build_baspacho_cpu
       - <<: *install_nox
       - run:
@@ -196,7 +195,6 @@ jobs:
       - checkout
       - <<: *install_suitesparse
       - <<: *install_functorch
-      - <<: *install_recent_cmake_2004
       - <<: *build_baspacho_cpu
       - <<: *install_nox
       - run:
@@ -213,7 +211,6 @@ jobs:
       - checkout
       - <<: *install_suitesparse
       - <<: *install_functorch
-      - <<: *install_recent_cmake_2004
       - <<: *build_baspacho_cpu
       - <<: *install_nox
       - run:

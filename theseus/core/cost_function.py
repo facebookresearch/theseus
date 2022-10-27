@@ -133,6 +133,11 @@ def _tmp_tensors(vars: Sequence[Variable]):
 #       aux_vars=(aux_vars[0].tensor, ..., aux_vars[M -1].tensor)
 #   )
 #
+# When using `autograd_mode="vmap"` err_fn should not have side effects
+# deriving from the tensor values of optim_vars and aux_vars, as this
+# might result in functorch errors. See the first sentence here
+# https://pytorch.org/functorch/stable/ux_limitations.html#general-limitations
+#
 # The user also needs to explicitly specify the output's dimension
 class AutoDiffCostFunction(CostFunction):
     def __init__(

@@ -61,6 +61,7 @@ from .geometry import (  # usort: skip
 from .optimizer import (  # usort: skip
     DenseLinearization,
     local_gaussian,
+    Linearization,
     ManifoldGaussian,
     OptimizerInfo,
     retract_gaussian,
@@ -73,6 +74,7 @@ from .optimizer.linear import (  # usort: skip
     CholmodSparseSolver,
     DenseSolver,
     LinearOptimizer,
+    LinearSolver,
     LUCudaSparseSolver,
     LUDenseSolver,
 )

@@ -50,8 +50,109 @@ class DCemSolver(abc.ABC):
         self.temp = temp
         self.normalize = normalize
         self.tot_dof = sum([x.dof() for x in self.ordering])
+        # self.sigma = {var.name: torch.ones(var.shape) for var in self.ordering}
+        self.lml_eps = lml_eps
+
+    def reinit_sigma(self):
         self.sigma = {var.name: torch.ones(var.shape) for var in self.ordering}
-        self.lml = LML(N=n_elite, verbose=lml_verbose, eps=lml_eps)
+
+    def all_solve(self, num_iters):
+        device = self.objective.device
+
+        n_batch = self.ordering[0].shape[0]
+
+        init_mu = torch.cat([var.tensor for var in self.ordering], dim=-1)
+        init_sigma = torch.ones((n_batch, self.tot_dof), device=device)
+
+        mu = init_mu.clone()
+        sigma = init_sigma.clone()
+
+        for itr in range(num_iters):
+            X_samples = []
+            for i in range(self.n_samples):
+                sample = {}
+                idx = 0
+                for var in self.ordering:
+                    sample[var.name] = Normal(
+                        mu[:, slice(idx, idx + var.dof())],
+                        sigma[:, slice(idx, idx + var.dof())],
+                    ).rsample()
+                    idx += var.dof()
+                    assert sample[var.name].size() == var.shape
+                    sample[var.name] = sample[var.name].contiguous()
+                # print("sample", sample)
+                X_samples.append(sample)
+
+            fX = torch.stack(
+                [
+                    self.objective.error_squared_norm(X_samples[i])
+                    for i in range(self.n_samples)
+                ],
+                dim=1,
+            )
+
+            # print("fx:", fX.shape)
+
+            # assert fX.shape == (n_batch, self.n_samples)
+
+            if self.temp is not None and self.temp < np.infty:
+                if self.normalize:
+                    fX_mu = fX.mean(dim=1).unsqueeze(1)
+                    fX_sigma = fX.std(dim=1).unsqueeze(1)
+                    _fX = (fX - fX_mu) / (fX_sigma + 1e-6)
+                else:
+                    _fX = fX
+
+                if self.n_elite == 1:
+                    # I = LML(N=n_elite, verbose=lml_verbose, eps=lml_eps)(-_fX*temp)
+                    I = torch.softmax(-_fX * self.temp, dim=1)
+                else:
+                    I = LML(N=self.n_elite, verbose=False, eps=self.lml_eps)(
+                        -_fX * self.temp
+                    )
+                I = I.unsqueeze(2)
+
+            else:
+                I_vals = fX.argsort(dim=1)[:, : self.n_elite]
+                # TODO: A scatter would be more efficient here.
+                I = torch.zeros(n_batch, self.n_samples, device=device)
+                for j in range(n_batch):
+                    for v in I_vals[j]:
+                        I[j, v] = 1.0
+                I = I.unsqueeze(2)
+            # I.shape should be (n_batch, n_sample, 1)
+
+            X = torch.zeros((n_batch, self.n_samples, self.tot_dof), device=device)
+
+            for i in range(self.n_samples):
+                sample = X_samples[i]
+                idx = 0
+                for var in self.ordering:
+                    X[:, i, slice(idx, idx + var.dof())] = sample[var.name]
+                    idx += var.dof()
+
+            assert I.shape[:2] == X.shape[:2]
+            # print("Samples:", X)
+            X_I = I * X
+
+            old_mu = mu.clone().detach()
+
+            mu = torch.sum(X_I, dim=1) / self.n_elite
+            sigma = ((I * (X - mu.unsqueeze(1)) ** 2).sum(dim=1) / self.n_elite).sqrt()
+
+            assert sigma.shape == (n_batch, self.tot_dof)
+
+            if (abs(mu - old_mu) < 1e-3).all():
+                break
+
+        new_dict = {}
+
+        idx = 0
+        for var in self.ordering:
+            new_dict[var.name] = mu[:, slice(idx, idx + var.dof())]
+            idx += var.dof()
+
+        return new_dict
 
     def solve(self):
         device = self.objective.device
@@ -109,7 +210,9 @@ class DCemSolver(abc.ABC):
                 # I = LML(N=n_elite, verbose=lml_verbose, eps=lml_eps)(-_fX*temp)
                 I = torch.softmax(-_fX * self.temp, dim=1)
             else:
-                I = self.lml(-_fX * self.temp)
+                I = LML(N=self.n_elite, verbose=False, eps=self.lml_eps)(
+                    -_fX * self.temp
+                )
             I = I.unsqueeze(2)
 
         else:
@@ -134,7 +237,7 @@ class DCemSolver(abc.ABC):
         assert I.shape[:2] == X.shape[:2]
         # print("Samples:", X)
         X_I = I * X
-        old_mu = mu.clone()
+        # old_mu = mu.clone()
         mu = torch.sum(X_I, dim=1) / self.n_elite
 
         sigma = ((I * (X - mu.unsqueeze(1)) ** 2).sum(dim=1) / self.n_elite).sqrt()
@@ -142,13 +245,18 @@ class DCemSolver(abc.ABC):
 
         assert sigma.shape == (n_batch, self.tot_dof)
 
+        new_dict = {}
+
         idx = 0
         for var in self.ordering:
             self.sigma[var.name] = sigma[:, slice(idx, idx + var.dof())]
+            new_dict[var.name] = mu[:, slice(idx, idx + var.dof())]
             idx += var.dof()
 
         # not sure about the detach
-        return mu - old_mu.detach()
+        # return mu - old_mu
+
+        return new_dict
 
 
 class DCem(Optimizer):
@@ -157,21 +265,20 @@ class DCem(Optimizer):
         objective: Objective,
         vectorize: bool = False,
         cem_solver: Optional[abc.ABC] = DCemSolver,
-        max_iterations: int = 50,
+        max_iterations: int = 20,
         n_sample: int = 50,
-        n_elite: int = 10,
+        n_elite: int = 5,
         temp: float = 1.0,
         lb=None,
         ub=None,
-        # iter_cb=None,
-        # proj_iterate_cb:=None,
         lml_verbose: bool = False,
         lml_eps: float = 1e-3,
         normalize: bool = True,
-        iter_eps: float = 1e-4,
+        iter_eps: float = 1e-3,
         **kwargs,
     ) -> None:
         super().__init__(objective, vectorize=vectorize, **kwargs)
+
         self.params = NonlinearOptimizerParams(
             iter_eps, iter_eps * 100, max_iterations, 1e-2
         )
@@ -180,6 +287,7 @@ class DCem(Optimizer):
 
         if cem_solver is None:
             cem_solver = DCemSolver
+
         self.linear_solver = cem_solver(
             objective,
             self.ordering,
@@ -306,18 +414,23 @@ class DCem(Optimizer):
         end_iter_callback: Optional[EndIterCallbackType] = None,
         **kwargs,
     ) -> int:
+
+        mu = self.linear_solver.all_solve(num_iter)
+        self.objective.update(mu)
+        with torch.no_grad():
+            info.best_solution = mu
+        return
+
         converged_indices = torch.zeros_like(info.last_err).bool()
         iters_done = 0
         for it_ in range(num_iter):
             iters_done += 1
             try:
-                delta = self.linear_solver.solve()
+                mu = self.linear_solver.solve()
             except RuntimeError as error:
                 raise RuntimeError(f"There is an error in update {error}")
 
-            self.objective.retract_optim_vars(
-                delta, self.ordering, ignore_mask=converged_indices, force_update=False
-            )
+            self.objective.update(mu)
 
             # check for convergence
             with torch.no_grad():
@@ -330,18 +443,19 @@ class DCem(Optimizer):
                     )
                 converged_indices = self._check_convergence(err, info.last_err)
                 info.status[
-                    converged_indices.cpu().numpy()
+                    np.array(converged_indices.cpu().numpy())
                 ] = NonlinearOptimizerStatus.CONVERGED
                 if converged_indices.all():
                     break  # nothing else will happen at this point
                 info.last_err = err
 
                 if end_iter_callback is not None:
-                    end_iter_callback(self, info, delta, it_)
+                    end_iter_callback(self, info, mu, it_)
 
         info.status[
             info.status == NonlinearOptimizerStatus.START
         ] = NonlinearOptimizerStatus.MAX_ITERATIONS
+
         return iters_done
 
     def _optimize_impl(
@@ -355,6 +469,8 @@ class DCem(Optimizer):
         **kwargs,
     ) -> OptimizerInfo:
         backward_mode = BackwardMode.resolve(backward_mode)
+        # self.linear_solver.reinit_sigma()
+
         with torch.no_grad():
             info = self._init_info(
                 track_best_solution, track_err_history, track_state_history

@@ -509,9 +509,7 @@ class Objective:
         self._batch_size = _get_batch_size(batch_sizes)
 
     def _vectorization_needs_update(self):
-        num_updates = dict(
-            (name, v._num_updates) for name, v in self._all_variables.items()
-        )
+        num_updates = {name: v._num_updates for name, v in self._all_variables.items()}
         needs = False
         if num_updates != self._num_updates_variables:
             self._num_updates_variables = num_updates
@@ -575,6 +573,11 @@ class Objective:
         self._retract_method(
             delta, ordering, ignore_mask=ignore_mask, force_update=force_update
         )
+        # Updating immediately is useful, since it will keep grad history if
+        # needed. Otherwise, with lazy waitng we can be in a situation where
+        # vectorization is updated with torch.no_grad() (e.g., for error logging),
+        # and then it has to be run again later when grad is back on.
+        self.update_vectorization_if_needed()
 
     def _enable_vectorization(
         self,

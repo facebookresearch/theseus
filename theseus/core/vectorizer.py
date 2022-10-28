@@ -228,7 +228,11 @@ class Vectorize:
                 # when updating the vectorized variable containers.
                 tensor = (
                     var.tensor
-                    if (var_batch_size > 1 or Vectorize._SHARED_TOKEN in name)
+                    if (
+                        var_batch_size > 1
+                        or objective_batch_size == 1
+                        or Vectorize._SHARED_TOKEN in name
+                    )
                     else Vectorize._expand(var.tensor, objective_batch_size)
                 )
                 names_to_tensors[name].append(tensor)

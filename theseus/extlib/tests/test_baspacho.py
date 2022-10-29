@@ -81,7 +81,8 @@ def check_baspacho(
 
     f.add_MtM(A_val, A_rowPtr, A_colInd)
     beta = 0.01
-    f.damp(0.0, beta)
+    alpha = torch.rand(batch_size, device=dev, dtype=torch.double)
+    f.damp(alpha, beta)
     f.factor()
 
     b = torch.rand((batch_size, A_num_rows), dtype=torch.double).to(dev)
@@ -94,8 +95,12 @@ def check_baspacho(
     sol = Atb.clone()
     f.solve(sol)
 
+    damp_diags = [
+        alpha[i].item() * np.diag(np.diag(AtA_csr[i].todense()))
+        for i in range(batch_size)
+    ]
     residuals = [
-        AtA_csr[i] @ sol[i].cpu().numpy()
+        (AtA_csr[i] + damp_diags[i]) @ sol[i].cpu().numpy()
         + beta * sol[i].cpu().numpy()
         - Atb[i].cpu().numpy()
         for i in range(batch_size)

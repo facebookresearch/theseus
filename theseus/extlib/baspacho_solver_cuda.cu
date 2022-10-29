@@ -185,7 +185,7 @@ void NumericDecomposition::add_MtM_cuda(const torch::Tensor& val,
 
 __global__ void damp_kernel(BaSpaCho::PermutedCoalescedAccessor accessor,
                      double* pFactor, int64_t factorSize,
-                     double alpha, double beta,
+                     double* alpha, double beta,
                      int64_t maxI, int batchSize) {
     int64_t i = blockIdx.x * blockDim.x + threadIdx.x;
     int batchIndex = blockIdx.y * blockDim.y + threadIdx.y;
@@ -195,11 +195,11 @@ __global__ void damp_kernel(BaSpaCho::PermutedCoalescedAccessor accessor,
 
     double* pFactorItem = pFactor + factorSize * batchIndex;
     auto block = accessor.diagBlock(pFactorItem, i);
-    block.diagonal() *= (1.0 + alpha);
+    block.diagonal() *= (1.0 + alpha[batchIndex]);
     block.diagonal().array() += beta;
 }
 
-void NumericDecomposition::damp_cuda(double alpha, double beta) {
+void NumericDecomposition::damp_cuda(double* alpha, double beta) {
     int64_t batchSize = data.size(0);
     int64_t factorSize = data.size(1);
     double* pFactor = data.data_ptr<double>();

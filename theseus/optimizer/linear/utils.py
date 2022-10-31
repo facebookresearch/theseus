@@ -4,7 +4,7 @@ import torch
 
 # See Nocedal and Wright, Numerical Optimization, pp. 260 and 261
 # https://www.csie.ntu.edu.tw/~r97002/temp/num_optimization.pdf
-def convert_to_alpha_beta_damping(
+def convert_to_alpha_beta_damping_tensors(
     damping: Union[float, torch.Tensor],
     damping_eps: float,
     ellipsoidal_damping: bool,

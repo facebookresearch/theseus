@@ -12,7 +12,7 @@ from theseus.optimizer import Linearization, SparseLinearization
 from theseus.optimizer.autograd import LUCudaSolveFunction
 
 from .linear_solver import LinearSolver
-from .sparse_utils import convert_to_alpha_beta_damping
+from .utils import convert_to_alpha_beta_damping_tensors
 
 
 class LUCudaSparseSolver(LinearSolver):
@@ -114,7 +114,7 @@ class LUCudaSparseSolver(LinearSolver):
             A_val = (
                 self.linearization.A_val
             )  # only used to get batch size, device, dtype
-            damping_alpha_beta = convert_to_alpha_beta_damping(
+            damping_alpha_beta = convert_to_alpha_beta_damping_tensors(
                 damping,
                 damping_eps,
                 ellipsoidal_damping,

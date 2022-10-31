@@ -63,14 +63,12 @@ def check_sparse_solver(
         Ai = torch.tensor(csrAi.todense(), dtype=torch.double)
         ata = Ai.T @ Ai
         b = linearization.b[i].cpu()
-        atb = torch.Tensor(csrAi.transpose() @ b)
+        atb = torch.DoubleTensor(csrAi.transpose() @ b)
 
         # the linear system solved is with matrix AtA
         solved_xi_cpu = solved_x[i].cpu()
         atb_check = ata @ solved_xi_cpu + damping * solved_xi_cpu
-
-        max_offset = torch.norm(atb - atb_check, p=float("inf"))
-        assert max_offset < 1e-4
+        torch.testing.assert_close(atb, atb_check, atol=1e-3, rtol=1e-3)
 
 
 @run_if_baspacho()

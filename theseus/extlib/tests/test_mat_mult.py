@@ -71,7 +71,7 @@ def check_mat_mult(batch_size, num_rows, num_cols, fill, verbose=False):
         )
     )
     alpha = 0.3 * torch.rand(batch_size, dtype=torch.double).cuda()
-    beta = 0.7
+    beta = 0.7 * torch.rand(batch_size, dtype=torch.double).cuda()
     apply_damping(batch_size, AtA_num_cols, AtA_rowPtr, AtA_colInd, res, alpha, beta)
     new_diagonals = torch.tensor(
         np.array(
@@ -85,7 +85,8 @@ def check_mat_mult(batch_size, num_rows, num_cols, fill, verbose=False):
         )
     )
     assert new_diagonals.isclose(
-        old_diagonals * (1 + alpha.cpu().view(-1, 1)) + beta, atol=1e-10
+        old_diagonals * (1 + alpha.cpu().view(-1, 1)) + beta.cpu().view(-1, 1),
+        atol=1e-10,
     ).all()
 
     # test A * b

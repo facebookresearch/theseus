@@ -33,8 +33,8 @@ class DCemSolver(abc.ABC):
         ordering: VariableOrdering = None,
         n_sample: int = 20,
         n_elite: int = 10,
-        lb=None,
-        ub=None,
+        lb: float = None,
+        ub: float = None,
         temp: float = 1.0,
         normalize: bool = False,
         lml_verbose: bool = False,
@@ -56,32 +56,33 @@ class DCemSolver(abc.ABC):
     def reinit_sigma(self):
         self.sigma = {var.name: torch.ones(var.shape) for var in self.ordering}
 
-    def all_solve(self, num_iters):
-        device = self.objective.device
+    def mu_vec_to_dict(self, mu):
+        idx = 0
+        mu_dic = {}
+        for var in self.ordering:
+            mu_dic[var.name] = mu[:, slice(idx, idx + var.dof())]
+            idx += var.dof()
+        return mu_dic
 
+    def all_solve(self, num_iters, init_sigma=1.0):
+        device = self.objective.device
         n_batch = self.ordering[0].shape[0]
 
         init_mu = torch.cat([var.tensor for var in self.ordering], dim=-1)
-        init_sigma = torch.ones((n_batch, self.tot_dof), device=device)
+        init_sigma = torch.ones((n_batch, self.tot_dof), device=device) * init_sigma
 
         mu = init_mu.clone()
         sigma = init_sigma.clone()
 
+        assert mu.shape == (n_batch, self.tot_dof)
+        assert sigma.shape == (n_batch, self.tot_dof)
+
         for itr in range(num_iters):
+            X = Normal(mu, sigma).rsample((self.n_samples,))
+
             X_samples = []
-            for i in range(self.n_samples):
-                sample = {}
-                idx = 0
-                for var in self.ordering:
-                    sample[var.name] = Normal(
-                        mu[:, slice(idx, idx + var.dof())],
-                        sigma[:, slice(idx, idx + var.dof())],
-                    ).rsample()
-                    idx += var.dof()
-                    assert sample[var.name].size() == var.shape
-                    sample[var.name] = sample[var.name].contiguous()
-                # print("sample", sample)
-                X_samples.append(sample)
+            for sample in X:
+                X_samples.append(self.mu_vec_to_dict(sample))
 
             fX = torch.stack(
                 [
@@ -91,9 +92,7 @@ class DCemSolver(abc.ABC):
                 dim=1,
             )
 
-            # print("fx:", fX.shape)
-
-            # assert fX.shape == (n_batch, self.n_samples)
+            assert fX.shape == (n_batch, self.n_samples)
 
             if self.temp is not None and self.temp < np.infty:
                 if self.normalize:
@@ -122,14 +121,7 @@ class DCemSolver(abc.ABC):
                 I = I.unsqueeze(2)
             # I.shape should be (n_batch, n_sample, 1)
 
-            X = torch.zeros((n_batch, self.n_samples, self.tot_dof), device=device)
-
-            for i in range(self.n_samples):
-                sample = X_samples[i]
-                idx = 0
-                for var in self.ordering:
-                    X[:, i, slice(idx, idx + var.dof())] = sample[var.name]
-                    idx += var.dof()
+            X = X.transpose(0, 1)
 
             assert I.shape[:2] == X.shape[:2]
             # print("Samples:", X)
@@ -145,14 +137,7 @@ class DCemSolver(abc.ABC):
             if (abs(mu - old_mu) < 1e-3).all():
                 break
 
-        new_dict = {}
-
-        idx = 0
-        for var in self.ordering:
-            new_dict[var.name] = mu[:, slice(idx, idx + var.dof())]
-            idx += var.dof()
-
-        return new_dict
+        return self.mu_vec_to_dict(mu)
 
     def solve(self):
         device = self.objective.device
@@ -269,6 +254,7 @@ class DCem(Optimizer):
         n_sample: int = 50,
         n_elite: int = 5,
         temp: float = 1.0,
+        init_sigma=1.0,
         lb=None,
         ub=None,
         lml_verbose: bool = False,

@@ -91,7 +91,6 @@ class BaspachoSolveFunction(torch.autograd.Function):
         )
         numeric_decomposition.add_MtM(A_val, A_rowPtr, A_colInd)
         if damping_alpha_beta is not None:
-            print(damping_alpha_beta[0].shape, damping_alpha_beta[1].shape)
             numeric_decomposition.damp(*damping_alpha_beta)
         numeric_decomposition.factor()
 

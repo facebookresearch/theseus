@@ -56,7 +56,10 @@ def check_sparse_backward_step(
     linearization.b.requires_grad = True
     # Only need this line for the test since the objective is a mock
     solver.reset(dev=dev)
-    damping_alpha_beta = (0.023, 0.157)
+    damping_alpha_beta = (
+        0.023 * torch.rand_like(linearization.A_val[:, 0]),
+        0.157 * torch.rand_like(linearization.A_val[:, 0]),
+    )
     inputs = (
         linearization.A_val,
         linearization.b,

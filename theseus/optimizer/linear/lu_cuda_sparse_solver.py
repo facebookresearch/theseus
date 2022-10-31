@@ -12,6 +12,7 @@ from theseus.optimizer import Linearization, SparseLinearization
 from theseus.optimizer.autograd import LUCudaSolveFunction
 
 from .linear_solver import LinearSolver
+from .sparse_utils import convert_to_alpha_beta_damping
 
 
 class LUCudaSparseSolver(LinearSolver):
@@ -95,8 +96,6 @@ class LUCudaSparseSolver(LinearSolver):
         damping_eps: float = 1e-8,
         **kwargs,
     ) -> torch.Tensor:
-        if damping is not None and not isinstance(damping, float):
-            raise ValueError("LUCudaSparseSolver only supports scalar damping.")
         if self._auto_reset:
             if self._solver_contexts[0].batch_size != self._objective.batch_size:
                 self.reset(self._objective.batch_size)
@@ -112,10 +111,16 @@ class LUCudaSparseSolver(LinearSolver):
         if damping is None:
             damping_alpha_beta = None
         else:
-            # See Nocedal and Wright, Numerical Optimization, pp. 260 and 261
-            # https://www.csie.ntu.edu.tw/~r97002/temp/num_optimization.pdf
-            damping_alpha_beta = (
-                (damping, damping_eps) if ellipsoidal_damping else (0.0, damping)
+            A_val = (
+                self.linearization.A_val
+            )  # only used to get batch size, device, dtype
+            damping_alpha_beta = convert_to_alpha_beta_damping(
+                damping,
+                damping_eps,
+                ellipsoidal_damping,
+                batch_size=A_val.shape[0],
+                device=A_val.device,
+                dtype=A_val.dtype,
             )
 
         return LUCudaSolveFunction.apply(

@@ -9,7 +9,7 @@ import torch
 import theseus as th
 
 
-def _build_sparse_mat(batch_size):
+def _build_sparse_mat(batch_size, rng):
     all_cols = list(range(10))
     col_ind = []
     row_ptr = [0]
@@ -18,13 +18,16 @@ def _build_sparse_mat(batch_size):
         end = min(i + 1, 10)
         col_ind += all_cols[start:end]
         row_ptr.append(len(col_ind))
-    data = torch.randn((batch_size, len(col_ind)), dtype=torch.double)
+    data = torch.randn((batch_size, len(col_ind)), dtype=torch.double, generator=rng)
     return 12, 10, data, col_ind, row_ptr
 
 
 @pytest.mark.cudaext
-def test_sparse_solver():
-
+@pytest.mark.parametrize("batch_size", [1, 32])
+@pytest.mark.parametrize("float_damping", [True, False])
+def test_sparse_solver(batch_size: int, float_damping: bool):
+    rng = torch.Generator()
+    rng.manual_seed(37)
     if not torch.cuda.is_available():
         return
 
@@ -36,35 +39,43 @@ def test_sparse_solver():
     )
     linearization = solver.linearization
 
-    batch_size = 4
     void_objective._batch_size = batch_size
-    num_rows, num_cols, data, col_ind, row_ptr = _build_sparse_mat(batch_size)
+    num_rows, num_cols, data, col_ind, row_ptr = _build_sparse_mat(batch_size, rng)
     linearization.num_rows = num_rows
     linearization.num_cols = num_cols
     linearization.A_val = data.cuda()
     linearization.A_col_ind = col_ind
     linearization.A_row_ptr = row_ptr
-    linearization.b = torch.randn((batch_size, num_rows), dtype=torch.double).cuda()
+    linearization.b = torch.randn(
+        (batch_size, num_rows), dtype=torch.double, generator=rng
+    ).cuda()
     # Only need this line for the test since the objective is a mock
     solver.reset(batch_size=batch_size)
 
-    solved_x = solver.solve()
+    if float_damping:
+        damping = 1e-4
+    else:
+        damping = 0.01 * torch.rand(batch_size, generator=rng)  # type: ignore
+    solved_x = solver.solve(damping=damping, ellipsoidal_damping=False)
 
     for i in range(batch_size):
         csrAi = linearization.structure().csr_straight(linearization.A_val[i, :].cpu())
         Ai = torch.tensor(csrAi.todense(), dtype=torch.double)
         ata = Ai.T @ Ai
         b = linearization.b[i].cpu()
-        atb = torch.Tensor(csrAi.transpose() @ b)
+        atb = torch.DoubleTensor(csrAi.transpose() @ b)
 
         # the linear system solved is with matrix AtA
-        atb_check = ata @ solved_x[i].cpu()
+        solved_xi_cpu = solved_x[i].cpu()
+        damp = damping if float_damping else damping[i]  # type: ignore
+        atb_check = ata @ solved_xi_cpu + damp * solved_xi_cpu
 
-        max_offset = torch.norm(atb - atb_check, p=float("inf"))
-        assert max_offset < 1e-4
+        torch.testing.assert_close(atb, atb_check, atol=1e-2, rtol=1e-2)
 
 
-def check_sparse_solver_multistep(test_exception: bool):
+def check_sparse_solver_multistep(batch_size: int, test_exception: bool):
+    rng = torch.Generator()
+    rng.manual_seed(37)
 
     if not torch.cuda.is_available():
         return
@@ -81,9 +92,8 @@ def check_sparse_solver_multistep(test_exception: bool):
     )
     linearization = solver.linearization
 
-    batch_size = 4
     void_objective._batch_size = batch_size
-    num_rows, num_cols, data, col_ind, row_ptr = _build_sparse_mat(batch_size)
+    num_rows, num_cols, data, col_ind, row_ptr = _build_sparse_mat(batch_size, rng)
     linearization.num_rows = num_rows
     linearization.num_cols = num_cols
     linearization.A_col_ind = col_ind
@@ -93,14 +103,16 @@ def check_sparse_solver_multistep(test_exception: bool):
     solver.reset(batch_size=batch_size)
 
     As = [
-        torch.randn((batch_size, len(col_ind)), dtype=torch.double).cuda()
+        torch.randn(
+            (batch_size, len(col_ind)), dtype=torch.double, generator=rng
+        ).cuda()
         for _ in range(num_steps)
     ]
     bs = [
-        torch.randn((batch_size, num_rows), dtype=torch.double).cuda()
+        torch.randn((batch_size, num_rows), dtype=torch.double, generator=rng).cuda()
         for _ in range(num_steps)
     ]
-    c = torch.randn((batch_size, num_cols), dtype=torch.double).cuda()
+    c = torch.randn((batch_size, num_cols), dtype=torch.double, generator=rng).cuda()
 
     # batched dot product
     def batched_dot(a, b):
@@ -143,27 +155,31 @@ def check_sparse_solver_multistep(test_exception: bool):
 
                 if perturb_A:
                     perturb = torch.randn(
-                        (batch_size, len(col_ind)), dtype=torch.double
+                        (batch_size, len(col_ind)), dtype=torch.double, generator=rng
                     ).cuda()
                     perturbed_As[step] += perturb * epsilon
                     analytic_der = batched_dot(perturb, As[step].grad)
                 else:
                     perturb = torch.randn(
-                        (batch_size, num_rows), dtype=torch.double
+                        (batch_size, num_rows), dtype=torch.double, generator=rng
                     ).cuda()
                     perturbed_bs[step] += perturb * epsilon
                     analytic_der = batched_dot(perturb, bs[step].grad)
 
                 perturbed_result = iterate_solver(perturbed_As, perturbed_bs)
                 numeric_der = (perturbed_result - result) / epsilon
-                assert numeric_der.isclose(analytic_der, rtol=1e-4, atol=1e-4).all()
+                torch.testing.assert_close(
+                    numeric_der, analytic_der, rtol=1e-3, atol=1e-3
+                )
 
 
 @pytest.mark.cudaext
-def test_sparse_solver_multistep_gradient():
-    check_sparse_solver_multistep(False)
+@pytest.mark.parametrize("batch_size", [1, 32])
+def test_sparse_solver_multistep_gradient(batch_size):
+    check_sparse_solver_multistep(batch_size, False)
 
 
 @pytest.mark.cudaext
-def test_sparse_solver_multistep_exception():
-    check_sparse_solver_multistep(True)
+@pytest.mark.parametrize("batch_size", [1, 32])
+def test_sparse_solver_multistep_exception(batch_size):
+    check_sparse_solver_multistep(batch_size, True)

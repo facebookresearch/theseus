@@ -319,7 +319,7 @@ __global__ void apply_damping_kernel(int batchSize,
                                 const int* M_colInd,
                                 double* Ms_val,
                                 double* alpha,
-                                double beta) {
+                                double* beta) {
 
 	int row = blockIdx.x * blockDim.x + threadIdx.x;
 	int batchIndex = blockIdx.y * blockDim.y + threadIdx.y;
@@ -334,7 +334,7 @@ __global__ void apply_damping_kernel(int batchSize,
 
 	for(int i = 0; i < srcRow_len; i++) {
 		if(srcRow_colInd[i] == row) {
-			srcRow_val[i] += alpha[batchIndex] * srcRow_val[i] + beta;
+			srcRow_val[i] += alpha[batchIndex] * srcRow_val[i] + beta[batchIndex];
 		}
 	}
 }
@@ -345,7 +345,7 @@ void apply_damping(int batchSize,
                    const torch::Tensor& M_colInd,
                    const torch::Tensor& Ms_val,
                    const torch::Tensor& alpha,
-                   double beta) {
+                   const torch::Tensor& beta) {
 
 	int64_t M_numRows = M_rowPtr.size(0) - 1;
 	int64_t M_nnz = M_colInd.size(0);
@@ -354,17 +354,21 @@ void apply_damping(int batchSize,
 	TORCH_CHECK(M_colInd.device().is_cuda());
 	TORCH_CHECK(Ms_val.device().is_cuda());
 	TORCH_CHECK(alpha.device().is_cuda());
+	TORCH_CHECK(beta.device().is_cuda());
 	TORCH_CHECK(M_rowPtr.dtype() == torch::kInt);
 	TORCH_CHECK(M_colInd.dtype() == torch::kInt);
 	TORCH_CHECK(Ms_val.dtype() == torch::kDouble); // TODO: add support for float
 	TORCH_CHECK(alpha.dtype() == torch::kDouble);
+	TORCH_CHECK(beta.dtype() == torch::kDouble);
 	TORCH_CHECK(M_rowPtr.dim() == 1);
 	TORCH_CHECK(M_colInd.dim() == 1);
 	TORCH_CHECK(Ms_val.dim() == 2);
 	TORCH_CHECK(alpha.dim() == 1)
+	TORCH_CHECK(beta.dim() == 1)
 	TORCH_CHECK(Ms_val.size(0) == batchSize);
-	TORCH_CHECK(alpha.size(0) == batchSize);
 	TORCH_CHECK(Ms_val.size(1) == M_nnz);
+	TORCH_CHECK(alpha.size(0) == batchSize);
+	TORCH_CHECK(beta.size(0) == batchSize);
 
 	// TODO: do experiments on choice of work group size
 	dim3 wgs(1, 16);
@@ -378,7 +382,7 @@ void apply_damping(int batchSize,
 	                                         M_colInd.data_ptr<int>(),
 	                                         Ms_val.data_ptr<double>(),
 	                                         alpha.data_ptr<double>(),
-	                                         beta);
+	                                         beta.data_ptr<double>());
 }
 
 PYBIND11_MODULE(mat_mult, m) {

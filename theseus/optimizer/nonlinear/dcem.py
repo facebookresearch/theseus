@@ -33,6 +33,7 @@ class DCemSolver(abc.ABC):
         ordering: VariableOrdering = None,
         n_sample: int = 20,
         n_elite: int = 10,
+        init_sigma: float = 1.0,
         lb: float = None,
         ub: float = None,
         temp: float = 1.0,
@@ -50,11 +51,13 @@ class DCemSolver(abc.ABC):
         self.temp = temp
         self.normalize = normalize
         self.tot_dof = sum([x.dof() for x in self.ordering])
-        # self.sigma = {var.name: torch.ones(var.shape) for var in self.ordering}
+        self.sigma = (
+            torch.ones((ordering[0].shape[0], self.tot_dof), device=objective.device)
+            * init_sigma,
+        )
         self.lml_eps = lml_eps
-
-    def reinit_sigma(self):
-        self.sigma = {var.name: torch.ones(var.shape) for var in self.ordering}
+        self.abs_err_tolerance = 1e-3
+        self.init_sigma = init_sigma
 
     def mu_vec_to_dict(self, mu):
         idx = 0
@@ -64,7 +67,24 @@ class DCemSolver(abc.ABC):
             idx += var.dof()
         return mu_dic
 
-    def all_solve(self, num_iters, init_sigma=1.0):
+    def reinit_sigma(self):
+        self.sigma = (
+            torch.ones(
+                (self.ordering[0].shape[0], self.tot_dof), device=self.objective.device
+            )
+            * self.init_sigma
+        )
+
+    def all_solve(
+        self,
+        num_iters: int,
+        info: OptimizerInfo,
+        init_sigma: float = 1.0,
+        verbose: bool = False,
+        end_iter_callback: Callable = None,
+    ):
+        converged_indices = torch.zeros_like(info.last_err).bool()
+
         device = self.objective.device
         n_batch = self.ordering[0].shape[0]
 
@@ -134,44 +154,47 @@ class DCemSolver(abc.ABC):
 
             assert sigma.shape == (n_batch, self.tot_dof)
 
-            if (abs(mu - old_mu) < 1e-3).all():
-                break
+            # self.objective.update(self.mu_vec_to_dict(mu))
 
-        return self.mu_vec_to_dict(mu)
+        #     with torch.no_grad():
+        #         err = self.objective.error_squared_norm(self.mu_vec_to_dict(mu)) / 2
+        #         self._update_info(info, itr + 1, err, converged_indices)
+        #         if verbose:
+        #             print(
+        #                 f"Nonlinear optimizer. Iteration: {it_+1}. "
+        #                 f"Error: {err.mean().item()}"
+        #             )
+        #         converged_indices = self._check_convergence(err, info.last_err)
+        #         info.status[
+        #             np.array(converged_indices.cpu().numpy())
+        #         ] = NonlinearOptimizerStatus.CONVERGED
+        #         if converged_indices.all():
+        #             break  # nothing else will happen at this point
+        #         info.last_err = err
+
+        #         if end_iter_callback is not None:
+        #             end_iter_callback(self, info, mu, itr + 1)
+
+        # info.status[
+        #     info.status == NonlinearOptimizerStatus.START
+        # ] = NonlinearOptimizerStatus.MAX_ITERATIONS
+
+        # self.objective.update(self.mu_vec_to_dict(mu))
+
+        return itr + 1
 
     def solve(self):
         device = self.objective.device
-
         n_batch = self.ordering[0].shape[0]
-        mu = torch.zeros(
-            (n_batch, sum([x.dof() for x in self.ordering])), device=device
-        )
 
-        idx = 0
-        for var in self.ordering:
-            mu[:, slice(idx, idx + var.dof())] = var.tensor
-            idx += var.dof()
+        mu = torch.cat([var.tensor for var in self.ordering], dim=-1)
 
-        # print("mu", mu)
-        # print("sigma", self.sigma)
+        X = Normal(mu, self.sigma).rsample((self.n_samples,))
 
         X_samples = []
-        for i in range(self.n_samples):
-            sample = {}
-            for var in self.ordering:
-                sample[var.name] = (
-                    Normal(var.tensor, self.sigma[var.name].to(device))
-                    .rsample()
-                    .to(device)
-                )
-                assert sample[var.name].size() == var.shape
-                sample[var.name] = sample[var.name].contiguous()
-                if self.lb is not None or self.ub is not None:
-                    sample[var.name] = torch.clamp(sample[var.name], self.lb, self.ub)
-            # print("sample", sample)
-            X_samples.append(sample)
+        for sample in X:
+            X_samples.append(self.mu_vec_to_dict(sample))
 
-        # TODO: Check that self.objective.error_squared_norm(X_samples[i]).size() == (n_batch,)
         fX = torch.stack(
             [
                 self.objective.error_squared_norm(X_samples[i])
@@ -179,9 +202,8 @@ class DCemSolver(abc.ABC):
             ],
             dim=1,
         )
-        # print("fx:", fX.shape)
 
-        # assert fX.shape == (n_batch, self.n_samples)
+        assert fX.shape == (n_batch, self.n_samples)
 
         if self.temp is not None and self.temp < np.infty:
             if self.normalize:
@@ -210,38 +232,18 @@ class DCemSolver(abc.ABC):
             I = I.unsqueeze(2)
         # I.shape should be (n_batch, n_sample, 1)
 
-        X = torch.zeros((n_batch, self.n_samples, self.tot_dof), device=device)
-
-        for i in range(self.n_samples):
-            sample = X_samples[i]
-            idx = 0
-            for var in self.ordering:
-                X[:, i, slice(idx, idx + var.dof())] = sample[var.name]
-                idx += var.dof()
+        X = X.transpose(0, 1)
 
         assert I.shape[:2] == X.shape[:2]
         # print("Samples:", X)
         X_I = I * X
-        # old_mu = mu.clone()
+
         mu = torch.sum(X_I, dim=1) / self.n_elite
+        self.sigma = ((I * (X - mu.unsqueeze(1)) ** 2).sum(dim=1) / self.n_elite).sqrt()
 
-        sigma = ((I * (X - mu.unsqueeze(1)) ** 2).sum(dim=1) / self.n_elite).sqrt()
-        # print("sigma_updates", sigma)
+        assert self.sigma.shape == (n_batch, self.tot_dof)
 
-        assert sigma.shape == (n_batch, self.tot_dof)
-
-        new_dict = {}
-
-        idx = 0
-        for var in self.ordering:
-            self.sigma[var.name] = sigma[:, slice(idx, idx + var.dof())]
-            new_dict[var.name] = mu[:, slice(idx, idx + var.dof())]
-            idx += var.dof()
-
-        # not sure about the detach
-        # return mu - old_mu
-
-        return new_dict
+        return self.mu_vec_to_dict(mu)
 
 
 class DCem(Optimizer):
@@ -279,6 +281,7 @@ class DCem(Optimizer):
             self.ordering,
             n_sample,
             n_elite,
+            init_sigma,
             lb,
             ub,
             temp,
@@ -401,11 +404,11 @@ class DCem(Optimizer):
         **kwargs,
     ) -> int:
 
-        mu = self.linear_solver.all_solve(num_iter)
-        self.objective.update(mu)
-        with torch.no_grad():
-            info.best_solution = mu
-        return
+        # mu = self.linear_solver.all_solve(num_iter)
+        # self.objective.update(mu)
+        # with torch.no_grad():
+        #     info.best_solution = mu
+        # return
 
         converged_indices = torch.zeros_like(info.last_err).bool()
         iters_done = 0
@@ -455,7 +458,7 @@ class DCem(Optimizer):
         **kwargs,
     ) -> OptimizerInfo:
         backward_mode = BackwardMode.resolve(backward_mode)
-        # self.linear_solver.reinit_sigma()
+        self.linear_solver.reinit_sigma()
 
         with torch.no_grad():
             info = self._init_info(

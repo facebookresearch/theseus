@@ -175,15 +175,19 @@ void NumericDecomposition::add_MtM(const torch::Tensor& val,
     }
 }
 
-void NumericDecomposition::damp(const torch::Tensor& alpha, double beta) {
+void NumericDecomposition::damp(const torch::Tensor& alpha, const torch::Tensor& beta) {
     TORCH_CHECK(alpha.dtype() == torch::kFloat64);
     TORCH_CHECK(alpha.dim() == 1);
     TORCH_CHECK(alpha.size(0) == data.size(0));
+    TORCH_CHECK(beta.dtype() == torch::kFloat64);
+    TORCH_CHECK(beta.dim() == 1);
+    TORCH_CHECK(beta.size(0) == data.size(0));
 
 #ifdef THESEUS_HAVE_CUDA
     if (dec->isCuda) {
         TORCH_CHECK(alpha.device().is_cuda());
-        damp_cuda(alpha.data_ptr<double>(), beta);
+        TORCH_CHECK(beta.device().is_cuda());
+        damp_cuda(alpha.data_ptr<double>(), beta.data_ptr<double>());
         return;
     }
 #endif
@@ -200,7 +204,7 @@ void NumericDecomposition::damp(const torch::Tensor& alpha, double beta) {
         for (int64_t p = 0; p < nParams; p++) {
             auto block = accessor.diagBlock(pFactorItem, p);
             block.diagonal() *= (1.0 + alpha[i].item<double>());
-            block.diagonal().array() += beta;
+            block.diagonal().array() += beta[i].item<double>();
         }
     }
 }

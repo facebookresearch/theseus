@@ -80,8 +80,8 @@ def check_baspacho(
     f = s.create_numeric_decomposition(batch_size)
 
     f.add_MtM(A_val, A_rowPtr, A_colInd)
-    beta = 0.01
-    alpha = torch.rand(batch_size, device=dev, dtype=torch.double)
+    beta = 0.01 * torch.rand(batch_size, device=dev, dtype=torch.double)
+    alpha = torch.rand_like(beta)
     f.damp(alpha, beta)
     f.factor()
 
@@ -101,7 +101,7 @@ def check_baspacho(
     ]
     residuals = [
         (AtA_csr[i] + damp_diags[i]) @ sol[i].cpu().numpy()
-        + beta * sol[i].cpu().numpy()
+        + beta[i].item() * sol[i].cpu().numpy()
         - Atb[i].cpu().numpy()
         for i in range(batch_size)
     ]

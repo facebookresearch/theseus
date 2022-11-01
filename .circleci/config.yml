@@ -66,7 +66,7 @@ install_torch_cuda11: &install_torch_cuda11
       name: Install Torch for cuda11
       working_directory: ~/project
       command: |
-        pip install --progress-bar off torch==1.13.0 torchvision==0.14.0 torchaudio=0.13.0 --extra-index-url https://download.pytorch.org/whl/cu117
+        pip install --progress-bar off torch==1.13.0 torchvision==0.14.0 torchaudio==0.13.0 --extra-index-url https://download.pytorch.org/whl/cu117
         python -c 'import torch; print("Torch version:", torch.__version__); assert torch.cuda.is_available()'
 
 install_functorch: &install_functorch

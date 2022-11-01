@@ -196,7 +196,7 @@ __global__ void damp_kernel(BaSpaCho::PermutedCoalescedAccessor accessor,
     double* pFactorItem = pFactor + factorSize * batchIndex;
     auto block = accessor.diagBlock(pFactorItem, i);
     block.diagonal() *= (1.0 + alpha[batchIndex]);
-    block.diagonal() += beta[batchIndex];
+    block.diagonal().array() += beta[batchIndex];
 }
 
 void NumericDecomposition::damp_cuda(double* alpha, double* beta) {

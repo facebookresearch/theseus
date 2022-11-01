@@ -5,15 +5,6 @@ version: 2.1
 # Executors
 # -------------------------------------------------------------------------------------
 executors:
-  gpu_cuda10:
-    environment:
-      CUDA_VERSION: "10.2"
-      CUDA_HOME: "/usr/local/cuda"
-      PYTHONUNBUFFERED: 1
-    machine:
-      image: ubuntu-2004:202107-02
-    resource_class: gpu.nvidia.small.multi # NVIDIA Tesla T4 2 GPU 4 vCPUs 15 GB RAM
-
   gpu_cuda11:
     environment:
       CUDA_VERSION: "11.4"
@@ -47,36 +38,14 @@ install_suitesparse: &install_suitesparse
       command: |
         sudo apt-get update && sudo apt-get install -y libsuitesparse-dev
 
-setup_cuda10_libs: &setup_cuda10_libs
-  - run:
-      name: Setup CUDA 10 drivers and libraries
-      working_directory: ~/
-      command: |
-        # ubuntu's default gcc9.3 is too recent for cuda10.2
-        sudo apt-get install -y gcc-8 g++-8
-        sudo update-alternatives --install /usr/bin/gcc gcc /usr/bin/gcc-9 10
-        sudo update-alternatives --install /usr/bin/gcc gcc /usr/bin/gcc-8 20
-        sudo update-alternatives --install /usr/bin/g++ g++ /usr/bin/g++-9 10
-        sudo update-alternatives --install /usr/bin/g++ g++ /usr/bin/g++-8 20
-        sudo update-alternatives --install /usr/bin/x86_64-linux-gnu-gcc x86_64-linux-gnu-gcc /usr/bin/x86_64-linux-gnu-gcc-9 10
-        sudo update-alternatives --install /usr/bin/x86_64-linux-gnu-gcc x86_64-linux-gnu-gcc /usr/bin/x86_64-linux-gnu-gcc-8 20
-        sudo update-alternatives --install /usr/bin/x86_64-linux-gnu-g++ x86_64-linux-gnu-g++ /usr/bin/x86_64-linux-gnu-g++-9 10
-        sudo update-alternatives --install /usr/bin/x86_64-linux-gnu-g++ x86_64-linux-gnu-g++ /usr/bin/x86_64-linux-gnu-g++-8 20
-        # download and install nvidia drivers, cuda, etc
-        wget --quiet --no-clobber -P ~/nvidia-downloads https://developer.download.nvidia.com/compute/cuda/10.2/Prod/local_installers/cuda_10.2.89_440.33.01_linux.run
-        time sudo /bin/bash nvidia-downloads/cuda_10.2.89_440.33.01_linux.run --no-drm --silent --driver --toolkit
-        sudo ldconfig /usr/local/cuda/lib64
-        echo "Done installing NVIDIA drivers and CUDA libraries."
-        nvidia-smi
-
 setup_cuda11_libs: &setup_cuda11_libs
   - run:
       name: Setup CUDA 11 drivers and libraries
       working_directory: ~/
       command: |
         # download and install nvidia drivers, cuda, etc
-        wget --quiet --no-clobber -P ~/nvidia-downloads https://developer.download.nvidia.com/compute/cuda/11.3.0/local_installers/cuda_11.3.0_465.19.01_linux.run
-        time sudo /bin/bash nvidia-downloads/cuda_11.3.0_465.19.01_linux.run --no-drm --silent --driver --toolkit
+        wget --quiet --no-clobber -P ~/nvidia-downloads https://developer.download.nvidia.com/compute/cuda/11.7.1/local_installers/cuda_11.7.1_515.65.01_linux.run
+        time sudo /bin/bash nvidia-downloads/cuda_11.7.1_515.65.01_linux.run --no-drm --silent --driver --toolkit
         sudo ldconfig /usr/local/cuda/lib64
         echo "Done installing NVIDIA drivers and CUDA libraries."
         nvidia-smi
@@ -92,20 +61,12 @@ setup_environment: &setup_environment
         pip install --progress-bar off --upgrade pip
         pip install --progress-bar off --upgrade setuptools
 
-install_torch_cuda10: &install_torch_cuda10
-  - run:
-      name: Install Torch for cuda10
-      working_directory: ~/project
-      command: |
-        pip install --progress-bar off torch==1.12.1+cu102 torchvision==0.13.1+cu102 torchaudio==0.12.1+cu102 -f https://download.pytorch.org/whl/cu102/torch_stable.html
-        python -c 'import torch; print("Torch version:", torch.__version__); assert torch.cuda.is_available()'
-
 install_torch_cuda11: &install_torch_cuda11
   - run:
       name: Install Torch for cuda11
       working_directory: ~/project
       command: |
-        pip install --progress-bar off torch==1.12.1+cu113 torchvision==0.13.1+cu113 torchaudio==0.12.1+cu113 -f https://download.pytorch.org/whl/cu113/torch_stable.html
+        pip install --progress-bar off torch==1.13.0 torchvision==0.14.0 torchaudio=0.13.0 --extra-index-url https://download.pytorch.org/whl/cu117
         python -c 'import torch; print("Torch version:", torch.__version__); assert torch.cuda.is_available()'
 
 install_functorch: &install_functorch
@@ -223,21 +184,6 @@ jobs:
               pip install nox==2020.8.22
               BASPACHO_ROOT_DIR=~/baspacho nox
 
-  unittests_gpu17_cuda10:
-    executor: gpu_cuda10
-    steps:
-      - checkout
-      - <<: *update_and_install_python
-      - <<: *install_suitesparse
-      - <<: *setup_cuda10_libs
-      - <<: *setup_environment
-      - <<: *install_torch_cuda10
-      - <<: *install_functorch
-      - <<: *install_recent_cmake_2004
-      - <<: *build_baspacho_cuda
-      - <<: *setup_project
-      - <<: *run_tests
-
   unittests_gpu17_cuda11:
     executor: gpu_cuda11
     steps:
@@ -260,5 +206,4 @@ workflows:
       - py37_linux
       - py38_linux
       - py39_linux
-      - unittests_gpu17_cuda10
       - unittests_gpu17_cuda11

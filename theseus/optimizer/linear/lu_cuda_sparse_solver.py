@@ -111,16 +111,13 @@ class LUCudaSparseSolver(LinearSolver):
         if damping is None:
             damping_alpha_beta = None
         else:
-            A_val = (
-                self.linearization.A_val
-            )  # only used to get batch size, device, dtype
             damping_alpha_beta = convert_to_alpha_beta_damping_tensors(
                 damping,
                 damping_eps,
                 ellipsoidal_damping,
-                batch_size=A_val.shape[0],
-                device=A_val.device,
-                dtype=A_val.dtype,
+                batch_size=self.linearization.A_val.shape[0],
+                device=self.linearization.A_val.device,
+                dtype=self.linearization.A_val.dtype,
             )
 
         return LUCudaSolveFunction.apply(

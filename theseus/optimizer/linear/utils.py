@@ -15,9 +15,10 @@ def convert_to_alpha_beta_damping_tensors(
     damping = torch.as_tensor(damping).to(device=device, dtype=dtype)
     if damping.ndim > 1:
         raise ValueError("Damping must be a float or a 1-D tensor.")
-    damping = damping.view(-1)  # this expands floats with ndim = 0
-    if batch_size != damping.shape[0]:
-        damping = damping.expand(batch_size)
+    if damping.ndim == 0 or damping.shape[0] == 1 and batch_size != 1:
+        # Our damp kernel does not like expand, since it may try
+        # to access indices beyond what's actually stored in this tensor
+        damping = damping.repeat(batch_size)
     return (
         (damping, damping_eps * torch.ones_like(damping))
         if ellipsoidal_damping

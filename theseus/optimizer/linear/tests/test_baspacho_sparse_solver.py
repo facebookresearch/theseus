@@ -5,56 +5,25 @@
 
 import pytest  # noqa: F401
 import torch
-import numpy as np
-
-import theseus as th
 
 from theseus.extlib.tests.common import run_if_baspacho
-from theseus.utils import random_sparse_binary_matrix, split_into_param_sizes
+from theseus.optimizer.autograd.tests.test_baspacho_sparse_backward import (
+    get_linearization_and_solver_for_random_sparse,
+)
 
 
 def check_sparse_solver(
     batch_size, rows_to_cols_ratio, num_cols, param_size_range, fill, dev="cpu"
 ):
-    torch.manual_seed(hash(str([batch_size, rows_to_cols_ratio, num_cols, fill])))
+    rng = torch.Generator(device=dev)
+    rng.manual_seed(hash(str([batch_size, rows_to_cols_ratio, num_cols, fill])))
 
-    # this is necessary assumption, so that the hessian can be full rank. actually we
-    # add some damping to At*A's diagonal, so not really necessary
-    assert rows_to_cols_ratio >= 1.0
-    num_rows = round(rows_to_cols_ratio * num_cols)
-
-    if isinstance(param_size_range, str):
-        param_size_range = [int(x) for x in param_size_range.split(":")]
-
-    void_objective = th.Objective()
-    void_ordering = th.VariableOrdering(void_objective, default_order=False)
-    solver = th.BaspachoSparseSolver(
-        void_objective,
-        linearization_kwargs={"ordering": void_ordering},
+    linearization, solver = get_linearization_and_solver_for_random_sparse(
+        batch_size, rows_to_cols_ratio, num_cols, param_size_range, fill, dev, rng
     )
-    linearization = solver.linearization
-
-    A_skel = random_sparse_binary_matrix(
-        num_rows, num_cols, fill, min_entries_per_col=1
-    )
-    void_objective._batch_size = batch_size
-    num_rows, num_cols = A_skel.shape
-    linearization.num_rows = num_rows
-    linearization.num_cols = num_cols
-    linearization.A_col_ind = A_skel.indices
-    linearization.A_row_ptr = A_skel.indptr
-    linearization.A_val = torch.rand((batch_size, A_skel.nnz), dtype=torch.double).to(
-        dev
-    )
-    linearization.b = torch.randn((batch_size, num_rows), dtype=torch.double).to(dev)
-
-    # also need: var dims and var_start_cols (because baspacho is blockwise)
-    linearization.var_dims = split_into_param_sizes(num_cols, *param_size_range)
-    linearization.var_start_cols = np.cumsum([0, *linearization.var_dims[:-1]])
 
     # Only need this line for the test since the objective is a mock
     solver.reset(dev=dev)
-
     damping = 1e-4
     solved_x = solver.solve(damping=damping, ellipsoidal_damping=False)
 

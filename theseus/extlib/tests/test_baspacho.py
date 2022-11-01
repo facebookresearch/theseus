@@ -22,7 +22,8 @@ def check_baspacho(
     dev="cpu",
     verbose=False,
 ):
-    torch.manual_seed(hash(str([batch_size, rows_to_cols_ratio, num_cols, fill])))
+    rng = torch.Generator(device=dev)
+    rng.manual_seed(hash(str([batch_size, rows_to_cols_ratio, num_cols, fill])))
 
     # this is necessary assumption, so that the hessian can be full rank. actually we
     # add some damping to At*A's diagonal, so not really necessary
@@ -35,17 +36,23 @@ def check_baspacho(
     from theseus.extlib.baspacho_solver import SymbolicDecomposition
 
     A_skel = random_sparse_binary_matrix(
-        num_rows, num_cols, fill, min_entries_per_col=1
+        num_rows, num_cols, fill, min_entries_per_col=1, rng=rng
     )
     A_num_cols = num_cols
     A_rowPtr = torch.tensor(A_skel.indptr, dtype=torch.int64).to(dev)
     A_colInd = torch.tensor(A_skel.indices, dtype=torch.int64).to(dev)
     A_num_rows = A_rowPtr.size(0) - 1
     A_nnz = A_colInd.size(0)
-    A_val = torch.rand((batch_size, A_nnz), dtype=torch.double).to(dev)
-    b = torch.rand((batch_size, A_num_rows), dtype=torch.double).to(dev)
+    A_val = torch.rand(
+        (batch_size, A_nnz), device=dev, dtype=torch.double, generator=rng
+    )
+    b = torch.rand(
+        (batch_size, A_num_rows), device=dev, dtype=torch.double, generator=rng
+    )
 
-    paramSizes = split_into_param_sizes(num_cols, *param_size_range)
+    paramSizes = split_into_param_sizes(
+        num_cols, param_size_range[0], param_size_range[1], rng
+    )
     nParams = len(paramSizes)
     paramStarts = np.cumsum([0, *paramSizes])
     to_blocks = csr_matrix(
@@ -80,12 +87,14 @@ def check_baspacho(
     f = s.create_numeric_decomposition(batch_size)
 
     f.add_MtM(A_val, A_rowPtr, A_colInd)
-    beta = 0.01 * torch.rand(batch_size, device=dev, dtype=torch.double)
-    alpha = torch.rand_like(beta)
+    beta = 0.01 * torch.rand(batch_size, device=dev, dtype=torch.double, generator=rng)
+    alpha = torch.rand(batch_size, device=dev, dtype=torch.double, generator=rng)
     f.damp(alpha, beta)
     f.factor()
 
-    b = torch.rand((batch_size, A_num_rows), dtype=torch.double).to(dev)
+    b = torch.rand(
+        (batch_size, A_num_rows), device=dev, dtype=torch.double, generator=rng
+    )
     Atb = torch.tensor(
         np.array([A_csr[i].T @ b[i].cpu().numpy() for i in range(batch_size)])
     ).to(dev)

@@ -23,8 +23,10 @@ def check_lu_solver(
         return
     from theseus.extlib.cusolver_lu_solver import CusolverLUSolver
 
+    rng = torch.Generator()
+    rng.manual_seed(0)
     A_skel = random_sparse_binary_matrix(
-        num_rows, num_cols, fill, min_entries_per_col=3
+        num_rows, num_cols, fill, min_entries_per_col=3, rng=rng
     )
     A_num_cols = num_cols
     A_rowPtr = torch.tensor(A_skel.indptr, dtype=torch.int).cuda()

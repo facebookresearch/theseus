@@ -10,7 +10,7 @@ import pathlib
 import shutil
 import sys
 import warnings
-from typing import Any, Dict, List, Tuple, cast
+from typing import Any, Dict, List, Optional, Tuple, Type, cast
 
 import cv2
 import hydra
@@ -284,6 +284,9 @@ def run(
     step_size: float = 0.1,
     autograd_mode: str = "vmap",
     benchmarking_costs: bool = False,
+    linear_solver_info: Optional[
+        Tuple[Type[th.LinearSolver], Type[th.Linearization]]
+    ] = None,
 ) -> List[List[Dict[str, Any]]]:
     logger.info(
         "==============================================================="
@@ -347,8 +350,14 @@ def run(
     )
     objective.add(reg_cf)
 
+    if linear_solver_info is not None:
+        linear_solver_cls, linearization_cls = linear_solver_info
+    else:
+        linear_solver_cls, linearization_cls = None, None
     inner_optim = th.LevenbergMarquardt(
         objective,
+        linear_solver_cls=linear_solver_cls,
+        linearization_cls=linearization_cls,
         max_iterations=max_iterations,
         step_size=step_size,
     )
@@ -504,6 +513,7 @@ def main(cfg):
         step_size=cfg.inner_optim.step_size,
         autograd_mode=cfg.autograd_mode,
         benchmarking_costs=cfg.benchmarking_costs,
+        linear_solver_info=cfg.get("linear_solver_info", None),
     )
     torch.save(benchmark_results, pathlib.Path(os.getcwd()) / "benchmark_results.pt")
 

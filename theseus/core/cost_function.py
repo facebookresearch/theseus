@@ -4,6 +4,7 @@
 # LICENSE file in the root directory of this source tree.
 
 import abc
+import contextlib
 from enum import Enum
 from itertools import chain
 from typing import Callable, List, Optional, Sequence, Tuple, Union, cast
@@ -118,11 +119,24 @@ class AutogradMode(Enum):
         return mode
 
 
+@contextlib.contextmanager
+def _tmp_tensors(vars: Sequence[Variable]):
+    tensors = [v.tensor for v in vars]
+    yield
+    for (v, tensor) in zip(vars, tensors):
+        v.update(tensor)
+
+
 # The error function is assumed to receive variables in the format
 #    err_fn(
 #       optim_vars=(optim_vars[0].tensor, ..., optim_vars[N - 1].tensor),
 #       aux_vars=(aux_vars[0].tensor, ..., aux_vars[M -1].tensor)
 #   )
+#
+# When using `autograd_mode="vmap"` err_fn should not have side effects
+# deriving from the tensor values of optim_vars and aux_vars, as this
+# might result in functorch errors. See the first sentence here
+# https://pytorch.org/functorch/stable/ux_limitations.html#general-limitations
 #
 # The user also needs to explicitly specify the output's dimension
 class AutoDiffCostFunction(CostFunction):
@@ -263,11 +277,20 @@ class AutoDiffCostFunction(CostFunction):
     def jacobians(self) -> Tuple[List[torch.Tensor], torch.Tensor]:
         err, optim_vars, aux_vars = self._compute_error()
         if self._autograd_mode == AutogradMode.VMAP:
-            jacobians_full = self._compute_autograd_jacobian_vmap(
-                tuple(v.tensor for v in optim_vars),
-                tuple(v.tensor for v in aux_vars),
-                self._make_jac_fn_vmap(self._tmp_optim_vars, self._tmp_aux_vars),
-            )
+            # functorch doesn't allow BatchedTensors created inside their transforms
+            # to be accessed outside that context. Since our tmp containers get
+            # populated inside the vmap(jacrev) calculation, this would result in
+            # errors when calling functions like copy() or to() after
+            # vmap has been run at least once.
+            # The _tmp_tensors context managers stores the (regular) tensors the vars
+            # had before entering and restores them on exit, thus dereferencing
+            # the temporary BatchedTensors.
+            with _tmp_tensors(self._tmp_optim_vars), _tmp_tensors(self._tmp_aux_vars):
+                jacobians_full = self._compute_autograd_jacobian_vmap(
+                    tuple(v.tensor for v in optim_vars),
+                    tuple(v.tensor for v in aux_vars),
+                    self._make_jac_fn_vmap(self._tmp_optim_vars, self._tmp_aux_vars),
+                )
         elif self._autograd_mode == AutogradMode.LOOP_BATCH:
             jacobians_raw_loop: List[Tuple[torch.Tensor, ...]] = []
             for n in range(optim_vars[0].shape[0]):

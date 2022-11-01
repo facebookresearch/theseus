@@ -16,8 +16,10 @@ def check_mat_mult(batch_size, num_rows, num_cols, fill, verbose=False):
         return
     from theseus.extlib.mat_mult import apply_damping, mat_vec, mult_MtM, tmat_vec
 
+    rng = torch.Generator()
+    rng.manual_seed(0)
     A_skel = random_sparse_binary_matrix(
-        num_rows, num_cols, fill, min_entries_per_col=3
+        num_rows, num_cols, fill, min_entries_per_col=3, rng=rng
     )
     A_num_cols = num_cols
     A_rowPtr = torch.tensor(A_skel.indptr, dtype=torch.int).cuda()

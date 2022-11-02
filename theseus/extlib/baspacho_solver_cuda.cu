@@ -8,6 +8,7 @@
 
 #include "baspacho_solver.h"
 #include "baspacho/baspacho/CudaDefs.h"
+#include "utils.h"
 
 void NumericDecomposition::init_factor_data_cuda(int64_t batchSize) {
     auto xOptions = torch::TensorOptions().dtype(torch::kFloat64).device(torch::kCUDA);
@@ -62,9 +63,9 @@ void NumericDecomposition::add_M_cuda(const torch::Tensor& val,
     int64_t batchSize = data.size(0);
     int64_t factorBatchStride = data.size(1);
 
-    TH_BASPACHO_TENSOR_CHECK_CUDA(val, 2, batchSize, torch::kFloat64);
-    TH_BASPACHO_TENSOR_CHECK_CUDA(ptrs, 1, dec->solver->order() + 1, torch::kInt64);
-    TH_BASPACHO_TENSOR_CHECK_CUDA(inds, 1, val.size(1), torch::kInt64);
+    THESEUS_TENSOR_CHECK_CUDA(val, 2, batchSize, torch::kFloat64);
+    THESEUS_TENSOR_CHECK_CUDA(ptrs, 1, dec->solver->order() + 1, torch::kInt64);
+    THESEUS_TENSOR_CHECK_CUDA(inds, 1, val.size(1), torch::kInt64);
 
 
     int64_t valBatchStride = val.size(1);
@@ -138,9 +139,9 @@ void NumericDecomposition::add_MtM_cuda(const torch::Tensor& val,
     int64_t batchSize = data.size(0);
     int64_t factorBatchStride = data.size(1);
 
-    TH_BASPACHO_TENSOR_CHECK_CUDA(val, 2, batchSize, torch::kFloat64);
-    TH_BASPACHO_TENSOR_CHECK_CUDA(ptrs, 1, ptrs.size(0), torch::kInt64);
-    TH_BASPACHO_TENSOR_CHECK_CUDA(inds, 1, val.size(1), torch::kInt64);
+    THESEUS_TENSOR_CHECK_CUDA(val, 2, batchSize, torch::kFloat64);
+    THESEUS_TENSOR_CHECK_CUDA(ptrs, 1, ptrs.size(0), torch::kInt64);
+    THESEUS_TENSOR_CHECK_CUDA(inds, 1, val.size(1), torch::kInt64);
     
     int64_t valBatchStride = val.size(1);
 
@@ -251,7 +252,7 @@ __global__ void unscramble_kernel(BaSpaCho::PermutedCoalescedAccessor acc,
 void NumericDecomposition::solve_cuda(torch::Tensor& x) {
     int64_t batchSize = data.size(0);
     int64_t order = dec->solver->order();
-    TH_BASPACHO_TENSOR_CHECK_CUDA(x, 2, batchSize, x.dtype());
+    THESEUS_TENSOR_CHECK_CUDA(x, 2, batchSize, x.dtype());
     TORCH_CHECK(x.size(1) == order);
 
     using OuterStride = Eigen::OuterStride<>;

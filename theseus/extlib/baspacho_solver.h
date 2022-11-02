@@ -9,6 +9,28 @@
 
 #include "baspacho/baspacho/Solver.h"
 
+
+// Various checks for tensor dimensions, dtype and devices
+#define TH_BASPACHO_TENSOR_CHECK(tensor, d, d1, dt)             \
+  do {                                                          \
+    TORCH_CHECK(tensor.dim() == d);                             \
+    TORCH_CHECK(tensor.size(0) == d1);                          \
+    TORCH_CHECK(tensor.dtype() == dt);                          \
+  } while (0)
+
+#define TH_BASPACHO_TENSOR_CHECK_CPU(tensor, d, d1, dt)         \
+  do {                                                          \
+    TH_BASPACHO_TENSOR_CHECK(tensor, d, d1, dt);                \
+    TORCH_CHECK(tensor.device().is_cpu());                      \
+  } while (0)
+
+#define TH_BASPACHO_TENSOR_CHECK_CUDA(tensor, d, d1, dt)        \
+  do {                                                          \
+    TH_BASPACHO_TENSOR_CHECK(tensor, d, d1, dt);                \
+    TORCH_CHECK(tensor.device().is_cuda());                     \
+  } while (0)
+
+
 // Data stored in a symbolic decomposition, result from analyzing sparse pattern.
 //
 // Both Python's symbolic decomposition and numeric decomposition will hold a

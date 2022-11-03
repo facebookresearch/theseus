@@ -75,8 +75,8 @@ setup_cuda11_libs: &setup_cuda11_libs
       working_directory: ~/
       command: |
         # download and install nvidia drivers, cuda, etc
-        wget --quiet --no-clobber -P ~/nvidia-downloads https://developer.download.nvidia.com/compute/cuda/11.3.0/local_installers/cuda_11.3.0_465.19.01_linux.run
-        time sudo /bin/bash nvidia-downloads/cuda_11.3.0_465.19.01_linux.run --no-drm --silent --driver --toolkit
+        wget --quiet --no-clobber -P ~/nvidia-downloads https://developer.download.nvidia.com/compute/cuda/11.7.1/local_installers/cuda_11.7.1_515.65.01_linux.run
+        time sudo /bin/bash nvidia-downloads/cuda_11.7.1_515.65.01_linux.run --no-drm --silent --driver --toolkit
         sudo ldconfig /usr/local/cuda/lib64
         echo "Done installing NVIDIA drivers and CUDA libraries."
         nvidia-smi
@@ -105,8 +105,15 @@ install_torch_cuda11: &install_torch_cuda11
       name: Install Torch for cuda11
       working_directory: ~/project
       command: |
-        pip install --progress-bar off torch==1.12.1+cu113 torchvision==0.13.1+cu113 torchaudio==0.12.1+cu113 -f https://download.pytorch.org/whl/cu113/torch_stable.html
+        pip install --progress-bar off torch==1.13.0 torchvision==0.14.0 torchaudio==0.13.0 --extra-index-url https://download.pytorch.org/whl/cu117
         python -c 'import torch; print("Torch version:", torch.__version__); assert torch.cuda.is_available()'
+
+install_functorch_021: &install_functorch_021
+  - run:
+      name: Install Functorch
+      working_directory: ~/project
+      command: |
+        pip install functorch==0.2.1
 
 install_functorch: &install_functorch
   - run:
@@ -230,7 +237,7 @@ jobs:
       - <<: *setup_cuda10_libs
       - <<: *setup_environment
       - <<: *install_torch_cuda10
-      - <<: *install_functorch
+      - <<: *install_functorch_021
       - <<: *install_recent_cmake_2004
       - <<: *build_baspacho_cuda
       - <<: *setup_project

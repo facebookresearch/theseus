@@ -29,12 +29,13 @@ ROOT_DIR=$1
 TAG=$2
 CUDA_VERSION=$3
 
-CUDA_VERSION_SUPPORTED=$(echo "cpu 10.2 11.3 11.6" | grep -w ${CUDA_VERSION})
-[ "${CUDA_VERSION_SUPPORTED}" ] || die "CUDA_VERSION must be one of (cpu, 10.2, 11.3, 11.6)"
+CUDA_VERSION_SUPPORTED=$(echo "cpu 10.2 11.3 11.6 11.7" | grep -w ${CUDA_VERSION})
+[ "${CUDA_VERSION_SUPPORTED}" ] || die "CUDA_VERSION must be one of (cpu, 10.2, 11.3, 11.6, 11.7)"
 
 
 CUDA_SUFFIX=$(echo ${CUDA_VERSION} | sed 's/[.]//g')
 
+TORCH_VERSION='"torch>=1.13"'
 if [[ ${CUDA_VERSION} == "cpu" ]]
 then 
     DEVICE_TAG=cpu
@@ -48,11 +49,16 @@ else
 
     BASPACHO_CUDA_ARCHS="60;70;75"
     TORCH_CUDA_ARCH_LIST="6.0;7.0;7.5"
-    if [[ ${CUDA_VERSION} != '10.2' ]]
+    if [[ ${CUDA_VERSION} != "10.2" ]]
     then
         BASPACHO_CUDA_ARCHS="${BASPACHO_CUDA_ARCHS};80"
         TORCH_CUDA_ARCH_LIST="${TORCH_CUDA_ARCH_LIST};8.0"
     fi
+    if [[ ${CUDA_VERSION} = "10.2" ]] || [[ ${CUDA_VERSION} = "13.3" ]]
+    then
+        TORCH_VERSION='"torch<1.13"'
+    fi
+
     BASPACHO_CUDA_ARGS="-DCMAKE_CUDA_COMPILER=/usr/local/cuda-${CUDA_VERSION}/bin/nvcc -DBASPACHO_CUDA_ARCHS='${BASPACHO_CUDA_ARCHS}'"
 fi
 
@@ -73,7 +79,7 @@ for PYTHON_VERSION in 3.9; do
 
     # --- Install torch
     ENV CUDA_HOME /usr/local/cuda-${CUDA_VERSION}
-    RUN pip install torch --extra-index-url https://download.pytorch.org/whl/${DEVICE_TAG}
+    RUN pip install ${TORCH_VERSION} --extra-index-url https://download.pytorch.org/whl/${DEVICE_TAG}
 
     # --- Install sparse suitesparse
     RUN conda install -c conda-forge suitesparse

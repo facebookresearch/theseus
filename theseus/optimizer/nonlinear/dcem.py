@@ -38,7 +38,8 @@ class DCemSolver(abc.ABC):
         temp: float = 1.0,
         normalize: bool = False,
         lml_verbose: bool = False,
-        lml_eps: float = 1e-3,
+        lml_eps: float = 1e-5,
+        iter_eps: float = 1e-5,
         **kwargs,
     ) -> None:
         self.objective = objective
@@ -55,7 +56,7 @@ class DCemSolver(abc.ABC):
             * init_sigma
         )
         self.lml_eps = lml_eps
-        self.abs_err_tolerance = 1e-3
+        self.iter_eps = iter_eps
         self.init_sigma = init_sigma
 
     def mu_vec_to_dict(self, mu):
@@ -66,7 +67,7 @@ class DCemSolver(abc.ABC):
             idx += var.dof()
         return mu_dic
 
-    def reinit_sigma(self, init_sigma=1.0):
+    def reinit_sigma(self, init_sigma=1.0, **kwargs):
         self.sigma = (
             torch.ones(
                 (self.ordering[0].shape[0], self.tot_dof), device=self.objective.device
@@ -98,6 +99,7 @@ class DCemSolver(abc.ABC):
         assert sigma.shape == (n_batch, self.tot_dof)
 
         for itr in range(num_iters):
+            # X = Normal(mu, sigma + 1e-5).rsample((self.n_samples,))
             X = Normal(mu, sigma).rsample((self.n_samples,))
 
             X_samples = []
@@ -132,7 +134,6 @@ class DCemSolver(abc.ABC):
                 I = I.unsqueeze(2)
 
             else:
-                print("Coming here")
                 I_vals = fX.argsort(dim=1)[:, : self.n_elite]
                 # TODO: A scatter would be more efficient here.
                 I = torch.zeros(n_batch, self.n_samples, device=device)
@@ -191,6 +192,7 @@ class DCemSolver(abc.ABC):
         mu = torch.cat([var.tensor for var in self.ordering], dim=-1)
 
         X = Normal(mu, self.sigma).rsample((self.n_samples,))
+        # X = Normal(mu, self.sigma + 1e-5).rsample((self.n_samples,))
 
         X_samples = []
         for sample in X:
@@ -253,7 +255,7 @@ class DCem(Optimizer):
         objective: Objective,
         vectorize: bool = False,
         cem_solver: Optional[abc.ABC] = DCemSolver,
-        max_iterations: int = 50,
+        max_iterations: int = 100,
         n_sample: int = 50,  # 20
         n_elite: int = 5,  # 5
         temp: float = 1.0,
@@ -261,9 +263,9 @@ class DCem(Optimizer):
         lb=None,
         ub=None,
         lml_verbose: bool = False,
-        lml_eps: float = 1e-3,
+        lml_eps: float = 1e-5,
         normalize: bool = True,
-        iter_eps: float = 1e-4,
+        iter_eps: float = 1e-5,
         **kwargs,
     ) -> None:
         super().__init__(objective, vectorize=vectorize, **kwargs)
@@ -406,11 +408,11 @@ class DCem(Optimizer):
         **kwargs,
     ) -> int:
 
-        mu = self.linear_solver.all_solve(num_iter)
-        self.objective.update(mu)
-        with torch.no_grad():
-            info.best_solution = mu
-        return
+        # mu = self.linear_solver.all_solve(num_iter)
+        # self.objective.update(mu)
+        # with torch.no_grad():
+        #     info.best_solution = mu
+        # return
 
         converged_indices = torch.zeros_like(info.last_err).bool()
         iters_done = 0
@@ -460,7 +462,7 @@ class DCem(Optimizer):
         **kwargs,
     ) -> OptimizerInfo:
         backward_mode = BackwardMode.resolve(backward_mode)
-        # self.linear_solver.reinit_sigma()
+        self.linear_solver.reinit_sigma(**kwargs)
 
         with torch.no_grad():
             info = self._init_info(

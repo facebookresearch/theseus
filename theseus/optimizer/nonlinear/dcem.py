@@ -1,6 +1,5 @@
 import abc
 import math
-from multiprocessing.sharedctypes import Value
 from typing import Any, Callable, Dict, NoReturn, Optional, Type, Union
 
 import numpy as np
@@ -32,7 +31,7 @@ class DCemSolver(abc.ABC):
         objective: Objective,
         ordering: VariableOrdering = None,
         n_sample: int = 20,
-        n_elite: int = 10,
+        n_elite: int = 5,
         init_sigma: float = 1.0,
         lb: float = None,
         ub: float = None,
@@ -53,7 +52,7 @@ class DCemSolver(abc.ABC):
         self.tot_dof = sum([x.dof() for x in self.ordering])
         self.sigma = (
             torch.ones((ordering[0].shape[0], self.tot_dof), device=objective.device)
-            * init_sigma,
+            * init_sigma
         )
         self.lml_eps = lml_eps
         self.abs_err_tolerance = 1e-3
@@ -67,23 +66,24 @@ class DCemSolver(abc.ABC):
             idx += var.dof()
         return mu_dic
 
-    def reinit_sigma(self):
+    def reinit_sigma(self, init_sigma=1.0):
         self.sigma = (
             torch.ones(
                 (self.ordering[0].shape[0], self.tot_dof), device=self.objective.device
             )
-            * self.init_sigma
+            * init_sigma
         )
 
     def all_solve(
         self,
         num_iters: int,
-        info: OptimizerInfo,
+        info: OptimizerInfo = None,
         init_sigma: float = 1.0,
         verbose: bool = False,
         end_iter_callback: Callable = None,
+        **kwargs,
     ):
-        converged_indices = torch.zeros_like(info.last_err).bool()
+        # converged_indices = torch.zeros_like(info.last_err).bool()
 
         device = self.objective.device
         n_batch = self.ordering[0].shape[0]
@@ -132,6 +132,7 @@ class DCemSolver(abc.ABC):
                 I = I.unsqueeze(2)
 
             else:
+                print("Coming here")
                 I_vals = fX.argsort(dim=1)[:, : self.n_elite]
                 # TODO: A scatter would be more efficient here.
                 I = torch.zeros(n_batch, self.n_samples, device=device)
@@ -181,7 +182,7 @@ class DCemSolver(abc.ABC):
 
         # self.objective.update(self.mu_vec_to_dict(mu))
 
-        return itr + 1
+        return self.mu_vec_to_dict(mu)
 
     def solve(self):
         device = self.objective.device
@@ -252,9 +253,9 @@ class DCem(Optimizer):
         objective: Objective,
         vectorize: bool = False,
         cem_solver: Optional[abc.ABC] = DCemSolver,
-        max_iterations: int = 20,
-        n_sample: int = 50,
-        n_elite: int = 5,
+        max_iterations: int = 50,
+        n_sample: int = 50,  # 20
+        n_elite: int = 5,  # 5
         temp: float = 1.0,
         init_sigma=1.0,
         lb=None,
@@ -262,14 +263,12 @@ class DCem(Optimizer):
         lml_verbose: bool = False,
         lml_eps: float = 1e-3,
         normalize: bool = True,
-        iter_eps: float = 1e-3,
+        iter_eps: float = 1e-4,
         **kwargs,
     ) -> None:
         super().__init__(objective, vectorize=vectorize, **kwargs)
 
-        self.params = NonlinearOptimizerParams(
-            iter_eps, iter_eps * 100, max_iterations, 1e-2
-        )
+        self.params = NonlinearOptimizerParams(iter_eps, iter_eps, max_iterations, 1e-2)
 
         self.ordering = VariableOrdering(objective)
 
@@ -289,6 +288,9 @@ class DCem(Optimizer):
             lml_verbose,
             lml_eps,
         )
+
+    def set_params(self, **kwargs):
+        self.params.update(kwargs)
 
     def _maybe_init_best_solution(
         self, do_init: bool = False
@@ -404,11 +406,11 @@ class DCem(Optimizer):
         **kwargs,
     ) -> int:
 
-        # mu = self.linear_solver.all_solve(num_iter)
-        # self.objective.update(mu)
-        # with torch.no_grad():
-        #     info.best_solution = mu
-        # return
+        mu = self.linear_solver.all_solve(num_iter)
+        self.objective.update(mu)
+        with torch.no_grad():
+            info.best_solution = mu
+        return
 
         converged_indices = torch.zeros_like(info.last_err).bool()
         iters_done = 0
@@ -434,8 +436,8 @@ class DCem(Optimizer):
                 info.status[
                     np.array(converged_indices.cpu().numpy())
                 ] = NonlinearOptimizerStatus.CONVERGED
-                if converged_indices.all():
-                    break  # nothing else will happen at this point
+                # if converged_indices.all():
+                #     break  # nothing else will happen at this point
                 info.last_err = err
 
                 if end_iter_callback is not None:
@@ -449,16 +451,16 @@ class DCem(Optimizer):
 
     def _optimize_impl(
         self,
-        track_best_solution: bool = True,
+        track_best_solution: bool = False,
         track_err_history: bool = False,
-        track_state_history: bool = True,
+        track_state_history: bool = False,
         verbose: bool = False,
         backward_mode: Union[str, BackwardMode] = BackwardMode.UNROLL,
         end_iter_callback: Optional[EndIterCallbackType] = None,
         **kwargs,
     ) -> OptimizerInfo:
         backward_mode = BackwardMode.resolve(backward_mode)
-        self.linear_solver.reinit_sigma()
+        # self.linear_solver.reinit_sigma()
 
         with torch.no_grad():
             info = self._init_info(

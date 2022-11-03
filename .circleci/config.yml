@@ -108,6 +108,13 @@ install_torch_cuda11: &install_torch_cuda11
         pip install --progress-bar off torch==1.12.1+cu113 torchvision==0.13.1+cu113 torchaudio==0.12.1+cu113 -f https://download.pytorch.org/whl/cu113/torch_stable.html
         python -c 'import torch; print("Torch version:", torch.__version__); assert torch.cuda.is_available()'
 
+install_functorch_021: &install_functorch_021
+  - run:
+      name: Install Functorch
+      working_directory: ~/project
+      command: |
+        pip install functorch==0.2.1
+
 install_functorch: &install_functorch
   - run:
       name: Install Functorch
@@ -230,7 +237,7 @@ jobs:
       - <<: *setup_cuda10_libs
       - <<: *setup_environment
       - <<: *install_torch_cuda10
-      - <<: *install_functorch
+      - <<: *install_functorch_021
       - <<: *install_recent_cmake_2004
       - <<: *build_baspacho_cuda
       - <<: *setup_project

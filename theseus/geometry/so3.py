@@ -402,7 +402,7 @@ class SO3(LieGroup):
                 non_zero.view(-1, 1),
                 sel_rows.norm(dim=1, keepdim=True),
             )
-            * sine_axis[aux, major].sign().view(-1, 1)
+            * torch.where(sine_axis[aux, major].view(-1, 1) >= 0, non_zero, -non_zero)
         )
         sine_half_theta = (0.5 * (1 - cosine_near_pi)).clamp(0, 1).sqrt().view(-1, 1)
         ret[:, 1:] = torch.where(
@@ -658,7 +658,9 @@ class SO3(LieGroup):
         axis = (
             sel_rows
             / sel_rows.norm(dim=1, keepdim=True)
-            * sine_axis[near_pi, major].sign().view(-1, 1)
+            * torch.where(
+                sine_axis[near_pi, major].view(-1, 1) >= 0, non_zero, -non_zero
+            )
         )
         sine_half_theta = (0.5 * (1 - cosine_near_pi)).clamp(0, 1).sqrt().view(-1, 1)
         ret[near_pi, 1:] = axis * sine_half_theta

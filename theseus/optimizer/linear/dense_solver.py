@@ -51,7 +51,7 @@ class DenseSolver(LinearSolver):
 
         # See Nocedal and Wright, Numerical Optimization, pp. 260 and 261
         # https://www.csie.ntu.edu.tw/~r97002/temp/num_optimization.pdf
-        damping = matrix.new_tensor(damping)
+        damping = torch.as_tensor(damping).to(device=matrix.device, dtype=matrix.dtype)
         if ellipsoidal:
             damping = damping.view(-1, 1)
             # Add eps to guard against ill-conditioned matrix

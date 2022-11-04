@@ -10,6 +10,7 @@ import torch
 from theseus.core import Objective
 from theseus.optimizer import DenseLinearization, Linearization
 from theseus.optimizer.linear import (
+    BaspachoSparseSolver,
     CholeskyDenseSolver,
     LinearSolver,
     LUCudaSparseSolver,
@@ -25,7 +26,9 @@ _LM_ALLOWED_ELLIPS_DAMP_SOLVERS: List[Type[LinearSolver]] = [
 ]
 _EDAMP_SOLVERS_STR = ",".join(c.__name__ for c in _LM_ALLOWED_ELLIPS_DAMP_SOLVERS)
 _LM_ALLOWED_ADAPTIVE_DAMP_SOLVERS: List[Type[LinearSolver]] = [
+    BaspachoSparseSolver,
     CholeskyDenseSolver,
+    LUCudaSparseSolver,
     LUDenseSolver,
 ]
 _ADAPT_DAMP_SOLVERS_STR = ",".join(

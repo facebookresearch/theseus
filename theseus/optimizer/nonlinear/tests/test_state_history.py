@@ -25,8 +25,9 @@ def test_state_history(var_type, batch_size):
 
     max_iters = 10
     optimizer = th.GaussNewton(objective, max_iterations=max_iters)
+    layer = th.TheseusLayer(optimizer)
 
-    info = optimizer.optimize(track_state_history=True)
+    _, info = layer.forward(optimizer_kwargs={"track_state_history": True})
 
     for var in objective.optim_vars.values():
         assert var.name in info.state_history

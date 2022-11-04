@@ -56,7 +56,7 @@ class LevenbergMarquardt(NonlinearLeastSquares):
         self,
         objective: Objective,
         linear_solver_cls: Optional[Type[LinearSolver]] = None,
-        vectorize: bool = True,
+        vectorize: bool = False,
         linearization_cls: Optional[Type[Linearization]] = None,
         linearization_kwargs: Optional[Dict[str, Any]] = None,
         linear_solver_kwargs: Optional[Dict[str, Any]] = None,

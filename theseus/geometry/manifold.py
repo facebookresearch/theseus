@@ -42,9 +42,10 @@ class Manifold(Variable, abc.ABC):
         if tensor is None and dtype is None:
             dtype = torch.get_default_dtype()
         if tensor is not None:
-            if _LieGroupCheckContext.get_context():
+            checks_enabled, silent_unchecks = _LieGroupCheckContext.get_context()
+            if checks_enabled:
                 tensor = self._check_tensor(tensor, strict)
-            else:
+            elif not silent_unchecks:
                 warnings.warn(
                     f"Manifold consistency checks are disabled "
                     f"for {self.__class__.__name__}.",

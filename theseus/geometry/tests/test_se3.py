@@ -29,13 +29,13 @@ from .common import (
 
 
 def check_SE3_log_map(tangent_vector, atol=TEST_EPS, enable_functorch=False):
-    with set_lie_group_check_enabled(not enable_functorch):
+    with set_lie_group_check_enabled(not enable_functorch, silent=True):
         g = th.SE3.exp_map(tangent_vector)
         assert torch.allclose(th.SE3.exp_map(g.log_map()).tensor, g.tensor, atol=atol)
 
 
 def check_SE3_to_x_y_z_quaternion(se3: th.SE3, atol=1e-10, enable_functorch=False):
-    with set_lie_group_check_enabled(not enable_functorch):
+    with set_lie_group_check_enabled(not enable_functorch, silent=True):
         x_y_z_quaternion = se3.to_x_y_z_quaternion()
         assert torch.allclose(
             th.SE3(x_y_z_quaternion=x_y_z_quaternion).to_matrix(),
@@ -82,7 +82,7 @@ def test_exp_map(batch_size, dtype, ang_factor, enable_functorch):
 )
 @pytest.mark.parametrize("enable_functorch", [True, False])
 def test_batch_size_3_exp_map(dtype, ang_factor, enable_functorch):
-    with set_lie_group_check_enabled(not enable_functorch):
+    with set_lie_group_check_enabled(not enable_functorch, silent=True):
         rng = torch.Generator()
         rng.manual_seed(0)
         ATOL = 1e-4 if dtype == torch.float32 else 1e-6
@@ -136,7 +136,7 @@ def test_log_map(batch_size, dtype, ang_factor, enable_functorch):
 )
 @pytest.mark.parametrize("enable_functorch", [True, False])
 def test_batch_size_3_log_map(dtype, ang_factor, enable_functorch):
-    with set_lie_group_check_enabled(not enable_functorch):
+    with set_lie_group_check_enabled(not enable_functorch, silent=True):
         rng = torch.Generator()
         rng.manual_seed(0)
         ATOL = 1e-3 if dtype == torch.float32 else 1e-6

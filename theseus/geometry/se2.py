@@ -121,7 +121,7 @@ class SE2(LieGroup):
 
     @property
     def rotation(self) -> SO2:
-        with no_lie_group_check():
+        with no_lie_group_check(silent=True):
             return SO2(tensor=self[:, 2:])
 
     def theta(self, jacobians: Optional[List[torch.Tensor]] = None) -> torch.Tensor:
@@ -134,7 +134,7 @@ class SE2(LieGroup):
 
     @property
     def translation(self) -> Point2:
-        with no_lie_group_check():
+        with no_lie_group_check(silent=True):
             return self.xy()
 
     def xy(self, jacobians: Optional[List[torch.Tensor]] = None) -> Point2:

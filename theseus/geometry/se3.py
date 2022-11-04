@@ -174,7 +174,8 @@ class SE3(LieGroup):
         if matrix.ndim != 3 or matrix.shape[1:] != (4, 4):
             raise ValueError("Hat matrices of SE3 can only be 4x4 matrices")
 
-        if _LieGroupCheckContext.get_context():
+        checks_enabled, silent_unchecks = _LieGroupCheckContext.get_context()
+        if checks_enabled:
             if matrix[:, 3].abs().max().item() > HAT_EPS:
                 raise ValueError(
                     "The last row of hat matrices of SE3 can only be zero."
@@ -186,7 +187,7 @@ class SE3(LieGroup):
                 raise ValueError(
                     "The 3x3 top-left corner of hat matrices of SE3 can only be skew-symmetric."
                 )
-        else:
+        elif not silent_unchecks:
             warnings.warn(
                 "Lie group checks are disabled, so the skew-symmetry of hat matrices is "
                 "not checked for SE3.",
@@ -629,16 +630,16 @@ class SE3(LieGroup):
     def to_x_y_z_quaternion(self) -> torch.Tensor:
         ret = self.tensor.new_zeros(self.shape[0], 7)
         ret[:, :3] = self.tensor[:, :, 3]
-        with no_lie_group_check():
+        with no_lie_group_check(silent=True):
             ret[:, 3:] = SO3(tensor=self.tensor[:, :, :3]).to_quaternion()
         return ret
 
     def rotation(self) -> SO3:
-        with no_lie_group_check():
+        with no_lie_group_check(silent=True):
             return SO3(tensor=self.tensor[:, :, :3])
 
     def translation(self) -> Point3:
-        with no_lie_group_check():
+        with no_lie_group_check(silent=True):
             return Point3(tensor=self.tensor[:, :, 3].view(-1, 3))
 
     # calls to() on the internal tensors

@@ -156,7 +156,8 @@ class SO3(LieGroup):
         if quaternion.ndim != 2 or quaternion.shape[1] != 4:
             raise ValueError("Quaternions can only be 4-D vectors.")
 
-        if _LieGroupCheckContext.get_context():
+        checks_enabled, silent_unchecks = _LieGroupCheckContext.get_context()
+        if checks_enabled:
             QUANTERNION_EPS = theseus.constants._SO3_QUATERNION_EPS[quaternion.dtype]
 
             if quaternion.dtype != torch.float64:
@@ -166,7 +167,7 @@ class SO3(LieGroup):
                 torch.linalg.norm(quaternion, dim=1) - 1
             ).abs().max().item() >= QUANTERNION_EPS:
                 raise ValueError("Not unit quaternions.")
-        else:
+        elif not silent_unchecks:
             warnings.warn(
                 "Lie group checks are disabled, so the validness of unit quaternions is not "
                 "checked for SO3.",
@@ -178,17 +179,18 @@ class SO3(LieGroup):
         if matrix.ndim != 3 or matrix.shape[1:] != (3, 3):
             raise ValueError("Hat matrices of SO(3) can only be 3x3 matrices")
 
-        if _LieGroupCheckContext.get_context():
+        checks_enabled, silent_unchecks = _LieGroupCheckContext.get_context()
+        if checks_enabled:
+            if (
+                matrix.transpose(1, 2) + matrix
+            ).abs().max().item() > theseus.constants._SO3_HAT_EPS[matrix.dtype]:
+                raise ValueError("Hat matrices of SO(3) can only be skew-symmetric.")
+        elif not silent_unchecks:
             warnings.warn(
                 "Lie group checks are disabled, so the skew-symmetry of hat matrices is "
                 "not checked for SO3.",
                 RuntimeWarning,
             )
-        else:
-            if (
-                matrix.transpose(1, 2) + matrix
-            ).abs().max().item() > theseus.constants._SO3_HAT_EPS[matrix.dtype]:
-                raise ValueError("Hat matrices of SO(3) can only be skew-symmetric.")
 
     @staticmethod
     def exp_map(

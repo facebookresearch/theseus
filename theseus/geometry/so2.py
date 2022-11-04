@@ -140,11 +140,12 @@ class SO2(LieGroup):
     def _hat_matrix_check(matrix: torch.Tensor):
         _check = matrix.ndim == 3 and matrix.shape[1:] == (2, 2)
 
-        if _LieGroupCheckContext.get_context():
+        checks_enabled, silent_unchecks = _LieGroupCheckContext.get_context()
+        if checks_enabled:
             _check &= matrix[:, 0, 0].abs().max().item() < theseus.constants.EPS
             _check &= matrix[:, 1, 1].abs().max().item() < theseus.constants.EPS
             _check &= torch.allclose(matrix[:, 0, 1], -matrix[:, 1, 0])
-        else:
+        elif not silent_unchecks:
             warnings.warn(
                 "Lie group checks are disabled, so the skew-symmetry of hat matrices is "
                 "not checked for SO2.",

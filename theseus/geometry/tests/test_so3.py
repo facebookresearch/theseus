@@ -30,14 +30,14 @@ from .common import (
 
 
 def check_SO3_log_map(tangent_vector, atol=1e-7, enable_functorch=False):
-    with set_lie_group_check_enabled(not enable_functorch):
+    with set_lie_group_check_enabled(not enable_functorch, silent=True):
         error = (tangent_vector - th.SO3.exp_map(tangent_vector).log_map()).norm(dim=1)
         error = torch.minimum(error, (error - 2 * np.pi).abs())
         assert torch.allclose(error, torch.zeros_like(error), atol=atol)
 
 
 def check_SO3_to_quaternion(so3: th.SO3, atol=1e-10, enable_functorch=False):
-    with set_lie_group_check_enabled(not enable_functorch):
+    with set_lie_group_check_enabled(not enable_functorch, silent=True):
         quaternions = so3.to_quaternion()
         assert torch.allclose(
             th.SO3(quaternion=quaternions).to_matrix(), so3.to_matrix(), atol=atol

@@ -35,7 +35,7 @@ The simplest way to install Theseus from source is by running the following (see
 
     git clone https://github.com/facebookresearch/theseus.git
     pip install -e .
-    python -m pytest theseus
+    python -m pytest tests
 
 If you are interested in contributing to ``theseus``, instead install using 
 
@@ -65,7 +65,7 @@ With ``dev`` installation, you can run unit tests via
 
 .. code-block:: bash
 
-    python -m pytest theseus
+    python -m pytest tests
 
 By default, unit tests include tests for our CUDA extensions. You can add the option `-m "not cudaext"`
 to skip them when installing without CUDA support. Additionally, the tests for sparse solver BaSpaCho are automatically 

@@ -124,7 +124,7 @@ We support several features that improve computation times and memory consumptio
 
 ### Running unit tests (requires `dev` installation)
 ```bash
-python -m pytest theseus
+python -m pytest tests
 ```
 By default, unit tests include tests for our CUDA extensions. You can add the option `-m "not cudaext"`
 to skip them when installing without CUDA support. Additionally, the tests for sparse solver BaSpaCho are automatically 

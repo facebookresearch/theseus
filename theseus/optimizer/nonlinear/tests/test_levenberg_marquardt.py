@@ -8,7 +8,7 @@ import torch
 
 import theseus as th
 
-from .common import run_nonlinear_least_squares_check
+from theseus.optimizer.nonlinear.tests.common import run_nonlinear_least_squares_check
 
 
 @pytest.fixture
@@ -20,18 +20,20 @@ def mock_objective():
     return objective
 
 
-def test_levenberg_marquartd():
-    for ellipsoidal_damping in [True, False]:
-        for damping in [0, 0.001, 0.01, 0.1]:
-            run_nonlinear_least_squares_check(
-                th.LevenbergMarquardt,
-                {
-                    "damping": damping,
-                    "ellipsoidal_damping": ellipsoidal_damping,
-                    "damping_eps": 0.0,
-                },
-                singular_check=damping < 0.001,
-            )
+@pytest.mark.parametrize("damping", [0.0, 0.001, 0.01, 0.1])
+@pytest.mark.parametrize("ellipsoidal_damping", [True, False])
+@pytest.mark.parametrize("adaptive_damping", [True, False])
+def test_levenberg_marquardt(damping, ellipsoidal_damping, adaptive_damping):
+    run_nonlinear_least_squares_check(
+        th.LevenbergMarquardt,
+        {
+            "damping": damping,
+            "ellipsoidal_damping": ellipsoidal_damping,
+            "adaptive_damping": adaptive_damping,
+            "damping_eps": 0.0,
+        },
+        singular_check=damping < 0.001,
+    )
 
 
 def test_ellipsoidal_damping_compatibility(mock_objective):

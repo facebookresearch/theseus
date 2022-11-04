@@ -5,7 +5,7 @@
 
 import abc
 import warnings
-from typing import Any, Dict, Optional, Type
+from typing import Any, Dict, Optional, Type, Union
 
 import torch
 import torch.linalg
@@ -37,7 +37,7 @@ class DenseSolver(LinearSolver):
     @staticmethod
     def _apply_damping(
         matrix: torch.Tensor,
-        damping: float,
+        damping: Union[float, torch.Tensor],
         ellipsoidal: bool = True,
         eps: float = 1e-8,
     ) -> torch.Tensor:
@@ -51,10 +51,13 @@ class DenseSolver(LinearSolver):
 
         # See Nocedal and Wright, Numerical Optimization, pp. 260 and 261
         # https://www.csie.ntu.edu.tw/~r97002/temp/num_optimization.pdf
+        damping = torch.as_tensor(damping).to(device=matrix.device, dtype=matrix.dtype)
         if ellipsoidal:
+            damping = damping.view(-1, 1)
             # Add eps to guard against ill-conditioned matrix
             damped_D = torch.diag_embed(damping * matrix.diagonal(dim1=1, dim2=2) + eps)
         else:
+            damping = damping.view(-1, 1, 1)
             damped_D = damping * torch.eye(
                 n, device=matrix.device, dtype=matrix.dtype
             ).unsqueeze(0)
@@ -64,11 +67,11 @@ class DenseSolver(LinearSolver):
         self,
         Atb: torch.Tensor,
         AtA: torch.Tensor,
-        damping: Optional[float] = None,
+        damping: Optional[Union[float, torch.Tensor]] = None,
         ellipsoidal_damping: bool = True,
         damping_eps: float = 1e-8,
     ) -> torch.Tensor:
-        if damping:
+        if damping is not None:
             AtA = DenseSolver._apply_damping(
                 AtA, damping, ellipsoidal=ellipsoidal_damping, eps=damping_eps
             )
@@ -80,7 +83,7 @@ class DenseSolver(LinearSolver):
 
     def solve(
         self,
-        damping: Optional[float] = None,
+        damping: Optional[Union[float, torch.Tensor]] = None,
         ellipsoidal_damping: bool = True,
         damping_eps: float = 1e-8,
         **kwargs,

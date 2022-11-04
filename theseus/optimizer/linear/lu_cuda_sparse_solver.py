@@ -3,7 +3,7 @@
 # This source code is licensed under the MIT license found in the
 # LICENSE file in the root directory of this source tree.
 
-from typing import Any, Dict, List, Optional, Type
+from typing import Any, Dict, List, Optional, Type, Union
 
 import torch
 
@@ -12,6 +12,7 @@ from theseus.optimizer import Linearization, SparseLinearization
 from theseus.optimizer.autograd import LUCudaSolveFunction
 
 from .linear_solver import LinearSolver
+from .utils import convert_to_alpha_beta_damping_tensors
 
 
 class LUCudaSparseSolver(LinearSolver):
@@ -90,7 +91,7 @@ class LUCudaSparseSolver(LinearSolver):
 
     def solve(
         self,
-        damping: Optional[float] = None,
+        damping: Optional[Union[float, torch.Tensor]] = None,
         ellipsoidal_damping: bool = True,
         damping_eps: float = 1e-8,
         **kwargs,
@@ -100,7 +101,7 @@ class LUCudaSparseSolver(LinearSolver):
                 self.reset(self._objective.batch_size)
         if not isinstance(self.linearization, SparseLinearization):
             raise RuntimeError(
-                "CholmodSparseSolver only works with theseus.optimizer.SparseLinearization."
+                "LUCudaSparseSolver only works with theseus.optimizer.SparseLinearization."
             )
 
         self._last_solver_context = (
@@ -110,10 +111,13 @@ class LUCudaSparseSolver(LinearSolver):
         if damping is None:
             damping_alpha_beta = None
         else:
-            # See Nocedal and Wright, Numerical Optimization, pp. 260 and 261
-            # https://www.csie.ntu.edu.tw/~r97002/temp/num_optimization.pdf
-            damping_alpha_beta = (
-                (damping, damping_eps) if ellipsoidal_damping else (0.0, damping)
+            damping_alpha_beta = convert_to_alpha_beta_damping_tensors(
+                damping,
+                damping_eps,
+                ellipsoidal_damping,
+                batch_size=self.linearization.A_val.shape[0],
+                device=self.linearization.A_val.device,
+                dtype=self.linearization.A_val.dtype,
             )
 
         return LUCudaSolveFunction.apply(

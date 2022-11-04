@@ -16,8 +16,10 @@ def check_mat_mult(batch_size, num_rows, num_cols, fill, verbose=False):
         return
     from theseus.extlib.mat_mult import apply_damping, mat_vec, mult_MtM, tmat_vec
 
+    rng = torch.Generator()
+    rng.manual_seed(0)
     A_skel = random_sparse_binary_matrix(
-        num_rows, num_cols, fill, min_entries_per_col=3
+        num_rows, num_cols, fill, min_entries_per_col=3, rng=rng
     )
     A_num_cols = num_cols
     A_rowPtr = torch.tensor(A_skel.indptr, dtype=torch.int).cuda()
@@ -42,7 +44,6 @@ def check_mat_mult(batch_size, num_rows, num_cols, fill, verbose=False):
     AtA_val = torch.tensor(np.array([m.data for m in AtA_csr])).cuda()
     AtA_num_rows = AtA_rowPtr.size(0) - 1
     AtA_num_cols = AtA_num_rows
-    AtA_nnz = AtA_colInd.size(0)  # noqa: F841
 
     if verbose:
         print("\nAtA[0]:\n", AtA_csr[0].todense())
@@ -71,8 +72,8 @@ def check_mat_mult(batch_size, num_rows, num_cols, fill, verbose=False):
             ]
         )
     )
-    alpha = 0.3
-    beta = 0.7
+    alpha = 0.3 * torch.rand(batch_size, dtype=torch.double).cuda()
+    beta = 0.7 * torch.rand(batch_size, dtype=torch.double).cuda()
     apply_damping(batch_size, AtA_num_cols, AtA_rowPtr, AtA_colInd, res, alpha, beta)
     new_diagonals = torch.tensor(
         np.array(
@@ -85,7 +86,10 @@ def check_mat_mult(batch_size, num_rows, num_cols, fill, verbose=False):
             ]
         )
     )
-    assert new_diagonals.isclose(old_diagonals * (1 + alpha) + beta, atol=1e-10).all()
+    assert new_diagonals.isclose(
+        old_diagonals * (1 + alpha.cpu().view(-1, 1)) + beta.cpu().view(-1, 1),
+        atol=1e-10,
+    ).all()
 
     # test A * b
     v = torch.rand((batch_size, A_num_cols), dtype=torch.double).cuda()

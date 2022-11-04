@@ -8,6 +8,7 @@
 
 #include "baspacho_solver.h"
 #include "baspacho/baspacho/CudaDefs.h"
+#include "utils.h"
 
 void NumericDecomposition::init_factor_data_cuda(int64_t batchSize) {
     auto xOptions = torch::TensorOptions().dtype(torch::kFloat64).device(torch::kCUDA);
@@ -62,18 +63,10 @@ void NumericDecomposition::add_M_cuda(const torch::Tensor& val,
     int64_t batchSize = data.size(0);
     int64_t factorBatchStride = data.size(1);
 
-    TORCH_CHECK(val.device().is_cuda());
-    TORCH_CHECK(ptrs.device().is_cuda());
-    TORCH_CHECK(inds.device().is_cuda());
-    TORCH_CHECK(val.dtype() == torch::kFloat64);
-    TORCH_CHECK(ptrs.dtype() == torch::kInt64);
-    TORCH_CHECK(inds.dtype() == torch::kInt64);
-    TORCH_CHECK(val.dim() == 2);
-    TORCH_CHECK(ptrs.dim() == 1);
-    TORCH_CHECK(inds.dim() == 1);
-    TORCH_CHECK(val.size(0) == batchSize);
-    TORCH_CHECK(val.size(1) == inds.size(0));
-    TORCH_CHECK(ptrs.size(0) - 1 == dec->solver->order());
+    THESEUS_TENSOR_CHECK_CUDA(val, 2, batchSize, torch::kFloat64);
+    THESEUS_TENSOR_CHECK_CUDA(ptrs, 1, dec->solver->order() + 1, torch::kInt64);
+    THESEUS_TENSOR_CHECK_CUDA(inds, 1, val.size(1), torch::kInt64);
+
 
     int64_t valBatchStride = val.size(1);
 
@@ -146,18 +139,10 @@ void NumericDecomposition::add_MtM_cuda(const torch::Tensor& val,
     int64_t batchSize = data.size(0);
     int64_t factorBatchStride = data.size(1);
 
-    TORCH_CHECK(val.device().is_cuda());
-    TORCH_CHECK(ptrs.device().is_cuda());
-    TORCH_CHECK(inds.device().is_cuda());
-    TORCH_CHECK(val.dtype() == torch::kFloat64);
-    TORCH_CHECK(ptrs.dtype() == torch::kInt64);
-    TORCH_CHECK(inds.dtype() == torch::kInt64);
-    TORCH_CHECK(val.dim() == 2);
-    TORCH_CHECK(ptrs.dim() == 1);
-    TORCH_CHECK(inds.dim() == 1);
-    TORCH_CHECK(val.size(0) == batchSize);
-    TORCH_CHECK(val.size(1) == inds.size(0));
-
+    THESEUS_TENSOR_CHECK_CUDA(val, 2, batchSize, torch::kFloat64);
+    THESEUS_TENSOR_CHECK_CUDA(ptrs, 1, ptrs.size(0), torch::kInt64);
+    THESEUS_TENSOR_CHECK_CUDA(inds, 1, val.size(1), torch::kInt64);
+    
     int64_t valBatchStride = val.size(1);
 
     const double* pVal = val.data_ptr<double>();
@@ -185,7 +170,7 @@ void NumericDecomposition::add_MtM_cuda(const torch::Tensor& val,
 
 __global__ void damp_kernel(BaSpaCho::PermutedCoalescedAccessor accessor,
                      double* pFactor, int64_t factorSize,
-                     double alpha, double beta,
+                     double* alpha, double* beta,
                      int64_t maxI, int batchSize) {
     int64_t i = blockIdx.x * blockDim.x + threadIdx.x;
     int batchIndex = blockIdx.y * blockDim.y + threadIdx.y;
@@ -195,11 +180,11 @@ __global__ void damp_kernel(BaSpaCho::PermutedCoalescedAccessor accessor,
 
     double* pFactorItem = pFactor + factorSize * batchIndex;
     auto block = accessor.diagBlock(pFactorItem, i);
-    block.diagonal() *= (1.0 + alpha);
-    block.diagonal().array() += beta;
+    block.diagonal() *= (1.0 + alpha[batchIndex]);
+    block.diagonal().array() += beta[batchIndex];
 }
 
-void NumericDecomposition::damp_cuda(double alpha, double beta) {
+void NumericDecomposition::damp_cuda(double* alpha, double* beta) {
     int64_t batchSize = data.size(0);
     int64_t factorSize = data.size(1);
     double* pFactor = data.data_ptr<double>();
@@ -267,9 +252,7 @@ __global__ void unscramble_kernel(BaSpaCho::PermutedCoalescedAccessor acc,
 void NumericDecomposition::solve_cuda(torch::Tensor& x) {
     int64_t batchSize = data.size(0);
     int64_t order = dec->solver->order();
-    TORCH_CHECK(x.device().is_cuda());
-    TORCH_CHECK(x.dim() == 2);
-    TORCH_CHECK(x.size(0) == batchSize);
+    THESEUS_TENSOR_CHECK_CUDA(x, 2, batchSize, x.dtype());
     TORCH_CHECK(x.size(1) == order);
 
     using OuterStride = Eigen::OuterStride<>;

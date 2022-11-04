@@ -3,7 +3,7 @@
 # This source code is licensed under the MIT license found in the
 # LICENSE file in the root directory of this source tree.
 
-from typing import Any, Dict, Optional, Type
+from typing import Any, Dict, Optional, Type, Union
 
 import torch
 
@@ -47,7 +47,11 @@ class CholmodSparseSolver(LinearSolver):
         # the `damping` has the purpose of (optionally) improving conditioning
         self._damping: float = damping
 
-    def solve(self, damping: Optional[float] = None, **kwargs) -> torch.Tensor:
+    def solve(
+        self, damping: Optional[Union[float, torch.Tensor]] = None, **kwargs
+    ) -> torch.Tensor:
+        if damping is not None and not isinstance(damping, float):
+            raise ValueError("CholmodSparseSolver only supports scalar damping.")
         damping = damping or self._damping
         if not isinstance(self.linearization, SparseLinearization):
             raise RuntimeError(

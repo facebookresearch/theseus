@@ -4,7 +4,7 @@
 # LICENSE file in the root directory of this source tree.
 
 import abc
-from typing import Any, Dict, Optional, Type
+from typing import Any, Dict, Optional, Type, Union
 
 import torch
 
@@ -27,5 +27,7 @@ class LinearSolver(abc.ABC):
         )
 
     @abc.abstractmethod
-    def solve(self, damping: Optional[float] = None, **kwargs) -> torch.Tensor:
+    def solve(
+        self, damping: Optional[Union[float, torch.Tensor]] = None, **kwargs
+    ) -> torch.Tensor:
         pass

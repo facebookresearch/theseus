@@ -4,6 +4,7 @@
 // LICENSE file in the root directory of this source tree.
 
 #include "baspacho_solver.h"
+#include "utils.h"
 #include <iostream>
 
 using namespace BaSpaCho;
@@ -40,19 +41,9 @@ void NumericDecomposition::add_M(const torch::Tensor& val,
     int64_t batchSize = data.size(0);
     int64_t factorBatchStride = data.size(1);
 
-    TORCH_CHECK(val.device().is_cpu());
-    TORCH_CHECK(ptrs.device().is_cpu());
-    TORCH_CHECK(inds.device().is_cpu());
-    TORCH_CHECK(val.dtype() == torch::kFloat64);
-    TORCH_CHECK(ptrs.dtype() == torch::kInt64);
-    TORCH_CHECK(inds.dtype() == torch::kInt64);
-    TORCH_CHECK(val.dim() == 2);
-    TORCH_CHECK(ptrs.dim() == 1);
-    TORCH_CHECK(inds.dim() == 1);
-    TORCH_CHECK(val.size(0) == batchSize);
-    TORCH_CHECK(val.size(1) == inds.size(0));
-    TORCH_CHECK(ptrs.size(0) - 1 == dec->solver->order());
-
+    THESEUS_TENSOR_CHECK_CPU(val, 2, batchSize, torch::kFloat64);
+    THESEUS_TENSOR_CHECK_CPU(ptrs, 1, dec->solver->order() + 1, torch::kInt64);
+    THESEUS_TENSOR_CHECK_CPU(inds, 1, val.size(1), torch::kInt64);
     int64_t valBatchStride = val.size(1);
 
     const double* pVal = val.data_ptr<double>();
@@ -112,18 +103,9 @@ void NumericDecomposition::add_MtM(const torch::Tensor& val,
     int64_t batchSize = data.size(0);
     int64_t factorBatchStride = data.size(1);
 
-    TORCH_CHECK(val.device().is_cpu());
-    TORCH_CHECK(ptrs.device().is_cpu());
-    TORCH_CHECK(inds.device().is_cpu());
-    TORCH_CHECK(val.dtype() == torch::kFloat64);
-    TORCH_CHECK(ptrs.dtype() == torch::kInt64);
-    TORCH_CHECK(inds.dtype() == torch::kInt64);
-    TORCH_CHECK(val.dim() == 2);
-    TORCH_CHECK(ptrs.dim() == 1);
-    TORCH_CHECK(inds.dim() == 1);
-    TORCH_CHECK(val.size(0) == batchSize);
-    TORCH_CHECK(val.size(1) == inds.size(0));
-
+    THESEUS_TENSOR_CHECK_CPU(val, 2, batchSize, torch::kFloat64);
+    THESEUS_TENSOR_CHECK_CPU(ptrs, 1, ptrs.size(0), torch::kInt64);
+    THESEUS_TENSOR_CHECK_CPU(inds, 1, val.size(1), torch::kInt64);
     int64_t valBatchStride = val.size(1);
 
     const double* pVal = val.data_ptr<double>();
@@ -175,13 +157,17 @@ void NumericDecomposition::add_MtM(const torch::Tensor& val,
     }
 }
 
-void NumericDecomposition::damp(double alpha, double beta) {
+void NumericDecomposition::damp(const torch::Tensor& alpha, const torch::Tensor& beta) {
 #ifdef THESEUS_HAVE_CUDA
     if (dec->isCuda) {
-        damp_cuda(alpha, beta);
+        THESEUS_TENSOR_CHECK_CUDA(alpha, 1, data.size(0), torch::kFloat64);
+        THESEUS_TENSOR_CHECK_CUDA(beta, 1, data.size(0), torch::kFloat64);
+        damp_cuda(alpha.data_ptr<double>(), beta.data_ptr<double>());
         return;
     }
 #endif
+    THESEUS_TENSOR_CHECK_CPU(alpha, 1, data.size(0), torch::kFloat64);
+    THESEUS_TENSOR_CHECK_CPU(beta, 1, data.size(0), torch::kFloat64);
 
     int64_t batchSize = data.size(0);
     int64_t factorSize = data.size(1);
@@ -193,8 +179,8 @@ void NumericDecomposition::damp(double alpha, double beta) {
         double* pFactorItem = pFactor + factorSize * i;
         for (int64_t p = 0; p < nParams; p++) {
             auto block = accessor.diagBlock(pFactorItem, p);
-            block.diagonal() *= (1.0 + alpha);
-            block.diagonal().array() += beta;
+            block.diagonal() *= (1.0 + alpha[i].item<double>());
+            block.diagonal().array() += beta[i].item<double>();
         }
     }
 }
@@ -227,9 +213,7 @@ void NumericDecomposition::solve(torch::Tensor& x) {
 
     int64_t batchSize = data.size(0);
     int64_t order = dec->solver->order();
-    TORCH_CHECK(x.device().is_cpu());
-    TORCH_CHECK(x.dim() == 2);
-    TORCH_CHECK(x.size(0) == batchSize);
+    THESEUS_TENSOR_CHECK_CPU(x, 2, batchSize, x.dtype());
     TORCH_CHECK(x.size(1) == order);
 
     using OuterStride = Eigen::OuterStride<>;
@@ -275,16 +259,9 @@ void NumericDecomposition::solve(torch::Tensor& x) {
 SymbolicDecomposition::SymbolicDecomposition(
     const torch::Tensor& paramSize, const torch::Tensor& sparseStructPtrs,
     const torch::Tensor& sparseStructInds, const std::string& device) {
-    TORCH_CHECK(paramSize.device().is_cpu());
-    TORCH_CHECK(sparseStructPtrs.device().is_cpu());
-    TORCH_CHECK(sparseStructInds.device().is_cpu());
-    TORCH_CHECK(paramSize.dtype() == torch::kInt64);
-    TORCH_CHECK(sparseStructPtrs.dtype() == torch::kInt64);
-    TORCH_CHECK(sparseStructInds.dtype() == torch::kInt64);
-    TORCH_CHECK(paramSize.dim() == 1);
-    TORCH_CHECK(sparseStructPtrs.dim() == 1);
-    TORCH_CHECK(sparseStructInds.dim() == 1);
-    TORCH_CHECK(paramSize.size(0) + 1 == sparseStructPtrs.size(0));
+    THESEUS_TENSOR_CHECK_CPU(paramSize, 1, sparseStructPtrs.size(0) - 1, torch::kInt64);
+    THESEUS_TENSOR_CHECK_CPU(sparseStructPtrs, 1, sparseStructPtrs.size(0), torch::kInt64);
+    THESEUS_TENSOR_CHECK_CPU(sparseStructInds, 1, sparseStructInds.size(0), torch::kInt64);
 #ifdef THESEUS_HAVE_CUDA
     TORCH_CHECK(device == "cpu" || device == "cuda");
 #else

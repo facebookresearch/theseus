@@ -9,6 +9,7 @@
 
 #include "baspacho/baspacho/Solver.h"
 
+
 // Data stored in a symbolic decomposition, result from analyzing sparse pattern.
 //
 // Both Python's symbolic decomposition and numeric decomposition will hold a
@@ -39,7 +40,7 @@ class NumericDecomposition {
                  const torch::Tensor& inds);
 
     // apply damping, ie on factor diag x -> x*(1+alpha) + beta (auto Cpu/Cuda)
-    void damp(double alpha, double beta);
+    void damp(const torch::Tensor& alpha, const torch::Tensor& beta);
 
     // in-place solves on vector data, batch size must match (auto Cpu/Cuda)
     void factor();
@@ -57,7 +58,7 @@ class NumericDecomposition {
                       const torch::Tensor& inds);
 
     // apply damping, ie on factor diag x -> x*(1+alpha) + beta (Cuda)
-    void damp_cuda(double alpha, double beta);
+    void damp_cuda(double* alpha, double* beta);
 
     // computes Cholesky factorization, in-place on the factor (Cuda)
     void factor_cuda();

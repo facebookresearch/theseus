@@ -2,7 +2,7 @@
 #
 # This source code is licensed under the MIT license found in the
 # LICENSE file in the root directory of this source tree.
-
+from typing import Optional, Tuple
 import torch
 
 from ..linear_system import SparseStructure
@@ -31,7 +31,7 @@ class LUCudaSolveFunction(torch.autograd.Function):
         A_rowPtr: torch.Tensor = args[3]
         A_colInd: torch.Tensor = args[4]
         solver_context: CusolverLUSolver = args[5]
-        damping_alpha_beta: float = args[6]
+        damping_alpha_beta: Optional[Tuple[torch.Tensor, torch.Tensor]] = args[6]
         check_factor_id: bool = args[7]
 
         AtA_rowPtr = solver_context.A_rowPtr
@@ -164,8 +164,11 @@ class LUCudaSolveFunction(torch.autograd.Function):
             )
 
         # apply correction if there is a multiplicative damping
-        if ctx.damping_alpha_beta is not None and ctx.damping_alpha_beta[0] > 0.0:
-            alpha = ctx.damping_alpha_beta[0]
+        if (
+            ctx.damping_alpha_beta is not None
+            and (ctx.damping_alpha_beta[0] > 0.0).any()
+        ):
+            alpha = ctx.damping_alpha_beta[0].view(-1, 1)
             alpha2Hx = (alpha * 2.0) * H * ctx.x  # componentwise product
             A_grad -= ctx.A_val * alpha2Hx[:, ctx.A_colInd.type(torch.long)]
 

@@ -13,7 +13,6 @@ from typing import Any, Callable, Dict, NoReturn, Optional, Type, Union
 import numpy as np
 import torch
 
-import theseus.constants
 from theseus.core import Objective
 from theseus.optimizer import Linearization, Optimizer, OptimizerInfo
 from theseus.optimizer.linear import LinearSolver
@@ -91,8 +90,8 @@ class NonlinearOptimizer(Optimizer, abc.ABC):
         linearization_cls: Optional[Type[Linearization]] = None,
         linearization_kwargs: Optional[Dict[str, Any]] = None,
         linear_solver_kwargs: Optional[Dict[str, Any]] = None,
-        abs_err_tolerance: float = 1e-10,
-        rel_err_tolerance: float = 1e-8,
+        abs_err_tolerance: float = 1e-8,
+        rel_err_tolerance: float = 1e-5,
         max_iterations: int = 20,
         step_size: float = 1.0,
         **kwargs,
@@ -112,9 +111,9 @@ class NonlinearOptimizer(Optimizer, abc.ABC):
     def set_params(self, **kwargs):
         self.params.update(kwargs)
 
+    @torch.no_grad()
     def _check_convergence(self, err: torch.Tensor, last_err: torch.Tensor):
-        assert not torch.is_grad_enabled()
-        if err.abs().mean() < theseus.constants.EPS:
+        if err.abs().mean() < self.params.abs_err_tolerance:
             return torch.ones_like(err).bool()
 
         abs_error = (last_err - err).abs()
@@ -279,6 +278,7 @@ class NonlinearOptimizer(Optimizer, abc.ABC):
         end_iter_callback: Optional[EndIterCallbackType] = None,
         **kwargs,
     ) -> int:
+        steps_tensor: torch.Tensor = None  # type: ignore
         converged_indices = torch.zeros_like(info.last_err).bool()
         iters_done = 0
         for it_ in range(num_iter):
@@ -315,17 +315,20 @@ class NonlinearOptimizer(Optimizer, abc.ABC):
                 # This is a "secret" option that is currently being tested in the
                 # context of implicit differentiation. Might be added as a supported
                 # kwarg in the future with a different name, or removed altogether.
-                if "__keep_final_step_size__" in kwargs:
-                    step_size = self.params.step_size
-                else:
-                    step_size = 1.0
+                # If the option is present and set to True, we don't use step size = 1
+                # 1 for the truncated steps, resulting in scaled gradients, but
+                # possibly better solution.
+                if not kwargs.get("__keep_final_step_size__", False):
+                    steps_tensor = torch.ones_like(delta)
                 force_update = True
             else:
-                step_size = self.params.step_size
                 force_update = False
 
+            with torch.no_grad():
+                if steps_tensor is None:
+                    steps_tensor = torch.ones_like(delta) * self.params.step_size
             self.objective.retract_optim_vars(
-                delta * step_size,
+                delta * steps_tensor,
                 self.linear_solver.linearization.ordering,
                 ignore_mask=converged_indices,
                 force_update=force_update,
@@ -335,6 +338,9 @@ class NonlinearOptimizer(Optimizer, abc.ABC):
             with torch.no_grad():
                 err = self.objective.error_squared_norm() / 2
                 self._update_info(info, it_, err, converged_indices)
+                self.update_optimizer_state(
+                    last_err=info.last_err, new_err=err, delta=delta, **kwargs
+                )
                 if verbose:
                     print(
                         f"Nonlinear optimizer. Iteration: {it_+1}. "
@@ -372,6 +378,7 @@ class NonlinearOptimizer(Optimizer, abc.ABC):
         end_iter_callback: Optional[EndIterCallbackType] = None,
         **kwargs,
     ) -> OptimizerInfo:
+        self.reset(**kwargs)
         backward_mode = BackwardMode.resolve(backward_mode)
         with torch.no_grad():
             info = self._init_info(
@@ -451,4 +458,32 @@ class NonlinearOptimizer(Optimizer, abc.ABC):
 
     @abc.abstractmethod
     def compute_delta(self, **kwargs) -> torch.Tensor:
+        pass
+
+    # Resets any internal state needed by the optimizer for a new optimization
+    # problem. Optimizer loop will pass all optimizer kwargs to this method.
+    # Deliberately not abstract, since some optimizers might not need this
+    def reset(self, **kwargs) -> None:
+        pass
+
+    # Called at the end of every optimizer step to update any internal state
+    # of the optimizer
+    @torch.no_grad()
+    def update_optimizer_state(
+        self,
+        last_err: torch.Tensor,
+        new_err: torch.Tensor,
+        delta: torch.Tensor,
+        **kwargs,
+    ) -> None:
+        self._update_state_impl(last_err, new_err, delta, **kwargs)
+
+    # Deliberately not abstract, since some optimizers might not need this
+    def _update_state_impl(
+        self,
+        last_err: torch.Tensor,
+        new_err: torch.Tensor,
+        delta: torch.Tensor,
+        **kwargs,
+    ) -> None:
         pass

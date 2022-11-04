@@ -20,7 +20,8 @@ def _create_linear_system(batch_size=32, matrix_size=10):
     return AtA, Atb, x
 
 
-def test_dense_solvers():
+@pytest.mark.parametrize("damp_as_tensor", [True, False])
+def test_dense_solvers(damp_as_tensor):
     void_objective = th.Objective()
     void_ordering = th.VariableOrdering(void_objective, default_order=False)
     for solver_cls in [th.LUDenseSolver, th.CholeskyDenseSolver]:
@@ -33,7 +34,11 @@ def test_dense_solvers():
         assert error < 1e-4
 
         # Test damping
-        damping = 0.2
+        damping = (
+            0.2
+            if not damp_as_tensor
+            else 0.1 * torch.arange(x.shape[0], device=x.device, dtype=x.dtype)
+        )
         damping_eps = 1e-3
         solved_x_with_ellipsoidal_damp = solver.solve(
             damping=damping, ellipsoidal_damping=True, damping_eps=damping_eps
@@ -47,9 +52,10 @@ def test_dense_solvers():
         # Add damping (using loop to make it more visually explicit)
         for i in range(batch_size):
             for j in range(n):
-                AtA_ellipsoidal_damp[i, j, j] *= 1 + damping
+                damp = damping if isinstance(damping, float) else damping[i]
+                AtA_ellipsoidal_damp[i, j, j] *= 1 + damp
                 AtA_ellipsoidal_damp[i, j, j] += damping_eps
-                AtA_spherical_damp[i, j, j] += damping
+                AtA_spherical_damp[i, j, j] += damp
         # AtA_ellipsoidal_damp += damping_eps
         Atb_check_ellipsoidal = AtA_ellipsoidal_damp.bmm(
             solved_x_with_ellipsoidal_damp.unsqueeze(-1)

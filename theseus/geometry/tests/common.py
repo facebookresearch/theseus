@@ -14,7 +14,7 @@ from theseus.utils import numeric_jacobian
 
 
 def check_exp_map(tangent_vector, group_cls, atol=TEST_EPS, enable_functorch=False):
-    with set_lie_group_check_enabled(not enable_functorch):
+    with set_lie_group_check_enabled(not enable_functorch, silent=True):
         group = group_cls.exp_map(tangent_vector)
         tangent_vector_double = tangent_vector.double()
         tangent_vector_double.to(dtype=torch.float64)
@@ -60,7 +60,7 @@ def check_exp_map(tangent_vector, group_cls, atol=TEST_EPS, enable_functorch=Fal
 
 
 def check_log_map(tangent_vector, group_cls, atol=TEST_EPS, enable_functorch=False):
-    with set_lie_group_check_enabled(not enable_functorch):
+    with set_lie_group_check_enabled(not enable_functorch, silent=True):
         assert torch.allclose(
             tangent_vector, group_cls.exp_map(tangent_vector).log_map(), atol=atol
         )
@@ -99,7 +99,7 @@ def check_log_map(tangent_vector, group_cls, atol=TEST_EPS, enable_functorch=Fal
 
 
 def check_compose(group_1, group_2, enable_functorch=False):
-    with set_lie_group_check_enabled(not enable_functorch):
+    with set_lie_group_check_enabled(not enable_functorch, silent=True):
         Jcmp = []
         composition = group_1.compose(group_2, jacobians=Jcmp)
         expected_matrix = group_1.to_matrix() @ group_2.to_matrix()
@@ -168,7 +168,7 @@ def check_compose(group_1, group_2, enable_functorch=False):
 
 
 def check_inverse(group, enable_functorch=False):
-    with set_lie_group_check_enabled(not enable_functorch):
+    with set_lie_group_check_enabled(not enable_functorch, silent=True):
         tangent_vector = group.log_map()
         inverse_group = group.exp_map(-tangent_vector.double())
         jac = []
@@ -204,7 +204,7 @@ def check_inverse(group, enable_functorch=False):
 
 
 def check_adjoint(group, tangent_vector, enable_functorch=False):
-    with set_lie_group_check_enabled(not enable_functorch):
+    with set_lie_group_check_enabled(not enable_functorch, silent=True):
         tangent_left = group.__class__.adjoint(group) @ tangent_vector.unsqueeze(2)
         group_matrix = group.to_matrix()
         tangent_right = group.__class__.vee(
@@ -295,7 +295,7 @@ def check_projection_for_rotate_and_transform(
 def check_projection_for_compose(
     Group, batch_size, generator=None, dtype=torch.float64, enable_functorch=False
 ):
-    with set_lie_group_check_enabled(not enable_functorch):
+    with set_lie_group_check_enabled(not enable_functorch, silent=True):
         group1_double = Group.rand(batch_size, generator=generator, dtype=torch.float64)
         group2_double = Group.rand(batch_size, generator=generator, dtype=torch.float64)
         group1 = group1_double.copy()
@@ -375,7 +375,7 @@ def check_projection_for_compose(
 def check_projection_for_inverse(
     Group, batch_size, generator=None, dtype=torch.float64, enable_functorch=False
 ):
-    with set_lie_group_check_enabled(not enable_functorch):
+    with set_lie_group_check_enabled(not enable_functorch, silent=True):
         group_double = Group.rand(batch_size, generator=generator, dtype=torch.float64)
         group = group_double.copy()
         group.to(dtype)
@@ -429,7 +429,7 @@ def check_projection_for_inverse(
 def check_projection_for_exp_map(
     tangent_vector, Group, is_projected=True, atol=1e-8, enable_functorch=False
 ):
-    with set_lie_group_check_enabled(not enable_functorch):
+    with set_lie_group_check_enabled(not enable_functorch, silent=True):
         batch_size = tangent_vector.shape[0]
         dof = tangent_vector.shape[1]
         aux_id = torch.arange(batch_size)
@@ -464,7 +464,7 @@ def check_projection_for_exp_map(
 def check_projection_for_log_map(
     tangent_vector, Group, is_projected=True, atol=1e-8, enable_functorch=False
 ):
-    with set_lie_group_check_enabled(not enable_functorch):
+    with set_lie_group_check_enabled(not enable_functorch, silent=True):
         batch_size = tangent_vector.shape[0]
         aux_id = torch.arange(batch_size)
         group_double = Group.exp_map(tangent_vector.double())

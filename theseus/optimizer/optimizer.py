@@ -4,12 +4,14 @@
 # LICENSE file in the root directory of this source tree.
 
 import abc
+import warnings
 from dataclasses import dataclass
 from typing import Dict, Optional
 
 import numpy as np
 import torch
 
+from theseus.constants import __FROM_THESEUS_LAYER_TOKEN__
 from theseus.core import Objective, Vectorize
 
 
@@ -22,7 +24,7 @@ class OptimizerInfo:
 
 
 class Optimizer(abc.ABC):
-    def __init__(self, objective: Objective, *args, vectorize: bool = True, **kwargs):
+    def __init__(self, objective: Objective, *args, vectorize: bool = False, **kwargs):
         self.objective = objective
         if vectorize:
             Vectorize(
@@ -35,6 +37,12 @@ class Optimizer(abc.ABC):
         pass
 
     def optimize(self, **kwargs) -> OptimizerInfo:
+        from_theseus_layer = kwargs.get(__FROM_THESEUS_LAYER_TOKEN__, False)
+        if not from_theseus_layer and not self.objective.vectorized:
+            warnings.warn(
+                "Vectorization is off by default when not running from TheseusLayer. "
+                "Using TheseusLayer is the recommended way to run our optimizers."
+            )
         if self._objectives_version != self.objective.current_version:
             raise RuntimeError(
                 "The objective was modified after optimizer construction, which is "

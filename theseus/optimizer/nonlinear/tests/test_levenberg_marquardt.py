@@ -8,6 +8,7 @@ import torch
 
 import theseus as th
 
+from theseus.constants import __FROM_THESEUS_LAYER_TOKEN__
 from theseus.optimizer.nonlinear.tests.common import run_nonlinear_least_squares_check
 
 
@@ -31,6 +32,7 @@ def test_levenberg_marquardt(damping, ellipsoidal_damping, adaptive_damping):
             "ellipsoidal_damping": ellipsoidal_damping,
             "adaptive_damping": adaptive_damping,
             "damping_eps": 0.0,
+            __FROM_THESEUS_LAYER_TOKEN__: True,
         },
         singular_check=damping < 0.001,
     )
@@ -40,15 +42,21 @@ def test_ellipsoidal_damping_compatibility(mock_objective):
     mock_objective.update({"v1": torch.ones(1, 1), "v2": torch.zeros(1, 1)})
     for lsc in [th.LUDenseSolver, th.CholeskyDenseSolver]:
         optimizer = th.LevenbergMarquardt(mock_objective, lsc)
-        optimizer.optimize(ellipsoidal_damping=True)
-        optimizer.optimize(damping_eps=0.1)
+        optimizer.optimize(
+            **{"ellipsoidal_damping": True, __FROM_THESEUS_LAYER_TOKEN__: True}
+        )
+        optimizer.optimize(**{"damping_eps": 0.1, __FROM_THESEUS_LAYER_TOKEN__: True})
 
     for lsc in [th.CholmodSparseSolver]:
         optimizer = th.LevenbergMarquardt(mock_objective, lsc)
         with pytest.raises(RuntimeError):
-            optimizer.optimize(ellipsoidal_damping=True)
+            optimizer.optimize(
+                **{"ellipsoidal_damping": True, __FROM_THESEUS_LAYER_TOKEN__: True}
+            )
         with pytest.raises(RuntimeError):
-            optimizer.optimize(damping_eps=0.1)
+            optimizer.optimize(
+                **{"damping_eps": 0.1, __FROM_THESEUS_LAYER_TOKEN__: True}
+            )
 
 
 @pytest.mark.cudaext
@@ -67,5 +75,7 @@ def test_ellipsoidal_damping_compatibility_cuda(mock_objective):
         optimizer = th.LevenbergMarquardt(
             mock_objective, lsc, linear_solver_kwargs={"batch_size": batch_size}
         )
-        optimizer.optimize(ellipsoidal_damping=True)
-        optimizer.optimize(damping_eps=0.1)
+        optimizer.optimize(
+            **{"ellipsoidal_damping": True, __FROM_THESEUS_LAYER_TOKEN__: True}
+        )
+        optimizer.optimize(**{"damping_eps": 0.1, __FROM_THESEUS_LAYER_TOKEN__: True})

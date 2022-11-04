@@ -13,6 +13,7 @@ import torch.nn.functional as F
 
 import theseus as th
 import theseus.utils as thutils
+from theseus.constants import __FROM_THESEUS_LAYER_TOKEN__
 from theseus.core.tests.common import (
     MockCostFunction,
     MockCostWeight,
@@ -432,7 +433,7 @@ def test_check_objective_consistency():
         with pytest.raises(RuntimeError):
             layer_.forward({})
         with pytest.raises(RuntimeError):
-            optimizer_.optimize()
+            optimizer_.optimize(**{__FROM_THESEUS_LAYER_TOKEN__: True})
 
     # Check for adding a factor
     new_cost = MockCostFunction(

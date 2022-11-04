@@ -11,6 +11,8 @@ TEST_EPS = 5e-7
 EPS = 1e-10
 PI = math.pi
 
+__FROM_THESEUS_LAYER_TOKEN__ = "__FROM_THESEUS_LAYER_TOKEN__"
+
 
 def _CHECK_DTYPE_SUPPORTED(dtype):
     if dtype not in [torch.float32, torch.float64]:

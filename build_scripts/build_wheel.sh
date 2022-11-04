@@ -10,7 +10,7 @@
 # ROOT_DIR: is the directory where the Dockerfile, tar.gz and .whl files will be stored
 #   (under a new subdirectory named theseus_docker_3.9)
 # TAG: is a theseus tag (e.g., 0.1.0)
-# CUDA_VERSION: the version of CUDA to use. We have tested 10.2, 11.3, and 11.6.
+# CUDA_VERSION: the version of CUDA to use. We have tested 10.2, 11.3, 11.6, and 11.7.
 #   You can also pass "cpu" to compile without CUDA extensions. 
 #
 #   For example
@@ -29,8 +29,9 @@ ROOT_DIR=$1
 TAG=$2
 CUDA_VERSION=$3
 
-CUDA_VERSION_SUPPORTED=$(echo "cpu 10.2 11.3 11.6 11.7" | grep -w ${CUDA_VERSION})
-[ "${CUDA_VERSION_SUPPORTED}" ] || die "CUDA_VERSION must be one of (cpu, 10.2, 11.3, 11.6, 11.7)"
+SUPPORTED_CUDA_VERSIONS="10.2 11.1 11.3 11.5 11.6 11.7"
+CUDA_VERSION_IS_SUPPORTED=$(echo "cpu ${SUPPORTED_CUDA_VERSIONS}" | grep -w ${CUDA_VERSION})
+[ "${CUDA_VERSION_IS_SUPPORTED}" ] || die "CUDA_VERSION must be one of (cpu ${SUPPORTED_CUDA_VERSIONS})"
 
 
 CUDA_SUFFIX=$(echo ${CUDA_VERSION} | sed 's/[.]//g')
@@ -54,7 +55,9 @@ else
         BASPACHO_CUDA_ARCHS="${BASPACHO_CUDA_ARCHS};80"
         TORCH_CUDA_ARCH_LIST="${TORCH_CUDA_ARCH_LIST};8.0"
     fi
-    if [[ ${CUDA_VERSION} = "10.2" ]] || [[ ${CUDA_VERSION} = "13.3" ]]
+    DEPRECATED_TORCH_CUDA="10.2 11.1 11.3"
+    CUDA_IS_TORCH_DEPRECATED=$(echo "${DEPRECATED_TORCH_CUDA}" | grep -w ${CUDA_VERSION})
+    if [[ ${CUDA_IS_TORCH_DEPRECATED} ]]
     then
         TORCH_VERSION='"torch<1.13"'
     fi

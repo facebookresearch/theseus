@@ -79,7 +79,7 @@ def test_error_local_cost_fn_so2():
     ).unsqueeze(1)
 
     num_val = len(so2_data)
-    sq_dist_errors = np.load("theseus/embodied/misc/tests/sq_dist_errors_so2.npy")
+    sq_dist_errors = np.load("tests/embodied/misc/sq_dist_errors_so2.npy")
     k = 0
     # sq_dist_errors was generated using all 2-combinations of the 5 SO2 above
     for i in range(num_val):
@@ -102,7 +102,7 @@ def test_error_local_cost_fn_se2():
         ]
     )
     num_val = len(se2_data)
-    sq_dist_errors = np.load("theseus/embodied/misc/tests/sq_dist_errors_se2.npy")
+    sq_dist_errors = np.load("tests/embodied/misc/sq_dist_errors_se2.npy")
     k = 0
     # sq_dist_errors was generated using all 2-combinations of the 5 SE2 above
     for i in range(num_val):

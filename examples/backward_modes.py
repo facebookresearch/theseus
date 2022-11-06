@@ -11,7 +11,6 @@
 import time
 from collections import defaultdict
 
-import numdifftools as nd
 import numpy as np
 import torch
 
@@ -146,20 +145,21 @@ print(da_dx.numpy())
 
 
 # Next we numerically check the derivative
-def fit_x(data_x_np):
-    theseus_inputs["x"] = (
-        torch.from_numpy(data_x_np).float().clone().requires_grad_().unsqueeze(0)
+with torch.no_grad():
+
+    def fn(data_x_torch):
+        theseus_inputs["x"] = data_x_torch
+        updated_inputs, _ = theseus_optim.forward(
+            theseus_inputs,
+            optimizer_kwargs={"track_best_solution": True, "verbose": False},
+        )
+        return updated_inputs["a"]
+
+    g = (
+        torch.autograd.functional.jacobian(fn, data_x.detach())[0, 0, 0]
+        .double()
+        .numpy()
     )
-    updated_inputs, _ = theseus_optim.forward(
-        theseus_inputs, optimizer_kwargs={"track_best_solution": True, "verbose": False}
-    )
-    return updated_inputs["a"].item()
-
-
-data_x_np = data_x.detach().clone().numpy()
-dfit_x = nd.Gradient(fit_x)
-g = dfit_x(data_x_np)
-
 print("\n--- Numeric derivative")
 print(g)
 

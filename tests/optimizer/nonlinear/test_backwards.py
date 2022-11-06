@@ -3,7 +3,6 @@
 # This source code is licensed under the MIT license found in the
 # LICENSE file in the root directory of this source tree.
 
-import numdifftools as nd
 import pytest  # noqa: F401
 import torch
 
@@ -63,21 +62,19 @@ theseus_optim = th.TheseusLayer(optimizer)
 
 
 def test_backwards():
-    # First we use numdifftools to numerically compute the gradient
+    # First we use torch.autograd.functional to numerically compute the gradient
     # the optimal a w.r.t. the x part of the data
-    def fit_x(data_x_np):
-        theseus_inputs["x"] = (
-            torch.from_numpy(data_x_np).float().clone().requires_grad_().unsqueeze(0)
-        )
-        updated_inputs, _ = theseus_optim.forward(
-            theseus_inputs,
-            optimizer_kwargs={"track_best_solution": True, "verbose": False},
-        )
-        return updated_inputs["a"].item()
+    with torch.no_grad():
 
-    data_x_np = data_x.detach().clone().numpy()
-    dfit_x = nd.Gradient(fit_x)
-    da_dx_numeric = torch.from_numpy(dfit_x(data_x_np)).float()
+        def fn(data_x_torch):
+            theseus_inputs["x"] = data_x_torch
+            updated_inputs, _ = theseus_optim.forward(
+                theseus_inputs,
+                optimizer_kwargs={"track_best_solution": True, "verbose": False},
+            )
+            return updated_inputs["a"]
+
+        da_dx_numeric = torch.autograd.functional.jacobian(fn, data_x.detach())[0, 0, 0]
 
     theseus_inputs["x"] = data_x
     updated_inputs, _ = theseus_optim.forward(

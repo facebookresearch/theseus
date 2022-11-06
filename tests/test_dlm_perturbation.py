@@ -93,7 +93,7 @@ def test_backward_pass_se3_runs():
     loss0 = None
     for _ in range(5):
         adam.zero_grad()
-        with th.enable_lie_tangent():
+        with th.enable_lie_tangent(), th.no_lie_group_check(silent=True):
             out, _ = layer.forward(
                 {"target": target_data},
                 optimizer_kwargs={

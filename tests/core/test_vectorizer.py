@@ -112,7 +112,7 @@ def test_correct_schemas_and_shared_vars():
     objective.add(cf6)
 
     # Not grouped with anything cf1 and cf2 because weight type is different
-    w7 = th.DiagonalCostWeight([1.0])
+    w7 = th.DiagonalCostWeight([[1.0]])
     cf7 = th.Difference(v1, tv, w7)
     objective.add(cf7)
 
@@ -178,7 +178,7 @@ def test_vectorized_error():
             for i in range(rng.choice([1, 10]))
         ]
         s_target = th.SE3.rand(1, generator=generator)
-        ws = th.DiagonalCostWeight(torch.randn(6, generator=generator))
+        ws = th.DiagonalCostWeight(torch.randn(1, 6, generator=generator))
         for s in se3s:
             objective.add(th.Difference(s, s_target, ws))
 

@@ -26,7 +26,7 @@ def test_copy_scale_cost_weight():
 
 
 def test_copy_diagonal_cost_weight():
-    diagonal = th.Variable(torch.ones(3))
+    diagonal = th.Variable(torch.ones(1, 3))
     p1 = th.DiagonalCostWeight(diagonal, name="diagonal_cost_weight")
     for the_copy in [p1.copy(), copy.deepcopy(p1)]:
         check_another_theseus_function_is_copy(p1, the_copy, new_name=f"{p1.name}_copy")
@@ -89,9 +89,9 @@ def test_diagonal_cost_weight():
                 assert error.allclose(expected_err)
                 assert jacobians[0].allclose(expected_jac)
 
+            diagonal = diagonal.unsqueeze(0)  # add batch dimension
             _check(th.DiagonalCostWeight(diagonal.tolist()))
             _check(th.DiagonalCostWeight(diagonal))
-            _check(th.DiagonalCostWeight(diagonal.view(1, dim)))
             _check(th.DiagonalCostWeight(th.Variable(diagonal)))
 
             batched_diagonal = torch.randn(batch_size, dim)

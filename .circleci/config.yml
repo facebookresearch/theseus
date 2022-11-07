@@ -323,4 +323,5 @@ workflows:
       - py39_linux
       - unittests_gpu17_cuda10
       - unittests_gpu17_cuda11
+      - test_cuda10_wheel
       - test_cuda11_wheel

@@ -1,6 +1,5 @@
-import abc
 import math
-from typing import Any, Callable, Dict, NoReturn, Optional, Type, Union
+from typing import Callable, Dict, NoReturn, Optional, Union
 
 import numpy as np
 import torch
@@ -9,7 +8,6 @@ from torch.distributions import Normal
 
 import theseus.constants
 from theseus.core.objective import Objective
-from theseus.core.vectorizer import Vectorize
 from theseus.optimizer import Optimizer, OptimizerInfo
 from theseus.optimizer.variable_ordering import VariableOrdering
 
@@ -194,7 +192,7 @@ class DCem(Optimizer):
     def _all_solve(
         self,
         num_iters,
-        init_sigma: float = 1.0,
+        init_sigma: Union[torch.Tensor, float] = 1.0,
         info: NonlinearOptimizerInfo = None,
         verbose: bool = False,
         end_iter_callback: Optional[EndIterCallbackType] = None,
@@ -241,34 +239,36 @@ class DCem(Optimizer):
                     _fX = fX
 
                 if self.n_elite == 1:
-                    # I = LML(N=n_elite, verbose=lml_verbose, eps=lml_eps)(-_fX*temp)
-                    I = torch.softmax(-_fX * self.temp, dim=1)
+                    # indexes = LML(N=n_elite, verbose=lml_verbose, eps=lml_eps)(-_fX*temp)
+                    indexes = torch.softmax(-_fX * self.temp, dim=1)
                 else:
-                    I = LML(N=self.n_elite, verbose=False, eps=self.lml_eps)(
+                    indexes = LML(N=self.n_elite, verbose=False, eps=self.lml_eps)(
                         -_fX * self.temp
                     )
-                I = I.unsqueeze(2)
+                indexes = indexes.unsqueeze(2)
 
             else:
-                I_vals = fX.argsort(dim=1)[:, : self.n_elite]
+                indexes_vals = fX.argsort(dim=1)[:, : self.n_elite]
                 # TODO: A scatter would be more efficient here.
-                I = torch.zeros(n_batch, self.n_samples, device=device)
+                indexes = torch.zeros(n_batch, self.n_samples, device=device)
                 for j in range(n_batch):
-                    for v in I_vals[j]:
-                        I[j, v] = 1.0
-                I = I.unsqueeze(2)
-            # I.shape should be (n_batch, n_sample, 1)
+                    for v in indexes_vals[j]:
+                        indexes[j, v] = 1.0
+                indexes = indexes.unsqueeze(2)
+            # indexes.shape should be (n_batch, n_sample, 1)
 
             X = X.transpose(0, 1)
 
-            assert I.shape[:2] == X.shape[:2]
+            assert indexes.shape[:2] == X.shape[:2]
             # print("Samples:", X)
-            X_I = I * X
+            X_I = indexes * X
 
-            old_mu = mu.clone().detach()
+            # old_mu = mu.clone().detach()
 
             mu = torch.sum(X_I, dim=1) / self.n_elite
-            sigma = ((I * (X - mu.unsqueeze(1)) ** 2).sum(dim=1) / self.n_elite).sqrt()
+            sigma = (
+                (indexes * (X - mu.unsqueeze(1)) ** 2).sum(dim=1) / self.n_elite
+            ).sqrt()
 
             assert sigma.shape == (n_batch, self.tot_dof)
 
@@ -286,7 +286,9 @@ class DCem(Optimizer):
                 ] = NonlinearOptimizerStatus.CONVERGED
 
                 # TODO
-                # Doesn't work with lml_eps = 1e-5. and with lml_eps= 1e-4, gives suboptimal solution
+                # Doesn't work with lml_eps = 1e-5.
+                # and with lml_eps= 1e-4, gives suboptimal solution
+
                 # if converged_indices.all():
                 #     break  # nothing else will happen at this point
 
@@ -302,7 +304,7 @@ class DCem(Optimizer):
         self.objective.update(self._mu_vec_to_dict(mu))
 
         # return self._mu_vec_to_dict(mu)
-        return None
+        return itr
 
     def _solve(self):
         device = self.objective.device
@@ -336,32 +338,34 @@ class DCem(Optimizer):
                 _fX = fX
 
             if self.n_elite == 1:
-                # I = LML(N=n_elite, verbose=lml_verbose, eps=lml_eps)(-_fX*temp)
-                I = torch.softmax(-_fX * self.temp, dim=1)
+                # indexes = LML(N=n_elite, verbose=lml_verbose, eps=lml_eps)(-_fX*temp)
+                indexes = torch.softmax(-_fX * self.temp, dim=1)
             else:
-                I = LML(N=self.n_elite, verbose=self.lml_verbose, eps=self.lml_eps)(
-                    -_fX * self.temp
-                )
-            I = I.unsqueeze(2)
+                indexes = LML(
+                    N=self.n_elite, verbose=self.lml_verbose, eps=self.lml_eps
+                )(-_fX * self.temp)
+            indexes = indexes.unsqueeze(2)
 
         else:
-            I_vals = fX.argsort(dim=1)[:, : self.n_elite]
+            indexes_vals = fX.argsort(dim=1)[:, : self.n_elite]
             # TODO: A scatter would be more efficient here.
-            I = torch.zeros(n_batch, self.n_samples, device=device)
+            indexes = torch.zeros(n_batch, self.n_samples, device=device)
             for j in range(n_batch):
-                for v in I_vals[j]:
-                    I[j, v] = 1.0
-            I = I.unsqueeze(2)
+                for v in indexes_vals[j]:
+                    indexes[j, v] = 1.0
+            indexes = indexes.unsqueeze(2)
         # I.shape should be (n_batch, n_sample, 1)
 
         X = X.transpose(0, 1)
 
-        assert I.shape[:2] == X.shape[:2]
+        assert indexes.shape[:2] == X.shape[:2]
         # print("Samples:", X)
-        X_I = I * X
+        X_I = indexes * X
 
         mu = torch.sum(X_I, dim=1) / self.n_elite
-        self.sigma = ((I * (X - mu.unsqueeze(1)) ** 2).sum(dim=1) / self.n_elite).sqrt()
+        self.sigma = (
+            (indexes * (X - mu.unsqueeze(1)) ** 2).sum(dim=1) / self.n_elite
+        ).sqrt()
 
         assert self.sigma.shape == (n_batch, self.tot_dof)
 
@@ -376,11 +380,11 @@ class DCem(Optimizer):
         **kwargs,
     ) -> int:
 
-        mu = self._all_solve(num_iter, info=info)
+        itr_done = self._all_solve(num_iter, info=info)
         # self.objective.update(mu)
         # with torch.no_grad():
         #     info.best_solution = mu
-        return
+        return itr_done
 
         converged_indices = torch.zeros_like(info.last_err).bool()
         iters_done = 0
@@ -409,7 +413,9 @@ class DCem(Optimizer):
                 ] = NonlinearOptimizerStatus.CONVERGED
 
                 # TODO
-                # Doesn't work with lml_eps = 1e-5. and with lml_eps= 1e-4, gives suboptimal solution
+                # Doesn't work with lml_eps = 1e-5.
+                # and with lml_eps= 1e-4, gives suboptimal solution
+
                 # if converged_indices.all():
                 #     break  # nothing else will happen at this point
                 info.last_err = err
@@ -435,7 +441,6 @@ class DCem(Optimizer):
     ) -> OptimizerInfo:
         backward_mode = BackwardMode.resolve(backward_mode)
         self._reinit_sigma(**kwargs)
-        # self.linear_solver.reinit_sigma(**kwargs)
 
         with torch.no_grad():
             info = self._init_info(

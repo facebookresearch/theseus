@@ -5,13 +5,14 @@
 # to install theseus.
 #
 # To use this script, from root theesus folder run 
-#    ./build_scripts/build_wheel.sh ROOT_DIR TAG CUDA_VERSION
+#    ./build_scripts/build_wheel.sh ROOT_DIR COMMIT CUDA_VERSION THESEUS_VERSION(optional) 
 #
 # ROOT_DIR: is the directory where the Dockerfile, tar.gz and .whl files will be stored
 #   (under a new subdirectory named theseus_docker_3.9)
-# TAG: is a theseus tag (e.g., 0.1.0)
+# COMMIT: is a theseus commit hash or tag (e.g., 0.1.3).
 # CUDA_VERSION: the version of CUDA to use. We have tested 10.2, 11.3, 11.6, and 11.7.
-#   You can also pass "cpu" to compile without CUDA extensions. 
+#   You can also pass "cpu" to compile without CUDA extensions.
+# THESEUS_VERSION: defaults to COMMIT, otherwise it must match the version in the commit.
 #
 #   For example
 #    ./build_scripts/build_wheel.sh . 0.1.0 10.2
@@ -19,17 +20,20 @@
 #   will run and store results under ./theseus_docker_3.9
 # -----------------
 
-# Ensure that 3 arguments (ROOT_DIR, TAG, CUDA_VERSION) are provided
+# Ensure that 3 or 4 arguments 
+# (ROOT_DIR, COMMIT, CUDA_VERSION, THESEUS_VERSION - optional) are provided.
 die () {
     echo >&2 "$@"
     exit 1
 }
-[ "$#" -eq 3 ] || die "3 arguments required, $# provided"
+[ "$#" -eq 3 ] || [ "$#" -eq 4 ] || die "3 or 4 arguments required, $# provided"
 ROOT_DIR=$1
-TAG=$2
+COMMIT=$2
 CUDA_VERSION=$3
+TH_VERSION=${4:-${COMMIT}}
 
-SUPPORTED_CUDA_VERSIONS="10.2 11.1 11.3 11.5 11.6 11.7"
+
+SUPPORTED_CUDA_VERSIONS="10.2 11.3 11.6 11.7"
 CUDA_VERSION_IS_SUPPORTED=$(echo "cpu ${SUPPORTED_CUDA_VERSIONS}" | grep -w ${CUDA_VERSION})
 [ "${CUDA_VERSION_IS_SUPPORTED}" ] || die "CUDA_VERSION must be one of (cpu ${SUPPORTED_CUDA_VERSIONS})"
 
@@ -55,7 +59,7 @@ else
         BASPACHO_CUDA_ARCHS="${BASPACHO_CUDA_ARCHS};80"
         TORCH_CUDA_ARCH_LIST="${TORCH_CUDA_ARCH_LIST};8.0"
     fi
-    DEPRECATED_TORCH_CUDA="10.2 11.1 11.3"
+    DEPRECATED_TORCH_CUDA="10.2 11.3"
     CUDA_IS_TORCH_DEPRECATED=$(echo "${DEPRECATED_TORCH_CUDA}" | grep -w ${CUDA_VERSION})
     if [[ ${CUDA_IS_TORCH_DEPRECATED} ]]
     then
@@ -111,7 +115,7 @@ for PYTHON_VERSION in 3.9; do
     RUN git clone https://github.com/facebookresearch/theseus.git
     WORKDIR theseus
     RUN git fetch --all --tags
-    RUN git checkout tags/${TAG} -b tmp_build
+    RUN git checkout ${COMMIT} -b tmp_build
     CMD BASPACHO_ROOT_DIR=/baspacho THESEUS_FORCE_CUDA=${ENABLE_CUDA} TORCH_CUDA_ARCH_LIST='${TORCH_CUDA_ARCH_LIST}' python3 -m build --no-isolation
     """ > ${DOCKER_DIR}/Dockerfile
 
@@ -124,16 +128,16 @@ for PYTHON_VERSION in 3.9; do
 
     # Copy the wheel to host
     CP_STR="cp"$(echo ${PYTHON_VERSION} | sed 's/[.]//g')
-    DOCKER_WHL="theseus/dist/theseus_ai-${TAG}-${CP_STR}-${CP_STR}-linux_x86_64.whl"
-    if [[ ${CUDA_VERSION} == "10.2" ]]
+    DOCKER_WHL="theseus/dist/theseus_ai-${TH_VERSION}-${CP_STR}-${CP_STR}-linux_x86_64.whl"
+    if [[ ${CUDA_VERSION} == "11.6" ]]
     then
-        PLUS_CU_TAG=""  # 10.2 will be the pypi version, so don't add +cu102
+        PLUS_CU_TAG=""  # 11.6 will be the pypi version, so don't add +cu116
     else
         PLUS_CU_TAG="+${DEVICE_TAG}"
     fi
-    HOST_WHL="theseus_ai-${TAG}${PLUS_CU_TAG}-${CP_STR}-${CP_STR}-manylinux_2_17_x86_64.whl"
+    HOST_WHL="theseus_ai-${TH_VERSION}${PLUS_CU_TAG}-${CP_STR}-${CP_STR}-manylinux_2_17_x86_64.whl"
 
-    sudo docker cp "${DOCKER_NAME}:theseus/dist/theseus-ai-${TAG}.tar.gz" "theseus-ai-${TAG}.tar.gz"
+    sudo docker cp "${DOCKER_NAME}:theseus/dist/theseus-ai-${TH_VERSION}.tar.gz" "theseus-ai-${TH_VERSION}.tar.gz"
     sudo docker cp "${DOCKER_NAME}:${DOCKER_WHL}" ${HOST_WHL}
     sudo docker rm ${DOCKER_NAME}
     sudo docker image rm "${DOCKER_NAME}_img"

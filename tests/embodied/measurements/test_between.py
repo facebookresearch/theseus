@@ -86,9 +86,7 @@ def test_error_between_so2():
     ).unsqueeze(1)
 
     num_val = len(so2_data)
-    between_errors = np.load(
-        "theseus/embodied/measurements/tests/between_errors_so2.npy"
-    )
+    between_errors = np.load("tests/embodied/measurements/between_errors_so2.npy")
     z = 0
     # between_errors was generated using all 3-combinations of the 5 SO2 above
     for i in range(num_val):
@@ -113,9 +111,7 @@ def test_error_between_se2():
         ]
     )
     num_val = len(se2_data)
-    between_errors = np.load(
-        "theseus/embodied/measurements/tests/between_errors_se2.npy"
-    )
+    between_errors = np.load("tests/embodied/measurements/between_errors_se2.npy")
     z = 0
     # between_errors was generated using all 3-combinations of the 5 SE2 above
     for i in range(num_val):

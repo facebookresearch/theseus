@@ -37,11 +37,6 @@ The motion planning and tactile estimation examples require `hydra` installation
 ```bash
 pip install hydra-core
 ```
-The backward modes example requires `numdifftools`, which you can install with
-
-```bash
-pip install numdifftools
-```
 
 The homography example requires `hydra`, `kornia` and `OpenCV`, which you can install with
 

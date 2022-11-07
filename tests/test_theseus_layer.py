@@ -248,7 +248,7 @@ def _run_optimizer_test(
     # need to pass updated values through "objective.update". I'm doing it this way
     # to check that update works properly
     cost_weight = th.DiagonalCostWeight(
-        th.Variable(torch.empty(num_points), name="cost_weight_values")
+        th.Variable(torch.empty(1, num_points), name="cost_weight_values")
     )
 
     # Here we create the outer loop models and optimizers for the cost weight

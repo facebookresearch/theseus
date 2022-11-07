@@ -86,7 +86,7 @@ def _create_sdf_data(sdf_idx=0):
     cell_size = 0.01
     origin_x, origin_y = 0.0, 0.0
     sdf_data = np.loadtxt(
-        open("theseus/embodied/collision/tests/sdf_data.csv", "rb"),
+        open("tests/embodied/collision/sdf_data.csv", "rb"),
         delimiter=",",
         skiprows=0,
     )

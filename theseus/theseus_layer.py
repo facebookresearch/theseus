@@ -117,7 +117,7 @@ class TheseusLayer(nn.Module):
             mean=torch.zeros((n_vars, n_samples), device=delta.device),
             std=torch.ones((n_vars, n_samples), device=delta.device),
         )
-        delta_samples = (torch.triangular_solve(y, sqrt_AtA).solution) + (
+        delta_samples = (torch.linalg.solve_triangular(sqrt_AtA, y, upper=True)) + (
             delta.unsqueeze(-1)
         ).repeat(1, 1, n_samples)
 

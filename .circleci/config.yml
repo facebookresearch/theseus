@@ -296,7 +296,7 @@ jobs:
       - checkout
       - <<: *update_and_install_python
       - <<: *install_suitesparse
-      - <<: *setup_cuda10_libs
+      - <<: *setup_cuda11_libs
       - <<: *setup_environment
       - <<: *build_cuda10_wheel
       - <<: *run_tests_from_wheel

@@ -4,4 +4,4 @@ scikit-sparse>=0.4.5
 pytest>=6.2.1
 pybind11>=2.7.1
 functorch==0.2.1 # > 0.2.1 will install torch1.13, which breaks CUDA 10.2
--e git+https://github.com/locuslab/lml.git
+-e git+https://github.com/locuslab/lml.git#egg=lml

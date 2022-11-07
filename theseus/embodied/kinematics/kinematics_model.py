@@ -111,6 +111,3 @@ class UrdfRobotModel(KinematicsModel):
                 jacobians[link_name] = torch.cat([jac_lin, jac_rot], dim=-2)
 
         return link_poses
-
-    def to(self, *args, **kwargs):
-        self.drm_model.to(*args, **kwargs)

@@ -36,7 +36,7 @@ class IdentityModel(KinematicsModel):
 
 
 class UrdfRobotModel(KinematicsModel):
-    def __init__(self, urdf_path: str, device: str = None):
+    def __init__(self, urdf_path: str, device: Optional[str] = None):
         try:
             import differentiable_robot_model as drm
         except ModuleNotFoundError as e:
@@ -111,3 +111,6 @@ class UrdfRobotModel(KinematicsModel):
                 jacobians[link_name] = torch.cat([jac_lin, jac_rot], dim=-2)
 
         return link_poses
+
+    def to(self, *args, **kwargs):
+        self.drm_model.to(*args, **kwargs)

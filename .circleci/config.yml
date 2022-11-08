@@ -32,7 +32,7 @@ update_and_install_python: &update_and_install_python
       command: |
         sudo add-apt-repository -y ppa:deadsnakes/ppa
         sudo apt-get update
-        sudo apt-get install -y python3.7 python3.7-dev python3.8 python3.8-dev python3.9 python3.9-dev
+        sudo apt-get install -y python3.9 python3.9-dev
 
 install_nox: &install_nox
   - run:
@@ -176,17 +176,6 @@ run_tests: &run_tests
         pytest -s tests/test_theseus_layer.py
         pytest -s tests -m "cudaext"
 
-build_cuda10_wheel: &build_cuda10_wheel
-  - run:
-      name: Building wheel for CUDA 10
-      working_directory: /home/circleci
-      command: |
-        THESEUS_GIT_COMMIT=$(git --git-dir project/.git log --format="%H" -n 1)
-        THESEUS_VERSION=$(grep -Eo  "[0-9].[0-9].[0-9][.0-9a-z]*" project/theseus/__init__.py)
-        ./project/build_scripts/build_wheel.sh . ${THESEUS_GIT_COMMIT} 10.2 ${THESEUS_VERSION}
-        pip install $(ls */*.whl)
-        pip install -r project/requirements/dev.txt
-
 build_cuda11_wheel: &build_cuda11_wheel
   - run:
       name: Building wheel for CUDA 11
@@ -290,17 +279,6 @@ jobs:
       - <<: *setup_project
       - <<: *run_tests
 
-  test_cuda10_wheel:
-    executor: gpu_cuda10
-    steps:
-      - checkout
-      - <<: *update_and_install_python
-      - <<: *install_suitesparse
-      - <<: *setup_cuda11_libs
-      - <<: *setup_environment
-      - <<: *build_cuda10_wheel
-      - <<: *run_tests_from_wheel
-
   test_cuda11_wheel:
     executor: gpu_cuda11
     steps:
@@ -323,5 +301,4 @@ workflows:
       - py39_linux
       - unittests_gpu17_cuda10
       - unittests_gpu17_cuda11
-      - test_cuda10_wheel
       - test_cuda11_wheel

@@ -76,6 +76,24 @@ for PYTHON_VERSION in 3.9; do
     echo """# ----------------
     FROM ${IMAGE_NAME}
 
+    # --- Install baspacho dependencies (cmake, BLAS)
+    RUN wget --quiet https://github.com/Kitware/CMake/releases/download/v3.24.2/cmake-3.24.2-linux-x86_64.sh -O ~/cmake3.24.sh
+    RUN mkdir /opt/cmake3.24
+    RUN /bin/bash ~/cmake3.24.sh --prefix=/opt/cmake3.24 --skip-license
+    RUN yum makecache
+    RUN yum -y install openblas-static
+
+    # --- Install baspacho
+    RUN git clone https://github.com/facebookresearch/baspacho.git
+    WORKDIR baspacho
+    # Note: to use static BLAS the option is really BLA_STATIC (https://cmake.org/cmake/help/latest/module/FindBLAS.html)
+    RUN /opt/cmake3.24/bin/cmake -S . -B build -DCMAKE_BUILD_TYPE=Release -DBLA_STATIC=ON \
+        ${BASPACHO_CUDA_ARGS} \
+        -DBUILD_SHARED_LIBS=OFF \
+        -DBASPACHO_BUILD_TESTS=OFF -DBASPACHO_BUILD_EXAMPLES=OFF
+    RUN /opt/cmake3.24/bin/cmake --build build -- -j16
+    WORKDIR ..
+
     # --- Install conda and environment
     ENV CONDA_DIR /opt/conda
     RUN wget --quiet https://repo.anaconda.com/miniconda/Miniconda3-latest-Linux-x86_64.sh -O ~/miniconda.sh && \
@@ -90,25 +108,6 @@ for PYTHON_VERSION in 3.9; do
 
     # --- Install sparse suitesparse
     RUN conda install -c conda-forge suitesparse
-
-    # --- Install baspacho dependencies (cmake, BLAS)
-    RUN wget --quiet https://github.com/Kitware/CMake/releases/download/v3.24.2/cmake-3.24.2-linux-x86_64.sh -O ~/cmake3.24.sh
-    RUN mkdir /opt/cmake3.24
-    RUN /bin/bash ~/cmake3.24.sh --prefix=/opt/cmake3.24 --skip-license
-    RUN yum makecache
-    RUN yum -y install openblas-static
-
-    # --- Install baspacho
-    RUN git clone https://github.com/facebookresearch/baspacho.git
-    WORKDIR baspacho
-
-    # Note: to use static BLAS the option is really BLA_STATIC (https://cmake.org/cmake/help/latest/module/FindBLAS.html)
-    RUN /opt/cmake3.24/bin/cmake -S . -B build -DCMAKE_BUILD_TYPE=Release -DBLA_STATIC=ON \
-        ${BASPACHO_CUDA_ARGS} \
-        -DBUILD_SHARED_LIBS=OFF \
-        -DBASPACHO_BUILD_TESTS=OFF -DBASPACHO_BUILD_EXAMPLES=OFF
-    RUN /opt/cmake3.24/bin/cmake --build build -- -j16
-    WORKDIR ..
 
     # --- Compile theseus wheel
     RUN pip install build wheel

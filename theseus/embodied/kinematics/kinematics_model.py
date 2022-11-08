@@ -36,7 +36,7 @@ class IdentityModel(KinematicsModel):
 
 
 class UrdfRobotModel(KinematicsModel):
-    def __init__(self, urdf_path: str):
+    def __init__(self, urdf_path: str, device: Optional[str] = None):
         try:
             import differentiable_robot_model as drm
         except ModuleNotFoundError as e:
@@ -46,7 +46,7 @@ class UrdfRobotModel(KinematicsModel):
             )
             raise e
 
-        self.drm_model = drm.DifferentiableRobotModel(urdf_path)
+        self.drm_model = drm.DifferentiableRobotModel(urdf_path, device=device)
 
     def _postprocess_quaternion(self, quat):
         # Convert quaternion convention (DRM uses xyzw, Theseus uses wxyz)

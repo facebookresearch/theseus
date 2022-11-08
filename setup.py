@@ -55,7 +55,8 @@ def parse_requirements_file(path):
             line = line.strip()
             if line[0] == "-":
                 reqs.append(_format(line))
-            reqs.append(line.split("==")[0])
+            else:
+                reqs.append(line.split("==")[0])
     return reqs
 
 

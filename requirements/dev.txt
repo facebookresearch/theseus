@@ -9,4 +9,4 @@ mock>=4.0.3
 types-mock>=4.0.8
 Sphinx==5.0.2
 sphinx-rtd-theme==1.0.0
-git+https://github.com/locuslab/lml.git#egg=lml
+-e git+https://github.com/locuslab/lml.git#egg=lml

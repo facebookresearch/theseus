@@ -231,7 +231,7 @@ class MotionPlanner:
         max_optim_iters: int,
         step_size: float = 1.0,
         objective: Optional[MotionPlannerObjective] = None,
-        device: str = "cpu",
+        device: th.device = "cpu",
         dtype: torch.dtype = torch.double,
         # The following are only used if objective is None
         map_size: Optional[int] = None,

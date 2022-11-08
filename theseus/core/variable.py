@@ -7,6 +7,7 @@ from itertools import count
 from typing import Optional, Sequence, Union
 
 import torch
+from theseus.constants import _TheseusDevice
 
 
 class Variable:
@@ -107,12 +108,16 @@ class Variable:
 # In this case, the device, dtype and name can be specified.
 def as_variable(
     value: Union[float, Sequence[float], torch.Tensor, Variable],
-    device: Optional[torch.device] = None,
+    device: Optional[_TheseusDevice] = None,
     dtype: Optional[torch.dtype] = None,
     name: Optional[str] = None,
 ) -> Variable:
     if isinstance(value, Variable):
         return value
+    if isinstance(device, str):
+        device = torch.device(
+            device
+        )  # mypy doesn't like passing str to torch.as_tensor
     tensor = torch.as_tensor(value, dtype=dtype, device=device)
     if isinstance(value, float):
         tensor = tensor.view(1, 1)

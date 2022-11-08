@@ -2,7 +2,7 @@
 #
 # This source code is licensed under the MIT license found in the
 # LICENSE file in the root directory of this source tree.
-
+from typing import Union
 import math
 
 import torch
@@ -56,3 +56,5 @@ _SE3_NEAR_PI_EPS = EPSDict(float32_eps=1e-2, float64_eps=1e-7)
 _SE3_NEAR_ZERO_EPS = EPSDict(float32_eps=1e-2, float64_eps=5e-3)
 
 _SE3_HAT_EPS = EPSDict(float32_eps=5e-6, float64_eps=5e-7)
+
+_TheseusDevice = Union[str, torch.device]

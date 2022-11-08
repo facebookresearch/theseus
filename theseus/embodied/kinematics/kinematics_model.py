@@ -8,6 +8,7 @@ from typing import Dict, Optional, Union
 
 import torch
 
+from theseus.constants import _TheseusDevice
 from theseus.geometry import SE3, LieGroup, Point2, Vector
 
 RobotModelInput = Union[torch.Tensor, Vector]
@@ -36,7 +37,7 @@ class IdentityModel(KinematicsModel):
 
 
 class UrdfRobotModel(KinematicsModel):
-    def __init__(self, urdf_path: str, device: Optional[str] = None):
+    def __init__(self, urdf_path: str, device: Optional[_TheseusDevice] = None):
         try:
             import differentiable_robot_model as drm
         except ModuleNotFoundError as e:

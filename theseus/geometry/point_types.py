@@ -7,6 +7,7 @@ from typing import List, Optional, Tuple, Union, cast
 
 import torch
 
+from theseus.constants import _TheseusDevice
 from .vector import Vector
 
 
@@ -41,7 +42,7 @@ class Point2(Vector):
         *size: int,
         generator: Optional[torch.Generator] = None,
         dtype: Optional[torch.dtype] = None,
-        device: Optional[torch.device] = None,
+        device: Optional[_TheseusDevice] = None,
         requires_grad: bool = False,
     ) -> "Point2":
         if len(size) != 1:
@@ -62,7 +63,7 @@ class Point2(Vector):
         *size: int,
         generator: Optional[torch.Generator] = None,
         dtype: Optional[torch.dtype] = None,
-        device: Optional[torch.device] = None,
+        device: Optional[_TheseusDevice] = None,
         requires_grad: bool = False,
     ) -> "Point2":
         if len(size) != 1:
@@ -143,7 +144,7 @@ class Point3(Vector):
         *size: int,
         generator: Optional[torch.Generator] = None,
         dtype: Optional[torch.dtype] = None,
-        device: Optional[torch.device] = None,
+        device: Optional[_TheseusDevice] = None,
         requires_grad: bool = False,
     ) -> "Point3":
         if len(size) != 1:
@@ -164,7 +165,7 @@ class Point3(Vector):
         *size: int,
         generator: Optional[torch.Generator] = None,
         dtype: Optional[torch.dtype] = None,
-        device: Optional[torch.device] = None,
+        device: Optional[_TheseusDevice] = None,
         requires_grad: bool = False,
     ) -> "Point3":
         if len(size) != 1:

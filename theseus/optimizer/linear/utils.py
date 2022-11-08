@@ -4,6 +4,7 @@
 # LICENSE file in the root directory of this source tree.
 from typing import Tuple, Union
 import torch
+from theseus.constants import _TheseusDevice
 
 
 # See Nocedal and Wright, Numerical Optimization, pp. 260 and 261
@@ -13,7 +14,7 @@ def convert_to_alpha_beta_damping_tensors(
     damping_eps: float,
     ellipsoidal_damping: bool,
     batch_size: int,
-    device: torch.device,
+    device: _TheseusDevice,
     dtype: torch.dtype,
 ) -> Tuple[torch.Tensor, torch.Tensor]:
     damping = torch.as_tensor(damping).to(device=device, dtype=dtype)

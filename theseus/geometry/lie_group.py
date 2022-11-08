@@ -8,6 +8,7 @@ from typing import Any, List, Optional, Tuple, cast
 
 import torch
 
+from theseus.constants import _TheseusDevice
 from theseus.geometry.manifold import Manifold
 
 
@@ -51,7 +52,7 @@ class LieGroup(Manifold):
         *size: int,
         generator: Optional[torch.Generator] = None,
         dtype: Optional[torch.dtype] = None,
-        device: Optional[torch.device] = None,
+        device: Optional[_TheseusDevice] = None,
         requires_grad: bool = False,
     ) -> "LieGroup":
         pass
@@ -62,7 +63,7 @@ class LieGroup(Manifold):
         *size: int,
         generator: Optional[torch.Generator] = None,
         dtype: Optional[torch.dtype] = None,
-        device: Optional[torch.device] = None,
+        device: Optional[_TheseusDevice] = None,
         requires_grad: bool = False,
     ) -> "LieGroup":
         pass

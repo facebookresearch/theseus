@@ -8,7 +8,6 @@ from typing import List, Optional, Union, cast
 
 import torch
 
-import theseus
 import theseus.constants
 
 from .lie_group import LieGroup
@@ -45,7 +44,7 @@ class SE3(LieGroup):
         *size: int,
         generator: Optional[torch.Generator] = None,
         dtype: Optional[torch.dtype] = None,
-        device: Optional[torch.device] = None,
+        device: Optional[theseus.constants._TheseusDevice] = None,
         requires_grad: bool = False,
     ) -> "SE3":
         if len(size) != 1:
@@ -73,7 +72,7 @@ class SE3(LieGroup):
         *size: int,
         generator: Optional[torch.Generator] = None,
         dtype: Optional[torch.dtype] = None,
-        device: Optional[torch.device] = None,
+        device: Optional[theseus.constants._TheseusDevice] = None,
         requires_grad: bool = False,
     ) -> "SE3":
         if len(size) != 1:

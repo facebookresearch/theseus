@@ -42,7 +42,7 @@ class Point2(Vector):
         *size: int,
         generator: Optional[torch.Generator] = None,
         dtype: Optional[torch.dtype] = None,
-        device: Optional[_TheseusDevice] = None,
+        device: _TheseusDevice = None,
         requires_grad: bool = False,
     ) -> "Point2":
         if len(size) != 1:
@@ -63,7 +63,7 @@ class Point2(Vector):
         *size: int,
         generator: Optional[torch.Generator] = None,
         dtype: Optional[torch.dtype] = None,
-        device: Optional[_TheseusDevice] = None,
+        device: _TheseusDevice = None,
         requires_grad: bool = False,
     ) -> "Point2":
         if len(size) != 1:
@@ -144,7 +144,7 @@ class Point3(Vector):
         *size: int,
         generator: Optional[torch.Generator] = None,
         dtype: Optional[torch.dtype] = None,
-        device: Optional[_TheseusDevice] = None,
+        device: _TheseusDevice = None,
         requires_grad: bool = False,
     ) -> "Point3":
         if len(size) != 1:
@@ -165,7 +165,7 @@ class Point3(Vector):
         *size: int,
         generator: Optional[torch.Generator] = None,
         dtype: Optional[torch.dtype] = None,
-        device: Optional[_TheseusDevice] = None,
+        device: _TheseusDevice = None,
         requires_grad: bool = False,
     ) -> "Point3":
         if len(size) != 1:

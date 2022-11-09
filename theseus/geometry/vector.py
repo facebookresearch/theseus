@@ -47,7 +47,7 @@ class Vector(LieGroup):
         *size: int,
         generator: Optional[torch.Generator] = None,
         dtype: Optional[torch.dtype] = None,
-        device: Optional[_TheseusDevice] = None,
+        device: _TheseusDevice = None,
         requires_grad: bool = False,
     ) -> "Vector":
         if len(size) != 2:
@@ -67,7 +67,7 @@ class Vector(LieGroup):
         *size: int,
         generator: Optional[torch.Generator] = None,
         dtype: Optional[torch.dtype] = None,
-        device: Optional[_TheseusDevice] = None,
+        device: _TheseusDevice = None,
         requires_grad: bool = False,
     ) -> "Vector":
         if len(size) != 2:

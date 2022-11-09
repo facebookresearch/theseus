@@ -52,7 +52,7 @@ class LieGroup(Manifold):
         *size: int,
         generator: Optional[torch.Generator] = None,
         dtype: Optional[torch.dtype] = None,
-        device: Optional[_TheseusDevice] = None,
+        device: _TheseusDevice = None,
         requires_grad: bool = False,
     ) -> "LieGroup":
         pass
@@ -63,7 +63,7 @@ class LieGroup(Manifold):
         *size: int,
         generator: Optional[torch.Generator] = None,
         dtype: Optional[torch.dtype] = None,
-        device: Optional[_TheseusDevice] = None,
+        device: _TheseusDevice = None,
         requires_grad: bool = False,
     ) -> "LieGroup":
         pass

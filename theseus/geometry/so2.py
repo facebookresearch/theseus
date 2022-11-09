@@ -43,7 +43,7 @@ class SO2(LieGroup):
         *size: int,
         generator: Optional[torch.Generator] = None,
         dtype: Optional[torch.dtype] = None,
-        device: Optional[theseus.constants._TheseusDevice] = None,
+        device: theseus.constants._TheseusDevice = None,
         requires_grad: bool = False,
     ) -> "SO2":
         if len(size) != 1:
@@ -67,7 +67,7 @@ class SO2(LieGroup):
         *size: int,
         generator: Optional[torch.Generator] = None,
         dtype: Optional[torch.dtype] = None,
-        device: Optional[theseus.constants._TheseusDevice] = None,
+        device: theseus.constants._TheseusDevice = None,
         requires_grad: bool = False,
     ) -> "SO2":
         if len(size) != 1:

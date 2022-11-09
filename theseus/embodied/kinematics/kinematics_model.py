@@ -37,7 +37,7 @@ class IdentityModel(KinematicsModel):
 
 
 class UrdfRobotModel(KinematicsModel):
-    def __init__(self, urdf_path: str, device: Optional[_TheseusDevice] = None):
+    def __init__(self, urdf_path: str, device: _TheseusDevice = None):
         try:
             import differentiable_robot_model as drm
         except ModuleNotFoundError as e:

@@ -108,7 +108,7 @@ class Variable:
 # In this case, the device, dtype and name can be specified.
 def as_variable(
     value: Union[float, Sequence[float], torch.Tensor, Variable],
-    device: Optional[_TheseusDevice] = None,
+    device: _TheseusDevice = None,
     dtype: Optional[torch.dtype] = None,
     name: Optional[str] = None,
 ) -> Variable:

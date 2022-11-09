@@ -18,7 +18,7 @@ from theseus.core import (
     Variable,
     Vectorize,
 )
-from theseus.constants import __FROM_THESEUS_LAYER_TOKEN__
+from theseus.constants import __FROM_THESEUS_LAYER_TOKEN__, DeviceType
 from theseus.geometry import LieGroup, Manifold
 from theseus.optimizer import Optimizer, OptimizerInfo
 from theseus.optimizer.linear import LinearSolver
@@ -139,7 +139,7 @@ class TheseusLayer(nn.Module):
         self.objective.to(*args, **kwargs)
 
     @property
-    def device(self) -> torch.device:
+    def device(self) -> DeviceType:
         return self.objective.device
 
     @property

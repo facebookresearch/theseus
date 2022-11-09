@@ -47,7 +47,10 @@ def init_tactile_model_from_file(model: nn.Module, filename: pathlib.Path):
 # Set some parameters for the cost weights
 class TactileWeightModel(nn.Module):
     def __init__(
-        self, device: torch.device, dim: int = 3, wt_init: Optional[torch.Tensor] = None
+        self,
+        device: th.DeviceType,
+        dim: int = 3,
+        wt_init: Optional[torch.Tensor] = None,
     ):
         super().__init__()
 
@@ -63,7 +66,7 @@ class TactileWeightModel(nn.Module):
 
 def create_tactile_models(
     model_type: str,
-    device: torch.device,
+    device: th.DeviceType,
     measurements_model_path: Optional[pathlib.Path] = None,
 ) -> Tuple[
     Optional[TactileMeasModel],
@@ -119,7 +122,7 @@ def create_tactile_models(
 
 def get_tactile_nn_measurements_inputs(
     batch: Dict[str, torch.Tensor],
-    device: torch.device,
+    device: th.DeviceType,
     class_label: int,
     num_classes: int,
     min_win_mf: int,
@@ -205,7 +208,7 @@ def get_tactile_nn_measurements_inputs(
 
 
 def get_tactile_motion_capture_inputs(
-    batch: Dict[str, torch.Tensor], device: torch.device, time_steps: int
+    batch: Dict[str, torch.Tensor], device: th.DeviceType, time_steps: int
 ):
     inputs = {}
     captures = batch["eff_poses"].to(device)
@@ -225,7 +228,7 @@ def get_tactile_cost_weight_inputs(qsp_model, mf_between_model):
 
 def get_tactile_initial_optim_vars(
     batch: Dict[str, torch.Tensor],
-    device: torch.device,
+    device: th.DeviceType,
     time_steps: int,
 ):
     inputs = {}
@@ -244,7 +247,7 @@ def update_tactile_pushing_inputs(
     measurements_model: nn.Module,
     qsp_model: nn.Module,
     mf_between_model: nn.Module,
-    device: torch.device,
+    device: th.DeviceType,
     cfg: omegaconf.DictConfig,
     theseus_inputs: Dict[str, torch.Tensor],
 ):

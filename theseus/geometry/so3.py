@@ -43,7 +43,7 @@ class SO3(LieGroup):
         *size: int,
         generator: Optional[torch.Generator] = None,
         dtype: Optional[torch.dtype] = None,
-        device: Optional[torch.device] = None,
+        device: theseus.constants.DeviceType = None,
         requires_grad: bool = False,
     ) -> "SO3":
         # Reference:
@@ -80,7 +80,7 @@ class SO3(LieGroup):
         *size: int,
         generator: Optional[torch.Generator] = None,
         dtype: Optional[torch.dtype] = None,
-        device: Optional[torch.device] = None,
+        device: theseus.constants.DeviceType = None,
         requires_grad: bool = False,
     ) -> "SO3":
         if len(size) != 1:

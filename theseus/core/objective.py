@@ -10,6 +10,7 @@ from typing import Any, Callable, Dict, Iterable, List, Optional, Sequence, Unio
 
 import torch
 
+from theseus.constants import DeviceType
 from theseus.core.theseus_function import TheseusFunction
 from theseus.geometry.manifold import Manifold
 
@@ -55,7 +56,7 @@ class Objective:
 
         self._batch_size: Optional[int] = None
 
-        self.device: torch.device = torch.device("cpu")
+        self.device: DeviceType = torch.device("cpu")
 
         self.dtype: Optional[torch.dtype] = dtype or torch.get_default_dtype()
 

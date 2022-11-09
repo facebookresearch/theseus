@@ -4,6 +4,7 @@
 # LICENSE file in the root directory of this source tree.
 __version__ = "0.1.2"
 
+from .constants import DeviceType as DeviceType
 
 from .core import (  # usort: skip
     AutoDiffCostFunction,

@@ -17,7 +17,7 @@ class TactilePoseEstimator:
         max_window_moving_frame: int,
         step_window_moving_frame: int,
         rectangle_shape: Tuple[float, float],
-        device: torch.device,
+        device: th.DeviceType,
         optimizer_cls: Optional[Type[th.NonlinearLeastSquares]] = LevenbergMarquardt,
         max_iterations: int = 3,
         step_size: float = 1.0,

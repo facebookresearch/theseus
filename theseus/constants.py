@@ -57,4 +57,4 @@ _SE3_NEAR_ZERO_EPS = EPSDict(float32_eps=1e-2, float64_eps=5e-3)
 
 _SE3_HAT_EPS = EPSDict(float32_eps=5e-6, float64_eps=5e-7)
 
-_TheseusDevice = Optional[Union[str, torch.device]]
+DeviceType = Optional[Union[str, torch.device]]

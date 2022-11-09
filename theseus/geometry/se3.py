@@ -44,7 +44,7 @@ class SE3(LieGroup):
         *size: int,
         generator: Optional[torch.Generator] = None,
         dtype: Optional[torch.dtype] = None,
-        device: theseus.constants._TheseusDevice = None,
+        device: theseus.constants.DeviceType = None,
         requires_grad: bool = False,
     ) -> "SE3":
         if len(size) != 1:
@@ -72,7 +72,7 @@ class SE3(LieGroup):
         *size: int,
         generator: Optional[torch.Generator] = None,
         dtype: Optional[torch.dtype] = None,
-        device: theseus.constants._TheseusDevice = None,
+        device: theseus.constants.DeviceType = None,
         requires_grad: bool = False,
     ) -> "SE3":
         if len(size) != 1:

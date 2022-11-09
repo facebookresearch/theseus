@@ -49,7 +49,7 @@ logger = logging.getLogger(__name__)
 
 class TactilePushingTrainer:
     def __init__(
-        self, cfg: omegaconf.DictConfig, exp_path: pathlib.Path, device: th.device
+        self, cfg: omegaconf.DictConfig, exp_path: pathlib.Path, device: th.DeviceType
     ):
         self.cfg = cfg
         self.device = device
@@ -124,7 +124,7 @@ class TactilePushingTrainer:
         self,
         batch: Dict[str, torch.Tensor],
         dataset: TactilePushingDataset,
-        device: th.device,
+        device: th.DeviceType,
     ) -> Tuple[Dict[str, torch.Tensor], torch.Tensor, torch.Tensor]:
         # Initialize inputs dictionary
         theseus_inputs = self.pose_estimator.get_start_pose_and_motion_capture_dict(

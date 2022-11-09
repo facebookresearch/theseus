@@ -21,7 +21,7 @@ class TactilePushingDataset:
         batch_size: int,
         max_episodes: int,
         max_steps: int,
-        device: th.device,
+        device: th.DeviceType,
         split_episodes: bool = False,
         data_mode: str = "all",
         val_ratio: float = 0.1,
@@ -73,7 +73,7 @@ class TactilePushingDataset:
         filename: str,
         episode_length: int,
         max_episodes: int,
-        device: th.device,
+        device: th.DeviceType,
         split_episodes: bool = False,
     ) -> Dict[str, torch.Tensor]:
         # Load all episode data
@@ -150,7 +150,7 @@ class TactilePushingDataset:
 
     @staticmethod
     def _load_tactile_sdf_from_file(
-        filename: str, device: th.device
+        filename: str, device: th.DeviceType
     ) -> Tuple[torch.Tensor, torch.Tensor, torch.Tensor]:
 
         with open(filename) as f:

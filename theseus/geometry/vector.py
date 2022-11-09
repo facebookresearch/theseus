@@ -7,7 +7,7 @@ from typing import List, Optional, Tuple, Union, cast
 
 import torch
 
-from theseus.constants import _TheseusDevice
+from theseus.constants import DeviceType
 from theseus.geometry.manifold import Manifold
 
 from .lie_group import LieGroup
@@ -47,7 +47,7 @@ class Vector(LieGroup):
         *size: int,
         generator: Optional[torch.Generator] = None,
         dtype: Optional[torch.dtype] = None,
-        device: _TheseusDevice = None,
+        device: DeviceType = None,
         requires_grad: bool = False,
     ) -> "Vector":
         if len(size) != 2:
@@ -67,7 +67,7 @@ class Vector(LieGroup):
         *size: int,
         generator: Optional[torch.Generator] = None,
         dtype: Optional[torch.dtype] = None,
-        device: _TheseusDevice = None,
+        device: DeviceType = None,
         requires_grad: bool = False,
     ) -> "Vector":
         if len(size) != 2:

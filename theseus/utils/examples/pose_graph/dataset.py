@@ -182,7 +182,7 @@ class PoseGraphDataset:
         edges: List[PoseGraphEdge],
         gt_poses: Optional[Union[List[th.SE2], List[th.SE3]]] = None,
         batch_size: int = 1,
-        device: th.device = None,
+        device: th.DeviceType = None,
     ):
         dataset_sizes: List[int] = [pose.shape[0] for pose in poses]
         if gt_poses is not None:

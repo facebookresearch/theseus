@@ -115,9 +115,8 @@ def as_variable(
     if isinstance(value, Variable):
         return value
     if isinstance(device, str):
-        device = torch.device(
-            device
-        )  # mypy doesn't like passing str to torch.as_tensor
+        # mypy doesn't like passing str to torch.as_tensor so convert
+        device = torch.device(device)
     tensor = torch.as_tensor(value, dtype=dtype, device=device)
     if isinstance(value, float):
         tensor = tensor.view(1, 1)

@@ -1,5 +1,5 @@
 import math
-from typing import Callable, Dict, NoReturn, Optional, Union
+from typing import Callable, Dict, NoReturn, Optional, Union, List
 
 import numpy as np
 import torch
@@ -32,11 +32,11 @@ class DCem(Optimizer):
         n_sample: int = 50,  # 20
         n_elite: int = 5,  # 5
         temp: float = 1.0,
-        init_sigma=1.0,
+        init_sigma: Union[float, torch.Tensor, List[float]] = 1.0,
         lb=None,
         ub=None,
         lml_verbose: bool = False,
-        lml_eps: float = 1e-4,
+        lml_eps: float = 1e-3,
         normalize: bool = True,
         iter_eps: float = 1e-7,
         **kwargs,
@@ -380,11 +380,11 @@ class DCem(Optimizer):
         **kwargs,
     ) -> int:
 
-        itr_done = self._all_solve(num_iter, info=info)
-        # self.objective.update(mu)
-        # with torch.no_grad():
-        #     info.best_solution = mu
-        return itr_done
+        # itr_done = self._all_solve(num_iter, info=info)
+        # # self.objective.update(mu)
+        # # with torch.no_grad():
+        # #     info.best_solution = mu
+        # return itr_done
 
         converged_indices = torch.zeros_like(info.last_err).bool()
         iters_done = 0

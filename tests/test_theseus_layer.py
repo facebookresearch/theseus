@@ -85,7 +85,7 @@ def create_qf_theseus_layer(
     cost_weight=th.ScaleCostWeight(1.0),
     nonlinear_optimizer_cls=th.GaussNewton,
     linear_solver_cls=th.CholeskyDenseSolver,
-    max_iterations=30,
+    max_iterations=50,
     use_learnable_error=False,
     force_vectorization=False,
 ):
@@ -341,6 +341,8 @@ def _run_optimizer_test(
             },
         )
 
+        # print("pred:", pred_vars)
+
         assert not (
             (info.status == th.NonlinearOptimizerStatus.START)
             | (info.status == th.NonlinearOptimizerStatus.FAIL)
@@ -417,7 +419,6 @@ def _solver_can_be_run(lin_solver_cls):
 )
 @pytest.mark.parametrize(
     "lin_solver_cls",
-<<<<<<< HEAD:tests/test_theseus_layer.py
     [
         th.CholeskyDenseSolver,
         th.LUDenseSolver,
@@ -425,13 +426,11 @@ def _solver_can_be_run(lin_solver_cls):
         th.LUCudaSparseSolver,
         th.BaspachoSparseSolver,
     ],
-=======
-    [th.CholeskyDenseSolver],
->>>>>>> c41d6c4 (refactoring, removed DcemSolver in favour of solve method in DCEM optimizer):theseus/tests/test_theseus_layer.py
 )
 @pytest.mark.parametrize("use_learnable_error", [True, False])
 @pytest.mark.parametrize("cost_weight_model", ["direct", "mlp"])
 @pytest.mark.parametrize("learning_method", ["default", "leo"])
+@pytest.mark.parametrize("use_learnable_error", [False, True])
 def test_backward(
     nonlinear_optim_cls,
     lin_solver_cls,
@@ -600,3 +599,12 @@ def test_no_layer_kwargs():
 
     with pytest.raises(TypeError):
         layer.forward(input_values, auxiliary_vars=None)
+
+
+# test_backward(
+#     nonlinear_optim_cls=th.DCem,
+#     lin_solver_cls=th.CholeskyDenseSolver,
+#     use_learnable_error=False,
+#     cost_weight_model="softmax",
+#     learning_method="default",
+# )

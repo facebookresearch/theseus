@@ -144,7 +144,7 @@ def _check_nonlinear_least_squares_fit(
     initial_error = objective.error_metric()
     max_iterations = 20
     optimizer = nonlinear_optim_cls(objective)
-    # assert isinstance(optimizer.linear_solver, th.CholeskyDenseSolver)
+    assert isinstance(optimizer.linear_solver, th.CholeskyDenseSolver)
     optimizer.set_params(max_iterations=max_iterations)
 
     callback_expected_iter = [0]
@@ -152,7 +152,7 @@ def _check_nonlinear_least_squares_fit(
     def callback(opt_, info_, delta_, it_):
         assert opt_ is optimizer
         assert isinstance(info_, th.optimizer.OptimizerInfo)
-        # assert isinstance(delta_, torch.Tensor)
+        assert isinstance(delta_, torch.Tensor)
         assert it_ == callback_expected_iter[0]
         callback_expected_iter[0] += 1
 
@@ -163,13 +163,7 @@ def _check_nonlinear_least_squares_fit(
         **optimize_kwargs,
     )
     # Solution must now match the true coefficients
-    print(variables[0].tensor)
-    print(
-        variables[0].tensor.abs().isclose(true_coeffs.repeat(batch_size, 1), atol=5e-2)
-    )
-    assert (
-        variables[0].tensor.abs().allclose(true_coeffs.repeat(batch_size, 1), atol=5e-2)
-    )
+    assert variables[0].tensor.allclose(true_coeffs.repeat(batch_size, 1), atol=1e-6)
     _check_info(info, batch_size, max_iterations, initial_error, objective)
 
 
@@ -203,9 +197,9 @@ def _check_nonlinear_least_squares_fit_multivar(
     objective.update(values)
     initial_error = objective.error_metric()
 
-    max_iterations = 100
+    max_iterations = 20
     optimizer = nonlinear_optim_cls(objective)
-    # assert isinstance(optimizer.linear_solver, th.CholeskyDenseSolver)
+    assert isinstance(optimizer.linear_solver, th.CholeskyDenseSolver)
     optimizer.set_params(max_iterations=max_iterations)
     info = optimizer.optimize(
         track_best_solution=True, track_err_history=True, **optimize_kwargs
@@ -272,7 +266,7 @@ def _check_optimizer_returns_fail_status_on_singular(
     objective.update(values)
 
     optimizer = nonlinear_optim_cls(objective, vectorize=False)
-    # assert isinstance(optimizer.linear_solver, th.CholeskyDenseSolver)
+    assert isinstance(optimizer.linear_solver, th.CholeskyDenseSolver)
     optimizer.set_params(max_iterations=30)
     optimizer.linear_solver.linearization = BadLinearization(objective)
     with pytest.raises(RuntimeError):

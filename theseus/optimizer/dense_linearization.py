@@ -22,9 +22,9 @@ class DenseLinearization(Linearization):
     ):
         super().__init__(objective, ordering)
         self.A: torch.Tensor = None
-        self.AtA: torch.Tensor = None
         self.b: torch.Tensor = None
-        self.Atb: torch.Tensor = None
+        self._AtA: torch.Tensor = None
+        self._Atb: torch.Tensor = None
 
     def _linearize_jacobian_impl(self):
         err_row_idx = 0
@@ -58,8 +58,14 @@ class DenseLinearization(Linearization):
     def _linearize_hessian_impl(self):
         self._linearize_jacobian_impl()
         At = self.A.transpose(1, 2)
-        self.AtA = At.bmm(self.A)
-        self.Atb = At.bmm(self.b.unsqueeze(2))
+        self._AtA = At.bmm(self.A)
+        self._Atb = At.bmm(self.b.unsqueeze(2))
 
     def hessian_approx(self):
-        return self.AtA
+        return self._AtA
+
+    def _ata_impl(self) -> torch.Tensor:
+        return self._AtA
+
+    def _atb_impl(self) -> torch.Tensor:
+        return self._Atb

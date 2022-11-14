@@ -9,6 +9,7 @@ import numpy as np
 import torch
 
 from theseus.core import Objective
+from theseus.utils.sparse_matrix_utils import tmat_vec
 
 from .linear_system import SparseStructure
 from .linearization import Linearization
@@ -20,7 +21,7 @@ class SparseLinearization(Linearization):
         self,
         objective: Objective,
         ordering: Optional[VariableOrdering] = None,
-        **kwargs
+        **kwargs,
     ):
         super().__init__(objective, ordering)
 
@@ -85,9 +86,13 @@ class SparseLinearization(Linearization):
         # batched data
         self.A_val: torch.Tensor = None
         self.b: torch.Tensor = None
-        self.Atb: torch.Tensor = None
+        # computed lazily by self._atb_impl() and reset to None by
+        # self._linearize_jacobian_impl()
+        self._Atb: torch.Tensor = None
 
     def _linearize_jacobian_impl(self):
+        self._Atb = None
+
         # those will be fully overwritten, no need to zero:
         self.A_val = torch.empty(
             size=(self.objective.batch_size, len(self.A_col_ind)),
@@ -135,3 +140,24 @@ class SparseLinearization(Linearization):
 
     def _linearize_hessian_impl(self):
         self._linearize_jacobian_impl()
+
+    def _ata_impl(self) -> torch.Tensor:
+        raise NotImplementedError("AtA is not yet implemented for SparseLinearization.")
+
+    def _atb_impl(self) -> torch.Tensor:
+        if self._Atb is None:
+            A_rowPtr = torch.tensor(self.A_row_ptr, dtype=torch.int32).to(
+                self.objective.device
+            )
+            A_colInd = A_rowPtr.new_tensor(self.A_col_ind)
+            self._Atb = tmat_vec(
+                self.objective.batch_size,
+                self.num_cols,
+                A_rowPtr,
+                A_colInd,
+                self.A_val,
+                self.b,
+            ).unsqueeze(
+                2
+            )  # for consistency with DenseLinearization
+        return self._Atb

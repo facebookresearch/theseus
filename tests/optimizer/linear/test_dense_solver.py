@@ -28,7 +28,11 @@ def test_dense_solvers(damp_as_tensor):
         solver = solver_cls(
             void_objective, linearization_kwargs={"ordering": void_ordering}
         )
-        solver.linearization.AtA, solver.linearization.Atb, x = _create_linear_system()
+        (
+            solver.linearization._AtA,
+            solver.linearization._Atb,
+            x,
+        ) = _create_linear_system()
         solved_x = solver.solve().squeeze()
         error = torch.norm(x - solved_x, p=float("inf"))
         assert error < 1e-4
@@ -88,8 +92,8 @@ def test_handle_singular():
                 check_singular=True,
             )
             (
-                solver.linearization.AtA,
-                solver.linearization.Atb,
+                solver.linearization._AtA,
+                solver.linearization._Atb,
                 x,
             ) = _create_linear_system(batch_size=batch_size, matrix_size=10)
             solver.linearization.AtA[:mid_point] = torch.zeros(matrix_size, matrix_size)

@@ -3,8 +3,70 @@
 # This source code is licensed under the MIT license found in the
 # LICENSE file in the root directory of this source tree.
 from typing import List
-from scipy.sparse import csr_matrix, lil_matrix
+
+import numpy as np
 import torch
+from scipy.sparse import csc_matrix, csr_matrix, lil_matrix
+
+
+def _mat_vec_cpu(batch_size, num_cols, A_rowPtr, A_colInd, A_val, v):
+    assert batch_size == A_val.shape[0]
+    num_rows = len(A_rowPtr) - 1
+    retv_data = np.array(
+        [
+            csr_matrix((A_val[i].numpy(), A_colInd, A_rowPtr), (num_rows, num_cols))
+            * v[i]
+            for i in range(batch_size)
+        ],
+        dtype=np.float64,
+    )
+    return torch.tensor(retv_data, dtype=torch.float64)
+
+
+def mat_vec(batch_size, num_cols, A_rowPtr, A_colInd, A_val, v):
+    if A_rowPtr.device.type == "cuda":
+        try:
+            from theseus.extlib.mat_mult import mat_vec as mat_vec_cuda
+        except Exception as e:
+            raise RuntimeError(
+                "Theseus C++/Cuda extension cannot be loaded\n"
+                "even if Cuda appears to be available. Make sure Theseus\n"
+                "is installed with Cuda support (export CUDA_HOME=...)\n"
+                f"{type(e).__name__}: {e}"
+            )
+        return mat_vec_cuda(batch_size, num_cols, A_rowPtr, A_colInd, A_val, v)
+    else:
+        return _mat_vec_cpu(batch_size, num_cols, A_rowPtr, A_colInd, A_val, v)
+
+
+def _tmat_vec_cpu(batch_size, num_cols, A_rowPtr, A_colInd, A_val, v):
+    assert batch_size == A_val.shape[0]
+    num_rows = len(A_rowPtr) - 1
+    retv_data = np.array(
+        [
+            csc_matrix((A_val[i].numpy(), A_colInd, A_rowPtr), (num_cols, num_rows))
+            * v[i]
+            for i in range(batch_size)
+        ],
+        dtype=np.float64,
+    )
+    return torch.tensor(retv_data, dtype=torch.float64)
+
+
+def tmat_vec(batch_size, num_cols, A_rowPtr, A_colInd, A_val, v):
+    if A_rowPtr.device.type == "cuda":
+        try:
+            from theseus.extlib.mat_mult import tmat_vec as tmat_vec_cuda
+        except Exception as e:
+            raise RuntimeError(
+                "Theseus C++/Cuda extension cannot be loaded\n"
+                "even if Cuda appears to be available. Make sure Theseus\n"
+                "is installed with Cuda support (export CUDA_HOME=...)\n"
+                f"{type(e).__name__}: {e}"
+            )
+        return tmat_vec_cuda(batch_size, num_cols, A_rowPtr, A_colInd, A_val, v)
+    else:
+        return _tmat_vec_cpu(batch_size, num_cols, A_rowPtr, A_colInd, A_val, v)
 
 
 def random_sparse_binary_matrix(

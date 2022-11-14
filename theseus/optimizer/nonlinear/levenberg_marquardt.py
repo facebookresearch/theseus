@@ -2,13 +2,12 @@
 #
 # This source code is licensed under the MIT license found in the
 # LICENSE file in the root directory of this source tree.
-import warnings
 from typing import Any, Dict, List, Optional, Sequence, Type, Union
 
 import torch
 
 from theseus.core import Objective
-from theseus.optimizer import DenseLinearization, Linearization
+from theseus.optimizer import Linearization
 from theseus.optimizer.linear import (
     BaspachoSparseSolver,
     CholeskyDenseSolver,
@@ -151,14 +150,6 @@ class LevenbergMarquardt(NonlinearLeastSquares):
         if not adaptive_damping:
             return
         linearization = self.linear_solver.linearization
-        if not isinstance(linearization, DenseLinearization):
-            warnings.warn(
-                "Adaptive damping is currently only supported with "
-                "DenseLinearization. Damping will not update.",
-                RuntimeWarning,
-            )
-            return
-
         damping = (
             self._damping.view(-1, 1)
             if isinstance(self._damping, torch.Tensor)

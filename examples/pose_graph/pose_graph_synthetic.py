@@ -211,12 +211,7 @@ def run(
         pr.enable()
         theseus_outputs, _ = theseus_optim.forward(
             input_tensors=theseus_inputs,
-            optimizer_kwargs={
-                "verbose": cfg.inner_optim.verbose,
-                "track_err_history": cfg.inner_optim.track_err_history,
-                "backward_mode": cfg.inner_optim.backward_mode,
-                "__keep_final_step_size__": cfg.inner_optim.keep_step_size,
-            },
+            optimizer_kwargs={**cfg.inner_optim.optimizer_kwargs},
         )
         pr.disable()
         end_event.record()

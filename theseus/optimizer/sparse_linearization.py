@@ -150,6 +150,8 @@ class SparseLinearization(Linearization):
                 self.objective.device
             )
             A_colInd = A_rowPtr.new_tensor(self.A_col_ind)
+
+            # unsqueeze at the end for consistency with DenseLinearization
             self._Atb = tmat_vec(
                 self.objective.batch_size,
                 self.num_cols,
@@ -157,7 +159,5 @@ class SparseLinearization(Linearization):
                 A_colInd,
                 self.A_val,
                 self.b,
-            ).unsqueeze(
-                2
-            )  # for consistency with DenseLinearization
+            ).unsqueeze(2)
         return self._Atb

@@ -104,9 +104,11 @@ class NonlinearOptimizer(Optimizer, abc.ABC):
             linearization_kwargs=linearization_kwargs,
             **linear_solver_kwargs,
         )
+        self.ordering = self.linear_solver.linearization.ordering
         self.params = NonlinearOptimizerParams(
             abs_err_tolerance, rel_err_tolerance, max_iterations, step_size
         )
+        self._tmp_optim_vars = tuple(v.copy(new_name=v.name) for v in self.ordering)
 
     def set_params(self, **kwargs):
         self.params.update(kwargs)
@@ -128,7 +130,7 @@ class NonlinearOptimizer(Optimizer, abc.ABC):
         if not do_init:
             return None
         solution_dict = {}
-        for var in self.linear_solver.linearization.ordering:
+        for var in self.ordering:
             solution_dict[var.name] = var.tensor.detach().clone().cpu()
         return solution_dict
 
@@ -204,7 +206,7 @@ class NonlinearOptimizer(Optimizer, abc.ABC):
             assert info.best_err is not None
             good_indices = err < info.best_err
             info.best_iter[good_indices] = current_iter
-            for var in self.linear_solver.linearization.ordering:
+            for var in self.ordering:
                 info.best_solution[var.name][good_indices] = (
                     var.tensor.detach().clone()[good_indices].cpu()
                 )
@@ -268,6 +270,10 @@ class NonlinearOptimizer(Optimizer, abc.ABC):
             M & (grad_loop_info.status == NonlinearOptimizerStatus.MAX_ITERATIONS)
         ] = -1
 
+    def _update_tmp_optim_vars(self):
+        for v_tmp, v_order in zip(self._tmp_optim_vars, self.ordering):
+            v_tmp.update(v_order.tensor)
+
     # loop for the iterative optimizer
     def _optimize_loop(
         self,
@@ -327,12 +333,7 @@ class NonlinearOptimizer(Optimizer, abc.ABC):
             with torch.no_grad():
                 if steps_tensor is None:
                     steps_tensor = torch.ones_like(delta) * self.params.step_size
-            self.objective.retract_optim_vars(
-                delta * steps_tensor,
-                self.linear_solver.linearization.ordering,
-                ignore_mask=converged_indices,
-                force_update=force_update,
-            )
+            self.step(delta, steps_tensor, converged_indices, force_update)
 
             # check for convergence
             with torch.no_grad():
@@ -459,6 +460,35 @@ class NonlinearOptimizer(Optimizer, abc.ABC):
     @abc.abstractmethod
     def compute_delta(self, **kwargs) -> torch.Tensor:
         pass
+
+    def _step_impl(
+        self,
+        delta: torch.Tensor,
+        steps: torch.Tensor,
+        converged_indices: torch.Tensor,
+        force_update: bool,
+    ) -> Dict[str, torch.Tensor]:
+        self.objective.retract_optim_vars(
+            delta * steps,
+            self._tmp_optim_vars,
+            ignore_mask=converged_indices,
+            force_update=force_update,
+        )
+        return {v.name: v.tensor for v in self._tmp_optim_vars}
+
+    # Given descent directions, updates the optimization variables.
+    # converged indices are ignored unless `force_update = True`.
+    def step(
+        self,
+        delta: torch.Tensor,
+        steps: torch.Tensor,
+        converged_indices: torch.Tensor,
+        force_update: bool,
+    ):
+        # makes sure tmp cotainers are up to date with current variables
+        self._update_tmp_optim_vars()
+        results = self._step_impl(delta, steps, converged_indices, force_update)
+        self.objective.update(results)
 
     # Resets any internal state needed by the optimizer for a new optimization
     # problem. Optimizer loop will pass all optimizer kwargs to this method.

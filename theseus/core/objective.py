@@ -485,7 +485,7 @@ class Objective:
         memo[id(self)] = the_copy
         return the_copy
 
-    def update(self, input_tensors: Optional[Dict[str, torch.Tensor]] = None):
+    def _resolve_batch_size(self):
         self._batch_size = None
 
         def _get_batch_size(batch_sizes: Sequence[int]) -> int:
@@ -498,6 +498,12 @@ class Objective:
                 if min_bs == 1:
                     return max_bs
             raise ValueError("Provided tensors must be broadcastable.")
+
+        batch_sizes = [v.tensor.shape[0] for v in self.optim_vars.values()]
+        batch_sizes.extend([v.tensor.shape[0] for v in self.aux_vars.values()])
+        self._batch_size = _get_batch_size(batch_sizes)
+
+    def update(self, input_tensors: Optional[Dict[str, torch.Tensor]] = None):
 
         input_tensors = input_tensors or {}
         for var_name, tensor in input_tensors.items():
@@ -526,9 +532,8 @@ class Objective:
                 )
 
         # Check that the batch size of all tensors is consistent after update
-        batch_sizes = [v.tensor.shape[0] for v in self.optim_vars.values()]
-        batch_sizes.extend([v.tensor.shape[0] for v in self.aux_vars.values()])
-        self._batch_size = _get_batch_size(batch_sizes)
+        self._resolve_batch_size()
+        self.update_vectorization_if_needed()
 
     def _vectorization_needs_update(self):
         num_updates = {name: v._num_updates for name, v in self._all_variables.items()}
@@ -545,7 +550,7 @@ class Objective:
     def update_vectorization_if_needed(self):
         if self.vectorized and self._vectorization_needs_update():
             if self._batch_size is None:
-                self.update()
+                self._resolve_batch_size()
             self._vectorization_run()
             self._last_vectorization_has_grad = torch.is_grad_enabled()
 

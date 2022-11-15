@@ -5,6 +5,7 @@
 
 import warnings
 from theseus.geometry.lie_group_check import _LieGroupCheckContext
+from theseus.geometry.functions.utils import check_jacobians_list
 
 from typing import List, Optional, cast
 
@@ -115,7 +116,7 @@ class SO3Function:
         def call(
             tangent_vector: torch.Tensor,
             jacobians: Optional[List[torch.Tensor]] = None,
-        ):
+        ) -> torch.Tensor:
             if not SO3Function.check_tangent_vector(tangent_vector):
                 raise ValueError("Tangent vectors of SO3 should be 3-D vectors.")
             tangent_vector = tangent_vector.view(-1, 3)
@@ -156,8 +157,7 @@ class SO3Function:
             ret[:, 2, 1] += sine_axis[:, 0]
 
             if jacobians is not None:
-                if len(jacobians) != 0:
-                    raise ValueError("jacobians list to be populated must be empty.")
+                check_jacobians_list(jacobians)
                 theta3_nz = theta_nz * theta2_nz
                 theta_minus_sine_by_theta3 = torch.where(
                     near_zero, torch.zeros_like(theta), (theta - sine) / theta3_nz
@@ -261,3 +261,81 @@ class SO3Function:
                 dim=1,
             ).view(-1, 3, 1)
             return grad.view(-1, 3)
+
+    class adjoint(torch.autograd.Function):
+        @staticmethod
+        def call(
+            g: torch.Tensor,
+        ) -> torch.Tensor:
+            if not SO3Function.check_group_tensor(g):
+                raise ValueError("Invalid data tensor for SO3.")
+            return g
+
+        @staticmethod
+        def forward(ctx, g):
+            g: torch.Tensor = cast(torch.Tensor, g)
+            return SO3Function.adjoint.call(g)
+
+        @staticmethod
+        def backward(ctx, grad_output):
+            return grad_output
+
+    class inverse(torch.autograd.Function):
+        @staticmethod
+        def call(
+            g: torch.Tensor, jacobians: Optional[List[torch.Tensor]] = None
+        ) -> torch.Tensor:
+            if not SO3Function.check_group_tensor(g):
+                raise ValueError("Invalid data tensor for SO3.")
+            if jacobians is not None:
+                check_jacobians_list(jacobians)
+                jacobians.append(-SO3Function.adjoint.call(g))
+            return g.transpose(1, 2)
+
+        @staticmethod
+        def jacobian(g: torch.Tensor) -> torch.Tensor:
+            if not SO3Function.check_group_tensor(g):
+                raise ValueError("Invalid data tensor for SO3.")
+            return -SO3Function.adjoint.call(g)
+
+        @staticmethod
+        def forward(ctx, g, jacobians=None):
+            g: torch.Tensor = cast(torch.Tensor, g)
+            return SO3Function.inverse.call(g, jacobians)
+
+        @staticmethod
+        def backward(ctx, grad_output):
+            return grad_output.transpose(1, 2)
+
+    class compose(torch.autograd.Function):
+        @staticmethod
+        def call(
+            g0: torch.Tensor,
+            g1: torch.Tensor,
+            jacobians: Optional[List[torch.Tensor]] = None,
+        ) -> torch.Tensor:
+            if not SO3Function.check_group_tensor(
+                g0
+            ) or not SO3Function.check_group_tensor(g1):
+                raise ValueError("Invalid data tensor for SO3.")
+            if jacobians is not None:
+                check_jacobians_list(jacobians)
+                jacobians.append(-SO3Function.inverse.jacobian(g1))
+                jacobians.append(g1.new_zeros(g0.shape[0], 3, 3))
+                jacobians[1][:, 0, 0] = 1
+                jacobians[2][:, 1, 1] = 1
+                jacobians[3][:, 2, 2] = 1
+            return g0 @ g1
+
+        @staticmethod
+        def forward(ctx, g0, g1, jacobians=None):
+            g0: torch.Tensor = cast(torch.Tensor, g0)
+            g1: torch.Tensor = cast(torch.Tensor, g1)
+            ctx.save_for_backward(g0, g1)
+            return SO3Function.compose.call(g0, g1, jacobians)
+
+        @staticmethod
+        def backward(ctx, grad_output):
+            g0 = ctx.saved_tensors[0]
+            g1 = ctx.saved_tensors[1]
+            return grad_output @ g1.transpose(1, 2), g0.transpose(1, 2) @ grad_output

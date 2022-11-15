@@ -4,17 +4,18 @@
 # LICENSE file in the root directory of this source tree.
 
 import warnings
+
 from theseus.geometry.lie_group_check import _LieGroupCheckContext
 from theseus.geometry.functions.utils import check_jacobians_list
+import theseus.constants
+from theseus.geometry.functions.lie_group_function import LieGroupFunction
 
 from typing import List, Optional, cast
 
 import torch
 
-import theseus.constants
 
-
-class SO3Function:
+class SO3Function(LieGroupFunction):
     @staticmethod
     def check_group_tensor(tensor: torch.Tensor) -> bool:
         with torch.no_grad():
@@ -57,7 +58,64 @@ class SO3Function:
                 RuntimeWarning,
             )
 
-    class hat(torch.autograd.Function):
+    @staticmethod
+    class project(LieGroupFunction.project):
+        @staticmethod
+        def call(matrix) -> torch.Tensor:
+            if matrix.shape[-2:] != (3, 3):
+                raise ValueError("Inconsistent shape for matrix.")
+
+            return torch.stack(
+                (
+                    matrix[..., 2, 1] - matrix[..., 1, 2],
+                    matrix[..., 0, 2] - matrix[..., 2, 0],
+                    matrix[..., 1, 0] - matrix[..., 0, 1],
+                ),
+                dim=1,
+            )
+
+        @staticmethod
+        def backward(ctx, grad_output):
+            return SO3Function.hat.call(grad_output)
+
+    class left_apply(LieGroupFunction.left_apply):
+        @staticmethod
+        def call(
+            group: torch.Tensor,
+            matrix: torch.Tensor,
+            jacobians: Optional[List[torch.Tensor]] = None,
+        ) -> torch.Tensor:
+            if not SO3Function.check_group_tensor(group):
+                raise ValueError("Invalid SO3 data tensors.")
+
+            if matrix.ndim != 3 or matrix.shape[1] != 3:
+                raise ValueError("The matrix tensor must have 3 rows.")
+
+            if jacobians is not None:
+                check_jacobians_list(jacobians)
+                check_jacobians_list(jacobians)
+                jacobians.append(SO3Function.left_apply.call(group, matrix))
+                jacobians.append(
+                    group.view(group.shape + (1,)).expand(group.shape + (3,))
+                )
+
+            return group @ matrix
+
+        @staticmethod
+        def forward(ctx, group, matrix, jacobians):
+            ctx.save_for_backward(group, matrix)
+            return SO3Function.left_apply.call(group, matrix, jacobians)
+
+        @staticmethod
+        def backward(ctx, grad_output):
+            group = ctx.saved_tensors[0]
+            matrix = ctx.saved_tensors[1]
+            return (
+                grad_output @ matrix.transpose(1, 2),
+                group.transpose(1, 2) @ grad_output,
+            )
+
+    class hat(LieGroupFunction.hat):
         @staticmethod
         def call(tangent_vector: torch.Tensor) -> torch.Tensor:
             if not SO3Function.check_tangent_vector(tangent_vector):
@@ -89,7 +147,7 @@ class SO3Function:
                 dim=1,
             )
 
-    class vee(torch.autograd.Function):
+    class vee(LieGroupFunction.vee):
         @staticmethod
         def call(matrix: torch.Tensor) -> torch.Tensor:
             SO3Function.check_hat_matrix(matrix)
@@ -111,7 +169,7 @@ class SO3Function:
             grad_output: torch.Tensor = cast(torch.Tensor, grad_output)
             return 0.5 * SO3Function.hat.call(grad_output)
 
-    class exp_map(torch.autograd.Function):
+    class exp_map(LieGroupFunction.exp_map):
         @staticmethod
         def call(
             tangent_vector: torch.Tensor,
@@ -262,7 +320,7 @@ class SO3Function:
             ).view(-1, 3, 1)
             return grad.view(-1, 3)
 
-    class adjoint(torch.autograd.Function):
+    class adjoint(LieGroupFunction.adjoint):
         @staticmethod
         def call(
             g: torch.Tensor,
@@ -280,7 +338,7 @@ class SO3Function:
         def backward(ctx, grad_output):
             return grad_output
 
-    class inverse(torch.autograd.Function):
+    class inverse(LieGroupFunction.inverse):
         @staticmethod
         def call(
             g: torch.Tensor, jacobians: Optional[List[torch.Tensor]] = None
@@ -307,7 +365,7 @@ class SO3Function:
         def backward(ctx, grad_output):
             return grad_output.transpose(1, 2)
 
-    class compose(torch.autograd.Function):
+    class compose(LieGroupFunction.compose):
         @staticmethod
         def call(
             g0: torch.Tensor,

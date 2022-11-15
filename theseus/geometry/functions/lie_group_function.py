@@ -55,11 +55,6 @@ class LieGroupFunction:
         def forward(ctx, group, matrix):
             return LieGroupFunction.left_project.call(group, matrix)
 
-        @staticmethod
-        @abc.abstractmethod
-        def backward(ctx, grad_output):
-            pass
-
     @staticmethod
     class right_project(torch.autograd.Function):
         @staticmethod
@@ -73,11 +68,6 @@ class LieGroupFunction:
         @staticmethod
         def forward(ctx, group, matrix):
             return LieGroupFunction.left_project.call(group, matrix)
-
-        @staticmethod
-        @abc.abstractmethod
-        def backward(ctx, grad_output):
-            pass
 
     class left_apply(torch.autograd.Function):
         @staticmethod

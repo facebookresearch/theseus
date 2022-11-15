@@ -3,7 +3,7 @@
 # This source code is licensed under the MIT license found in the
 # LICENSE file in the root directory of this source tree.
 
-from typing import Any, Dict, Optional, Type
+from typing import Any, Dict, Optional, Tuple, Type
 
 import torch
 
@@ -45,3 +45,21 @@ class GaussNewton(NonlinearLeastSquares):
 
     def compute_delta(self, **kwargs) -> torch.Tensor:
         return self.linear_solver.solve()
+
+    def _step_impl(
+        self,
+        delta: torch.Tensor,
+        steps: torch.Tensor,
+        converged_indices: torch.Tensor,
+        force_update: bool,
+    ) -> Tuple[Dict[str, torch.Tensor], torch.Tensor]:
+        self.objective.retract_optim_vars(
+            delta * steps,
+            self._tmp_optim_vars,
+            ignore_mask=converged_indices,
+            force_update=force_update,
+        )
+        tensor_map = {v.name: v.tensor for v in self._tmp_optim_vars}
+        with torch.no_grad():
+            error = self.objective.error_squared_norm(tensor_map, also_update=False)
+        return tensor_map, error

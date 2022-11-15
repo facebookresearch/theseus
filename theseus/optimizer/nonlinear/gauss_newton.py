@@ -53,7 +53,7 @@ class GaussNewton(NonlinearLeastSquares):
         converged_indices: torch.Tensor,
         force_update: bool,
     ) -> Tuple[Dict[str, torch.Tensor], torch.Tensor]:
-        self.objective.retract_optim_vars(
+        self.objective.retract_vars_sequence(
             delta * steps,
             self._tmp_optim_vars,
             ignore_mask=converged_indices,

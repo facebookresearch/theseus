@@ -70,7 +70,7 @@ class LinearOptimizer(Optimizer):
                 warnings.warn(msg, RuntimeWarning)
                 info.status[:] = LinearOptimizerStatus.FAIL
                 return info
-        self.objective.retract_optim_vars(
+        self.objective.retract_vars_sequence(
             delta, self.linear_solver.linearization.ordering
         )
         info.status[:] = LinearOptimizerStatus.CONVERGED

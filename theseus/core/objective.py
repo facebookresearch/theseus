@@ -594,7 +594,13 @@ class Objective:
                 var.update(new_var.tensor, batch_ignore_mask=ignore_mask)
             var_idx += var.dof()
 
-    def retract_optim_vars(
+    # Retracts an ordered sequence of variables according to the
+    # corresponding `delta` tangent vectors.
+    # This function assumes that delta is constructed as follows:
+    #    For ordering = [v1 v2 ... vn]
+    #    delta = torch.cat([delta_v1, delta_v2, ..., delta_vn], dim=-1)
+    # where delta_vi.shape = (batch_size, vi.dof)
+    def retract_vars_sequence(
         self,
         delta: torch.Tensor,
         ordering: Iterable[Manifold],

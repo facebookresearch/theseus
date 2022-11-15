@@ -16,3 +16,11 @@ import torch
 def test_exp_map(batch_size: int, dtype: torch.dtype):
     tangent_vector = torch.rand(batch_size, 3, dtype=dtype)
     check_lie_group_function(SO3Function, "exp_map", TEST_EPS, tangent_vector)
+
+
+@pytest.mark.parametrize("batch_size", [1, 20, 100])
+@pytest.mark.parametrize("dtype", [torch.float32, torch.float64])
+def test_compose(batch_size: int, dtype: torch.dtype):
+    g0 = SO3Function.exp_map.call(torch.rand(batch_size, 3, dtype=dtype))
+    g1 = SO3Function.exp_map.call(torch.rand(batch_size, 3, dtype=dtype))
+    check_lie_group_function(SO3Function, "compose", TEST_EPS, g0, g1)

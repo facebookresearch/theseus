@@ -55,21 +55,24 @@ class LieGroupFunction:
     class project(torch.autograd.Function):
         @staticmethod
         @abc.abstractmethod
-        def call(matrix: torch.Tensor) -> torch.Tensor:
+        def manifold():
             pass
 
-        @staticmethod
-        def forward(cls, ctx, matrix):
-            return cls.project.call(matrix)
+        @abc.abstractclassmethod
+        def call(cls, matrix: torch.Tensor) -> torch.Tensor:
+            pass
 
-        @staticmethod
-        @abc.abstractmethod
-        def backward(ctx, grad_output):
+        @abc.abstractclassmethod
+        def forward(cls, ctx, matrix):
+            return cls.call(matrix)
+
+        @abc.abstractclassmethod
+        def backward(cls, ctx, grad_output):
             pass
 
     class left_project(torch.autograd.Function):
         @staticmethod
-        @abc.abstractclassmethod
+        @abc.abstractmethod
         def manifold():
             pass
 
@@ -86,7 +89,7 @@ class LieGroupFunction:
 
     class right_project(torch.autograd.Function):
         @staticmethod
-        @abc.abstractclassmethod
+        @abc.abstractmethod
         def manifold():
             pass
 
@@ -104,158 +107,172 @@ class LieGroupFunction:
     class left_apply(torch.autograd.Function):
         @staticmethod
         @abc.abstractmethod
+        def manifold():
+            pass
+
+        @abc.abstractclassmethod
         def call(
+            cls,
             group: torch.Tensor,
             matrix: torch.Tensor,
             jacobians: Optional[List[torch.Tensor]] = None,
         ) -> torch.Tensor:
             pass
 
-        @staticmethod
-        @abc.abstractmethod
-        def forward(ctx, group, matrix, jacobians):
+        @abc.abstractclassmethod
+        def forward(cls, ctx, group, matrix, jacobians):
             pass
 
-        @staticmethod
-        @abc.abstractmethod
-        def backward(ctx, grad_output):
+        @abc.abstractclassmethod
+        def backward(cls, ctx, grad_output):
             pass
 
     class right_apply(torch.autograd.Function):
         @staticmethod
         @abc.abstractmethod
+        def manifold():
+            pass
+
+        @abc.abstractclassmethod
         def call(
+            cls,
             matrix: torch.Tensor,
             group: torch.Tensor,
             jacobians: Optional[List[torch.Tensor]] = None,
         ) -> torch.Tensor:
             pass
 
-        @staticmethod
-        @abc.abstractmethod
-        def forward(ctx, matrix, group, jacobians):
+        @abc.abstractclassmethod
+        def forward(cls, ctx, matrix, group, jacobians):
             pass
 
-        @staticmethod
-        @abc.abstractmethod
-        def backward(ctx, grad_output):
+        @abc.abstractclassmethod
+        def backward(cls, ctx, grad_output):
             pass
 
     class hat(torch.autograd.Function):
         @staticmethod
         @abc.abstractmethod
-        def call(tangent_vector: torch.Tensor) -> torch.Tensor:
+        def manifold():
             pass
 
-        @staticmethod
-        def forward(ctx, tangent_vector):
+        @abc.abstractclassmethod
+        def call(cls, tangent_vector: torch.Tensor) -> torch.Tensor:
+            pass
+
+        @abc.abstractclassmethod
+        def forward(cls, ctx, tangent_vector):
             return LieGroupFunction.call(tangent_vector)
 
-        @staticmethod
-        @abc.abstractmethod
-        def backward(ctx, grad_output):
+        @abc.abstractclassmethod
+        def backward(cls, ctx, grad_output):
             pass
 
     class vee(torch.autograd.Function):
         @staticmethod
         @abc.abstractmethod
-        def call(matrix: torch.Tensor) -> torch.Tensor:
+        def manifold():
             pass
 
-        @staticmethod
-        def forward(ctx, matrix):
+        @abc.abstractclassmethod
+        def call(cls, matrix: torch.Tensor) -> torch.Tensor:
+            pass
+
+        @abc.abstractclassmethod
+        def forward(cls, ctx, matrix):
             return LieGroupFunction.vee.call(matrix)
 
-        @staticmethod
-        @abc.abstractmethod
-        def backward(ctx, grad_output):
+        @abc.abstractclassmethod
+        def backward(cls, ctx, grad_output):
             pass
 
     class exp_map(torch.autograd.Function):
         @staticmethod
         @abc.abstractmethod
+        def manifold():
+            pass
+
+        @abc.abstractclassmethod
         def call(
+            cls,
             tangent_vector: torch.Tensor,
             jacobians: Optional[List[torch.Tensor]] = None,
         ) -> torch.Tensor:
             pass
 
-        @staticmethod
-        @abc.abstractmethod
-        def jacobian(tangent_vector: torch.Tensor) -> torch.Tensor:
+        @abc.abstractclassmethod
+        def jacobian(cls, tangent_vector: torch.Tensor) -> torch.Tensor:
             pass
 
-        @staticmethod
-        @abc.abstractmethod
-        def forward(
-            ctx,
-            tangent_vector,
-            jacobians=None,
-        ):
+        @abc.abstractclassmethod
+        def forward(cls, ctx, tangent_vector, jacobians=None):
             pass
 
-        @staticmethod
-        @abc.abstractmethod
-        def backward(ctx, grad_output):
+        @abc.abstractclassmethod
+        def backward(cls, ctx, grad_output):
             pass
 
     class adjoint(torch.autograd.Function):
         @staticmethod
         @abc.abstractmethod
-        def call(
-            g: torch.Tensor,
-        ) -> torch.Tensor:
+        def manifold():
             pass
 
-        @staticmethod
-        @abc.abstractmethod
-        def forward(ctx, g):
+        @abc.abstractclassmethod
+        def call(cls, g: torch.Tensor) -> torch.Tensor:
             pass
 
-        @staticmethod
-        @abc.abstractmethod
-        def backward(ctx, grad_output):
+        @abc.abstractclassmethod
+        def forward(cls, ctx, g):
+            pass
+
+        @abc.abstractclassmethod
+        def backward(cls, ctx, grad_output):
             pass
 
     class inverse(torch.autograd.Function):
         @staticmethod
         @abc.abstractmethod
+        def manifold():
+            pass
+
+        @abc.abstractclassmethod
         def call(
-            g: torch.Tensor, jacobians: Optional[List[torch.Tensor]] = None
+            cls, g: torch.Tensor, jacobians: Optional[List[torch.Tensor]] = None
         ) -> torch.Tensor:
             pass
 
-        @staticmethod
-        @abc.abstractmethod
-        def jacobian(g: torch.Tensor) -> torch.Tensor:
+        @abc.abstractclassmethod
+        def jacobian(cls, g: torch.Tensor) -> torch.Tensor:
             pass
 
-        @staticmethod
-        @abc.abstractmethod
-        def forward(ctx, g, jacobians=None):
+        @abc.abstractclassmethod
+        def forward(cls, ctx, g, jacobians=None):
             pass
 
-        @staticmethod
-        @abc.abstractmethod
-        def backward(ctx, grad_output):
+        @abc.abstractclassmethod
+        def backward(cls, ctx, grad_output):
             pass
 
     class compose(torch.autograd.Function):
         @staticmethod
         @abc.abstractmethod
+        def manifold():
+            pass
+
+        @abc.abstractclassmethod
         def call(
+            cls,
             g0: torch.Tensor,
             g1: torch.Tensor,
             jacobians: Optional[List[torch.Tensor]] = None,
         ) -> torch.Tensor:
             pass
 
-        @staticmethod
-        @abc.abstractmethod
-        def forward(ctx, g0, g1, jacobians=None):
+        @abc.abstractclassmethod
+        def forward(cls, ctx, g0, g1, jacobians=None):
             pass
 
-        @staticmethod
-        @abc.abstractmethod
-        def backward(ctx, grad_output):
+        @abc.abstractclassmethod
+        def backward(cls, ctx, grad_output):
             pass

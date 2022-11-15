@@ -26,6 +26,28 @@ class LieGroupFunction:
         pass
 
     @staticmethod
+    @abc.abstractmethod
+    def rand(
+        *size: int,
+        generator: Optional[torch.Generator] = None,
+        dtype: Optional[torch.dtype] = None,
+        device: torch.device = None,
+        requires_grad: bool = False,
+    ) -> torch.Tensor:
+        pass
+
+    @staticmethod
+    @abc.abstractmethod
+    def randn(
+        *size: int,
+        generator: Optional[torch.Generator] = None,
+        dtype: Optional[torch.dtype] = None,
+        device: torch.device = None,
+        requires_grad: bool = False,
+    ) -> torch.Tensor:
+        pass
+
+    @staticmethod
     class project(torch.autograd.Function):
         @staticmethod
         @abc.abstractmethod

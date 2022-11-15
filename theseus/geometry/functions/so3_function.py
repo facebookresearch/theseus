@@ -59,6 +59,38 @@ class SO3Function(LieGroupFunction):
             )
 
     @staticmethod
+    def rand(
+        *size: int,
+        generator: Optional[torch.Generator] = None,
+        dtype: Optional[torch.dtype] = None,
+        device: torch.device = None,
+        requires_grad: bool = False,
+    ) -> torch.Tensor:
+        raise NotImplementedError
+
+    @staticmethod
+    def randn(
+        *size: int,
+        generator: Optional[torch.Generator] = None,
+        dtype: Optional[torch.dtype] = None,
+        device: theseus.constants.DeviceType = None,
+        requires_grad: bool = False,
+    ) -> torch.Tensor:
+        if len(size) != 1:
+            raise ValueError("The size should be 1D.")
+        return SO3Function.exp_map.call(
+            theseus.constants.PI
+            * torch.randn(
+                size[0],
+                3,
+                generator=generator,
+                dtype=dtype,
+                device=device,
+                requires_grad=requires_grad,
+            )
+        )
+
+    @staticmethod
     class project(LieGroupFunction.project):
         @staticmethod
         def call(matrix) -> torch.Tensor:

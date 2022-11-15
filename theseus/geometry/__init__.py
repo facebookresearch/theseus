@@ -30,4 +30,4 @@ from .utils import (
 )
 from .vector import Vector, rand_vector, randn_vector
 
-from .functions import so3
+from .functions import SO3Function

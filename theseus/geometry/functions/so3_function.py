@@ -88,6 +88,28 @@ class SO3Function:
                 dim=1,
             )
 
+    class vee(torch.autograd.Function):
+        @staticmethod
+        def call(matrix: torch.Tensor) -> torch.Tensor:
+            SO3Function.check_hat_matrix(matrix)
+            return 0.5 * torch.stack(
+                (
+                    matrix[:, 2, 1] - matrix[:, 1, 2],
+                    matrix[:, 0, 2] - matrix[:, 2, 0],
+                    matrix[:, 1, 0] - matrix[:, 0, 1],
+                ),
+                dim=1,
+            )
+
+        @staticmethod
+        def forward(ctx, tangent_vector):
+            return SO3Function.vee.call(tangent_vector)
+
+        @staticmethod
+        def backward(ctx, grad_output):
+            grad_output: torch.Tensor = cast(torch.Tensor, grad_output)
+            return 0.5 * SO3Function.hat.call(grad_output)
+
     class exp_map(torch.autograd.Function):
         @staticmethod
         def call(
@@ -216,21 +238,26 @@ class SO3Function:
         ):
             tangent_vector: torch.Tensor = cast(torch.Tensor, tangent_vector)
             ret = SO3Function.exp_map.call(tangent_vector, jacobians)
-            ctx.save_for_backward(tangent_vector)
-
-            if jacobians is not None:
-                ctx.save_for_backward(jacobians[0])
+            ctx.save_for_backward(tangent_vector, ret)
+            ctx.jacobians = jacobians
 
             return ret
 
         @staticmethod
         def backward(ctx, grad_output):
-            saved_tensors = ctx.saved_tensors
+            if ctx.jacobians is None:
+                tangent_vector: torch.Tensor = ctx.saved_tensors[0]
+                ctx.jacobians = SO3Function.exp_map.jacobian(tangent_vector)
 
-            if len(saved_tensors) == 1:
-                tangent_vector: torch.Tensor = saved_tensors[0]
-                ctx.save_for_backward(SO3Function.exp_map(tangent_vector))
-
-            jacs = ctx.saved_tensors[1]
-
-            return jacs
+            R: torch.Tensor = ctx.saved_tensors[1]
+            jacs: torch.Tensor = ctx.jacobians
+            dR = R.transpose(1, 2) @ grad_output
+            grad = jacs.transpose(1, 2) @ torch.stack(
+                (
+                    dR[:, 2, 1] - dR[:, 1, 2],
+                    dR[:, 0, 2] - dR[:, 2, 0],
+                    dR[:, 1, 0] - dR[:, 0, 1],
+                ),
+                dim=1,
+            ).view(-1, 3, 1)
+            return grad.view(-1, 3)

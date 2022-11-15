@@ -12,6 +12,11 @@ import torch
 class LieGroupFunction:
     @staticmethod
     @abc.abstractmethod
+    def dim() -> int:
+        pass
+
+    @staticmethod
+    @abc.abstractmethod
     def check_group_tensor(tensor: torch.Tensor) -> bool:
         pass
 

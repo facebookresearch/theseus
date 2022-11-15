@@ -17,6 +17,10 @@ import torch
 
 class SO3Function(LieGroupFunction):
     @staticmethod
+    def dim() -> int:
+        return 3
+
+    @staticmethod
     def check_group_tensor(tensor: torch.Tensor) -> bool:
         with torch.no_grad():
             if tensor.ndim != 3 or tensor.shape[1:] != (3, 3):

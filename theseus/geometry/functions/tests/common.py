@@ -4,11 +4,10 @@
 # LICENSE file in the root directory of this source tree.
 
 from theseus.geometry import LieGroupFunction
-
 import torch
 
 
-def test_lie_group_function(func: LieGroupFunction, method: str, atol: float, *args):
+def check_lie_group_function(func: LieGroupFunction, method: str, atol: float, *args):
     def func_call(*args):
         return getattr(func, method).call(*args)
 

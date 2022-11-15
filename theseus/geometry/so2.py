@@ -260,7 +260,7 @@ class SO2(LieGroup):
         else:
             point_tensor = point.tensor
         px, py = point_tensor[:, 0], point_tensor[:, 1]
-        new_point_tensor = point_tensor.new_empty(batch_size, 2)
+        new_point_tensor = cosine.new_empty(batch_size, 2)
         new_point_tensor[:, 0] = cosine * px - sine * py
         new_point_tensor[:, 1] = sine * px + cosine * py
         return Point2(tensor=new_point_tensor)

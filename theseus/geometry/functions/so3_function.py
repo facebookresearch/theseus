@@ -115,12 +115,12 @@ class SO3Function(LieGroupFunction):
 
     class left_project(LieGroupFunction.left_project):
         @staticmethod
-        def manifold() -> type:
+        def manifold():
             return SO3Function
 
     class left_apply(LieGroupFunction.left_apply):
         @staticmethod
-        def manifold() -> type:
+        def manifold():
             return SO3Function
 
         @classmethod
@@ -162,7 +162,7 @@ class SO3Function(LieGroupFunction):
 
     class hat(LieGroupFunction.hat):
         @staticmethod
-        def manifold() -> type:
+        def manifold():
             return SO3Function
 
         @classmethod
@@ -220,7 +220,7 @@ class SO3Function(LieGroupFunction):
 
     class exp_map(LieGroupFunction.exp_map):
         @staticmethod
-        def manifold() -> type:
+        def manifold():
             return SO3Function
 
         @classmethod
@@ -377,7 +377,7 @@ class SO3Function(LieGroupFunction):
 
     class adjoint(LieGroupFunction.adjoint):
         @staticmethod
-        def manifold() -> type:
+        def manifold():
             return SO3Function
 
         @classmethod
@@ -400,7 +400,7 @@ class SO3Function(LieGroupFunction):
 
     class inverse(LieGroupFunction.inverse):
         @staticmethod
-        def manifold() -> type:
+        def manifold():
             return SO3Function
 
         @classmethod
@@ -431,7 +431,7 @@ class SO3Function(LieGroupFunction):
 
     class compose(LieGroupFunction.compose):
         @staticmethod
-        def manifold() -> type:
+        def manifold():
             return SO3Function
 
         @classmethod

@@ -58,15 +58,18 @@ class LieGroupFunction:
         def manifold():
             pass
 
-        @abc.abstractclassmethod
+        @classmethod
+        @abc.abstractmethod
         def call(cls, matrix: torch.Tensor) -> torch.Tensor:
             pass
 
-        @abc.abstractclassmethod
+        @classmethod
+        @abc.abstractmethod
         def forward(cls, ctx, matrix):
             return cls.call(matrix)
 
-        @abc.abstractclassmethod
+        @classmethod
+        @abc.abstractmethod
         def backward(cls, ctx, grad_output):
             pass
 
@@ -110,7 +113,8 @@ class LieGroupFunction:
         def manifold():
             pass
 
-        @abc.abstractclassmethod
+        @classmethod
+        @abc.abstractmethod
         def call(
             cls,
             group: torch.Tensor,
@@ -119,11 +123,13 @@ class LieGroupFunction:
         ) -> torch.Tensor:
             pass
 
-        @abc.abstractclassmethod
+        @classmethod
+        @abc.abstractmethod
         def forward(cls, ctx, group, matrix, jacobians):
             pass
 
-        @abc.abstractclassmethod
+        @classmethod
+        @abc.abstractmethod
         def backward(cls, ctx, grad_output):
             pass
 
@@ -133,7 +139,8 @@ class LieGroupFunction:
         def manifold():
             pass
 
-        @abc.abstractclassmethod
+        @classmethod
+        @abc.abstractmethod
         def call(
             cls,
             matrix: torch.Tensor,
@@ -142,11 +149,13 @@ class LieGroupFunction:
         ) -> torch.Tensor:
             pass
 
-        @abc.abstractclassmethod
+        @classmethod
+        @abc.abstractmethod
         def forward(cls, ctx, matrix, group, jacobians):
             pass
 
-        @abc.abstractclassmethod
+        @classmethod
+        @abc.abstractmethod
         def backward(cls, ctx, grad_output):
             pass
 
@@ -156,15 +165,18 @@ class LieGroupFunction:
         def manifold():
             pass
 
-        @abc.abstractclassmethod
+        @classmethod
+        @abc.abstractmethod
         def call(cls, tangent_vector: torch.Tensor) -> torch.Tensor:
             pass
 
-        @abc.abstractclassmethod
+        @classmethod
+        @abc.abstractmethod
         def forward(cls, ctx, tangent_vector):
             return LieGroupFunction.call(tangent_vector)
 
-        @abc.abstractclassmethod
+        @classmethod
+        @abc.abstractmethod
         def backward(cls, ctx, grad_output):
             pass
 
@@ -174,15 +186,18 @@ class LieGroupFunction:
         def manifold():
             pass
 
-        @abc.abstractclassmethod
+        @classmethod
+        @abc.abstractmethod
         def call(cls, matrix: torch.Tensor) -> torch.Tensor:
             pass
 
-        @abc.abstractclassmethod
+        @classmethod
+        @abc.abstractmethod
         def forward(cls, ctx, matrix):
             return LieGroupFunction.vee.call(matrix)
 
-        @abc.abstractclassmethod
+        @classmethod
+        @abc.abstractmethod
         def backward(cls, ctx, grad_output):
             pass
 
@@ -192,7 +207,8 @@ class LieGroupFunction:
         def manifold():
             pass
 
-        @abc.abstractclassmethod
+        @classmethod
+        @abc.abstractmethod
         def call(
             cls,
             tangent_vector: torch.Tensor,
@@ -200,15 +216,18 @@ class LieGroupFunction:
         ) -> torch.Tensor:
             pass
 
-        @abc.abstractclassmethod
+        @classmethod
+        @abc.abstractmethod
         def jacobian(cls, tangent_vector: torch.Tensor) -> torch.Tensor:
             pass
 
-        @abc.abstractclassmethod
+        @classmethod
+        @abc.abstractmethod
         def forward(cls, ctx, tangent_vector, jacobians=None):
             pass
 
-        @abc.abstractclassmethod
+        @classmethod
+        @abc.abstractmethod
         def backward(cls, ctx, grad_output):
             pass
 
@@ -218,15 +237,18 @@ class LieGroupFunction:
         def manifold():
             pass
 
-        @abc.abstractclassmethod
+        @classmethod
+        @abc.abstractmethod
         def call(cls, g: torch.Tensor) -> torch.Tensor:
             pass
 
-        @abc.abstractclassmethod
+        @classmethod
+        @abc.abstractmethod
         def forward(cls, ctx, g):
             pass
 
-        @abc.abstractclassmethod
+        @classmethod
+        @abc.abstractmethod
         def backward(cls, ctx, grad_output):
             pass
 
@@ -236,21 +258,25 @@ class LieGroupFunction:
         def manifold():
             pass
 
-        @abc.abstractclassmethod
+        @classmethod
+        @abc.abstractmethod
         def call(
             cls, g: torch.Tensor, jacobians: Optional[List[torch.Tensor]] = None
         ) -> torch.Tensor:
             pass
 
-        @abc.abstractclassmethod
+        @classmethod
+        @abc.abstractmethod
         def jacobian(cls, g: torch.Tensor) -> torch.Tensor:
             pass
 
-        @abc.abstractclassmethod
+        @classmethod
+        @abc.abstractmethod
         def forward(cls, ctx, g, jacobians=None):
             pass
 
-        @abc.abstractclassmethod
+        @classmethod
+        @abc.abstractmethod
         def backward(cls, ctx, grad_output):
             pass
 
@@ -260,7 +286,8 @@ class LieGroupFunction:
         def manifold():
             pass
 
-        @abc.abstractclassmethod
+        @classmethod
+        @abc.abstractmethod
         def call(
             cls,
             g0: torch.Tensor,
@@ -269,10 +296,12 @@ class LieGroupFunction:
         ) -> torch.Tensor:
             pass
 
-        @abc.abstractclassmethod
+        @classmethod
+        @abc.abstractmethod
         def forward(cls, ctx, g0, g1, jacobians=None):
             pass
 
-        @abc.abstractclassmethod
+        @classmethod
+        @abc.abstractmethod
         def backward(cls, ctx, grad_output):
             pass

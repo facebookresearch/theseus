@@ -96,7 +96,7 @@ class SO3Function(LieGroupFunction):
 
     class project(LieGroupFunction.project):
         @classmethod
-        def call(cls, matrix) -> torch.Tensor:
+        def call(cls, matrix: torch.Tensor) -> torch.Tensor:
             if matrix.shape[-2:] != (3, 3):
                 raise ValueError("Inconsistent shape for matrix.")
 

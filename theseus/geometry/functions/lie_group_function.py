@@ -52,7 +52,6 @@ class LieGroupFunction:
     ) -> torch.Tensor:
         pass
 
-    @staticmethod
     class project(torch.autograd.Function):
         @staticmethod
         @abc.abstractmethod
@@ -60,41 +59,47 @@ class LieGroupFunction:
             pass
 
         @staticmethod
-        def forward(ctx, matrix):
-            return LieGroupFunction.project(matrix)
+        def forward(cls, ctx, matrix):
+            return cls.project.call(matrix)
 
         @staticmethod
         @abc.abstractmethod
         def backward(ctx, grad_output):
             pass
 
-    @staticmethod
     class left_project(torch.autograd.Function):
         @staticmethod
-        def call(group: torch.Tensor, matrix: torch.Tensor) -> torch.Tensor:
-            return LieGroupFunction.project.call(
-                LieGroupFunction.left_apply.call(
-                    LieGroupFunction.inverse.call(group), matrix
-                )
+        @abc.abstractclassmethod
+        def manifold():
+            pass
+
+        @classmethod
+        def call(cls, group: torch.Tensor, matrix: torch.Tensor) -> torch.Tensor:
+            manifold = cls.manifold()
+            return manifold.project.call(
+                manifold.left_apply.call(manifold.inverse.call(group), matrix)
             )
 
-        @staticmethod
-        def forward(ctx, group, matrix):
-            return LieGroupFunction.left_project.call(group, matrix)
+        @classmethod
+        def forward(cls, ctx, group, matrix):
+            return cls.call(group, matrix)
 
-    @staticmethod
     class right_project(torch.autograd.Function):
         @staticmethod
-        def call(matrix: torch.Tensor, group: torch.Tensor) -> torch.Tensor:
-            return LieGroupFunction.project.call(
-                LieGroupFunction.right_apply.call(
-                    matrix, LieGroupFunction.inverse.call(group)
-                )
+        @abc.abstractclassmethod
+        def manifold():
+            pass
+
+        @classmethod
+        def call(cls, matrix: torch.Tensor, group: torch.Tensor) -> torch.Tensor:
+            manifold = cls.manifold()
+            return manifold.project.call(
+                manifold.right_apply.call(matrix, manifold.inverse.call(group))
             )
 
         @staticmethod
-        def forward(ctx, group, matrix):
-            return LieGroupFunction.left_project.call(group, matrix)
+        def forward(cls, ctx, group, matrix):
+            return cls.call(group, matrix)
 
     class left_apply(torch.autograd.Function):
         @staticmethod

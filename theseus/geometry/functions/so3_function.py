@@ -94,7 +94,6 @@ class SO3Function(LieGroupFunction):
             )
         )
 
-    @staticmethod
     class project(LieGroupFunction.project):
         @staticmethod
         def call(matrix) -> torch.Tensor:
@@ -113,6 +112,11 @@ class SO3Function(LieGroupFunction):
         @staticmethod
         def backward(ctx, grad_output):
             return SO3Function.hat.call(grad_output)
+
+    class left_project(LieGroupFunction.left_project):
+        @staticmethod
+        def manifold() -> type:
+            return SO3Function
 
     class left_apply(LieGroupFunction.left_apply):
         @staticmethod

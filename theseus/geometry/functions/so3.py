@@ -6,7 +6,7 @@
 import warnings
 from theseus.geometry.lie_group_check import _LieGroupCheckContext
 
-from typing import List, cast
+from typing import List, Optional, cast
 
 import torch
 
@@ -57,8 +57,7 @@ def check_hat_matrix(matrix: torch.Tensor):
 
 class hat(torch.autograd.Function):
     @staticmethod
-    def forward(ctx, tangent_vector):
-        tangent_vector: torch.Tensor = cast(torch.Tensor, tangent_vector)
+    def call(tangent_vector: torch.Tensor) -> torch.Tensor:
         if not check_tangent_vector(tangent_vector):
             raise ValueError("Tangent vectors of SO3 should be 3-D vectors.")
         matrix = tangent_vector.new_zeros(tangent_vector.shape[0], 3, 3)
@@ -71,6 +70,10 @@ class hat(torch.autograd.Function):
         matrix[:, 2, 1] = tangent_vector[:, 0].view(-1)
 
         return matrix
+
+    @staticmethod
+    def forward(ctx, tangent_vector):
+        return hat.call(tangent_vector)
 
     @staticmethod
     def backward(ctx, grad_output):
@@ -86,6 +89,76 @@ class hat(torch.autograd.Function):
 
 
 class exp_map(torch.autograd.Function):
+    @staticmethod
+    def call(
+        tangent_vector: torch.Tensor,
+        jacobians: Optional[List[torch.Tensor]] = None,
+    ):
+        if not check_tangent_vector(tangent_vector):
+            raise ValueError("Tangent vectors of SO3 should be 3-D vectors.")
+        tangent_vector = tangent_vector.view(-1, 3)
+        ret = tangent_vector.new_zeros(tangent_vector.shape[0], 3, 3)
+        theta = torch.linalg.norm(tangent_vector, dim=1, keepdim=True).unsqueeze(1)
+        theta2 = theta**2
+        # Compute the approximations when theta ~ 0
+        near_zero = theta < theseus.constants._SO3_NEAR_ZERO_EPS[tangent_vector.dtype]
+        non_zero = torch.ones(
+            1, dtype=tangent_vector.dtype, device=tangent_vector.device
+        )
+        theta_nz = torch.where(near_zero, non_zero, theta)
+        theta2_nz = torch.where(near_zero, non_zero, theta2)
+
+        cosine = torch.where(near_zero, 8 / (4 + theta2) - 1, theta.cos())
+        sine = theta.sin()
+        sine_by_theta = torch.where(near_zero, 0.5 * cosine + 0.5, sine / theta_nz)
+        one_minus_cosie_by_theta2 = torch.where(
+            near_zero, 0.5 * sine_by_theta, (1 - cosine) / theta2_nz
+        )
+        ret = (
+            one_minus_cosie_by_theta2
+            * tangent_vector.view(-1, 3, 1)
+            @ tangent_vector.view(-1, 1, 3)
+        )
+
+        ret[:, 0, 0] += cosine.view(-1)
+        ret[:, 1, 1] += cosine.view(-1)
+        ret[:, 2, 2] += cosine.view(-1)
+        sine_axis = sine_by_theta.view(-1, 1) * tangent_vector
+        ret[:, 0, 1] -= sine_axis[:, 2]
+        ret[:, 1, 0] += sine_axis[:, 2]
+        ret[:, 0, 2] += sine_axis[:, 1]
+        ret[:, 2, 0] -= sine_axis[:, 1]
+        ret[:, 1, 2] -= sine_axis[:, 0]
+        ret[:, 2, 1] += sine_axis[:, 0]
+
+        if jacobians is not None:
+            if len(jacobians) != 0:
+                raise ValueError("jacobians list to be populated must be empty.")
+            theta3_nz = theta_nz * theta2_nz
+            theta_minus_sine_by_theta3 = torch.where(
+                near_zero, torch.zeros_like(theta), (theta - sine) / theta3_nz
+            )
+            jac = (
+                theta_minus_sine_by_theta3
+                * tangent_vector.view(-1, 3, 1)
+                @ tangent_vector.view(-1, 1, 3)
+            )
+            diag_jac = jac.diagonal(dim1=1, dim2=2)
+            diag_jac += sine_by_theta.view(-1, 1)
+
+            jac_temp = one_minus_cosie_by_theta2.view(-1, 1) * tangent_vector
+
+            jac[:, 0, 1] += jac_temp[:, 2]
+            jac[:, 1, 0] -= jac_temp[:, 2]
+            jac[:, 0, 2] -= jac_temp[:, 1]
+            jac[:, 2, 0] += jac_temp[:, 1]
+            jac[:, 1, 2] += jac_temp[:, 0]
+            jac[:, 2, 1] -= jac_temp[:, 0]
+
+            jacobians.append(jac)
+
+        return ret
+
     @staticmethod
     def jacobian(tangent_vector: torch.Tensor) -> torch.Tensor:
         if not check_tangent_vector(tangent_vector):
@@ -138,72 +211,11 @@ class exp_map(torch.autograd.Function):
         jacobians=None,
     ):
         tangent_vector: torch.Tensor = cast(torch.Tensor, tangent_vector)
-        if not check_tangent_vector(tangent_vector):
-            raise ValueError("Tangent vectors of SO3 should be 3-D vectors.")
-        tangent_vector = tangent_vector.view(-1, 3)
-        ret = tangent_vector.new_zeros(tangent_vector.shape[0], 3, 3)
-        theta = torch.linalg.norm(tangent_vector, dim=1, keepdim=True).unsqueeze(1)
-        theta2 = theta**2
-        # Compute the approximations when theta ~ 0
-        near_zero = theta < theseus.constants._SO3_NEAR_ZERO_EPS[tangent_vector.dtype]
-        non_zero = torch.ones(
-            1, dtype=tangent_vector.dtype, device=tangent_vector.device
-        )
-        theta_nz = torch.where(near_zero, non_zero, theta)
-        theta2_nz = torch.where(near_zero, non_zero, theta2)
-
-        cosine = torch.where(near_zero, 8 / (4 + theta2) - 1, theta.cos())
-        sine = theta.sin()
-        sine_by_theta = torch.where(near_zero, 0.5 * cosine + 0.5, sine / theta_nz)
-        one_minus_cosie_by_theta2 = torch.where(
-            near_zero, 0.5 * sine_by_theta, (1 - cosine) / theta2_nz
-        )
-        ret = (
-            one_minus_cosie_by_theta2
-            * tangent_vector.view(-1, 3, 1)
-            @ tangent_vector.view(-1, 1, 3)
-        )
-
-        ret[:, 0, 0] += cosine.view(-1)
-        ret[:, 1, 1] += cosine.view(-1)
-        ret[:, 2, 2] += cosine.view(-1)
-        sine_axis = sine_by_theta.view(-1, 1) * tangent_vector
-        ret[:, 0, 1] -= sine_axis[:, 2]
-        ret[:, 1, 0] += sine_axis[:, 2]
-        ret[:, 0, 2] += sine_axis[:, 1]
-        ret[:, 2, 0] -= sine_axis[:, 1]
-        ret[:, 1, 2] -= sine_axis[:, 0]
-        ret[:, 2, 1] += sine_axis[:, 0]
-
+        ret = exp_map.call(tangent_vector, jacobians)
         ctx.save_for_backward(tangent_vector)
 
         if jacobians is not None:
-            if len(jacobians) != 0 or not isinstance(List[torch.Tensor]):
-                raise ValueError("jacobians list to be populated must be empty.")
-            theta3_nz = theta_nz * theta2_nz
-            theta_minus_sine_by_theta3 = torch.where(
-                near_zero, torch.zeros_like(theta), (theta - sine) / theta3_nz
-            )
-            jac = (
-                theta_minus_sine_by_theta3
-                * tangent_vector.view(-1, 3, 1)
-                @ tangent_vector.view(-1, 1, 3)
-            )
-            diag_jac = jac.diagonal(dim1=1, dim2=2)
-            diag_jac += sine_by_theta.view(-1, 1)
-
-            jac_temp = one_minus_cosie_by_theta2.view(-1, 1) * tangent_vector
-
-            jac[:, 0, 1] += jac_temp[:, 2]
-            jac[:, 1, 0] -= jac_temp[:, 2]
-            jac[:, 0, 2] -= jac_temp[:, 1]
-            jac[:, 2, 0] += jac_temp[:, 1]
-            jac[:, 1, 2] += jac_temp[:, 0]
-            jac[:, 2, 1] -= jac_temp[:, 0]
-
-            jacobians.append(jac)
-
-            ctx.save_for_backward(jac)
+            ctx.save_for_backward(jacobians[0])
 
         return ret
 

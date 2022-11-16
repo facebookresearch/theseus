@@ -74,6 +74,10 @@ class Objective:
         # them whenever called if no other updates have been done
         self._vectorization_run: Optional[Callable] = None
 
+        # If vectorization is on, this gets replaced by a vectorized version
+        # This method doesn't update the cache used by `self._get_jacobians_iter()`
+        self._get_error_iter = self._get_error_iter_base
+
         # If vectorization is on, this will also handle vectorized containers
         self._vectorization_to: Optional[Callable] = None
 
@@ -394,7 +398,7 @@ class Objective:
             self.update(input_tensors=input_tensors)
 
         error_vector = torch.cat(
-            [cf.weighted_error() for cf in self._get_iterator()], dim=1
+            [cf.weighted_error() for cf in self._get_error_iter()], dim=1
         )
 
         if input_tensors is not None and not also_update:
@@ -534,6 +538,9 @@ class Objective:
     def __iter__(self):
         return iter([cf for cf in self.cost_functions.values()])
 
+    def _get_error_iter_base(self) -> Iterable:
+        return iter(cf for cf in self.cost_functions.values())
+
     def _get_jacobians_iter(self) -> Iterable:
         self.update_vectorization_if_needed()
         if self._cost_functions_iterable is None:
@@ -588,6 +595,7 @@ class Objective:
         vectorization_run_fn: Callable,
         vectorized_to: Callable,
         vectorized_retract_fn: Callable,
+        error_iter_fn: Callable[[], Iterable[CostFunction]],
         enabler: Any,
     ):
         # Hacky way to make Vectorize a "friend" class
@@ -599,6 +607,7 @@ class Objective:
         self._vectorization_run = vectorization_run_fn
         self._vectorization_to = vectorized_to
         self._retract_method = vectorized_retract_fn
+        self._get_error_iter = error_iter_fn
         self._vectorized = True
 
     # Making public, since this should be a safe operation

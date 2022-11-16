@@ -4,8 +4,8 @@
 # LICENSE file in the root directory of this source tree.
 
 import math
+from unittest import mock
 
-import mock
 import pytest  # noqa: F401
 import torch
 import torch.nn as nn

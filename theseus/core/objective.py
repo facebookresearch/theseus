@@ -72,7 +72,7 @@ class Objective:
         # computes these quantities on demand.
         # But when vectorization is on, it returns separate cost function
         # containers that serve cached jacobians and errors that have been
-        # previously by the vectorization computed.
+        # previously computed by the vectorization.
         self._jacobians_iter: Optional[Iterable[CostFunction]] = None
 
         # Used to vectorize cost functions error + jacobians after an update

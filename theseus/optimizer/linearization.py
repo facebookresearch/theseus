@@ -6,6 +6,8 @@
 import abc
 from typing import List, Optional
 
+import torch
+
 from theseus.core import Objective
 
 from .variable_ordering import VariableOrdering
@@ -17,7 +19,7 @@ class Linearization(abc.ABC):
         self,
         objective: Objective,
         ordering: Optional[VariableOrdering] = None,
-        **kwargs
+        **kwargs,
     ):
         self.objective = objective
         if ordering is None:
@@ -54,4 +56,22 @@ class Linearization(abc.ABC):
         self._linearize_hessian_impl()
 
     def hessian_approx(self):
-        raise NotImplementedError
+        raise NotImplementedError(
+            f"hessian_approx is not implemented for {self.__class__.__name__}"
+        )
+
+    @abc.abstractmethod
+    def _ata_impl(self) -> torch.Tensor:
+        pass
+
+    @abc.abstractmethod
+    def _atb_impl(self) -> torch.Tensor:
+        pass
+
+    @property
+    def AtA(self) -> torch.Tensor:
+        return self._ata_impl()
+
+    @property
+    def Atb(self) -> torch.Tensor:
+        return self._atb_impl()

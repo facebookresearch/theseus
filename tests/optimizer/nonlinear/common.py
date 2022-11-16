@@ -223,10 +223,16 @@ def _check_optimizer_returns_fail_status_on_singular(
             pass
 
         def _linearize_hessian_impl(self):
-            self.AtA = torch.zeros(
+            self._AtA = torch.zeros(
                 self.objective.batch_size, self.num_rows, self.num_cols
             )
-            self.Atb = torch.ones(self.objective.batch_size, self.num_cols)
+            self._Atb = torch.ones(self.objective.batch_size, self.num_cols)
+
+        def _ata_impl(self) -> torch.Tensor:
+            return self._AtA
+
+        def _atb_impl(self) -> torch.Tensor:
+            return self._Atb
 
     class MockCostFunction(th.CostFunction):
         def __init__(self, optim_vars, cost_weight):

@@ -197,7 +197,7 @@ def test_vectorized_error():
         vectorization = th.Vectorize(objective)
         objective.update_vectorization_if_needed()
 
-        assert objective._cost_functions_iterable is vectorization._cost_fn_wrappers
+        assert objective._jacobians_iter is vectorization._cost_fn_wrappers
         _check_vectorized_wrappers(vectorization, objective)
 
         squared_error = torch.cat(

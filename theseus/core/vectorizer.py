@@ -34,9 +34,15 @@ def _get_cost_function_schema(cost_function: CostFunction) -> _CostFunctionSchem
     )
 
 
+# Identifies what quantities vectorizaton computes for all cost functions
 class _VectorizationMode(Enum):
+    # Only computes cf.error()
     ERROR = 0
+    # Only computes cf.weighted_error()
     WEIGHTED_ERROR = 1
+    # Computes cf.weighted_jacobians_error()
+    # For this mode the results are stored in a persistent cache.
+    # For the other two modes, the results are stored in a temporary one.
     FULL = 2
 
 

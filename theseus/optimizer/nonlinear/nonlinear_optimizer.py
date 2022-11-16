@@ -8,7 +8,7 @@ import math
 import warnings
 from dataclasses import dataclass
 from enum import Enum
-from typing import Any, Callable, Dict, NoReturn, Optional, Tuple, Type, Union
+from typing import Any, Callable, Dict, NoReturn, Optional, Type, Union
 
 import numpy as np
 import torch
@@ -333,15 +333,20 @@ class NonlinearOptimizer(Optimizer, abc.ABC):
             with torch.no_grad():
                 if steps_tensor is None:
                     steps_tensor = torch.ones_like(delta) * self.params.step_size
-            # err is shape (batch_size,)
-            err = self.step(delta, steps_tensor, converged_indices, force_update)
+
+            # For now, step size is combined with delta. If we add more sophisticated
+            # line search, will probably need to pass it separately, or compute inside.
+            err = self.step(
+                delta * steps_tensor,
+                info.last_err,
+                converged_indices,
+                force_update,
+                **kwargs,
+            )  # err is shape (batch_size,)
 
             # check for convergence
             with torch.no_grad():
                 self._update_info(info, it_, err, converged_indices)
-                self.update_optimizer_state(
-                    last_err=info.last_err, new_err=err, delta=delta, **kwargs
-                )
                 if verbose:
                     print(
                         f"Nonlinear optimizer. Iteration: {it_+1}. "
@@ -461,20 +466,6 @@ class NonlinearOptimizer(Optimizer, abc.ABC):
     def compute_delta(self, **kwargs) -> torch.Tensor:
         pass
 
-    # Implements step for each individual optimizer subclass.
-    # Returns a dictionary of variable names to torch tensors,
-    # and tensor with the error after the update. The tensor
-    # must be detached from the compute graph.
-    @abc.abstractmethod
-    def _step_impl(
-        self,
-        delta: torch.Tensor,
-        steps: torch.Tensor,
-        converged_indices: torch.Tensor,
-        force_update: bool,
-    ) -> Tuple[Dict[str, torch.Tensor], torch.Tensor]:
-        pass
-
     # Given descent directions and step sizes, updates the optimization
     # variables.
     # Batch indices indicated by `converged_indices` mask are ignored
@@ -483,18 +474,28 @@ class NonlinearOptimizer(Optimizer, abc.ABC):
     def step(
         self,
         delta: torch.Tensor,
-        steps: torch.Tensor,
+        previous_err: torch.Tensor,
         converged_indices: torch.Tensor,
         force_update: bool,
+        **kwargs,
     ) -> torch.Tensor:
         # makes sure tmp cotainers are up to date with current variables
         self._update_tmp_optim_vars()
-        tensor_map, error = self._step_impl(
-            delta, steps, converged_indices, force_update
+        # stores the result of the retract step in `self._tmp_optim_vars`
+        self.objective.retract_vars_sequence(
+            delta,
+            self._tmp_optim_vars,
+            ignore_mask=converged_indices,
+            force_update=force_update,
         )
-        assert error.grad_fn is None
-        self.objective.update(tensor_map)
-        return error
+        tensor_map = {v.name: v.tensor for v in self._tmp_optim_vars}
+        with torch.no_grad():
+            err = self.objective.error_squared_norm(tensor_map, also_update=False)
+
+        reject_indices = self._complete_step(delta, err, previous_err, **kwargs)
+        self.objective.update(tensor_map, batch_ignore_mask=reject_indices)
+
+        return err
 
     # Resets any internal state needed by the optimizer for a new optimization
     # problem. Optimizer loop will pass all optimizer kwargs to this method.
@@ -502,24 +503,18 @@ class NonlinearOptimizer(Optimizer, abc.ABC):
     def reset(self, **kwargs) -> None:
         pass
 
-    # Called at the end of every optimizer step to update any internal state
-    # of the optimizer
-    @torch.no_grad()
-    def update_optimizer_state(
+    # Called at the end of step() but before variables are update to their new values.
+    # This method can be used to update any internal state of the optimizer and
+    # also obtain an optional tensor of shape (batch_size,), representing
+    # a mask of booleans indicating if the step is to be rejected for any
+    # batch elements.
+    #
+    # Deliberately not abstract, since some optimizers might not need this.
+    def _complete_step(
         self,
-        last_err: torch.Tensor,
-        new_err: torch.Tensor,
         delta: torch.Tensor,
-        **kwargs,
-    ) -> None:
-        self._update_state_impl(last_err, new_err, delta, **kwargs)
-
-    # Deliberately not abstract, since some optimizers might not need this
-    def _update_state_impl(
-        self,
-        last_err: torch.Tensor,
         new_err: torch.Tensor,
-        delta: torch.Tensor,
+        previous_err: torch.Tensor,
         **kwargs,
-    ) -> None:
-        pass
+    ) -> Optional[torch.Tensor]:
+        return None

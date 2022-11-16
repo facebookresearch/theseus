@@ -3,7 +3,7 @@
 # This source code is licensed under the MIT license found in the
 # LICENSE file in the root directory of this source tree.
 
-from typing import Any, Dict, Optional, Tuple, Type
+from typing import Any, Dict, Optional, Type
 
 import torch
 
@@ -27,7 +27,7 @@ class GaussNewton(NonlinearLeastSquares):
         rel_err_tolerance: float = 1e-8,
         max_iterations: int = 20,
         step_size: float = 1.0,
-        **kwargs
+        **kwargs,
     ):
         super().__init__(
             objective,
@@ -40,26 +40,8 @@ class GaussNewton(NonlinearLeastSquares):
             rel_err_tolerance=rel_err_tolerance,
             max_iterations=max_iterations,
             step_size=step_size,
-            **kwargs
+            **kwargs,
         )
 
     def compute_delta(self, **kwargs) -> torch.Tensor:
         return self.linear_solver.solve()
-
-    def _step_impl(
-        self,
-        delta: torch.Tensor,
-        steps: torch.Tensor,
-        converged_indices: torch.Tensor,
-        force_update: bool,
-    ) -> Tuple[Dict[str, torch.Tensor], torch.Tensor]:
-        self.objective.retract_vars_sequence(
-            delta * steps,
-            self._tmp_optim_vars,
-            ignore_mask=converged_indices,
-            force_update=force_update,
-        )
-        tensor_map = {v.name: v.tensor for v in self._tmp_optim_vars}
-        with torch.no_grad():
-            error = self.objective.error_squared_norm(tensor_map, also_update=False)
-        return tensor_map, error

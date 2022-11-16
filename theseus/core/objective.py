@@ -503,7 +503,14 @@ class Objective:
         batch_sizes.extend([v.tensor.shape[0] for v in self.aux_vars.values()])
         self._batch_size = _get_batch_size(batch_sizes)
 
-    def update(self, input_tensors: Optional[Dict[str, torch.Tensor]] = None):
+    # batch_ignore_mask is a boolean list where batch_ignore_mask[i] = 1 means
+    # for any variable v, v[i] will *not* be updated. Shape must be equal to the
+    # batch size.
+    def update(
+        self,
+        input_tensors: Optional[Dict[str, torch.Tensor]] = None,
+        batch_ignore_mask: Optional[torch.Tensor] = None,
+    ):
 
         input_tensors = input_tensors or {}
         for var_name, tensor in input_tensors.items():
@@ -514,11 +521,17 @@ class Objective:
                     f"tensor with name {var_name}."
                 )
             if var_name in self.optim_vars:
-                self.optim_vars[var_name].update(tensor)
+                self.optim_vars[var_name].update(
+                    tensor, batch_ignore_mask=batch_ignore_mask
+                )
             elif var_name in self.aux_vars:
-                self.aux_vars[var_name].update(tensor)
+                self.aux_vars[var_name].update(
+                    tensor, batch_ignore_mask=batch_ignore_mask
+                )
             elif var_name in self.cost_weight_optim_vars:
-                self.cost_weight_optim_vars[var_name].update(tensor)
+                self.cost_weight_optim_vars[var_name].update(
+                    tensor, batch_ignore_mask=batch_ignore_mask
+                )
                 warnings.warn(
                     "Updated a variable declared as optimization, but it is "
                     "only associated to cost weights and not to any cost functions. "

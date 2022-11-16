@@ -69,7 +69,9 @@ class Objective:
         # This gets replaced when cost function vectorization is used
         self._cost_functions_iterable: Optional[Iterable[CostFunction]] = None
 
-        # Used to vectorize cost functions after update
+        # Used to vectorize cost functions error + jacobians after an update
+        # The results are cached so that the `self._get_jacobians_iter()` returns
+        # them whenever called if no other updates have been done
         self._vectorization_run: Optional[Callable] = None
 
         # If vectorization is on, this will also handle vectorized containers
@@ -532,11 +534,11 @@ class Objective:
     def __iter__(self):
         return iter([cf for cf in self.cost_functions.values()])
 
-    def _get_iterator(self):
+    def _get_jacobians_iter(self) -> Iterable:
         self.update_vectorization_if_needed()
         if self._cost_functions_iterable is None:
-            return iter([cf for cf in self.cost_functions.values()])
-        return iter([cf for cf in self._cost_functions_iterable])
+            return iter(cf for cf in self.cost_functions.values())
+        return iter(cf for cf in self._cost_functions_iterable)
 
     # Applies to() with given args to all tensors in the objective
     def to(self, *args, **kwargs):

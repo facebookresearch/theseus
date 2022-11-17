@@ -3,10 +3,13 @@
 # This source code is licensed under the MIT license found in the
 # LICENSE file in the root directory of this source tree.
 
+import warnings
 import torch
 import theseus
 
 from typing import Optional, List, cast
+
+from theseus.geometry.lie_group_check import _LieGroupCheckContext
 
 from .lie_group_function import (
     LieGroupAdjoint,
@@ -14,6 +17,7 @@ from .lie_group_function import (
     LieGroupExpMap,
     LieGroupHat,
     LieGroupInverse,
+    LieGroupVee,
 )
 from .utils import check_jacobians_list
 
@@ -42,6 +46,24 @@ def check_group_tensor(tensor: torch.Tensor) -> bool:
         _check &= (torch.linalg.det(tensor) - 1).abs().max().item() < MATRIX_EPS
 
     return _check
+
+
+def check_hat_matrix(matrix: torch.Tensor):
+    if matrix.ndim != 3 or matrix.shape[1:] != (3, 3):
+        raise ValueError("Hat matrices of SO(3) can only be 3x3 matrices")
+
+    checks_enabled, silent_unchecks = _LieGroupCheckContext.get_context()
+    if checks_enabled:
+        if (
+            matrix.transpose(1, 2) + matrix
+        ).abs().max().item() > theseus.constants._SO3_HAT_EPS[matrix.dtype]:
+            raise ValueError("Hat matrices of SO(3) can only be skew-symmetric.")
+    elif not silent_unchecks:
+        warnings.warn(
+            "Lie group checks are disabled, so the skew-symmetry of hat matrices is "
+            "not checked for SO3.",
+            RuntimeWarning,
+        )
 
 
 def check_tangent_vector(tangent_vector: torch.Tensor) -> bool:
@@ -308,8 +330,32 @@ class Inverse(LieGroupInverse):
         return grad_output.transpose(1, 2)
 
 
+class Vee(LieGroupVee):
+    @classmethod
+    def call(cls, matrix: torch.Tensor) -> torch.Tensor:
+        check_hat_matrix(matrix)
+        return 0.5 * torch.stack(
+            (
+                matrix[:, 2, 1] - matrix[:, 1, 2],
+                matrix[:, 0, 2] - matrix[:, 2, 0],
+                matrix[:, 1, 0] - matrix[:, 0, 1],
+            ),
+            dim=1,
+        )
+
+    @classmethod
+    def forward(cls, ctx, tangent_vector):
+        return cls.call(tangent_vector)
+
+    @classmethod
+    def backward(cls, ctx, grad_output):
+        grad_output: torch.Tensor = cast(torch.Tensor, grad_output)
+        return 0.5 * hat(grad_output)
+
+
 adjoint = Adjoint.apply
 compose = Compose.apply
 exp_map = ExpMap.apply
 hat = Hat.apply
 inverse = Inverse.apply
+vee = Vee.apply

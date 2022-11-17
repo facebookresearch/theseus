@@ -88,3 +88,15 @@ class LieGroupInverse(torch.autograd.Function):
     @abc.abstractmethod
     def forward(cls, ctx, tangent_vector, jacobians=None):
         pass
+
+
+class LieGroupVee(torch.autograd.Function):
+    @classmethod
+    @abc.abstractmethod
+    def call(cls, matrix: torch.Tensor) -> torch.Tensor:
+        pass
+
+    @classmethod
+    @abc.abstractmethod
+    def forward(cls, ctx, matrix):
+        return cls.call(matrix)

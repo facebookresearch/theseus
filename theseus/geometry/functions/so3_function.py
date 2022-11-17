@@ -277,3 +277,4 @@ class Inverse(LieGroupInverse):
 adjoint = Adjoint.apply
 exp_map = ExpMap.apply
 inverse = Inverse.apply
+compose = Compose.apply

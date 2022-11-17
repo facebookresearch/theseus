@@ -90,6 +90,18 @@ class LieGroupInverse(torch.autograd.Function):
         pass
 
 
+class LieGroupProject(torch.autograd.Function):
+    @classmethod
+    @abc.abstractmethod
+    def call(cls, matrix: torch.Tensor) -> torch.Tensor:
+        pass
+
+    @classmethod
+    @abc.abstractmethod
+    def forward(cls, ctx, matrix):
+        return cls.call(matrix)
+
+
 class LieGroupVee(torch.autograd.Function):
     @classmethod
     @abc.abstractmethod

@@ -17,6 +17,7 @@ from .lie_group_function import (
     LieGroupExpMap,
     LieGroupHat,
     LieGroupInverse,
+    LieGroupProject,
     LieGroupVee,
 )
 from .utils import check_jacobians_list
@@ -330,6 +331,35 @@ class Inverse(LieGroupInverse):
         return grad_output.transpose(1, 2)
 
 
+class Project(LieGroupProject):
+    @classmethod
+    def call(cls, matrix: torch.Tensor) -> torch.Tensor:
+        if matrix.shape[-2:] != (3, 3):
+            raise ValueError("Inconsistent shape for matrix.")
+
+        return torch.stack(
+            (
+                matrix[..., 2, 1] - matrix[..., 1, 2],
+                matrix[..., 0, 2] - matrix[..., 2, 0],
+                matrix[..., 1, 0] - matrix[..., 0, 1],
+            ),
+            dim=1,
+        )
+
+    @classmethod
+    def backward(cls, ctx, grad_output):
+        grad_output: torch.Tensor = cast(torch.Tensor, grad_output)
+        grad_output = grad_output.transpose(-1, -2)
+        grad_input = grad_output.new_zeros(grad_output.shape + (3,))
+        grad_input[..., 0, 1] = -grad_output[..., 2]
+        grad_input[..., 0, 2] = grad_output[..., 1]
+        grad_input[..., 1, 2] = -grad_output[..., 0]
+        grad_input[..., 1, 0] = grad_output[..., 2]
+        grad_input[..., 2, 0] = -grad_output[..., 1]
+        grad_input[..., 2, 1] = grad_output[..., 0]
+        return grad_input
+
+
 class Vee(LieGroupVee):
     @classmethod
     def call(cls, matrix: torch.Tensor) -> torch.Tensor:
@@ -358,4 +388,5 @@ compose = Compose.apply
 exp_map = ExpMap.apply
 hat = Hat.apply
 inverse = Inverse.apply
+project = Project.apply
 vee = Vee.apply

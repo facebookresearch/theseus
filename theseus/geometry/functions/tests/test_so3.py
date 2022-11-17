@@ -15,4 +15,4 @@ import torch
 @pytest.mark.parametrize("dtype", [torch.float32, torch.float64])
 def test_exp_map(batch_size: int, dtype: torch.dtype):
     tangent_vector = torch.rand(batch_size, 3, dtype=dtype)
-    check_lie_group_function(SO3Function, "SO3ExpMap", TEST_EPS, tangent_vector)
+    check_lie_group_function(SO3Function, "ExpMap", TEST_EPS, tangent_vector)

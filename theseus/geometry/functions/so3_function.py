@@ -8,7 +8,12 @@ import theseus
 
 from typing import Optional, List, cast
 
-from .lie_group_function import LieGroupExpMap, LieGroupAdjoint, LieGroupInverse
+from .lie_group_function import (
+    LieGroupAdjoint,
+    LieGroupCompose,
+    LieGroupExpMap,
+    LieGroupInverse,
+)
 from .utils import check_jacobians_list
 
 
@@ -62,6 +67,39 @@ class Adjoint(LieGroupAdjoint):
     @classmethod
     def backward(cls, ctx, grad_output):
         return grad_output
+
+
+class Compose(LieGroupCompose):
+    @classmethod
+    def call(
+        cls,
+        g0: torch.Tensor,
+        g1: torch.Tensor,
+        jacobians: Optional[List[torch.Tensor]] = None,
+    ) -> torch.Tensor:
+        if not check_group_tensor(g0) or not check_group_tensor(g1):
+            raise ValueError("Invalid data tensor for SO3.")
+        if jacobians is not None:
+            check_jacobians_list(jacobians)
+            jacobians.append(-inverse.jacobian(g1))
+            jacobians.append(g1.new_zeros(g0.shape[0], 3, 3))
+            jacobians[1][:, 0, 0] = 1
+            jacobians[2][:, 1, 1] = 1
+            jacobians[3][:, 2, 2] = 1
+        return g0 @ g1
+
+    @classmethod
+    def forward(cls, ctx, g0, g1, jacobians=None):
+        g0: torch.Tensor = cast(torch.Tensor, g0)
+        g1: torch.Tensor = cast(torch.Tensor, g1)
+        ctx.save_for_backward(g0, g1)
+        return cls.call(g0, g1, jacobians)
+
+    @classmethod
+    def backward(cls, ctx, grad_output):
+        g0 = ctx.saved_tensors[0]
+        g1 = ctx.saved_tensors[1]
+        return grad_output @ g1.transpose(1, 2), g0.transpose(1, 2) @ grad_output
 
 
 class ExpMap(LieGroupExpMap):

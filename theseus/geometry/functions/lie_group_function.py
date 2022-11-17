@@ -22,6 +22,28 @@ class LieGroupAdjoint(torch.autograd.Function):
         pass
 
 
+class LieGroupCompose(torch.autograd.Function):
+    @classmethod
+    @abc.abstractmethod
+    def call(
+        cls,
+        g0: torch.Tensor,
+        g1: torch.Tensor,
+        jacobians: Optional[List[torch.Tensor]] = None,
+    ) -> torch.Tensor:
+        pass
+
+    @classmethod
+    @abc.abstractmethod
+    def forward(cls, ctx, g0, g1, jacobians=None):
+        pass
+
+    @classmethod
+    @abc.abstractmethod
+    def backward(cls, ctx, grad_output):
+        pass
+
+
 class LieGroupExpMap(torch.autograd.Function):
     @classmethod
     @abc.abstractmethod

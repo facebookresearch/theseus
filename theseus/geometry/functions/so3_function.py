@@ -170,7 +170,12 @@ class ExpMap(LieGroupExpMap):
         tangent_vector: torch.Tensor = cast(torch.Tensor, tangent_vector)
         ret = cls.call(tangent_vector, jacobians)
         ctx.save_for_backward(tangent_vector, ret)
-        ctx.jacobians = jacobians
+        if jacobians is None:
+            ctx.jacobians = None
+            ctx.num_args = 1
+        else:
+            ctx.jacobians = jacobians[0].clone()
+            ctx.num_args = 2
 
         return ret
 
@@ -191,7 +196,7 @@ class ExpMap(LieGroupExpMap):
             ),
             dim=1,
         ).view(-1, 3, 1)
-        return grad.view(-1, 3)
+        return grad.view(-1, 3) if ctx.num_args == 1 else grad.view(-1, 3), None
 
 
 exp_map = ExpMap.apply

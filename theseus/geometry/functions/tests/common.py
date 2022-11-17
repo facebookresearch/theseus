@@ -11,7 +11,7 @@ def check_lie_group_function(func, method: str, atol: float, *args):
         return getattr(func, method).call(*args)
 
     def func_apply(*args):
-        return getattr(func, method).call(*args)
+        return getattr(func, method).apply(*args)
 
     grad_call = torch.autograd.functional.jacobian(func_call, args)
     grad_apply = torch.autograd.functional.jacobian(func_apply, args)

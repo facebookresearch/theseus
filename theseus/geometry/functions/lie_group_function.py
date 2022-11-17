@@ -7,6 +7,7 @@ import torch
 import abc
 
 from typing import Optional, List
+from .utils import get_module
 
 
 class LieGroupAdjoint(torch.autograd.Function):
@@ -49,7 +50,7 @@ class LieGroupInverse(torch.autograd.Function):
 
     @classmethod
     def jacobian(cls, group: torch.Tensor) -> torch.Tensor:
-        module = __import__(cls.__module__, fromlist=[""])
+        module = get_module(cls)
         if not module.check_group_tensor(group):
             raise ValueError(f"Invalid data tensor for {module.name()}")
         return -module.adjoint(group)

@@ -24,3 +24,11 @@ def test_adjoint(batch_size: int, dtype: torch.dtype):
     tangent_vector = torch.rand(batch_size, 3, dtype=dtype)
     group = SO3Function.exp_map(tangent_vector)
     check_lie_group_function(SO3Function, "Adjoint", TEST_EPS, group)
+
+
+@pytest.mark.parametrize("batch_size", [1, 20, 100])
+@pytest.mark.parametrize("dtype", [torch.float32, torch.float64])
+def test_inverse(batch_size: int, dtype: torch.dtype):
+    tangent_vector = torch.rand(batch_size, 3, dtype=dtype)
+    group = SO3Function.exp_map(tangent_vector)
+    check_lie_group_function(SO3Function, "Inverse", TEST_EPS, group)

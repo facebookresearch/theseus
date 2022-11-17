@@ -44,7 +44,7 @@ def check_tangent_vector(tangent_vector: torch.Tensor) -> bool:
     return _check
 
 
-class SO3ExpMap(LieGroupExpMap):
+class ExpMap(LieGroupExpMap):
     @classmethod
     def call(
         cls,
@@ -168,7 +168,7 @@ class SO3ExpMap(LieGroupExpMap):
         jacobians=None,
     ):
         tangent_vector: torch.Tensor = cast(torch.Tensor, tangent_vector)
-        ret = SO3ExpMap.call(tangent_vector, jacobians)
+        ret = ExpMap.call(tangent_vector, jacobians)
         ctx.save_for_backward(tangent_vector, ret)
         ctx.jacobians = jacobians
 
@@ -192,3 +192,6 @@ class SO3ExpMap(LieGroupExpMap):
             dim=1,
         ).view(-1, 3, 1)
         return grad.view(-1, 3)
+
+
+exp_map = ExpMap.apply

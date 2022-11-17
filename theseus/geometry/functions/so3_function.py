@@ -8,7 +8,7 @@ import theseus
 
 from typing import Optional, List, cast
 
-from .lie_group_function import LieGroupExpMap
+from .lie_group_function import LieGroupExpMap, LieGroupAdjoint
 from .utils import check_jacobians_list
 
 
@@ -42,6 +42,26 @@ def check_tangent_vector(tangent_vector: torch.Tensor) -> bool:
     _check = tangent_vector.ndim == 3 and tangent_vector.shape[1:] == (3, 1)
     _check |= tangent_vector.ndim == 2 and tangent_vector.shape[1] == 3
     return _check
+
+
+class Adjoint(LieGroupAdjoint):
+    @classmethod
+    def call(
+        cls,
+        g: torch.Tensor,
+    ) -> torch.Tensor:
+        if not check_group_tensor(g):
+            raise ValueError("Invalid data tensor for SO3.")
+        return g
+
+    @classmethod
+    def forward(cls, ctx, g):
+        g: torch.Tensor = cast(torch.Tensor, g)
+        return cls.call(g)
+
+    @classmethod
+    def backward(cls, ctx, grad_output):
+        return grad_output
 
 
 class ExpMap(LieGroupExpMap):
@@ -194,4 +214,5 @@ class ExpMap(LieGroupExpMap):
         return grad.view(-1, 3)
 
 
+adjoint = Adjoint.apply
 exp_map = ExpMap.apply

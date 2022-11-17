@@ -9,6 +9,18 @@ import abc
 from typing import Optional, List
 
 
+class LieGroupAdjoint(torch.autograd.Function):
+    @classmethod
+    @abc.abstractmethod
+    def call(cls, tangent_vector: torch.Tensor):
+        pass
+
+    @classmethod
+    @abc.abstractmethod
+    def forward(cls, ctx, tangent_vector, jacobians=None):
+        pass
+
+
 class LieGroupExpMap(torch.autograd.Function):
     @classmethod
     @abc.abstractmethod

@@ -42,3 +42,10 @@ def test_compose(batch_size: int, dtype: torch.dtype):
     group0 = SO3Function.exp_map(tangent_vector0)
     group1 = SO3Function.exp_map(tangent_vector1)
     check_lie_group_function(SO3Function, "Compose", TEST_EPS, group0, group1)
+
+
+@pytest.mark.parametrize("batch_size", [1, 20, 100])
+@pytest.mark.parametrize("dtype", [torch.float32, torch.float64])
+def test_hat(batch_size: int, dtype: torch.dtype):
+    tangent_vector = torch.rand(batch_size, 3, dtype=dtype)
+    check_lie_group_function(SO3Function, "Hat", TEST_EPS, tangent_vector)

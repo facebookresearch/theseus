@@ -12,6 +12,7 @@ from .lie_group_function import (
     LieGroupAdjoint,
     LieGroupCompose,
     LieGroupExpMap,
+    LieGroupHat,
     LieGroupInverse,
 )
 from .utils import check_jacobians_list
@@ -252,6 +253,39 @@ class ExpMap(LieGroupExpMap):
         return grad.view(-1, 3)
 
 
+class Hat(LieGroupHat):
+    @classmethod
+    def call(cls, tangent_vector: torch.Tensor) -> torch.Tensor:
+        if not check_tangent_vector(tangent_vector):
+            raise ValueError("Tangent vectors of SO3 should be 3-D vectors.")
+        matrix = tangent_vector.new_zeros(tangent_vector.shape[0], 3, 3)
+
+        matrix[:, 0, 1] = -tangent_vector[:, 2].view(-1)
+        matrix[:, 0, 2] = tangent_vector[:, 1].view(-1)
+        matrix[:, 1, 2] = -tangent_vector[:, 0].view(-1)
+        matrix[:, 1, 0] = tangent_vector[:, 2].view(-1)
+        matrix[:, 2, 0] = -tangent_vector[:, 1].view(-1)
+        matrix[:, 2, 1] = tangent_vector[:, 0].view(-1)
+
+        return matrix
+
+    @classmethod
+    def forward(cls, ctx, tangent_vector):
+        return cls.call(tangent_vector)
+
+    @classmethod
+    def backward(cls, ctx, grad_output):
+        grad_output: torch.Tensor = cast(torch.Tensor, grad_output)
+        return torch.stack(
+            (
+                grad_output[:, 2, 1] - grad_output[:, 1, 2],
+                grad_output[:, 0, 2] - grad_output[:, 2, 0],
+                grad_output[:, 1, 0] - grad_output[:, 0, 1],
+            ),
+            dim=1,
+        )
+
+
 class Inverse(LieGroupInverse):
     @classmethod
     def call(
@@ -275,6 +309,7 @@ class Inverse(LieGroupInverse):
 
 
 adjoint = Adjoint.apply
-exp_map = ExpMap.apply
-inverse = Inverse.apply
 compose = Compose.apply
+exp_map = ExpMap.apply
+hat = Hat.apply
+inverse = Inverse.apply

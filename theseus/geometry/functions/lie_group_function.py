@@ -38,11 +38,6 @@ class LieGroupCompose(torch.autograd.Function):
     def forward(cls, ctx, g0, g1, jacobians=None):
         pass
 
-    @classmethod
-    @abc.abstractmethod
-    def backward(cls, ctx, grad_output):
-        pass
-
 
 class LieGroupExpMap(torch.autograd.Function):
     @classmethod
@@ -58,6 +53,18 @@ class LieGroupExpMap(torch.autograd.Function):
     @abc.abstractmethod
     def forward(cls, ctx, tangent_vector, jacobians=None):
         pass
+
+
+class LieGroupHat(torch.autograd.Function):
+    @classmethod
+    @abc.abstractmethod
+    def call(cls, tangent_vector: torch.Tensor) -> torch.Tensor:
+        pass
+
+    @classmethod
+    @abc.abstractmethod
+    def forward(cls, ctx, tangent_vector):
+        return cls.call(tangent_vector)
 
 
 class LieGroupInverse(torch.autograd.Function):

@@ -8,7 +8,7 @@ import theseus
 
 from typing import Optional, List, cast
 
-from .lie_group_function import LieGroupExpMap, LieGroupAdjoint
+from .lie_group_function import LieGroupExpMap, LieGroupAdjoint, LieGroupInverse
 from .utils import check_jacobians_list
 
 
@@ -214,5 +214,28 @@ class ExpMap(LieGroupExpMap):
         return grad.view(-1, 3)
 
 
+class Inverse(LieGroupInverse):
+    @classmethod
+    def call(
+        cls, g: torch.Tensor, jacobians: Optional[List[torch.Tensor]] = None
+    ) -> torch.Tensor:
+        if not check_group_tensor(g):
+            raise ValueError("Invalid data tensor for SO3.")
+        if jacobians is not None:
+            check_jacobians_list(jacobians)
+            jacobians.append(cls.jacobian(g))
+        return g.transpose(1, 2)
+
+    @classmethod
+    def forward(cls, ctx, g, jacobians=None):
+        g: torch.Tensor = cast(torch.Tensor, g)
+        return cls.call(g, jacobians)
+
+    @classmethod
+    def backward(cls, ctx, grad_output):
+        return grad_output.transpose(1, 2)
+
+
 adjoint = Adjoint.apply
 exp_map = ExpMap.apply
+inverse = Inverse.apply

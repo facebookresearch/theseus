@@ -168,7 +168,7 @@ class ExpMap(LieGroupExpMap):
         jacobians=None,
     ):
         tangent_vector: torch.Tensor = cast(torch.Tensor, tangent_vector)
-        ret = ExpMap.call(tangent_vector, jacobians)
+        ret = cls.call(tangent_vector, jacobians)
         ctx.save_for_backward(tangent_vector, ret)
         ctx.jacobians = jacobians
 

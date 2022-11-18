@@ -623,6 +623,7 @@ class Objective:
         self._vectorization_run = None
         self._vectorization_to = None
         self._retract_method = Objective._retract_base
+        self._get_error_iter = Objective._get_error_iter_base
         self._vectorized = False
 
     @property
@@ -632,6 +633,7 @@ class Objective:
             == (self._jacobians_iter is None)
             == (self._vectorization_run is None)
             == (self._vectorization_to is None)
+            == (self._get_error_iter is Objective._get_error_iter_base)
             == (self._retract_method is Objective._retract_base)
         )
         return self._vectorized

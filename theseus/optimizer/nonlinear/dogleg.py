@@ -2,7 +2,7 @@
 #
 # This source code is licensed under the MIT license found in the
 # LICENSE file in the root directory of this source tree.
-from typing import Any, Dict, Optional, Type
+from typing import Any, Dict, Optional, Tuple, Type
 
 import torch
 
@@ -10,12 +10,12 @@ from theseus.core import Objective
 from theseus.optimizer import DenseLinearization, Linearization
 from theseus.optimizer.linear import LinearSolver
 
-from .nonlinear_least_squares import NonlinearLeastSquares
+from .trust_region import TrustRegionOptimizer
 
 
 # See Nocedal and Wright, Numerical Optimization, pp. 73-77
 # https://www.csie.ntu.edu.tw/~r97002/temp/num_optimization.pdf
-class Dogleg(NonlinearLeastSquares):
+class Dogleg(TrustRegionOptimizer):
     def __init__(
         self,
         objective: Objective,
@@ -62,17 +62,14 @@ class Dogleg(NonlinearLeastSquares):
     def _detached_squared_norm(tensor: torch.Tensor) -> torch.Tensor:
         return (tensor**2).sum(dim=1)
 
-    def compute_delta(
-        self,
-        **kwargs,
-    ) -> torch.Tensor:
+    def _compute_delta_impl(self) -> Tuple[torch.Tensor, Optional[torch.Tensor]]:
         trust_region_2 = self._trust_region**2
         delta_gn = self.linear_solver.solve()
         delta_gn_norm_2 = Dogleg._detached_squared_norm(delta_gn)
         good_gn_idx = delta_gn_norm_2 < trust_region_2
         # All Gauss-Newton step are within trust-region, can return
         if good_gn_idx.all():
-            return delta_gn
+            return delta_gn, ~good_gn_idx  # no indices at boundary
 
         # If reach here, some steps are outside trust-region,
         # need to compute dogleg step
@@ -118,4 +115,4 @@ class Dogleg(NonlinearLeastSquares):
                 delta_dogleg,
             )
 
-        return delta_dogleg
+        return delta_dogleg, ~good_gn_idx

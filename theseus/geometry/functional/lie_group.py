@@ -6,7 +6,7 @@
 import torch
 import abc
 
-from typing import List, Optional, Tuple
+from typing import List, Optional
 from .utils import check_jacobians_list
 
 
@@ -17,19 +17,17 @@ class ExpMap(torch.autograd.Function):
         pass
 
 
-def ExpMapFactory(module):
-    def exp_map(
-        tangent_vector: torch.Tensor,
+def UnaryFunctionFactory(module, fn_name):
+    fn_base = getattr(module, "_" + fn_name + "_fn_base")
+    j_fn_base = getattr(module, "_j_" + fn_name + "_fn_base")
+
+    def fn(
+        input: torch.Tensor,
         jacobians: Optional[List[torch.Tensor]] = None,
     ) -> torch.Tensor:
         if jacobians is not None:
             check_jacobians_list(jacobians)
-            jacobians.append(module._j_exp_map_impl(tangent_vector))
-        return module.ExpMap.apply(tangent_vector)
+            jacobians.append(j_fn_base(input))
+        return fn_base(input)
 
-    def jexp_map(tangent_vector: torch.Tensor) -> Tuple[torch.Tensor, torch.Tensor]:
-        return module.ExpMap.apply(tangent_vector), module._j_exp_map_impl(
-            tangent_vector
-        )
-
-    return exp_map, jexp_map
+    return fn

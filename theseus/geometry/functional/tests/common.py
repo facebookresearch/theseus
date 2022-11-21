@@ -6,12 +6,12 @@
 import torch
 
 
-def check_lie_group_function(module, func_name: str, atol: float, *args):
-    func_impl = getattr(module, "_" + func_name + "_impl")
-    func = getattr(module, func_name)
+def check_lie_group_function(module, op_name: str, atol: float, *args):
+    op_impl = getattr(module, "_" + op_name + "_impl")
+    op = getattr(module, op_name)
 
-    jacs_impl = torch.autograd.functional.jacobian(func_impl, args)
-    jacs = torch.autograd.functional.jacobian(func, args)
+    jacs_impl = torch.autograd.functional.jacobian(op_impl, args)
+    jacs = torch.autograd.functional.jacobian(op, args)
 
     for jac_impl, jac in zip(jacs_impl, jacs):
         assert torch.allclose(jac_impl, jac, atol=atol)

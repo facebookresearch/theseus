@@ -9,25 +9,31 @@ import abc
 from typing import List, Optional
 from .utils import check_jacobians_list
 
+# There are four functions associated with each Lie group operator xxx.
+# _xxx_impl: mathematical implementation of the operator
+# _j_xxx_impl: mathematical implementation of the operator jacobian
+# _xxx_base: a torch.autograd.Function wrapper of _xxx_impl
+# _j_xxx_base: simply equivalent to _j_xxx_impl
 
-class ExpMap(torch.autograd.Function):
+
+class UnaryOperator(torch.autograd.Function):
     @classmethod
     @abc.abstractmethod
-    def forward(cls, ctx, tangent_vector):
+    def forward(cls, ctx, input):
         pass
 
 
-def UnaryFunctionFactory(module, func_name):
-    fn_base = getattr(module, "_" + func_name + "_base")
-    j_fn_base = getattr(module, "_j_" + func_name + "_base")
+def UnaryOperatorFactory(module, op_name):
+    op_base = getattr(module, "_" + op_name + "_base")
+    j_op_base = getattr(module, "_j_" + op_name + "_base")
 
-    def func(
+    def op(
         input: torch.Tensor,
         jacobians: Optional[List[torch.Tensor]] = None,
     ) -> torch.Tensor:
         if jacobians is not None:
             check_jacobians_list(jacobians)
-            jacobians.append(j_fn_base(input))
-        return fn_base(input)
+            jacobians.append(j_op_base(input))
+        return op_base(input)
 
-    return func
+    return op

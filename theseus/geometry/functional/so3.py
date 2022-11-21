@@ -126,7 +126,7 @@ def _j_exp_map_impl(tangent_vector: torch.Tensor) -> torch.Tensor:
     return jac
 
 
-class ExpMap(LieGroup.ExpMap):
+class ExpMap(LieGroup.UnaryOperator):
     @classmethod
     def forward(cls, ctx, tangent_vector):
         tangent_vector: torch.Tensor = cast(torch.Tensor, tangent_vector)
@@ -158,4 +158,4 @@ _module = get_module(__name__)
 _exp_map_base = ExpMap.apply
 _j_exp_map_base = _j_exp_map_impl
 
-exp_map = LieGroup.UnaryFunctionFactory(_module, "exp_map")
+exp_map = LieGroup.UnaryOperatorFactory(_module, "exp_map")

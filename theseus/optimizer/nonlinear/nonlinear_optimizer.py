@@ -80,6 +80,32 @@ EndIterCallbackType = Callable[
 ]
 
 
+# Base class for all nonlinear optimizers, providing the skeleton of the
+# optimization loop. Subclasses need to implement the following method:
+#
+#   - `compute_delta`: returns a descent direction given the current values
+#     of the objective's optimization vars.
+#
+# Optionally, they can also provide the following methods:
+#
+#   - `reset`: resets any internal state needed by the optimizer.
+#   - `_complete_step`: called at the end of an optimization step, but before
+#     optimization variables are updated. Returns batch indices that should not
+#     any be updated (e.g., if the step is to be rejected).
+#
+# The high level logic of a call to optimize is as follows:
+#
+# prev_err = objective.error_squared_norm()
+# do optimization loop:
+#    1. compute delta
+#    2. step(delta, prev_err)
+#           2.1. Store current optim var tensors in tmp_optim_vars containers
+#           2.2. Retract all tmp_optim_vars given delta
+#           2.3. Evaluate new error
+#           2.4. reject_indices = self._complete_step(delta, new_err, prev_err)
+#           2.5. Update objective's optim var containers with retracted values,
+#                ignoring indices given by `reject_indices`
+#    3. Check convergence
 class NonlinearOptimizer(Optimizer, abc.ABC):
     def __init__(
         self,
@@ -270,10 +296,6 @@ class NonlinearOptimizer(Optimizer, abc.ABC):
             M & (grad_loop_info.status == NonlinearOptimizerStatus.MAX_ITERATIONS)
         ] = -1
 
-    def _update_tmp_optim_vars(self):
-        for v_tmp, v_order in zip(self._tmp_optim_vars, self.ordering):
-            v_tmp.update(v_order.tensor)
-
     # loop for the iterative optimizer
     def _optimize_loop(
         self,
@@ -336,7 +358,7 @@ class NonlinearOptimizer(Optimizer, abc.ABC):
 
             # For now, step size is combined with delta. If we add more sophisticated
             # line search, will probably need to pass it separately, or compute inside.
-            err = self.step(
+            err = self._step(
                 delta * steps_tensor,
                 info.last_err,
                 converged_indices,
@@ -466,12 +488,20 @@ class NonlinearOptimizer(Optimizer, abc.ABC):
     def compute_delta(self, **kwargs) -> torch.Tensor:
         pass
 
+    # Adds references to the current optim variable tensors in the the optimizer's
+    # _tmp_optim_varscontainers. This allow us to compute t_next = V.tensor + delta for
+    # any optimization variable, without changing the permanent optim var objects
+    # in the objective.
+    def _update_tmp_optim_vars(self):
+        for v_tmp, v_order in zip(self._tmp_optim_vars, self.ordering):
+            v_tmp.update(v_order.tensor)
+
     # Given descent directions and step sizes, updates the optimization
     # variables.
     # Batch indices indicated by `converged_indices` mask are ignored
     # unless `force_update = True`.
     # Returns the total error tensor after the update
-    def step(
+    def _step(
         self,
         delta: torch.Tensor,
         previous_err: torch.Tensor,
@@ -479,7 +509,7 @@ class NonlinearOptimizer(Optimizer, abc.ABC):
         force_update: bool,
         **kwargs,
     ) -> torch.Tensor:
-        # makes sure tmp cotainers are up to date with current variables
+        # makes sure tmp containers are up to date with current variables
         self._update_tmp_optim_vars()
         # stores the result of the retract step in `self._tmp_optim_vars`
         self.objective.retract_vars_sequence(

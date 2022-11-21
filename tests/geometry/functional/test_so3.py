@@ -4,7 +4,7 @@
 # LICENSE file in the root directory of this source tree.
 
 import pytest
-from theseus.geometry.functional.tests.common import check_lie_group_function
+from .common import check_lie_group_function
 from theseus.geometry.functional.constants import TEST_EPS
 from theseus.geometry.functional import SO3
 

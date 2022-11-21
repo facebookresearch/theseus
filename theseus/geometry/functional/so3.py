@@ -155,7 +155,7 @@ class ExpMap(LieGroup.ExpMap):
 
 _module = get_module(__name__)
 
-_exp_map_fn_base = ExpMap.apply
-_j_exp_map_fn_base = _j_exp_map_impl
+_exp_map_base = ExpMap.apply
+_j_exp_map_base = _j_exp_map_impl
 
 exp_map = LieGroup.UnaryFunctionFactory(_module, "exp_map")

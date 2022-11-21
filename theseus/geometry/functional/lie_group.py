@@ -17,11 +17,11 @@ class ExpMap(torch.autograd.Function):
         pass
 
 
-def UnaryFunctionFactory(module, fn_name):
-    fn_base = getattr(module, "_" + fn_name + "_fn_base")
-    j_fn_base = getattr(module, "_j_" + fn_name + "_fn_base")
+def UnaryFunctionFactory(module, func_name):
+    fn_base = getattr(module, "_" + func_name + "_base")
+    j_fn_base = getattr(module, "_j_" + func_name + "_base")
 
-    def fn(
+    def func(
         input: torch.Tensor,
         jacobians: Optional[List[torch.Tensor]] = None,
     ) -> torch.Tensor:
@@ -30,4 +30,4 @@ def UnaryFunctionFactory(module, fn_name):
             jacobians.append(j_fn_base(input))
         return fn_base(input)
 
-    return fn
+    return func

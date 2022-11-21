@@ -138,7 +138,9 @@ class ExpMap(LieGroupModule.ExpMap):
     def backward(cls, ctx, grad_output):
         tangent_vector: torch.Tensor = ctx.saved_tensors[0]
         group: torch.Tensor = ctx.saved_tensors[1]
-        jacs: torch.Tensor = _j_exp_map_impl(tangent_vector)
+        if not hasattr(ctx, "jacobians"):
+            ctx.jacobians: torch.Tensor = _j_exp_map_impl(tangent_vector)
+        jacs = ctx.jacobians
         dR = group.transpose(1, 2) @ grad_output
         grad_input = jacs.transpose(1, 2) @ torch.stack(
             (

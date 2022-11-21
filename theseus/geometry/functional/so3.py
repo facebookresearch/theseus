@@ -4,20 +4,15 @@
 # LICENSE file in the root directory of this source tree.
 
 import torch
+from typing import cast
 
 from . import constants
 from . import lie_group as LieGroup
 from .utils import get_module
 
-from typing import cast
 
-
-def name() -> str:
-    return "SO3"
-
-
-def dim() -> int:
-    return 3
+NAME: str = "SO3"
+DIM: int = 3
 
 
 def check_group_tensor(tensor: torch.Tensor) -> bool:

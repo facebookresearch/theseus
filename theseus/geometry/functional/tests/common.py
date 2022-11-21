@@ -4,14 +4,13 @@
 # LICENSE file in the root directory of this source tree.
 
 import torch
+from theseus.geometry.functional.utils import get_module
 
 
-def check_lie_group_function(func, method: str, atol: float, *args):
-    def func_call(*args):
-        return getattr(func, method).call(*args)
-
-    def func_apply(*args):
-        return getattr(func, method).apply(*args)
+def check_lie_group_function(cls, method: str, atol: float, *args):
+    module = get_module(cls)
+    func_call = getattr(module, "_" + method + "_impl")
+    func_apply = getattr(cls, method)
 
     grad_call = torch.autograd.functional.jacobian(func_call, args)
     grad_apply = torch.autograd.functional.jacobian(func_apply, args)

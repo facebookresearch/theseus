@@ -4,9 +4,9 @@
 # LICENSE file in the root directory of this source tree.
 
 import pytest
-from theseus.geometry.functions.tests.common import check_lie_group_function
-from theseus.geometry.functions import SO3Function
-from theseus.constants import TEST_EPS
+from theseus.geometry.functional.tests.common import check_lie_group_function
+from theseus.geometry.functional.constants import TEST_EPS
+from theseus.geometry.functional import SO3
 
 import torch
 
@@ -15,4 +15,4 @@ import torch
 @pytest.mark.parametrize("dtype", [torch.float32, torch.float64])
 def test_exp_map(batch_size: int, dtype: torch.dtype):
     tangent_vector = torch.rand(batch_size, 3, dtype=dtype)
-    check_lie_group_function(SO3Function, "ExpMap", TEST_EPS, tangent_vector)
+    check_lie_group_function(SO3, "exp_map", TEST_EPS, tangent_vector)

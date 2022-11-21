@@ -12,5 +12,9 @@ def check_jacobians_list(jacobians: List[torch.Tensor]):
         raise ValueError("jacobians list to be populated must be empty.")
 
 
-def get_module(cls):
-    return __import__(cls.__module__, fromlist=[""])
+def get_module(module_name):
+    return __import__(module_name, fromlist=[""])
+
+
+def get_cls_module(cls):
+    return get_module(cls.__module__)

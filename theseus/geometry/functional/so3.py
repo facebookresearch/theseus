@@ -6,8 +6,8 @@
 import torch
 
 from . import constants
-from . import lie_group as LieGroupModule
-from .lie_group import LieGroup
+from . import lie_group as LieGroup
+from .utils import get_module
 
 from typing import cast
 
@@ -126,7 +126,7 @@ def _j_exp_map_impl(tangent_vector: torch.Tensor) -> torch.Tensor:
     return jac
 
 
-class ExpMap(LieGroupModule.ExpMap):
+class ExpMap(LieGroup.ExpMap):
     @classmethod
     def forward(cls, ctx, tangent_vector):
         tangent_vector: torch.Tensor = cast(torch.Tensor, tangent_vector)
@@ -153,5 +153,6 @@ class ExpMap(LieGroupModule.ExpMap):
         return grad_input.view(-1, 3)
 
 
-class SO3(LieGroup):
-    pass
+_module = get_module(__name__)
+
+exp_map, jexp_map = LieGroup.ExpMapFactory(_module)

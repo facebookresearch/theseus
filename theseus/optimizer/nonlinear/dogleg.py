@@ -48,28 +48,15 @@ class Dogleg(TrustRegionOptimizer):
             # I'll avoid fancier error handling
             # I expect this method to work with all our current solvers
             raise NotImplementedError
-        self._trust_region = 1.0
-
-    def reset(
-        self,
-        trust_region_init: float = 1.2,
-        **kwargs,
-    ) -> None:
-        self._trust_region = trust_region_init
-
-    @staticmethod
-    @torch.no_grad()
-    def _detached_squared_norm(tensor: torch.Tensor) -> torch.Tensor:
-        return (tensor**2).sum(dim=1)
 
     def _compute_delta_impl(self) -> Tuple[torch.Tensor, Optional[torch.Tensor]]:
         trust_region_2 = self._trust_region**2
         delta_gn = self.linear_solver.solve()
-        delta_gn_norm_2 = Dogleg._detached_squared_norm(delta_gn)
+        delta_gn_norm_2 = TrustRegionOptimizer._detached_squared_norm(delta_gn)
         good_gn_idx = delta_gn_norm_2 < trust_region_2
         # All Gauss-Newton step are within trust-region, can return
         if good_gn_idx.all():
-            return delta_gn, ~good_gn_idx  # no indices at boundary
+            return delta_gn, good_gn_idx
 
         # If reach here, some steps are outside trust-region,
         # need to compute dogleg step
@@ -81,13 +68,13 @@ class Dogleg(TrustRegionOptimizer):
         # native functions
         assert isinstance(linearization, DenseLinearization)
 
-        grad = linearization.Atb.squeeze(2)
-        Adelta_sd = linearization.A.bmm(grad.unsqueeze(2)).squeeze(2)
-        Adelta_sd_norm_2 = Dogleg._detached_squared_norm(Adelta_sd)
-        grad_norm_2 = Dogleg._detached_squared_norm(grad)
+        neg_grad = linearization.Atb.squeeze(2)
+        Adelta_sd = linearization.A.bmm(neg_grad.unsqueeze(2)).squeeze(2)
+        Adelta_sd_norm_2 = TrustRegionOptimizer._detached_squared_norm(Adelta_sd)
+        grad_norm_2 = TrustRegionOptimizer._detached_squared_norm(neg_grad)
         t = grad_norm_2 / Adelta_sd_norm_2
-        delta_sd = grad * t.view(-1, 1)
-        delta_sd_norm_2 = Dogleg._detached_squared_norm(delta_sd)
+        delta_sd = neg_grad * t
+        delta_sd_norm_2 = TrustRegionOptimizer._detached_squared_norm(delta_sd)
 
         delta_dogleg = delta_sd
         good_sd_idx = delta_sd_norm_2 <= trust_region_2
@@ -99,20 +86,20 @@ class Dogleg(TrustRegionOptimizer):
             # a * tau^2 + b * tau + c, with a, b, c given below
             diff = delta_gn - delta_sd
             with torch.no_grad():
-                a = Dogleg._detached_squared_norm(diff)
-                b = (2 * delta_sd * diff).sum(dim=1)
+                a = TrustRegionOptimizer._detached_squared_norm(diff)
+                b = (2 * delta_sd * diff).sum(dim=1, keepdim=True)
                 c = delta_sd_norm_2 - trust_region_2
                 tau = (-b + ((b**2) - 4 * a * c).sqrt()) / (2 * a)
-            delta_dogleg = torch.where(
-                good_sd_idx, delta_sd + tau.view(-1, 1) * diff, delta_sd
-            )
+            delta_dogleg = torch.where(good_sd_idx, delta_sd + tau * diff, delta_sd)
 
-        if (~good_sd_idx).any():
+        if not good_sd_idx.all():
             # For any steps beyond the trust region, truncate to trust region
             delta_dogleg = torch.where(
-                ~good_sd_idx,
-                delta_sd * trust_region_2 / delta_sd_norm_2.sqrt(),
+                good_sd_idx,
                 delta_dogleg,
+                delta_sd * trust_region_2 / delta_sd_norm_2.sqrt(),
             )
 
-        return delta_dogleg, ~good_gn_idx
+        # Finally, use the Gauss-Newton step if it was within the boundary
+        delta_dogleg = torch.where(good_gn_idx, delta_gn, delta_dogleg)
+        return delta_dogleg, good_gn_idx

@@ -4,9 +4,10 @@
 # LICENSE file in the root directory of this source tree.
 
 import torch
-import theseus
 
-from theseus.geometry.functional import LieGroup
+from . import constants
+from . import lie_group as LieGroupModule
+from .lie_group import LieGroup
 
 from typing import cast
 
@@ -24,7 +25,7 @@ def check_group_tensor(tensor: torch.Tensor) -> bool:
         if tensor.ndim != 3 or tensor.shape[1:] != (3, 3):
             raise ValueError("SO3 data tensors can only be 3x3 matrices.")
 
-        MATRIX_EPS = theseus.constants._SO3_MATRIX_EPS[tensor.dtype]
+        MATRIX_EPS = constants._SO3_MATRIX_EPS[tensor.dtype]
         if tensor.dtype != torch.float64:
             tensor = tensor.double()
 
@@ -43,7 +44,7 @@ def check_tangent_vector(tangent_vector: torch.Tensor) -> bool:
     return _check
 
 
-def _exp_map_impl(tangent_vector: torch.Tensor):
+def _exp_map_impl(tangent_vector: torch.Tensor) -> torch.Tensor:
     if not check_tangent_vector(tangent_vector):
         raise ValueError("Tangent vectors of SO3 should be 3-D vectors.")
     tangent_vector = tangent_vector.view(-1, 3)
@@ -51,7 +52,7 @@ def _exp_map_impl(tangent_vector: torch.Tensor):
     theta = torch.linalg.norm(tangent_vector, dim=1, keepdim=True).unsqueeze(1)
     theta2 = theta**2
     # Compute the approximations when theta ~ 0
-    near_zero = theta < theseus.constants._SO3_NEAR_ZERO_EPS[tangent_vector.dtype]
+    near_zero = theta < constants._SO3_NEAR_ZERO_EPS[tangent_vector.dtype]
     non_zero = torch.ones(1, dtype=tangent_vector.dtype, device=tangent_vector.device)
     theta_nz = torch.where(near_zero, non_zero, theta)
     theta2_nz = torch.where(near_zero, non_zero, theta2)
@@ -82,14 +83,14 @@ def _exp_map_impl(tangent_vector: torch.Tensor):
     return ret
 
 
-def _j_exp_map_impl(tangent_vector: torch.Tensor):
+def _j_exp_map_impl(tangent_vector: torch.Tensor) -> torch.Tensor:
     if not check_tangent_vector(tangent_vector):
         raise ValueError("Tangent vectors of SO3 should be 3-D vectors.")
     tangent_vector = tangent_vector.view(-1, 3)
     theta = torch.linalg.norm(tangent_vector, dim=1, keepdim=True).unsqueeze(1)
     theta2 = theta**2
     # Compute the approximations when theta ~ 0
-    near_zero = theta < theseus.constants._SO3_NEAR_ZERO_EPS[tangent_vector.dtype]
+    near_zero = theta < constants._SO3_NEAR_ZERO_EPS[tangent_vector.dtype]
     non_zero = torch.ones(1, dtype=tangent_vector.dtype, device=tangent_vector.device)
     theta_nz = torch.where(near_zero, non_zero, theta)
     theta2_nz = torch.where(near_zero, non_zero, theta2)
@@ -125,7 +126,7 @@ def _j_exp_map_impl(tangent_vector: torch.Tensor):
     return jac
 
 
-class ExpMap(LieGroup.ExpMap):
+class ExpMap(LieGroupModule.ExpMap):
     @classmethod
     def forward(cls, ctx, tangent_vector):
         tangent_vector: torch.Tensor = cast(torch.Tensor, tangent_vector)
@@ -150,5 +151,5 @@ class ExpMap(LieGroup.ExpMap):
         return grad_input.view(-1, 3)
 
 
-class SO3(LieGroup.LieGroup):
+class SO3(LieGroup):
     pass

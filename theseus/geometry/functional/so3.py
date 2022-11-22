@@ -39,7 +39,7 @@ def check_tangent_vector(tangent_vector: torch.Tensor) -> bool:
     return _check
 
 
-def _exp_map_impl(tangent_vector: torch.Tensor) -> torch.Tensor:
+def _exp_impl(tangent_vector: torch.Tensor) -> torch.Tensor:
     if not check_tangent_vector(tangent_vector):
         raise ValueError("Tangent vectors of SO3 should be 3-D vectors.")
     tangent_vector = tangent_vector.view(-1, 3)
@@ -77,7 +77,7 @@ def _exp_map_impl(tangent_vector: torch.Tensor) -> torch.Tensor:
     return ret
 
 
-def _jexp_map_impl(
+def _jexp_impl(
     tangent_vector: torch.Tensor,
 ) -> Tuple[List[torch.Tensor], torch.Tensor]:
     if not check_tangent_vector(tangent_vector):
@@ -140,7 +140,7 @@ class ExpMap(LieGroup.UnaryOperator):
     @classmethod
     def forward(cls, ctx, tangent_vector):
         tangent_vector: torch.Tensor = cast(torch.Tensor, tangent_vector)
-        ret = _exp_map_impl(tangent_vector)
+        ret = _exp_impl(tangent_vector)
         ctx.save_for_backward(tangent_vector, ret)
         return ret
 
@@ -149,7 +149,7 @@ class ExpMap(LieGroup.UnaryOperator):
         tangent_vector: torch.Tensor = ctx.saved_tensors[0]
         group: torch.Tensor = ctx.saved_tensors[1]
         if not hasattr(ctx, "jacobians"):
-            ctx.jacobians: torch.Tensor = _jexp_map_impl(tangent_vector)[0][0]
+            ctx.jacobians: torch.Tensor = _jexp_impl(tangent_vector)[0][0]
         jacs = ctx.jacobians
         dR = group.transpose(1, 2) @ grad_output
         grad_input = jacs.transpose(1, 2) @ torch.stack(
@@ -165,7 +165,8 @@ class ExpMap(LieGroup.UnaryOperator):
 
 _module = get_module(__name__)
 
-_exp_map_autograd_fn = ExpMap.apply
-_jexp_map_autograd_fn = _jexp_map_impl
+# TODO: Implement analytic backward for _jxxx_impl
+_exp_autograd_fn = ExpMap.apply
+_jexp_autograd_fn = _jexp_impl
 
-exp_map, jexp_map = LieGroup.UnaryOperatorFactory(_module, "exp_map")
+exp, jexp = LieGroup.UnaryOperatorFactory(_module, "exp")

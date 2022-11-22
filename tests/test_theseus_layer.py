@@ -389,7 +389,7 @@ def _solver_can_be_run(lin_solver_cls):
     return True
 
 
-@pytest.mark.parametrize("nonlinear_optim_cls", [th.GaussNewton, th.LevenbergMarquardt])
+@pytest.mark.parametrize("nonlinear_optim_cls", [th.Dogleg, th.GaussNewton, th.LevenbergMarquardt])
 @pytest.mark.parametrize(
     "lin_solver_cls",
     [
@@ -419,11 +419,14 @@ def test_backward(
             "adaptive_damping": lin_solver_cls not in [th.CholmodSparseSolver]
             and learning_method not in "leo",
         },
+        th.Dogleg: {},
     }[nonlinear_optim_cls]
     if learning_method == "leo":
         if lin_solver_cls not in [th.CholeskyDenseSolver, th.LUDenseSolver]:
             # other solvers don't support sampling from system's covariance
             return
+    if nonlinear_optim_cls == th.Dogleg and lin_solver_cls != th.CholeskyDenseSolver:
+        return
     # test both vectorization on/off
     force_vectorization = torch.rand(1).item() > 0.5
     _run_optimizer_test(

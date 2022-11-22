@@ -4,7 +4,7 @@
 # LICENSE file in the root directory of this source tree.
 
 import torch
-from typing import cast
+from typing import cast, Tuple
 
 from . import constants
 from . import lie_group as LieGroup
@@ -77,7 +77,7 @@ def _exp_map_impl(tangent_vector: torch.Tensor) -> torch.Tensor:
     return ret
 
 
-def _j_exp_map_impl(tangent_vector: torch.Tensor) -> torch.Tensor:
+def _jexp_map_impl(tangent_vector: torch.Tensor) -> Tuple[torch.Tensor, torch.Tensor]:
     if not check_tangent_vector(tangent_vector):
         raise ValueError("Tangent vectors of SO3 should be 3-D vectors.")
     tangent_vector = tangent_vector.view(-1, 3)
@@ -100,6 +100,22 @@ def _j_exp_map_impl(tangent_vector: torch.Tensor) -> torch.Tensor:
         near_zero, torch.zeros_like(theta), (theta - sine) / theta3_nz
     )
 
+    ret = (
+        one_minus_cosine_by_theta2
+        * tangent_vector.view(-1, 3, 1)
+        @ tangent_vector.view(-1, 1, 3)
+    )
+    ret[:, 0, 0] += cosine.view(-1)
+    ret[:, 1, 1] += cosine.view(-1)
+    ret[:, 2, 2] += cosine.view(-1)
+    sine_axis = sine_by_theta.view(-1, 1) * tangent_vector
+    ret[:, 0, 1] -= sine_axis[:, 2]
+    ret[:, 1, 0] += sine_axis[:, 2]
+    ret[:, 0, 2] += sine_axis[:, 1]
+    ret[:, 2, 0] -= sine_axis[:, 1]
+    ret[:, 1, 2] -= sine_axis[:, 0]
+    ret[:, 2, 1] += sine_axis[:, 0]
+
     jac = (
         theta_minus_sine_by_theta3
         * tangent_vector.view(-1, 3, 1)
@@ -107,9 +123,7 @@ def _j_exp_map_impl(tangent_vector: torch.Tensor) -> torch.Tensor:
     )
     diag_jac = jac.diagonal(dim1=1, dim2=2)
     diag_jac += sine_by_theta.view(-1, 1)
-
     jac_temp = one_minus_cosine_by_theta2.view(-1, 1) * tangent_vector
-
     jac[:, 0, 1] += jac_temp[:, 2]
     jac[:, 1, 0] -= jac_temp[:, 2]
     jac[:, 0, 2] -= jac_temp[:, 1]
@@ -117,7 +131,7 @@ def _j_exp_map_impl(tangent_vector: torch.Tensor) -> torch.Tensor:
     jac[:, 1, 2] += jac_temp[:, 0]
     jac[:, 2, 1] -= jac_temp[:, 0]
 
-    return jac
+    return jac, ret
 
 
 class ExpMap(LieGroup.UnaryOperator):
@@ -133,7 +147,7 @@ class ExpMap(LieGroup.UnaryOperator):
         tangent_vector: torch.Tensor = ctx.saved_tensors[0]
         group: torch.Tensor = ctx.saved_tensors[1]
         if not hasattr(ctx, "jacobians"):
-            ctx.jacobians: torch.Tensor = _j_exp_map_impl(tangent_vector)
+            ctx.jacobians: torch.Tensor = _jexp_map_impl(tangent_vector)[0]
         jacs = ctx.jacobians
         dR = group.transpose(1, 2) @ grad_output
         grad_input = jacs.transpose(1, 2) @ torch.stack(
@@ -149,7 +163,7 @@ class ExpMap(LieGroup.UnaryOperator):
 
 _module = get_module(__name__)
 
-_exp_map_base = ExpMap.apply
-_j_exp_map_base = _j_exp_map_impl
+_exp_map_autograd_fn = ExpMap.apply
+_jexp_map_autograd_fn = _jexp_map_impl
 
-exp_map = LieGroup.UnaryOperatorFactory(_module, "exp_map")
+exp_map, jexp_map = LieGroup.UnaryOperatorFactory(_module, "exp_map")

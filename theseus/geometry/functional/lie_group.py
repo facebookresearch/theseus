@@ -6,14 +6,14 @@
 import torch
 import abc
 
-from typing import List, Optional
+from typing import List, Tuple, Optional
 from .utils import check_jacobians_list
 
 # There are four functions associated with each Lie group operator xxx.
-# _xxx_impl: mathematical implementation of the operator
-# _j_xxx_impl: mathematical implementation of the operator jacobian
-# _xxx_base: a torch.autograd.Function wrapper of _xxx_impl
-# _j_xxx_base: simply equivalent to _j_xxx_impl
+# _xxx_impl: analytic implementation of the operator, return xxx
+# _jxxx_impl: analytic implementation of the operator jacobian, return jxxx and xxx
+# _xxx_autograd_fn: a torch.autograd.Function wrapper of _xxx_impl
+# _jxxx_autograd_fn: simply equivalent to _jxxx_impl for now
 
 
 class UnaryOperator(torch.autograd.Function):
@@ -24,8 +24,8 @@ class UnaryOperator(torch.autograd.Function):
 
 
 def UnaryOperatorFactory(module, op_name):
-    op_base = getattr(module, "_" + op_name + "_base")
-    j_op_base = getattr(module, "_j_" + op_name + "_base")
+    op_autograd_fn = getattr(module, "_" + op_name + "_autograd_fn")
+    jop_autograd_fn = getattr(module, "_j" + op_name + "_autograd_fn")
 
     def op(
         input: torch.Tensor,
@@ -33,7 +33,10 @@ def UnaryOperatorFactory(module, op_name):
     ) -> torch.Tensor:
         if jacobians is not None:
             check_jacobians_list(jacobians)
-            jacobians.append(j_op_base(input))
-        return op_base(input)
+            jacobians.append(jop_autograd_fn(input)[0])
+        return op_autograd_fn(input)
 
-    return op
+    def jop(input: torch.Tensor) -> Tuple[torch.Tensor]:
+        return jop_autograd_fn(input)
+
+    return op, jop

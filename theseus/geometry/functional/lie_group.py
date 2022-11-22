@@ -36,7 +36,7 @@ def UnaryOperatorFactory(module, op_name):
             jacobians.append(jop_autograd_fn(input)[0])
         return op_autograd_fn(input)
 
-    def jop(input: torch.Tensor) -> Tuple[torch.Tensor]:
+    def jop(input: torch.Tensor) -> Tuple[List[torch.Tensor], torch.Tensor]:
         return jop_autograd_fn(input)
 
     return op, jop

@@ -4,7 +4,7 @@
 # LICENSE file in the root directory of this source tree.
 
 import torch
-from typing import cast, Tuple
+from typing import cast, List, Tuple
 
 from . import constants
 from . import lie_group as LieGroup
@@ -77,7 +77,9 @@ def _exp_map_impl(tangent_vector: torch.Tensor) -> torch.Tensor:
     return ret
 
 
-def _jexp_map_impl(tangent_vector: torch.Tensor) -> Tuple[torch.Tensor, torch.Tensor]:
+def _jexp_map_impl(
+    tangent_vector: torch.Tensor,
+) -> Tuple[List[torch.Tensor], torch.Tensor]:
     if not check_tangent_vector(tangent_vector):
         raise ValueError("Tangent vectors of SO3 should be 3-D vectors.")
     tangent_vector = tangent_vector.view(-1, 3)
@@ -131,7 +133,7 @@ def _jexp_map_impl(tangent_vector: torch.Tensor) -> Tuple[torch.Tensor, torch.Te
     jac[:, 1, 2] += jac_temp[:, 0]
     jac[:, 2, 1] -= jac_temp[:, 0]
 
-    return jac, ret
+    return [jac], ret
 
 
 class ExpMap(LieGroup.UnaryOperator):
@@ -147,7 +149,7 @@ class ExpMap(LieGroup.UnaryOperator):
         tangent_vector: torch.Tensor = ctx.saved_tensors[0]
         group: torch.Tensor = ctx.saved_tensors[1]
         if not hasattr(ctx, "jacobians"):
-            ctx.jacobians: torch.Tensor = _jexp_map_impl(tangent_vector)[0]
+            ctx.jacobians: torch.Tensor = _jexp_map_impl(tangent_vector)[0][0]
         jacs = ctx.jacobians
         dR = group.transpose(1, 2) @ grad_output
         grad_input = jacs.transpose(1, 2) @ torch.stack(

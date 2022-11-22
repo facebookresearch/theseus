@@ -57,25 +57,3 @@ def test_ellipsoidal_damping_compatibility(mock_objective):
             optimizer.optimize(
                 **{"damping_eps": 0.1, __FROM_THESEUS_LAYER_TOKEN__: True}
             )
-
-
-@pytest.mark.cudaext
-def test_ellipsoidal_damping_compatibility_cuda(mock_objective):
-    if not torch.cuda.is_available():
-        return
-    mock_objective.to(device="cuda", dtype=torch.double)
-    batch_size = 2
-    mock_objective.update(
-        {
-            "v1": torch.ones(batch_size, 1, device="cuda", dtype=torch.double),
-            "v2": torch.zeros(batch_size, 1, device="cuda", dtype=torch.double),
-        }
-    )
-    for lsc in [th.LUCudaSparseSolver]:
-        optimizer = th.LevenbergMarquardt(
-            mock_objective, lsc, linear_solver_kwargs={"batch_size": batch_size}
-        )
-        optimizer.optimize(
-            **{"ellipsoidal_damping": True, __FROM_THESEUS_LAYER_TOKEN__: True}
-        )
-        optimizer.optimize(**{"damping_eps": 0.1, __FROM_THESEUS_LAYER_TOKEN__: True})

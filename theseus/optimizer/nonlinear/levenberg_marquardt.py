@@ -19,6 +19,7 @@ from theseus.optimizer.linear import (
 from .nonlinear_least_squares import NonlinearLeastSquares
 
 _LM_ALLOWED_ELLIPS_DAMP_SOLVERS: List[Type[LinearSolver]] = [
+    BaspachoSparseSolver,
     CholeskyDenseSolver,
     LUDenseSolver,
     LUCudaSparseSolver,

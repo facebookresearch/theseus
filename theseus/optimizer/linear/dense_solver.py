@@ -16,7 +16,7 @@ from theseus.optimizer import DenseLinearization, Linearization
 from .linear_solver import LinearSolver
 
 
-class DenseSolver(LinearSolver):
+class DenseSolver(LinearSolver, abc.ABC):
     def __init__(
         self,
         objective: Objective,

@@ -191,7 +191,7 @@ def _run_optimizer_test(
     optimizer_kwargs,
     cost_weight_model,
     use_learnable_error=False,
-    verbose=True,
+    verbose=False,
     learning_method="default",
     force_vectorization=False,
 ):
@@ -353,12 +353,13 @@ def _run_optimizer_test(
             l2_reg = F.mse_loss(
                 cost_weight_fn(), torch.zeros((1, num_points), device=device)
             )
-            loss = (cost_gt - cost_opt) + 10.0 * l2_reg
+            loss = (cost_gt - cost_opt) ** 2 + 10.0 * l2_reg
             loss = torch.mean(loss, dim=0)
         else:
             loss = mse_loss
 
         loss.backward()
+        print("Loss: ", loss.item())
         optimizer.step()
 
         if mse_loss.item() / loss0 < 1e-2:

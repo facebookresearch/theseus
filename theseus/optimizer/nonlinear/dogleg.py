@@ -43,7 +43,7 @@ class Dogleg(TrustRegionOptimizer):
             step_size=step_size,
             **kwargs,
         )
-        if linearization_cls not in [DenseLinearization]:
+        if not isinstance(self.linear_solver.linearization, DenseLinearization):
             # Since I will implement for sparse soon after,
             # I'll avoid fancier error handling
             # I expect this method to work with all our current solvers
@@ -69,15 +69,26 @@ class Dogleg(TrustRegionOptimizer):
         assert isinstance(linearization, DenseLinearization)
 
         neg_grad = linearization.Atb.squeeze(2)
-        Adelta_sd = linearization.A.bmm(neg_grad.unsqueeze(2)).squeeze(2)
-        Adelta_sd_norm_2 = TrustRegionOptimizer._detached_squared_norm(Adelta_sd)
-        grad_norm_2 = TrustRegionOptimizer._detached_squared_norm(neg_grad)
-        t = grad_norm_2 / Adelta_sd_norm_2
-        delta_sd = neg_grad * t
-        delta_sd_norm_2 = TrustRegionOptimizer._detached_squared_norm(delta_sd)
+        with torch.no_grad():
+            Adelta_sd = linearization.A.bmm(neg_grad.unsqueeze(2)).squeeze(2)
+            Adelta_sd_norm_2 = TrustRegionOptimizer._detached_squared_norm(Adelta_sd)
+            grad_norm_2 = TrustRegionOptimizer._detached_squared_norm(neg_grad)
+            t = grad_norm_2 / Adelta_sd_norm_2
+            delta_sd = neg_grad * t
+            delta_sd_norm_2 = TrustRegionOptimizer._detached_squared_norm(delta_sd)
+            not_near_zero_sd_idx = delta_sd_norm_2 > 1e-6
+            good_sd_idx = delta_sd_norm_2 <= trust_region_2
 
         delta_dogleg = delta_sd
-        good_sd_idx = delta_sd_norm_2 <= trust_region_2
+        # If the steepest descent direction is too close to zero, just use
+        # the Gauss-Newton direction truncated at the trust region to avoid
+        # numerical errors.
+        delta_dogleg = torch.where(
+            not_near_zero_sd_idx,
+            delta_dogleg,
+            delta_gn / delta_gn_norm_2.sqrt() * self._trust_region,
+        )
+        good_sd_idx &= not_near_zero_sd_idx
         if good_sd_idx.any():
             # In this case, some steepest descent steps are within region
             # so need to extend towards boundary with Gauss-Newton step
@@ -89,7 +100,8 @@ class Dogleg(TrustRegionOptimizer):
                 a = TrustRegionOptimizer._detached_squared_norm(diff)
                 b = (2 * delta_sd * diff).sum(dim=1, keepdim=True)
                 c = delta_sd_norm_2 - trust_region_2
-                tau = (-b + ((b**2) - 4 * a * c).sqrt()) / (2 * a)
+                disc = ((b**2) - 4 * a * c).clamp(0.0)
+                tau = (-b + disc.sqrt()) / (2 * a)
             delta_dogleg = torch.where(good_sd_idx, delta_sd + tau * diff, delta_sd)
 
         if not good_sd_idx.all():

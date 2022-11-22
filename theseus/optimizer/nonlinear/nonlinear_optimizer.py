@@ -91,7 +91,7 @@ EndIterCallbackType = Callable[
 #   - `reset`: resets any internal state needed by the optimizer.
 #   - `_complete_step`: called at the end of an optimization step, but before
 #     optimization variables are updated. Returns batch indices that should not
-#     any be updated (e.g., if the step is to be rejected).
+#     be updated (e.g., if the step is to be rejected).
 #
 # The high level logic of a call to optimize is as follows:
 #

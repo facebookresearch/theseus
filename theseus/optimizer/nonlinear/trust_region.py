@@ -32,8 +32,6 @@ from .nonlinear_least_squares import NonlinearLeastSquares
 # Iff the ratio is lower than `shrink_threshold`,
 # then the trust region is reduced by `shrink_ratio`.
 # The trust region is initialized to `trust_region_init`.
-
-
 class TrustRegionOptimizer(NonlinearLeastSquares, abc.ABC):
     _MIN_TRUST_REGION = 1.0e-7
     _MAX_TRUST_REGION = 1.0e7
@@ -65,7 +63,7 @@ class TrustRegionOptimizer(NonlinearLeastSquares, abc.ABC):
             step_size=step_size,
             **kwargs,
         )
-        if linearization_cls not in [DenseLinearization]:
+        if not isinstance(self.linear_solver.linearization, DenseLinearization):
             # Since I will implement for sparse soon after,
             # I'll avoid fancier error handling
             # I expect this method to work with all our current solvers

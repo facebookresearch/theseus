@@ -6,7 +6,7 @@
 import pytest
 from .common import check_lie_group_function
 from theseus.geometry.functional.constants import TEST_EPS
-from theseus.geometry.functional import SO3
+import theseus.geometry.functional.so3 as so3
 
 import torch
 
@@ -17,4 +17,4 @@ def test_exp(batch_size: int, dtype: torch.dtype):
     rng = torch.Generator()
     rng.manual_seed(0)
     tangent_vector = torch.rand(batch_size, 3, dtype=dtype, generator=rng)
-    check_lie_group_function(SO3, "exp", TEST_EPS, tangent_vector)
+    check_lie_group_function(so3, "exp", TEST_EPS, tangent_vector)

@@ -67,13 +67,15 @@ class Objective:
 
         # ---- Callbacks for vectorization ---- #
         # This gets replaced when cost function vectorization is used.
-        # Normally it returns an iterator over `self.cost_functions.values()`, so
+        #
+        # Normally, `_get_jacobians_iter()` returns an iterator over
+        #  `self.cost_functions.values()`, so
         # that calling error() or jacobians() on the yielded cost functions
         # computes these quantities on demand.
-        # But when vectorization is on, it returns separate cost function
-        # containers that serve cached jacobians and errors that have been
+        # But when vectorization is on, it will return this iterator that loops
+        # over containers that serve cached jacobians and errors that have been
         # previously computed by the vectorization.
-        self._jacobians_iter: Optional[Iterable[CostFunction]] = None
+        self._vectorized_jacobians_iter: Optional[Iterable[CostFunction]] = None
 
         # Used to vectorize cost functions error + jacobians after an update
         # The results are cached so that the `self._get_jacobians_iter()` returns
@@ -549,10 +551,10 @@ class Objective:
 
     def _get_jacobians_iter(self) -> Iterable:
         self.update_vectorization_if_needed()
-        if self._jacobians_iter is None:
-            # No vectorization is used, just serve from cost functions
-            return iter(cf for cf in self.cost_functions.values())
-        return iter(cf for cf in self._jacobians_iter)
+        if self.vectorized:
+            return iter(cf for cf in self._vectorized_jacobians_iter)
+        # No vectorization is used, just serve from cost functions
+        return iter(cf for cf in self.cost_functions.values())
 
     # Applies to() with given args to all tensors in the objective
     def to(self, *args, **kwargs):
@@ -610,7 +612,7 @@ class Objective:
             enabler.__module__ == "theseus.core.vectorizer"
             and enabler.__class__.__name__ == "Vectorize"
         )
-        self._jacobians_iter = jacobians_iter
+        self._vectorized_jacobians_iter = jacobians_iter
         self._vectorization_run = vectorization_run_fn
         self._vectorization_to = vectorized_to
         self._retract_method = vectorized_retract_fn
@@ -619,7 +621,7 @@ class Objective:
 
     # Making public, since this should be a safe operation
     def disable_vectorization(self):
-        self._jacobians_iter = None
+        self._vectorized_jacobians_iter = None
         self._vectorization_run = None
         self._vectorization_to = None
         self._retract_method = Objective._retract_base
@@ -630,7 +632,7 @@ class Objective:
     def vectorized(self):
         assert (
             (not self._vectorized)
-            == (self._jacobians_iter is None)
+            == (self._vectorized_jacobians_iter is None)
             == (self._vectorization_run is None)
             == (self._vectorization_to is None)
             == (self._get_error_iter == self._get_error_iter_base)

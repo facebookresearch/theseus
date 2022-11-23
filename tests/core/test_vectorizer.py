@@ -2,6 +2,7 @@
 #
 # This source code is licensed under the MIT license found in the
 # LICENSE file in the root directory of this source tree.
+from unittest import mock
 
 import numpy as np
 import pytest  # noqa: F401
@@ -50,7 +51,7 @@ def test_costs_vars_and_err_before_vectorization():
         # Check that the vectorizer's cost functions have the right variables and error
         saw_cf1 = False
         saw_cf2 = False
-        for cf in objective._get_iterator():
+        for cf in objective._get_jacobians_iter():
             assert isinstance(cf, _CostFunctionWrapper)
             optim_vars = [v for v in cf.optim_vars]
             aux_vars = [v for v in cf.aux_vars]
@@ -150,6 +151,16 @@ def test_correct_schemas_and_shared_vars():
     assert seen_cnt == [1] * 7
 
 
+def _check_vectorized_wrappers(vectorization, objective):
+    for w in vectorization._cost_fn_wrappers:
+        for cost_fn in objective.cost_functions.values():
+            if cost_fn is w.cost_fn:
+                w_jac, w_err = cost_fn.weighted_jacobians_error()
+                assert w._cached_error.allclose(w_err)
+                for jac, exp_jac in zip(w._cached_jacobians, w_jac):
+                    torch.testing.assert_close(jac, exp_jac, atol=1e-6, rtol=1e-6)
+
+
 def test_vectorized_error():
     rng = np.random.default_rng(0)
     generator = torch.Generator()
@@ -159,11 +170,12 @@ def test_vectorized_error():
         objective = th.Objective()
         batch_size = rng.choice(range(1, 11))
 
+        n_vars = rng.choice([1, 10])
         vectors = [
             th.Vector(
                 tensor=torch.randn(batch_size, dim, generator=generator), name=f"v{i}"
             )
-            for i in range(rng.choice([1, 10]))
+            for i in range(n_vars)
         ]
         target = th.Vector(dim, name="target")
         w = th.ScaleCostWeight(torch.randn(1, generator=generator))
@@ -185,19 +197,37 @@ def test_vectorized_error():
         vectorization = th.Vectorize(objective)
         objective.update_vectorization_if_needed()
 
-        assert objective._cost_functions_iterable is vectorization._cost_fn_wrappers
-        for w in vectorization._cost_fn_wrappers:
-            for cost_fn in objective.cost_functions.values():
-                if cost_fn is w.cost_fn:
-                    w_jac, w_err = cost_fn.weighted_jacobians_error()
-                    assert w._cached_error.allclose(w_err)
-                    for jac, exp_jac in zip(w._cached_jacobians, w_jac):
-                        assert jac.allclose(exp_jac, atol=1e-6)
+        assert objective._vectorized_jacobians_iter is vectorization._cost_fn_wrappers
+        _check_vectorized_wrappers(vectorization, objective)
 
         squared_error = torch.cat(
             [cf.weighted_error() for cf in objective.cost_functions.values()], dim=1
         )
-        assert squared_error.allclose(objective.error())
+        torch.testing.assert_close(squared_error, objective.error())
+
+        # Check that calling error(also_update=False) changes the result but doesn't
+        # change the vectorized wrappers
+        another_squared_error = objective.error(
+            {f"v{i}": torch.ones(batch_size, dim) for i in range(n_vars)},
+            also_update=False,
+        )
+        assert not another_squared_error.allclose(squared_error)
+        _check_vectorized_wrappers(vectorization, objective)
+
+        # Just to be sure, check that objective.error() is calling
+        # the vectorized error iterator.
+        called = [False]
+
+        def mock_err_iter(self):
+            called[0] = True
+            return self._cost_fn_wrappers  # just to have the same return type
+
+        with mock.patch.object(
+            th.Vectorize, "_get_vectorized_error_iter", mock_err_iter
+        ):
+            th.Vectorize(objective)
+            objective.error()
+            assert called[0]
 
 
 def test_vectorized_retract():

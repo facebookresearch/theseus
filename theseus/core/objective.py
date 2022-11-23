@@ -66,11 +66,25 @@ class Objective:
         self.current_version = 0
 
         # ---- Callbacks for vectorization ---- #
-        # This gets replaced when cost function vectorization is used
-        self._cost_functions_iterable: Optional[Iterable[CostFunction]] = None
+        # This gets replaced when cost function vectorization is used.
+        #
+        # Normally, `_get_jacobians_iter()` returns an iterator over
+        #  `self.cost_functions.values()`, so
+        # that calling error() or jacobians() on the yielded cost functions
+        # computes these quantities on demand.
+        # But when vectorization is on, it will return this iterator that loops
+        # over containers that serve cached jacobians and errors that have been
+        # previously computed by the vectorization.
+        self._vectorized_jacobians_iter: Optional[Iterable[CostFunction]] = None
 
-        # Used to vectorize cost functions after update
+        # Used to vectorize cost functions error + jacobians after an update
+        # The results are cached so that the `self._get_jacobians_iter()` returns
+        # them whenever called if no other updates have been done
         self._vectorization_run: Optional[Callable] = None
+
+        # If vectorization is on, this gets replaced by a vectorized version
+        # This method doesn't update the cache used by `self._get_jacobians_iter()`
+        self._get_error_iter = self._get_error_iter_base
 
         # If vectorization is on, this will also handle vectorized containers
         self._vectorization_to: Optional[Callable] = None
@@ -391,8 +405,15 @@ class Objective:
                     old_tensors[var] = self.optim_vars[var].tensor
             self.update(input_tensors=input_tensors)
 
+        # Current behavior when vectorization is on, is to always compute the error.
+        # One could potentially optimize by only recompute when `input_tensors`` is
+        # not None, and serving from the jacobians cache. However, when robust cost
+        # functions are present this results in incorrect rescaling of error terms
+        # so we are currently avoiding this optimization. Optimizers also compute error
+        # by passing `input_tensors`, so for optimizers the current version should be
+        # good enough.
         error_vector = torch.cat(
-            [cf.weighted_error() for cf in self._get_iterator()], dim=1
+            [cf.weighted_error() for cf in self._get_error_iter()], dim=1
         )
 
         if input_tensors is not None and not also_update:
@@ -532,11 +553,15 @@ class Objective:
     def __iter__(self):
         return iter([cf for cf in self.cost_functions.values()])
 
-    def _get_iterator(self):
+    def _get_error_iter_base(self) -> Iterable:
+        return iter(cf for cf in self.cost_functions.values())
+
+    def _get_jacobians_iter(self) -> Iterable:
         self.update_vectorization_if_needed()
-        if self._cost_functions_iterable is None:
-            return iter([cf for cf in self.cost_functions.values()])
-        return iter([cf for cf in self._cost_functions_iterable])
+        if self.vectorized:
+            return iter(cf for cf in self._vectorized_jacobians_iter)
+        # No vectorization is used, just serve from cost functions
+        return iter(cf for cf in self.cost_functions.values())
 
     # Applies to() with given args to all tensors in the objective
     def to(self, *args, **kwargs):
@@ -582,10 +607,11 @@ class Objective:
 
     def _enable_vectorization(
         self,
-        cost_fns_iter: Iterable[CostFunction],
+        jacobians_iter: Iterable[CostFunction],
         vectorization_run_fn: Callable,
         vectorized_to: Callable,
         vectorized_retract_fn: Callable,
+        error_iter_fn: Callable[[], Iterable[CostFunction]],
         enabler: Any,
     ):
         # Hacky way to make Vectorize a "friend" class
@@ -593,27 +619,30 @@ class Objective:
             enabler.__module__ == "theseus.core.vectorizer"
             and enabler.__class__.__name__ == "Vectorize"
         )
-        self._cost_functions_iterable = cost_fns_iter
+        self._vectorized_jacobians_iter = jacobians_iter
         self._vectorization_run = vectorization_run_fn
         self._vectorization_to = vectorized_to
         self._retract_method = vectorized_retract_fn
+        self._get_error_iter = error_iter_fn
         self._vectorized = True
 
     # Making public, since this should be a safe operation
     def disable_vectorization(self):
-        self._cost_functions_iterable = None
+        self._vectorized_jacobians_iter = None
         self._vectorization_run = None
         self._vectorization_to = None
         self._retract_method = Objective._retract_base
+        self._get_error_iter = self._get_error_iter_base
         self._vectorized = False
 
     @property
     def vectorized(self):
         assert (
             (not self._vectorized)
-            == (self._cost_functions_iterable is None)
+            == (self._vectorized_jacobians_iter is None)
             == (self._vectorization_run is None)
             == (self._vectorization_to is None)
-            == (self._retract_method is Objective._retract_base)
+            == (self._get_error_iter == self._get_error_iter_base)
+            == (self._retract_method == Objective._retract_base)
         )
         return self._vectorized

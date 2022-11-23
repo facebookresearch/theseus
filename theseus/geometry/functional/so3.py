@@ -7,7 +7,7 @@ import torch
 from typing import cast, List, Tuple
 
 from . import constants
-from . import lie_group as LieGroup
+from . import lie_group
 from .utils import get_module
 
 
@@ -39,6 +39,9 @@ def check_tangent_vector(tangent_vector: torch.Tensor) -> bool:
     return _check
 
 
+# -----------------------------------------------------------------------------
+# Exponential Map
+# -----------------------------------------------------------------------------
 def _exp_impl(tangent_vector: torch.Tensor) -> torch.Tensor:
     if not check_tangent_vector(tangent_vector):
         raise ValueError("Tangent vectors of SO3 should be 3-D vectors.")
@@ -136,7 +139,7 @@ def _jexp_impl(
     return [jac], ret
 
 
-class ExpMap(LieGroup.UnaryOperator):
+class Exp(lie_group.UnaryOperator):
     @classmethod
     def forward(cls, ctx, tangent_vector):
         tangent_vector: torch.Tensor = cast(torch.Tensor, tangent_vector)
@@ -165,8 +168,38 @@ class ExpMap(LieGroup.UnaryOperator):
 
 _module = get_module(__name__)
 
-# TODO: Implement analytic backward for _jxxx_impl
-_exp_autograd_fn = ExpMap.apply
+# TODO: Implement analytic backward for _jexp_impl
+_exp_autograd_fn = Exp.apply
 _jexp_autograd_fn = _jexp_impl
 
-exp, jexp = LieGroup.UnaryOperatorFactory(_module, "exp")
+exp, jexp = lie_group.UnaryOperatorFactory(_module, "exp")
+
+
+# -----------------------------------------------------------------------------
+# Adjoint Transformation
+# -----------------------------------------------------------------------------
+def _adjoint_impl(group: torch.Tensor) -> torch.Tensor:
+    if not check_group_tensor(group):
+        raise ValueError("Invalid data tensor for SO3.")
+    return group
+
+
+# NOTE: No jacobian is defined for the adjoint transformation
+_jadjoint_impl = None
+
+
+class Adjoint(lie_group.UnaryOperator):
+    @classmethod
+    def forward(cls, ctx, group):
+        group: torch.Tensor = cast(torch.Tensor, group)
+        return _adjoint_impl(group)
+
+    @classmethod
+    def backward(cls, ctx, grad_output):
+        return grad_output
+
+
+_adjoint_autograd_fn = Adjoint.apply
+_jadjoint_autograd_fn = None
+
+adjoint = lie_group.UnaryOperatorFactory(_module, "adjoint")

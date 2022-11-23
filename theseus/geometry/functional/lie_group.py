@@ -27,16 +27,24 @@ def UnaryOperatorFactory(module, op_name):
     op_autograd_fn = getattr(module, "_" + op_name + "_autograd_fn")
     jop_autograd_fn = getattr(module, "_j" + op_name + "_autograd_fn")
 
-    def op(
-        input: torch.Tensor,
-        jacobians: Optional[List[torch.Tensor]] = None,
-    ) -> torch.Tensor:
-        if jacobians is not None:
-            check_jacobians_list(jacobians)
-            jacobians.append(jop_autograd_fn(input)[0])
-        return op_autograd_fn(input)
+    if jop_autograd_fn is not None:
 
-    def jop(input: torch.Tensor) -> Tuple[List[torch.Tensor], torch.Tensor]:
-        return jop_autograd_fn(input)
+        def op(
+            input: torch.Tensor,
+            jacobians: Optional[List[torch.Tensor]] = None,
+        ) -> torch.Tensor:
+            if jacobians is not None:
+                check_jacobians_list(jacobians)
+                jacobians.append(jop_autograd_fn(input)[0])
+            return op_autograd_fn(input)
 
-    return op, jop
+        def jop(input: torch.Tensor) -> Tuple[List[torch.Tensor], torch.Tensor]:
+            return jop_autograd_fn(input)
+
+        return op, jop
+    else:
+
+        def op_no_jacobians(input: torch.Tensor) -> torch.Tensor:
+            return op_autograd_fn(input)
+
+        return op_no_jacobians

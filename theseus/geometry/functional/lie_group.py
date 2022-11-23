@@ -31,6 +31,7 @@ class UnaryOperator(torch.autograd.Function):
 
 
 def UnaryOperatorFactory(module, op_name):
+    # Get autograd.Function wrapper of op and its jacobian
     op_autograd_fn = getattr(module, "_" + op_name + "_autograd_fn")
     jop_autograd_fn = getattr(module, "_j" + op_name + "_autograd_fn")
 

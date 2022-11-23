@@ -35,6 +35,12 @@ def _get_cost_function_schema(cost_function: CostFunction) -> _CostFunctionSchem
 
 
 # Identifies what quantities vectorizaton computes for all cost functions
+#
+# Currently we select it manually in two places:
+# 1.) when requesting to compute Objective.error() we select WEIGHTED_ERROR,
+# so that we compute the vectorized error w/o modifying the permanent caches.
+# 2.) when Objective requests that the vectorization is updated, then we use
+# FULL so that we compute jacobians and replace the permanent caches.
 class _VectorizationMode(Enum):
     # Only computes cf.error()
     ERROR = 0

@@ -405,6 +405,13 @@ class Objective:
                     old_tensors[var] = self.optim_vars[var].tensor
             self.update(input_tensors=input_tensors)
 
+        # Current behavior when vectorization is on, is to always compute the error.
+        # One could potentially optimize by only recompute when `input_tensors`` is
+        # not None, and serving from the jacobians cache. However, when robust cost
+        # functions are present this results in incorrect rescaling of error terms
+        # so we are currently avoiding this optimization. Optimizers also compute error
+        # by passing `input_tensors`, so for optimizers the current version should be
+        # good enough.
         error_vector = torch.cat(
             [cf.weighted_error() for cf in self._get_error_iter()], dim=1
         )

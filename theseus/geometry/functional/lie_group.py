@@ -16,6 +16,13 @@ from .utils import check_jacobians_list
 # _jxxx_autograd_fn: simply equivalent to _jxxx_impl for now
 
 
+def JInverseImplFactory(module):
+    def _jinverse_impl(group: torch.Tensor) -> Tuple[List[torch.Tensor], torch.Tensor]:
+        return -module._adjoint_autograd_fn(group), module._inverse_autograd_fn(group)
+
+    return _jinverse_impl
+
+
 class UnaryOperator(torch.autograd.Function):
     @classmethod
     @abc.abstractmethod

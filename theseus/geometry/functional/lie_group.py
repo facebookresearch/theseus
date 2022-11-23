@@ -18,7 +18,7 @@ from .utils import check_jacobians_list
 
 def JInverseImplFactory(module):
     def _jinverse_impl(group: torch.Tensor) -> Tuple[List[torch.Tensor], torch.Tensor]:
-        return -module._adjoint_autograd_fn(group), module._inverse_autograd_fn(group)
+        return [-module._adjoint_autograd_fn(group)], module._inverse_autograd_fn(group)
 
     return _jinverse_impl
 

@@ -44,7 +44,7 @@ def UnaryOperatorFactory(module, op_name):
         return op, jop
     else:
 
-        def op_no_jacobians(input: torch.Tensor) -> torch.Tensor:
+        def op_no_jop(input: torch.Tensor) -> torch.Tensor:
             return op_autograd_fn(input)
 
-        return op_no_jacobians
+        return op_no_jop

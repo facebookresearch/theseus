@@ -611,14 +611,7 @@ class Lift(lie_group.UnaryOperator):
     def backward(cls, ctx, grad_output):
         grad_output: torch.Tensor = cast(torch.Tensor, grad_output)
         grad_output: torch.Tensor = cast(torch.Tensor, grad_output)
-        return torch.stack(
-            (
-                grad_output[..., 2, 1] - grad_output[..., 1, 2],
-                grad_output[..., 0, 2] - grad_output[..., 2, 0],
-                grad_output[..., 1, 0] - grad_output[..., 0, 1],
-            ),
-            dim=-1,
-        )
+        return project(grad_output)
 
 
 _lift_autograd_fn = Lift.apply

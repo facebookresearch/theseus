@@ -84,3 +84,15 @@ def test_compose(batch_size: int, dtype: torch.dtype):
 
     # check analytic backward for the operator
     check_lie_group_function(so3, "compose", TEST_EPS, group0, group1)
+
+
+@pytest.mark.parametrize("batch_size", [1, 20, 100])
+@pytest.mark.parametrize("dtype", [torch.float32, torch.float64])
+def test_quaternion_to_rotation(batch_size: int, dtype: torch.dtype):
+    rng = torch.Generator()
+    rng.manual_seed(0)
+    quaternion = torch.rand(batch_size, 4, dtype=dtype, generator=rng)
+    quaternion = quaternion / torch.norm(quaternion, dim=1, keepdim=True)
+
+    # check analytic backward for the operator
+    check_lie_group_function(so3, "quaternion_to_rotation", TEST_EPS, quaternion)

@@ -27,8 +27,7 @@ def test_exp(batch_size: int, dtype: torch.dtype):
 def test_adjoint(batch_size: int, dtype: torch.dtype):
     rng = torch.Generator()
     rng.manual_seed(0)
-    tangent_vector = torch.rand(batch_size, 3, dtype=dtype, generator=rng)
-    group = so3.exp(tangent_vector)
+    group = so3.rand(batch_size, generator=rng, dtype=dtype)
 
     # check analytic backward for the operator
     check_lie_group_function(so3, "adjoint", TEST_EPS, group)
@@ -39,8 +38,7 @@ def test_adjoint(batch_size: int, dtype: torch.dtype):
 def test_inverse(batch_size: int, dtype: torch.dtype):
     rng = torch.Generator()
     rng.manual_seed(0)
-    tangent_vector = torch.rand(batch_size, 3, dtype=dtype, generator=rng)
-    group = so3.exp(tangent_vector)
+    group = so3.rand(batch_size, generator=rng, dtype=dtype)
 
     # check analytic backward for the operator
     check_lie_group_function(so3, "inverse", TEST_EPS, group)
@@ -78,9 +76,8 @@ def test_vee(batch_size: int, dtype: torch.dtype):
 def test_compose(batch_size: int, dtype: torch.dtype):
     rng = torch.Generator()
     rng.manual_seed(0)
-    tangent_vector = torch.rand(batch_size, 3, dtype=dtype, generator=rng)
-    group0 = so3.exp(tangent_vector)
-    group1 = so3.exp(tangent_vector)
+    group0 = so3.rand(batch_size, generator=rng, dtype=dtype)
+    group1 = so3.rand(batch_size, generator=rng, dtype=dtype)
 
     # check analytic backward for the operator
     check_lie_group_function(so3, "compose", TEST_EPS, group0, group1)

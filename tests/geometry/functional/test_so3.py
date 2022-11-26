@@ -93,3 +93,36 @@ def test_quaternion_to_rotation(batch_size: int, dtype: torch.dtype):
 
     # check analytic backward for the operator
     check_lie_group_function(so3, "quaternion_to_rotation", TEST_EPS, quaternion)
+
+
+@pytest.mark.parametrize("batch_size", [1, 20, 100])
+@pytest.mark.parametrize("dtype", [torch.float32, torch.float64])
+def test_lift(batch_size: int, dtype: torch.dtype):
+    rng = torch.Generator()
+    matrix = torch.rand(
+        batch_size,
+        int(torch.randint(1, 20, (1,), generator=rng)),
+        3,
+        dtype=dtype,
+        generator=rng,
+    )
+
+    # check analytic backward for the operator
+    check_lie_group_function(so3, "lift", TEST_EPS, matrix)
+
+
+@pytest.mark.parametrize("batch_size", [1, 20, 100])
+@pytest.mark.parametrize("dtype", [torch.float32, torch.float64])
+def test_project(batch_size: int, dtype: torch.dtype):
+    rng = torch.Generator()
+    matrix = torch.rand(
+        batch_size,
+        int(torch.randint(1, 20, (1,), generator=rng)),
+        3,
+        3,
+        dtype=dtype,
+        generator=rng,
+    )
+
+    # check analytic backward for the operator
+    check_lie_group_function(so3, "project", TEST_EPS, matrix)

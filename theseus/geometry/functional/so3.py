@@ -4,7 +4,7 @@
 # LICENSE file in the root directory of this source tree.
 
 import torch
-from typing import cast, List, Tuple
+from typing import cast, List, Tuple, Optional
 
 from . import constants
 from . import lie_group
@@ -63,6 +63,71 @@ def check_unit_quaternion(quaternion: torch.Tensor):
 
     if (torch.linalg.norm(quaternion, dim=1) - 1).abs().max().item() >= QUANTERNION_EPS:
         raise ValueError("Not unit quaternions.")
+
+
+# -----------------------------------------------------------------------------
+# Rand
+# -----------------------------------------------------------------------------
+def rand(
+    *size: int,
+    generator: Optional[torch.Generator] = None,
+    dtype: Optional[torch.dtype] = None,
+    device: constants.DeviceType = None,
+    requires_grad: bool = False,
+) -> torch.Tensor:
+    # Reference:
+    # https://web.archive.org/web/20211105205926/http://planning.cs.uiuc.edu/node198.html
+    if len(size) != 1:
+        raise ValueError("The size should be 1D.")
+    u = torch.rand(
+        3,
+        size[0],
+        generator=generator,
+        dtype=dtype,
+        device=device,
+        requires_grad=requires_grad,
+    )
+    u1 = u[0]
+    u2, u3 = u[1:3] * 2 * constants.PI
+
+    a = torch.sqrt(1.0 - u1)
+    b = torch.sqrt(u1)
+    quaternion = torch.stack(
+        [
+            a * torch.sin(u2),
+            a * torch.cos(u2),
+            b * torch.sin(u3),
+            b * torch.cos(u3),
+        ],
+        dim=1,
+    )
+    assert quaternion.shape == (size[0], 4)
+    return quaternion_to_rotation(quaternion)
+
+
+# -----------------------------------------------------------------------------
+# Randn
+# -----------------------------------------------------------------------------
+def randn(
+    *size: int,
+    generator: Optional[torch.Generator] = None,
+    dtype: Optional[torch.dtype] = None,
+    device: constants.DeviceType = None,
+    requires_grad: bool = False,
+) -> torch.Tensor:
+    if len(size) != 1:
+        raise ValueError("The size should be 1D.")
+    return exp(
+        constants.PI
+        * torch.randn(
+            size[0],
+            3,
+            generator=generator,
+            dtype=dtype,
+            device=device,
+            requires_grad=requires_grad,
+        )
+    )
 
 
 # -----------------------------------------------------------------------------

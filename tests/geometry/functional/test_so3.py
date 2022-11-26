@@ -38,3 +38,12 @@ def test_inverse(batch_size: int, dtype: torch.dtype):
     tangent_vector = torch.rand(batch_size, 3, dtype=dtype, generator=rng)
     group = so3.exp(tangent_vector)
     check_lie_group_function(so3, "inverse", TEST_EPS, group)
+
+
+@pytest.mark.parametrize("batch_size", [1, 20, 100])
+@pytest.mark.parametrize("dtype", [torch.float32, torch.float64])
+def test_hat(batch_size: int, dtype: torch.dtype):
+    rng = torch.Generator()
+    rng.manual_seed(0)
+    tangent_vector = torch.rand(batch_size, 3, dtype=dtype, generator=rng)
+    check_lie_group_function(so3, "hat", TEST_EPS, tangent_vector)

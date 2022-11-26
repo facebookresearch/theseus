@@ -576,3 +576,43 @@ _jquaternion_to_rotation_autograd_fn = _jquaternion_to_rotation_impl
 quaternion_to_rotation, jquaternion_to_rotation = lie_group.UnaryOperatorFactory(
     _module, "quaternion_to_rotation"
 )
+
+
+# -----------------------------------------------------------------------------
+# Project
+# -----------------------------------------------------------------------------
+def _project_impl(matrix: torch.Tensor) -> torch.Tensor:
+    if matrix.shape[-2:] != (3, 3):
+        raise ValueError("Inconsistent shape for matrix.")
+
+    return torch.stack(
+        (
+            matrix[..., 2, 1] - matrix[..., 1, 2],
+            matrix[..., 0, 2] - matrix[..., 2, 0],
+            matrix[..., 1, 0] - matrix[..., 0, 1],
+        ),
+        dim=1,
+    )
+
+
+# NOTE: No jacobian is defined for the project operator
+_jproject_impl = None
+
+
+class Project(lie_group.UnaryOperator):
+    @classmethod
+    def forward(cls, ctx, matrix):
+        matrix: torch.Tensor = cast(torch.Tensor, matrix)
+        ret = _project_impl(matrix)
+        return ret
+
+    @classmethod
+    def backward(cls, ctx, grad_output):
+        grad_output: torch.Tensor = cast(torch.Tensor, grad_output)
+        return 0.5 * hat(grad_output)
+
+
+_project_autograd_fn = Project.apply
+_jproject_autograd_fn = None
+
+project = lie_group.UnaryOperatorFactory(_module, "project")

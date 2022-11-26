@@ -579,11 +579,60 @@ quaternion_to_rotation, jquaternion_to_rotation = lie_group.UnaryOperatorFactory
 
 
 # -----------------------------------------------------------------------------
+# Lift
+# -----------------------------------------------------------------------------
+def _lift_impl(matrix: torch.Tensor) -> torch.Tensor:
+    if matrix.shape[-1] != 3:
+        raise ValueError("Inconsistent shape for the matrix to lift.")
+
+    ret = matrix.new_zeros(matrix.shape[:-1] + (3, 3))
+    ret[..., 0, 1] = -matrix[..., 2]
+    ret[..., 0, 2] = matrix[..., 1]
+    ret[..., 1, 2] = -matrix[..., 0]
+    ret[..., 1, 0] = matrix[..., 2]
+    ret[..., 2, 0] = -matrix[..., 1]
+    ret[..., 2, 1] = matrix[..., 0]
+
+    return ret
+
+
+# NOTE: No jacobian is defined for the project operator
+_jlift_impl = None
+
+
+class Lift(lie_group.UnaryOperator):
+    @classmethod
+    def forward(cls, ctx, matrix):
+        matrix: torch.Tensor = cast(torch.Tensor, matrix)
+        ret = _lift_impl(matrix)
+        return ret
+
+    @classmethod
+    def backward(cls, ctx, grad_output):
+        grad_output: torch.Tensor = cast(torch.Tensor, grad_output)
+        grad_output: torch.Tensor = cast(torch.Tensor, grad_output)
+        return torch.stack(
+            (
+                grad_output[..., 2, 1] - grad_output[..., 1, 2],
+                grad_output[..., 0, 2] - grad_output[..., 2, 0],
+                grad_output[..., 1, 0] - grad_output[..., 0, 1],
+            ),
+            dim=-1,
+        )
+
+
+_lift_autograd_fn = Lift.apply
+_jlift_autograd_fn = None
+
+lift = lie_group.UnaryOperatorFactory(_module, "lift")
+
+
+# -----------------------------------------------------------------------------
 # Project
 # -----------------------------------------------------------------------------
 def _project_impl(matrix: torch.Tensor) -> torch.Tensor:
     if matrix.shape[-2:] != (3, 3):
-        raise ValueError("Inconsistent shape for matrix.")
+        raise ValueError("Inconsistent shape for the matrix to project.")
 
     return torch.stack(
         (
@@ -591,7 +640,7 @@ def _project_impl(matrix: torch.Tensor) -> torch.Tensor:
             matrix[..., 0, 2] - matrix[..., 2, 0],
             matrix[..., 1, 0] - matrix[..., 0, 1],
         ),
-        dim=1,
+        dim=-1,
     )
 
 
@@ -609,7 +658,7 @@ class Project(lie_group.UnaryOperator):
     @classmethod
     def backward(cls, ctx, grad_output):
         grad_output: torch.Tensor = cast(torch.Tensor, grad_output)
-        return 0.5 * hat(grad_output)
+        return lift(grad_output)
 
 
 _project_autograd_fn = Project.apply

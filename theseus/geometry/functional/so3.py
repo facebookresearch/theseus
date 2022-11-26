@@ -15,6 +15,9 @@ NAME: str = "SO3"
 DIM: int = 3
 
 
+_module = get_module(__name__)
+
+
 def check_group_tensor(tensor: torch.Tensor) -> bool:
     with torch.no_grad():
         if tensor.ndim != 3 or tensor.shape[1:] != (3, 3):
@@ -166,8 +169,6 @@ class Exp(lie_group.UnaryOperator):
         return grad_input.view(-1, 3)
 
 
-_module = get_module(__name__)
-
 # TODO: Implement analytic backward for _jexp_impl
 _exp_autograd_fn = Exp.apply
 _jexp_autograd_fn = _jexp_impl
@@ -203,3 +204,32 @@ _adjoint_autograd_fn = Adjoint.apply
 _jadjoint_autograd_fn = None
 
 adjoint = lie_group.UnaryOperatorFactory(_module, "adjoint")
+
+
+# -----------------------------------------------------------------------------
+# Inverse
+# -----------------------------------------------------------------------------
+def _inverse_impl(group: torch.Tensor) -> torch.Tensor:
+    if not check_group_tensor(group):
+        raise ValueError("Invalid data tensor for SO3.")
+    return group.transpose(1, 2)
+
+
+_jinverse_impl = lie_group.JInverseImplFactory(_module)
+
+
+class Inverse(lie_group.UnaryOperator):
+    @classmethod
+    def forward(cls, ctx, group):
+        group: torch.Tensor = cast(torch.Tensor, group)
+        return _inverse_impl(group)
+
+    @classmethod
+    def backward(cls, ctx, grad_output):
+        return grad_output.transpose(1, 2)
+
+
+_inverse_autograd_fn = Inverse.apply
+_jinverse_autograd_fn = _jinverse_impl
+
+inverse, jinverse = lie_group.UnaryOperatorFactory(_module, "inverse")

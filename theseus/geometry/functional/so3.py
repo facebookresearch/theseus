@@ -52,6 +52,19 @@ def check_hat_matrix(matrix: torch.Tensor):
         raise ValueError("Hat matrices of SO(3) can only be skew-symmetric.")
 
 
+def check_unit_quaternion(quaternion: torch.Tensor):
+    if quaternion.ndim != 2 or quaternion.shape[1] != 4:
+        raise ValueError("Quaternions can only be 4-D vectors.")
+
+    QUANTERNION_EPS = constants._SO3_QUATERNION_EPS[quaternion.dtype]
+
+    if quaternion.dtype != torch.float64:
+        quaternion = quaternion.double()
+
+    if (torch.linalg.norm(quaternion, dim=1) - 1).abs().max().item() >= QUANTERNION_EPS:
+        raise ValueError("Not unit quaternions.")
+
+
 # -----------------------------------------------------------------------------
 # Exponential Map
 # -----------------------------------------------------------------------------
@@ -376,3 +389,39 @@ _compose_autograd_fn = Compose.apply
 _jcompose_autograd_fn = _jcompose_impl
 
 compose, jcompose = lie_group.BinaryOperatorFactory(_module, "compose")
+
+
+# -----------------------------------------------------------------------------
+# Unit Quaternion to Rotation Matrix
+# -----------------------------------------------------------------------------
+def _quaternion_to_rotation_impl(quaternion: torch.Tensor) -> torch.Tensor:
+    if quaternion.ndim == 1:
+        quaternion = quaternion.unsqueeze(0)
+    check_unit_quaternion(quaternion)
+    w = quaternion[:, 0]
+    x = quaternion[:, 1]
+    y = quaternion[:, 2]
+    z = quaternion[:, 3]
+    q00 = w * w
+    q01 = w * x
+    q02 = w * y
+    q03 = w * z
+    q11 = x * x
+    q12 = x * y
+    q13 = x * z
+    q22 = y * y
+    q23 = y * z
+    q33 = z * z
+
+    ret = quaternion.new_zeros(quaternion.shape[0], 3, 3)
+
+    ret[:, 0, 0] = 2 * (q00 + q11) - 1
+    ret[:, 0, 1] = 2 * (q12 - q03)
+    ret[:, 0, 2] = 2 * (q13 + q02)
+    ret[:, 1, 0] = 2 * (q12 + q03)
+    ret[:, 1, 1] = 2 * (q00 + q22) - 1
+    ret[:, 1, 2] = 2 * (q23 - q01)
+    ret[:, 2, 0] = 2 * (q13 - q02)
+    ret[:, 2, 1] = 2 * (q23 + q01)
+    ret[:, 2, 2] = 2 * (q00 + q33) - 1
+    return ret

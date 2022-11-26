@@ -436,7 +436,8 @@ def _jquaternion_to_rotation_impl(
         quaternion = quaternion.unsqueeze(0)
     check_unit_quaternion(quaternion)
 
-    quaternion = quaternion / torch.norm(quaternion, dim=1, keepdim=True)
+    quaternion_norm = torch.norm(quaternion, dim=1, keepdim=True)
+    quaternion = quaternion / quaternion_norm
     w = quaternion[:, 0]
     x = quaternion[:, 1]
     y = quaternion[:, 2]
@@ -464,13 +465,13 @@ def _jquaternion_to_rotation_impl(
     ret[:, 2, 1] = 2 * (q23 + q01)
     ret[:, 2, 2] = q00 - q11 - q22 + q33
 
-    temp = -4 * quaternion
+    temp = -2 * quaternion / quaternion_norm
     jac = quaternion.new_zeros(quaternion.shape[0], 3, 4)
     jac[:, :, :1] = temp[:, 1:].view(-1, 3, 1)
     jac[:, :, 1:] = hat(temp[:, 1:])
-    jac[:, 0, 1] = temp[:, 0]
-    jac[:, 1, 2] = temp[:, 0]
-    jac[:, 2, 3] = temp[:, 0]
+    jac[:, 0, 1] = -temp[:, 0]
+    jac[:, 1, 2] = -temp[:, 0]
+    jac[:, 2, 3] = -temp[:, 0]
 
     return [jac], ret
 
@@ -500,7 +501,7 @@ class QuaternionToRotation(lie_group.UnaryOperator):
                 dR[:, 1, 0] - dR[:, 0, 1],
             ),
             dim=1,
-        ).view(-1, 4, 1)
+        ).view(-1, 3, 1)
         return grad_input.view(-1, 4)
 
 

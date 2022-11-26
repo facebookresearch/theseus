@@ -329,3 +329,50 @@ _vee_autograd_fn = Vee.apply
 _jvee_autograd_fn = None
 
 vee = lie_group.UnaryOperatorFactory(_module, "vee")
+
+
+# -----------------------------------------------------------------------------
+# Compose
+# -----------------------------------------------------------------------------
+def _compose_impl(group0: torch.Tensor, group1: torch.Tensor) -> torch.Tensor:
+    if not check_group_tensor(group0) or not check_group_tensor(group1):
+        raise ValueError("Invalid data tensor for SO3.")
+    return group0 @ group1
+
+
+def _jcompose_impl(
+    group0: torch.Tensor, group1: torch.Tensor
+) -> Tuple[List[torch.Tensor], torch.Tensor]:
+    if not check_group_tensor(group0) or not check_group_tensor(group1):
+        raise ValueError("Invalid data tensor for SO3.")
+    jacobians = []
+    jacobians.append(group1.transpose(1, 2))
+    jacobians.append(group0.new_zeros(group0.shape[0], 3, 3))
+    jacobians[1][:, 0, 0] = 1
+    jacobians[1][:, 1, 1] = 1
+    jacobians[1][:, 2, 2] = 1
+    return jacobians, group0 @ group1
+
+
+class Compose(lie_group.BinaryOperator):
+    @classmethod
+    def forward(cls, ctx, group0, group1):
+        group0: torch.Tensor = cast(torch.Tensor, group0)
+        group1: torch.Tensor = cast(torch.Tensor, group1)
+        ret = _compose_impl(group0, group1)
+        ctx.save_for_backward(group0, group1)
+        return ret
+
+    @classmethod
+    def backward(cls, ctx, grad_output):
+        group0, group1 = ctx.saved_tensors
+        return (
+            grad_output @ group1.transpose(1, 2),
+            group0.transpose(1, 2) @ grad_output,
+        )
+
+
+_compose_autograd_fn = Compose.apply
+_jcompose_autograd_fn = _jcompose_impl
+
+compose, jcompose = lie_group.BinaryOperatorFactory(_module, "compose")

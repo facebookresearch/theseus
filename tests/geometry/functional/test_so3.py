@@ -18,3 +18,13 @@ def test_exp(batch_size: int, dtype: torch.dtype):
     rng.manual_seed(0)
     tangent_vector = torch.rand(batch_size, 3, dtype=dtype, generator=rng)
     check_lie_group_function(so3, "exp", TEST_EPS, tangent_vector)
+
+
+@pytest.mark.parametrize("batch_size", [1, 20, 100])
+@pytest.mark.parametrize("dtype", [torch.float32, torch.float64])
+def test_adjoint(batch_size: int, dtype: torch.dtype):
+    rng = torch.Generator()
+    rng.manual_seed(0)
+    tangent_vector = torch.rand(batch_size, 3, dtype=dtype, generator=rng)
+    group = so3.exp(tangent_vector)
+    check_lie_group_function(so3, "adjoint", TEST_EPS, group)

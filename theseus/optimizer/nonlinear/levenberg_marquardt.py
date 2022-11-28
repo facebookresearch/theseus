@@ -133,37 +133,62 @@ class LevenbergMarquardt(NonlinearLeastSquares):
             damping_eps=damping_eps,
         )
 
-    # Updates damping per batch element depending on whether the last step
-    # was successful in decreasing error or not.
-    # Based on https://people.duke.edu/~hpgavin/ce281/lm.pdf, Section 4.1
-    # We currently use method (1) from 4.1.1
-    def _update_state_impl(
+    def _complete_step(
         self,
-        last_err: torch.Tensor,
-        new_err: torch.Tensor,
         delta: torch.Tensor,
+        new_err: torch.Tensor,
+        previous_err: torch.Tensor,
         adaptive_damping: bool = False,
         down_damping_ratio: float = 9.0,
         up_damping_ratio: float = 11.0,
         damping_accept: float = 0.1,
         **kwargs,
-    ) -> None:
-        if not adaptive_damping:
-            return
+    ) -> Optional[torch.Tensor]:
+        if adaptive_damping:
+            return self._check_accept(
+                delta,
+                new_err,
+                previous_err,
+                damping_accept,
+                down_damping_ratio,
+                up_damping_ratio,
+            )
+        else:
+            return None
+
+    # Checks if the step should be accepted (per batch element)
+    # Adjusts self._damping accordingly
+    # Returns a mask indicating which batch indices were accepted
+    #
+    # Based on https://people.duke.edu/~hpgavin/ce281/lm.pdf, Section 4.1
+    # We currently use method (1) from 4.1.1
+    @torch.no_grad()
+    def _check_accept(
+        self,
+        delta: torch.Tensor,
+        err: torch.Tensor,
+        previous_err: torch.Tensor,
+        damping_accept: float,
+        down_damping_ratio: float,
+        up_damping_ratio: float,
+    ) -> torch.Tensor:
         linearization = self.linear_solver.linearization
         damping = (
             self._damping.view(-1, 1)
             if isinstance(self._damping, torch.Tensor)
             else self._damping
         )
+        # Deliberately using Atb before updating the variables, according to
+        # the LM reference above
         den = (delta * (damping * delta + linearization.Atb.squeeze(2))).sum(dim=1)
-        rho = (last_err - new_err) / den
-        good_idx = rho > damping_accept
+        rho = (previous_err - err) / den
+        reject_indices = rho <= damping_accept
         self._damping = torch.where(
-            good_idx,
-            self._damping / down_damping_ratio,
+            reject_indices,
             self._damping * up_damping_ratio,
+            self._damping / down_damping_ratio,
         )
         self._damping = self._damping.clamp(
             LevenbergMarquardt._MIN_DAMPING, LevenbergMarquardt._MAX_DAMPING
         )
+        return reject_indices

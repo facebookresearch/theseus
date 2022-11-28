@@ -485,7 +485,7 @@ class Objective:
         memo[id(self)] = the_copy
         return the_copy
 
-    def update(self, input_tensors: Optional[Dict[str, torch.Tensor]] = None):
+    def _resolve_batch_size(self):
         self._batch_size = None
 
         def _get_batch_size(batch_sizes: Sequence[int]) -> int:
@@ -499,6 +499,19 @@ class Objective:
                     return max_bs
             raise ValueError("Provided tensors must be broadcastable.")
 
+        batch_sizes = [v.tensor.shape[0] for v in self.optim_vars.values()]
+        batch_sizes.extend([v.tensor.shape[0] for v in self.aux_vars.values()])
+        self._batch_size = _get_batch_size(batch_sizes)
+
+    # batch_ignore_mask is a boolean list where batch_ignore_mask[i] = 1 means
+    # for any variable v, v[i] will *not* be updated. Shape must be equal to the
+    # batch size.
+    def update(
+        self,
+        input_tensors: Optional[Dict[str, torch.Tensor]] = None,
+        batch_ignore_mask: Optional[torch.Tensor] = None,
+    ):
+
         input_tensors = input_tensors or {}
         for var_name, tensor in input_tensors.items():
             if tensor.ndim < 2:
@@ -508,11 +521,17 @@ class Objective:
                     f"tensor with name {var_name}."
                 )
             if var_name in self.optim_vars:
-                self.optim_vars[var_name].update(tensor)
+                self.optim_vars[var_name].update(
+                    tensor, batch_ignore_mask=batch_ignore_mask
+                )
             elif var_name in self.aux_vars:
-                self.aux_vars[var_name].update(tensor)
+                self.aux_vars[var_name].update(
+                    tensor, batch_ignore_mask=batch_ignore_mask
+                )
             elif var_name in self.cost_weight_optim_vars:
-                self.cost_weight_optim_vars[var_name].update(tensor)
+                self.cost_weight_optim_vars[var_name].update(
+                    tensor, batch_ignore_mask=batch_ignore_mask
+                )
                 warnings.warn(
                     "Updated a variable declared as optimization, but it is "
                     "only associated to cost weights and not to any cost functions. "
@@ -526,9 +545,8 @@ class Objective:
                 )
 
         # Check that the batch size of all tensors is consistent after update
-        batch_sizes = [v.tensor.shape[0] for v in self.optim_vars.values()]
-        batch_sizes.extend([v.tensor.shape[0] for v in self.aux_vars.values()])
-        self._batch_size = _get_batch_size(batch_sizes)
+        self._resolve_batch_size()
+        self.update_vectorization_if_needed()
 
     def _vectorization_needs_update(self):
         num_updates = {name: v._num_updates for name, v in self._all_variables.items()}
@@ -545,7 +563,7 @@ class Objective:
     def update_vectorization_if_needed(self):
         if self.vectorized and self._vectorization_needs_update():
             if self._batch_size is None:
-                self.update()
+                self._resolve_batch_size()
             self._vectorization_run()
             self._last_vectorization_has_grad = torch.is_grad_enabled()
 
@@ -589,7 +607,13 @@ class Objective:
                 var.update(new_var.tensor, batch_ignore_mask=ignore_mask)
             var_idx += var.dof()
 
-    def retract_optim_vars(
+    # Retracts an ordered sequence of variables according to the
+    # corresponding `delta` tangent vectors.
+    # This function assumes that delta is constructed as follows:
+    #    For ordering = [v1 v2 ... vn]
+    #    delta = torch.cat([delta_v1, delta_v2, ..., delta_vn], dim=-1)
+    # where delta_vi.shape = (batch_size, vi.dof)
+    def retract_vars_sequence(
         self,
         delta: torch.Tensor,
         ordering: Iterable[Manifold],

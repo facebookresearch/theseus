@@ -81,8 +81,8 @@ def check_sparse_backward_step(
         linearization.A_val,
         linearization.b,
         linearization.structure(),
-        solver.A_rowPtr,
-        solver.A_colInd,
+        solver.A_row_ptr,
+        solver.A_col_ind,
         solver.symbolic_decomposition,
         damping_alpha_beta,
     )

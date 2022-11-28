@@ -17,8 +17,8 @@ class BaspachoSolveFunction(torch.autograd.Function):
         A_val: torch.Tensor = args[0]
         b: torch.Tensor = args[1]
         sparse_structure: SparseStructure = args[2]
-        A_rowPtr: torch.Tensor = args[3]
-        A_colInd: torch.Tensor = args[4]
+        A_row_ptr: torch.Tensor = args[3]
+        A_col_ind: torch.Tensor = args[4]
         symbolic_decomposition: SymbolicDecomposition = args[5]
         damping_alpha_beta: Optional[Tuple[torch.Tensor, torch.Tensor]] = args[6]
 
@@ -27,12 +27,12 @@ class BaspachoSolveFunction(torch.autograd.Function):
         numeric_decomposition = symbolic_decomposition.create_numeric_decomposition(
             batch_size
         )
-        numeric_decomposition.add_MtM(A_val, A_rowPtr, A_colInd)
+        numeric_decomposition.add_MtM(A_val, A_row_ptr, A_col_ind)
         if damping_alpha_beta is not None:
             numeric_decomposition.damp(*damping_alpha_beta)
         numeric_decomposition.factor()
 
-        A_args = sparse_structure.num_cols, A_rowPtr, A_colInd, A_val
+        A_args = sparse_structure.num_cols, A_row_ptr, A_col_ind, A_val
         Atb = tmat_vec(batch_size, *A_args, b)
 
         x = Atb.clone()
@@ -41,8 +41,8 @@ class BaspachoSolveFunction(torch.autograd.Function):
         ctx.b = b
         ctx.x = x
         ctx.A_val = A_val
-        ctx.A_rowPtr = A_rowPtr
-        ctx.A_colInd = A_colInd
+        ctx.A_row_ptr = A_row_ptr
+        ctx.A_col_ind = A_col_ind
         ctx.sparse_structure = sparse_structure
         ctx.numeric_decomposition = numeric_decomposition
         ctx.damping_alpha_beta = damping_alpha_beta
@@ -106,7 +106,7 @@ class BaspachoSolveFunction(torch.autograd.Function):
         H = grad_output.clone()
         ctx.numeric_decomposition.solve(H)  # solve in place
 
-        A_args = ctx.sparse_structure.num_cols, ctx.A_rowPtr, ctx.A_colInd, ctx.A_val
+        A_args = ctx.sparse_structure.num_cols, ctx.A_row_ptr, ctx.A_col_ind, ctx.A_val
         AH = mat_vec(batch_size, *A_args, H)
         b_Ax = ctx.b - mat_vec(batch_size, *A_args, ctx.x)
 
@@ -114,15 +114,15 @@ class BaspachoSolveFunction(torch.autograd.Function):
         # selected entries from the difference of tensor products:
         #   b_Ax (X) H - AH (X) x
         # NOTE: this row-wise manipulation can be much faster in C++ or Cython
-        A_colInd = ctx.sparse_structure.col_ind
-        A_rowPtr = ctx.sparse_structure.row_ptr
+        A_col_ind = ctx.sparse_structure.col_ind
+        A_row_ptr = ctx.sparse_structure.row_ptr
         batch_size = grad_output.shape[0]
         A_grad = torch.empty(
-            size=(batch_size, len(A_colInd)), **targs
+            size=(batch_size, len(A_col_ind)), **targs
         )  # return value, A's grad
-        for r in range(len(A_rowPtr) - 1):
-            start, end = A_rowPtr[r], A_rowPtr[r + 1]
-            columns = A_colInd[start:end]  # col indices, for this row
+        for r in range(len(A_row_ptr) - 1):
+            start, end = A_row_ptr[r], A_row_ptr[r + 1]
+            columns = A_col_ind[start:end]  # col indices, for this row
             A_grad[:, start:end] = (
                 b_Ax[:, r].unsqueeze(1) * H[:, columns]
                 - AH[:, r].unsqueeze(1) * ctx.x[:, columns]
@@ -135,6 +135,6 @@ class BaspachoSolveFunction(torch.autograd.Function):
         ):
             alpha = ctx.damping_alpha_beta[0].view(-1, 1)
             alpha2Hx = (alpha * 2.0) * H * ctx.x  # componentwise product
-            A_grad -= ctx.A_val * alpha2Hx[:, ctx.A_colInd.type(torch.long)]
+            A_grad -= ctx.A_val * alpha2Hx[:, ctx.A_col_ind.type(torch.long)]
 
         return A_grad, AH, None, None, None, None, None, None

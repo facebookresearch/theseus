@@ -35,12 +35,11 @@ def check_baspacho(
 
     from theseus.extlib.baspacho_solver import SymbolicDecomposition
 
-    A_colInd, A_rowPtr, A_val, A_skel = random_sparse_matrix(
+    A_col_ind, A_row_ptr, A_val, A_skel = random_sparse_matrix(
         batch_size, num_rows, num_cols, fill, 1, rng, dev
     )
     A_num_cols = num_cols
-    A_num_rows = A_rowPtr.size(0) - 1
-
+    A_num_rows = A_row_ptr.size(0) - 1
     b = torch.rand(
         (batch_size, A_num_rows), device=dev, dtype=torch.double, generator=rng
     )
@@ -60,7 +59,7 @@ def check_baspacho(
 
     A_csr = [
         csr_matrix(
-            (A_val[i].cpu(), A_colInd.cpu(), A_rowPtr.cpu()), (A_num_rows, A_num_cols)
+            (A_val[i].cpu(), A_col_ind.cpu(), A_row_ptr.cpu()), (A_num_rows, A_num_cols)
         )
         for i in range(batch_size)
     ]
@@ -81,7 +80,7 @@ def check_baspacho(
     )
     f = s.create_numeric_decomposition(batch_size)
 
-    f.add_MtM(A_val, A_rowPtr, A_colInd)
+    f.add_MtM(A_val, A_row_ptr, A_col_ind)
     beta = 0.01 * torch.rand(batch_size, device=dev, dtype=torch.double, generator=rng)
     alpha = torch.rand(batch_size, device=dev, dtype=torch.double, generator=rng)
     f.damp(alpha, beta)

@@ -28,24 +28,26 @@ class LUCudaSolveFunction(torch.autograd.Function):
         A_val: torch.Tensor = args[0]
         b: torch.Tensor = args[1]
         sparse_structure: SparseStructure = args[2]
-        A_rowPtr: torch.Tensor = args[3]
-        A_colInd: torch.Tensor = args[4]
+        A_row_ptr: torch.Tensor = args[3]
+        A_col_ind: torch.Tensor = args[4]
         solver_context: CusolverLUSolver = args[5]
         damping_alpha_beta: Optional[Tuple[torch.Tensor, torch.Tensor]] = args[6]
         check_factor_id: bool = args[7]
 
-        AtA_rowPtr = solver_context.A_rowPtr
-        AtA_colInd = solver_context.A_colInd
+        AtA_row_ptr = solver_context.A_rowPtr
+        AtA_col_ind = solver_context.A_colInd
 
         batch_size = A_val.shape[0]
 
-        AtA = mult_MtM(batch_size, A_rowPtr, A_colInd, A_val, AtA_rowPtr, AtA_colInd)
+        AtA = mult_MtM(
+            batch_size, A_row_ptr, A_col_ind, A_val, AtA_row_ptr, AtA_col_ind
+        )
         if damping_alpha_beta is not None:
-            AtA_args = sparse_structure.num_cols, AtA_rowPtr, AtA_colInd, AtA
+            AtA_args = sparse_structure.num_cols, AtA_row_ptr, AtA_col_ind, AtA
             apply_damping(batch_size, *AtA_args, *damping_alpha_beta)
         solver_context.factor(AtA)
 
-        A_args = sparse_structure.num_cols, A_rowPtr, A_colInd, A_val
+        A_args = sparse_structure.num_cols, A_row_ptr, A_col_ind, A_val
         Atb = tmat_vec(batch_size, *A_args, b)
         x = Atb.clone()
         solver_context.solve(x)  # solve in place
@@ -53,8 +55,8 @@ class LUCudaSolveFunction(torch.autograd.Function):
         ctx.b = b
         ctx.x = x
         ctx.A_val = A_val
-        ctx.A_rowPtr = A_rowPtr
-        ctx.A_colInd = A_colInd
+        ctx.A_row_ptr = A_row_ptr
+        ctx.A_col_ind = A_col_ind
         ctx.sparse_structure = sparse_structure
         ctx.solver_context = solver_context
         ctx.damping_alpha_beta = damping_alpha_beta
@@ -141,7 +143,7 @@ class LUCudaSolveFunction(torch.autograd.Function):
         H = grad_output.clone()
         ctx.solver_context.solve(H)  # solve in place
 
-        A_args = ctx.sparse_structure.num_cols, ctx.A_rowPtr, ctx.A_colInd, ctx.A_val
+        A_args = ctx.sparse_structure.num_cols, ctx.A_row_ptr, ctx.A_col_ind, ctx.A_val
         AH = mat_vec(batch_size, *A_args, H)
         b_Ax = ctx.b - mat_vec(batch_size, *A_args, ctx.x)
 
@@ -149,15 +151,15 @@ class LUCudaSolveFunction(torch.autograd.Function):
         # selected entries from the difference of tensor products:
         #   b_Ax (X) H - AH (X) x
         # NOTE: this row-wise manipulation can be much faster in C++ or Cython
-        A_colInd = ctx.sparse_structure.col_ind
-        A_rowPtr = ctx.sparse_structure.row_ptr
+        A_col_ind = ctx.sparse_structure.col_ind
+        A_row_ptr = ctx.sparse_structure.row_ptr
         batch_size = grad_output.shape[0]
         A_grad = torch.empty(
-            size=(batch_size, len(A_colInd)), **targs
+            size=(batch_size, len(A_col_ind)), **targs
         )  # return value, A's grad
-        for r in range(len(A_rowPtr) - 1):
-            start, end = A_rowPtr[r], A_rowPtr[r + 1]
-            columns = A_colInd[start:end]  # col indices, for this row
+        for r in range(len(A_row_ptr) - 1):
+            start, end = A_row_ptr[r], A_row_ptr[r + 1]
+            columns = A_col_ind[start:end]  # col indices, for this row
             A_grad[:, start:end] = (
                 b_Ax[:, r].unsqueeze(1) * H[:, columns]
                 - AH[:, r].unsqueeze(1) * ctx.x[:, columns]
@@ -170,6 +172,6 @@ class LUCudaSolveFunction(torch.autograd.Function):
         ):
             alpha = ctx.damping_alpha_beta[0].view(-1, 1)
             alpha2Hx = (alpha * 2.0) * H * ctx.x  # componentwise product
-            A_grad -= ctx.A_val * alpha2Hx[:, ctx.A_colInd.type(torch.long)]
+            A_grad -= ctx.A_val * alpha2Hx[:, ctx.A_col_ind.type(torch.long)]
 
         return A_grad, AH, None, None, None, None, None, None

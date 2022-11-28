@@ -10,7 +10,7 @@ from scipy.sparse import csr_matrix, tril
 
 
 from tests.extlib.common import run_if_baspacho
-from theseus.utils import random_sparse_binary_matrix, split_into_param_sizes
+from theseus.utils import random_sparse_matrix, split_into_param_sizes
 
 
 def check_baspacho(
@@ -35,17 +35,12 @@ def check_baspacho(
 
     from theseus.extlib.baspacho_solver import SymbolicDecomposition
 
-    A_skel = random_sparse_binary_matrix(
-        num_rows, num_cols, fill, min_entries_per_col=1, rng=rng
+    A_colInd, A_rowPtr, A_val, A_skel = random_sparse_matrix(
+        batch_size, num_rows, num_cols, fill, 1, rng, dev
     )
     A_num_cols = num_cols
-    A_rowPtr = torch.tensor(A_skel.indptr, dtype=torch.int64).to(dev)
-    A_colInd = torch.tensor(A_skel.indices, dtype=torch.int64).to(dev)
     A_num_rows = A_rowPtr.size(0) - 1
-    A_nnz = A_colInd.size(0)
-    A_val = torch.rand(
-        (batch_size, A_nnz), device=dev, dtype=torch.double, generator=rng
-    )
+
     b = torch.rand(
         (batch_size, A_num_rows), device=dev, dtype=torch.double, generator=rng
     )

@@ -2,7 +2,7 @@
 #
 # This source code is licensed under the MIT license found in the
 # LICENSE file in the root directory of this source tree.
-from typing import List
+from typing import List, Tuple
 
 import numpy as np
 import torch
@@ -95,6 +95,32 @@ def random_sparse_binary_matrix(
         retv[row, col] = 1.0
 
     return retv.tocsr()
+
+
+def random_sparse_matrix(
+    batch_size: int,
+    num_rows: int,
+    num_cols: int,
+    fill: float,
+    min_entries_per_col: int,
+    rng: torch.Generator,
+    device: torch.device,
+    int_dtype: torch.dtype = torch.int64,
+    float_dtype: torch.dtype = torch.double,
+) -> Tuple[torch.Tensor, torch.Tensor, torch.Tensor, torch.Tensor]:
+    A_skel = random_sparse_binary_matrix(
+        num_rows, num_cols, fill, min_entries_per_col=min_entries_per_col, rng=rng
+    )
+    A_row_ptr = torch.tensor(A_skel.indptr, dtype=int_dtype).to(device)
+    A_col_ind = torch.tensor(A_skel.indices, dtype=int_dtype).to(device)
+    A_val = torch.rand(
+        batch_size,
+        A_col_ind.size(0),
+        device=rng.device,
+        dtype=float_dtype,
+        generator=rng,
+    ).to(device)
+    return A_col_ind, A_row_ptr, A_val, A_skel
 
 
 def split_into_param_sizes(

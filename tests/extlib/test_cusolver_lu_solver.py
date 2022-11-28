@@ -8,7 +8,7 @@ import pytest  # noqa: F401
 import torch  # needed for import of Torch C++ extensions to work
 from scipy.sparse import csr_matrix
 
-from theseus.utils import random_sparse_binary_matrix
+from theseus.utils import random_sparse_matrix
 
 
 # ideally we would like to support batch_size <= init_batch_size, but
@@ -25,15 +25,12 @@ def check_lu_solver(
 
     rng = torch.Generator()
     rng.manual_seed(0)
-    A_skel = random_sparse_binary_matrix(
-        num_rows, num_cols, fill, min_entries_per_col=3, rng=rng
+    A_colInd, A_rowPtr, A_val, A_skel = random_sparse_matrix(
+        batch_size, num_rows, num_cols, fill, 3, rng, "cuda:0"
     )
     A_num_cols = num_cols
-    A_rowPtr = torch.tensor(A_skel.indptr, dtype=torch.int).cuda()
-    A_colInd = torch.tensor(A_skel.indices, dtype=torch.int).cuda()
     A_num_rows = A_rowPtr.size(0) - 1
-    A_nnz = A_colInd.size(0)
-    A_val = torch.rand((batch_size, A_nnz), dtype=torch.double).cuda()
+
     b = torch.rand((batch_size, A_num_rows), dtype=torch.double).cuda()
 
     A_csr = [

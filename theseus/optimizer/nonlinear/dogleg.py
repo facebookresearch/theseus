@@ -16,6 +16,8 @@ from .trust_region import TrustRegion
 # See Nocedal and Wright, Numerical Optimization, pp. 73-77
 # https://www.csie.ntu.edu.tw/~r97002/temp/num_optimization.pdf
 class Dogleg(TrustRegion):
+    EPS = 1e-7
+
     def __init__(
         self,
         objective: Objective,
@@ -56,7 +58,8 @@ class Dogleg(TrustRegion):
         good_gn_idx = delta_gn_norm_2 < trust_region_2
         # All Gauss-Newton step are within trust-region, can return
         if good_gn_idx.all():
-            return delta_gn, good_gn_idx
+            # Return a False mask since no indices are at the boundary
+            return delta_gn, torch.zeros_like(good_gn_idx).bool()
 
         # If reach here, some steps are outside trust-region,
         # need to compute dogleg step
@@ -73,23 +76,26 @@ class Dogleg(TrustRegion):
             Adelta_sd = linearization.A.bmm(neg_grad.unsqueeze(2)).squeeze(2)
             Adelta_sd_norm_2 = TrustRegion._detached_squared_norm(Adelta_sd)
             grad_norm_2 = TrustRegion._detached_squared_norm(neg_grad)
-            t = grad_norm_2 / Adelta_sd_norm_2
+            t = grad_norm_2 / (Adelta_sd_norm_2 + Dogleg.EPS)
             delta_sd = neg_grad * t
             delta_sd_norm_2 = TrustRegion._detached_squared_norm(delta_sd)
             not_near_zero_sd_idx = delta_sd_norm_2 > 1e-6
-            good_sd_idx = delta_sd_norm_2 <= trust_region_2
+            sd_within_region_idx = delta_sd_norm_2 <= trust_region_2
 
-        delta_dogleg = delta_sd
-        # If the steepest descent direction is too close to zero, just use
-        # the Gauss-Newton direction truncated at the trust region to avoid
-        # numerical errors.
-        delta_dogleg = torch.where(
-            not_near_zero_sd_idx,
-            delta_dogleg,
-            delta_gn / delta_gn_norm_2.sqrt() * self._trust_region,
-        )
-        good_sd_idx &= not_near_zero_sd_idx
-        if good_sd_idx.any():
+        # Firsst make sure that any steps beyond the trust region, are truncated
+        if not sd_within_region_idx.all():
+            delta_dogleg = torch.where(
+                sd_within_region_idx,
+                delta_sd,
+                delta_sd * self._trust_region / (delta_sd_norm_2 + Dogleg.EPS).sqrt(),
+            )
+        else:
+            delta_dogleg = delta_sd
+
+        # Now mask near zero indices so the next computation doesn't happen for them
+        sd_within_region_idx &= not_near_zero_sd_idx
+
+        if sd_within_region_idx.any():
             # In this case, some steepest descent steps are within region
             # so need to extend towards boundary with Gauss-Newton step
             # Need to solve a quadratic || sd + tau * (gn - sd)|| == tr**2
@@ -100,18 +106,28 @@ class Dogleg(TrustRegion):
                 a = TrustRegion._detached_squared_norm(diff)
                 b = (2 * delta_sd * diff).sum(dim=1, keepdim=True)
                 c = delta_sd_norm_2 - trust_region_2
-                disc = ((b**2) - 4 * a * c).clamp(0.0)
-                tau = (-b + disc.sqrt()) / (2 * a)
-            delta_dogleg = torch.where(good_sd_idx, delta_sd + tau * diff, delta_sd)
-
-        if not good_sd_idx.all():
-            # For any steps beyond the trust region, truncate to trust region
+                disc = ((b**2) - 4 * a * c) + Dogleg.EPS
+                tau = (-b + disc.sqrt()) / (2 * a + Dogleg.EPS)
+                tau[~sd_within_region_idx] = 0.0  # avoid nans in backward pass
             delta_dogleg = torch.where(
-                good_sd_idx,
+                sd_within_region_idx,
+                delta_sd + tau * diff,
                 delta_dogleg,
-                delta_sd * trust_region_2 / delta_sd_norm_2.sqrt(),
+            )
+
+        # Finally, when the steepest descent direction is too close to zero, just use
+        # the Gauss-Newton direction truncated at the trust region, to avoid
+        # numerical errors.
+        if not not_near_zero_sd_idx.all():
+            delta_dogleg = torch.where(
+                not_near_zero_sd_idx,
+                delta_dogleg,
+                delta_gn / (delta_gn_norm_2 + Dogleg.EPS).sqrt() * self._trust_region,
             )
 
         # Finally, use the Gauss-Newton step if it was within the boundary
         delta_dogleg = torch.where(good_gn_idx, delta_gn, delta_dogleg)
-        return delta_dogleg, good_gn_idx
+        # The only steps that are within the trust region are those were
+        # Gauss-Newton was "good". Every other step size will have
+        # norm exactly equal to the trust region
+        return delta_dogleg, ~good_gn_idx

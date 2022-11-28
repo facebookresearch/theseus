@@ -33,8 +33,8 @@ from .nonlinear_least_squares import NonlinearLeastSquares
 # then the trust region is reduced by `shrink_ratio`.
 # The trust region is initialized to `trust_region_init`.
 class TrustRegion(NonlinearLeastSquares, abc.ABC):
-    _MIN_TRUST_REGION = 1.0e-7
-    _MAX_TRUST_REGION = 1.0e7
+    _MIN_TRUST_REGION = 1.0e-5
+    _MAX_TRUST_REGION = 1.0e5
 
     def __init__(
         self,
@@ -69,11 +69,11 @@ class TrustRegion(NonlinearLeastSquares, abc.ABC):
             # I expect this method to work with all our current solvers
             raise NotImplementedError
         self._trust_region: torch.Tensor = None
-        self._trusted_step_idx: torch.Tensor = None
+        self._at_trust_boundary_idx: torch.Tensor = None
 
     def reset(
         self,
-        trust_region_init: float = 1.0,
+        trust_region_init: float = 0.5,
         **kwargs,
     ) -> None:
         self._trust_region = trust_region_init * torch.ones(
@@ -82,10 +82,10 @@ class TrustRegion(NonlinearLeastSquares, abc.ABC):
             device=self.objective.device,
             dtype=self.objective.dtype,
         )
-        self._trusted_step_idx = None
+        self._at_trust_boundary_idx = None
 
     # Return the computed delta and, optionally, the indices that with the
-    # steps that are within the trust region
+    # steps that are exactly at the boundary of the trust region
     @abc.abstractmethod
     def _compute_delta_impl(self) -> Tuple[torch.Tensor, Optional[torch.Tensor]]:
         pass
@@ -97,7 +97,16 @@ class TrustRegion(NonlinearLeastSquares, abc.ABC):
         if self._trusted_step_idx is None:
             self._trusted_step_idx = (
                 TrustRegion._detached_squared_norm(delta) <= self._trust_region**2
-                <= self._trust_region**2
+            )
+
+        # Storing the indices of delta exactly at the trust boundary.
+        # If the step is at the boundary and the predicted error reduction agrees
+        # with real reduction, we can increase the trust region
+        # in self.complete_step()
+        delta, self._at_trust_boundary_idx = self._compute_delta_impl()
+        if self._at_trust_boundary_idx is None:
+            self._at_trust_boundary_idx = (
+                TrustRegion._detached_squared_norm(delta) <= self._trust_region**2
             )
         return delta
 
@@ -138,7 +147,7 @@ class TrustRegion(NonlinearLeastSquares, abc.ABC):
         delta: torch.Tensor,
         new_err: torch.Tensor,
         previous_err: torch.Tensor,
-        accept_threshold: float = 0.25,
+        accept_threshold: float = 0.0,
         shrink_threshold: float = 0.25,
         expand_threshold: float = 0.75,
         shrink_ratio: float = 0.25,
@@ -147,12 +156,12 @@ class TrustRegion(NonlinearLeastSquares, abc.ABC):
     ) -> Optional[torch.Tensor]:
         good_params = (0.0 < shrink_ratio <= 1.0) and (expand_ratio >= 1.0)
         good_params &= (shrink_threshold < expand_threshold) and (
-            accept_threshold < expand_threshold
+            accept_threshold < shrink_threshold
         )
         if not good_params:
             raise ValueError(
                 "Invalid parameters for TrustRegionMethod. "
-                "Values must satisfy accept_threshold/shrink_threshold < expand_threshold, "
+                "Values must satisfy <accept/shrink>_threshold < expand_threshold, "
                 "shrink_ratio in (0, 1], and expand_ratio > 1.0."
             )
         pred_err = self._predicted_error(previous_err, delta)
@@ -161,7 +170,7 @@ class TrustRegion(NonlinearLeastSquares, abc.ABC):
         self._trust_region = torch.where(
             shrink_idx, self._trust_region * shrink_ratio, self._trust_region
         )
-        expand_idx = (rho > expand_threshold) & ~self._trusted_step_idx
+        expand_idx = (rho > expand_threshold) & self._at_trust_boundary_idx
         self._trust_region = torch.where(
             expand_idx, self._trust_region * expand_ratio, self._trust_region
         )

@@ -70,6 +70,11 @@ def check_left_act_matrix(matrix: torch.Tensor):
         raise ValueError("Inconsistent shape for the matrix.")
 
 
+def check_left_project_matrix(matrix: torch.Tensor):
+    if matrix.ndim != 3 or matrix.shape[-2:] != (3, 3):
+        raise ValueError("Inconsistent shape for the matrix.")
+
+
 # -----------------------------------------------------------------------------
 # Rand
 # -----------------------------------------------------------------------------
@@ -702,3 +707,35 @@ _left_act_autograd_fn = LeftAct.apply
 _jleft_act_autograd_fn = None
 
 left_act = lie_group.BinaryOperatorFactory(_module, "left_act")
+
+
+# -----------------------------------------------------------------------------
+# Left Project
+# -----------------------------------------------------------------------------
+_left_project_impl = lie_group.LeftProjectImplFactory(_module)
+_jleft_project_impl = None
+
+
+class LeftProject(lie_group.BinaryOperator):
+    @classmethod
+    def forward(cls, ctx, group, matrix):
+        group: torch.Tensor = cast(torch.Tensor, group)
+        matrix: torch.Tensor = cast(torch.Tensor, matrix)
+        ret = _left_project_impl(group, matrix)
+        ctx.save_for_backward(group, matrix)
+        return ret
+
+    @classmethod
+    def backward(cls, ctx, grad_output):
+        group, matrix = ctx.saved_tensors
+        grad_output_lifted = lift(grad_output)
+        return (
+            -matrix @ grad_output_lifted,
+            group @ grad_output_lifted,
+        )
+
+
+_left_project_autograd_fn = LeftProject.apply
+_jleft_project_autograd_fn = _jleft_project_impl
+
+left_project = lie_group.BinaryOperatorFactory(_module, "left_project")

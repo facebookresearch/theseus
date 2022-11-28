@@ -82,7 +82,7 @@ class Dogleg(TrustRegion):
             not_near_zero_sd_idx = delta_sd_norm_2 > 1e-6
             sd_within_region_idx = delta_sd_norm_2 <= trust_region_2
 
-        # Firsst make sure that any steps beyond the trust region, are truncated
+        # First make sure that any steps beyond the trust region, are truncated
         if not sd_within_region_idx.all():
             delta_dogleg = torch.where(
                 sd_within_region_idx,

@@ -10,12 +10,12 @@ from theseus.core import Objective
 from theseus.optimizer import DenseLinearization, Linearization
 from theseus.optimizer.linear import LinearSolver
 
-from .trust_region import TrustRegionOptimizer
+from .trust_region import TrustRegion
 
 
 # See Nocedal and Wright, Numerical Optimization, pp. 73-77
 # https://www.csie.ntu.edu.tw/~r97002/temp/num_optimization.pdf
-class Dogleg(TrustRegionOptimizer):
+class Dogleg(TrustRegion):
     def __init__(
         self,
         objective: Objective,
@@ -52,7 +52,7 @@ class Dogleg(TrustRegionOptimizer):
     def _compute_delta_impl(self) -> Tuple[torch.Tensor, Optional[torch.Tensor]]:
         trust_region_2 = self._trust_region**2
         delta_gn = self.linear_solver.solve()
-        delta_gn_norm_2 = TrustRegionOptimizer._detached_squared_norm(delta_gn)
+        delta_gn_norm_2 = TrustRegion._detached_squared_norm(delta_gn)
         good_gn_idx = delta_gn_norm_2 < trust_region_2
         # All Gauss-Newton step are within trust-region, can return
         if good_gn_idx.all():
@@ -71,11 +71,11 @@ class Dogleg(TrustRegionOptimizer):
         neg_grad = linearization.Atb.squeeze(2)
         with torch.no_grad():
             Adelta_sd = linearization.A.bmm(neg_grad.unsqueeze(2)).squeeze(2)
-            Adelta_sd_norm_2 = TrustRegionOptimizer._detached_squared_norm(Adelta_sd)
-            grad_norm_2 = TrustRegionOptimizer._detached_squared_norm(neg_grad)
+            Adelta_sd_norm_2 = TrustRegion._detached_squared_norm(Adelta_sd)
+            grad_norm_2 = TrustRegion._detached_squared_norm(neg_grad)
             t = grad_norm_2 / Adelta_sd_norm_2
             delta_sd = neg_grad * t
-            delta_sd_norm_2 = TrustRegionOptimizer._detached_squared_norm(delta_sd)
+            delta_sd_norm_2 = TrustRegion._detached_squared_norm(delta_sd)
             not_near_zero_sd_idx = delta_sd_norm_2 > 1e-6
             good_sd_idx = delta_sd_norm_2 <= trust_region_2
 
@@ -97,7 +97,7 @@ class Dogleg(TrustRegionOptimizer):
             # a * tau^2 + b * tau + c, with a, b, c given below
             diff = delta_gn - delta_sd
             with torch.no_grad():
-                a = TrustRegionOptimizer._detached_squared_norm(diff)
+                a = TrustRegion._detached_squared_norm(diff)
                 b = (2 * delta_sd * diff).sum(dim=1, keepdim=True)
                 c = delta_sd_norm_2 - trust_region_2
                 disc = ((b**2) - 4 * a * c).clamp(0.0)

@@ -13,4 +13,4 @@ from .nonlinear_optimizer import (
     NonlinearOptimizerParams,
     NonlinearOptimizerStatus,
 )
-from .trust_region import TrustRegionOptimizer
+from .trust_region import TrustRegion

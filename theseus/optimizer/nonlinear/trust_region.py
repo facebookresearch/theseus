@@ -32,7 +32,7 @@ from .nonlinear_least_squares import NonlinearLeastSquares
 # Iff the ratio is lower than `shrink_threshold`,
 # then the trust region is reduced by `shrink_ratio`.
 # The trust region is initialized to `trust_region_init`.
-class TrustRegionOptimizer(NonlinearLeastSquares, abc.ABC):
+class TrustRegion(NonlinearLeastSquares, abc.ABC):
     _MIN_TRUST_REGION = 1.0e-7
     _MAX_TRUST_REGION = 1.0e7
 
@@ -96,7 +96,7 @@ class TrustRegionOptimizer(NonlinearLeastSquares, abc.ABC):
         delta, self._trusted_step_idx = self._compute_delta_impl()
         if self._trusted_step_idx is None:
             self._trusted_step_idx = (
-                TrustRegionOptimizer._detached_squared_norm(delta)
+                TrustRegion._detached_squared_norm(delta) <= self._trust_region**2
                 <= self._trust_region**2
             )
         return delta
@@ -129,7 +129,7 @@ class TrustRegionOptimizer(NonlinearLeastSquares, abc.ABC):
         return (
             previous_error
             + delta_dot_grad
-            + 0.5 * TrustRegionOptimizer._detached_squared_norm(Adelta, keepdim=False)
+            + 0.5 * TrustRegion._detached_squared_norm(Adelta, keepdim=False)
         )
 
     @torch.no_grad()

@@ -107,6 +107,8 @@ EndIterCallbackType = Callable[
 #                ignoring indices given by `reject_indices`
 #    3. Check convergence
 class NonlinearOptimizer(Optimizer, abc.ABC):
+    _DEFAULT_STEP_ALL_REJECT = 0.05
+
     def __init__(
         self,
         objective: Objective,
@@ -533,8 +535,21 @@ class NonlinearOptimizer(Optimizer, abc.ABC):
             delta, converged_indices, force_update
         )
         reject_indices = self._complete_step(delta, err, previous_err, **kwargs)
-        self.objective.update(tensor_dict, batch_ignore_mask=reject_indices)
 
+        if reject_indices is not None and reject_indices.all():
+            # If all steps are marked as rejected, optimizer will think convergence
+            # has happened and stop. Taking a small step prevents this issue
+            tensor_dict, err = self._compute_retracted_tensors_and_error(
+                self._DEFAULT_STEP_ALL_REJECT * delta, converged_indices, force_update
+            )
+            self.objective.update(tensor_dict)
+            return err
+
+        self.objective.update(tensor_dict, batch_ignore_mask=reject_indices)
+        if reject_indices is not None and reject_indices.any():
+            # Some steps were rejected so the error computed above is not accurate
+            with torch.no_grad():
+                err = self.objective.error_squared_norm() / 2
         return err
 
     # Resets any internal state needed by the optimizer for a new optimization

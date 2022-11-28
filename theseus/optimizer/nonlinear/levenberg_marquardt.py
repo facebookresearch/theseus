@@ -148,6 +148,8 @@ class LevenbergMarquardt(NonlinearLeastSquares):
         ellipsoidal_damping: bool = False,
         **kwargs,
     ) -> Optional[torch.Tensor]:
+        # "err" tensors passed as input refer to the squared norm of the
+        # error vector, as returned by self._error_metric()
         if adaptive_damping:
             return self._check_accept(
                 delta,

@@ -154,6 +154,8 @@ class TrustRegion(NonlinearLeastSquares, abc.ABC):
         expand_ratio: float = 2.0,
         **kwargs,
     ) -> Optional[torch.Tensor]:
+        # "err" tensors passed as input refer to the squared norm of the
+        # error vector, as returned by self.objective.error_squared_norm() / 2
         good_params = (0.0 < shrink_ratio <= 1.0) and (expand_ratio >= 1.0)
         good_params &= (shrink_threshold < expand_threshold) and (
             accept_threshold < shrink_threshold

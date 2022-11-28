@@ -555,7 +555,12 @@ class NonlinearOptimizer(Optimizer, abc.ABC):
     # Batch indices indicated by `converged_indices` mask are ignored
     # unless `force_update = True`.
     # Returns the total error tensor after the update and a boolean indicating
-    # if all steps were rejected
+    # if all steps were rejected.
+    #
+    # `previous_err` refes to the squared norm of the
+    # error vector, as returned by self._error_metric()
+    # The returned error must also refer to this quantity, but after the
+    # update.
     def _step(
         self,
         delta: torch.Tensor,

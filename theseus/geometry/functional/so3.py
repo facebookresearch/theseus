@@ -65,9 +65,16 @@ def check_unit_quaternion(quaternion: torch.Tensor):
         raise ValueError("Not unit quaternions.")
 
 
+def check_left_act_matrix(matrix: torch.Tensor):
+    if matrix.ndim != 3 or matrix.shape[-2] != 3:
+        raise ValueError("Inconsistent shape for the matrix.")
+
+
 # -----------------------------------------------------------------------------
 # Rand
 # -----------------------------------------------------------------------------
+
+
 def rand(
     *size: int,
     generator: Optional[torch.Generator] = None,
@@ -658,3 +665,57 @@ _project_autograd_fn = Project.apply
 _jproject_autograd_fn = None
 
 project = lie_group.UnaryOperatorFactory(_module, "project")
+
+
+# -----------------------------------------------------------------------------
+# Left Act
+# -----------------------------------------------------------------------------
+def _left_act_impl(group: torch.Tensor, matrix: torch.Tensor) -> torch.Tensor:
+    if not check_group_tensor(group):
+        raise ValueError("Invalid data tensor for SO3.")
+    check_left_act_matrix(matrix)
+
+    return group @ matrix
+
+
+def _jleft_act_impl(
+    group: torch.Tensor, matrix: torch.Tensor
+) -> Tuple[List[torch.Tensor], torch.Tensor]:
+    if not check_group_tensor(group):
+        raise ValueError("Invalid data tensor for SO3.")
+    check_left_act_matrix(matrix)
+    jacobians = []
+    jacobians.append(
+        -torch.einsum("nij,nljk->nlik", group, lift(matrix.transpose(1, 2)))
+    )
+    jacobians.append(group.new_zeros(matrix.shape + matrix.shape[1:]))
+    cols = torch.arange(matrix.shape[-1])
+    jacobians[1][:, :, cols, :, cols] = group.view((1,) + group.shape).expand(
+        matrix.shape[-1:] + group.shape
+    )
+
+    return jacobians, group @ matrix
+
+
+class LeftAct(lie_group.BinaryOperator):
+    @classmethod
+    def forward(cls, ctx, group, matrix):
+        group: torch.Tensor = cast(torch.Tensor, group)
+        matrix: torch.Tensor = cast(torch.Tensor, matrix)
+        ret = _left_act_impl(group, matrix)
+        ctx.save_for_backward(group, matrix)
+        return ret
+
+    @classmethod
+    def backward(cls, ctx, grad_output):
+        group, matrix = ctx.saved_tensors
+        return (
+            grad_output @ matrix.transpose(1, 2),
+            group.transpose(1, 2) @ grad_output,
+        )
+
+
+_left_act_autograd_fn = LeftAct.apply
+_jleft_act_autograd_fn = _jleft_act_impl
+
+left_act, jleft_act = lie_group.BinaryOperatorFactory(_module, "left_act")

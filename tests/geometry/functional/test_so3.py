@@ -126,3 +126,31 @@ def test_project(batch_size: int, dtype: torch.dtype):
 
     # check analytic backward for the operator
     check_lie_group_function(so3, "project", TEST_EPS, matrix)
+
+
+@pytest.mark.parametrize("batch_size", [1, 20, 100])
+@pytest.mark.parametrize("dtype", [torch.float32, torch.float64])
+def test_left_act(batch_size: int, dtype: torch.dtype):
+    rng = torch.Generator()
+    group = so3.rand(batch_size, dtype=dtype, generator=rng)
+    matrix = torch.rand(
+        batch_size,
+        3,
+        int(torch.randint(1, 20, (1,), generator=rng)),
+        dtype=dtype,
+        generator=rng,
+    )
+
+    # check analytic backward for the operator
+    check_lie_group_function(so3, "left_act", TEST_EPS, group, matrix)
+
+    # check analytic jacobian
+    def func(group, matrix):
+        return so3.left_act(group, matrix)
+
+    actual_jacs, _ = so3.jleft_act(group, matrix)
+    expected_jacs = torch.autograd.functional.jacobian(func, (group, matrix))
+    idx = torch.arange(batch_size)
+    assert torch.allclose(
+        actual_jacs[1], expected_jacs[1][idx, :, :, idx], atol=TEST_EPS
+    )

@@ -156,3 +156,19 @@ def test_left_act(batch_size: int, dtype: torch.dtype):
 
     # check analytic backward for the operator
     check_lie_group_function(so3, "left_act", TEST_EPS, group, matrix)
+
+@pytest.mark.parametrize("batch_size", [1, 20, 100])
+@pytest.mark.parametrize("dtype", [torch.float32, torch.float64])
+def test_left_project(batch_size: int, dtype: torch.dtype):
+    rng = torch.Generator()
+    group = so3.rand(batch_size, dtype=dtype, generator=rng)
+    matrix = torch.rand(
+        batch_size,
+        3,
+        3,
+        dtype=dtype,
+        generator=rng,
+    )
+
+    # check analytic backward for the operator
+    check_lie_group_function(so3, "left_project", TEST_EPS, group, matrix)

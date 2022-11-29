@@ -2,27 +2,34 @@
 #
 # This source code is licensed under the MIT license found in the
 # LICENSE file in the root directory of this source tree.
+from typing import Any, Tuple
 
 import torch
 from sksparse.cholmod import Factor as CholeskyDecomposition
 
 from ..linear_system import SparseStructure
 
+_CholmodSolveFunctionBwdReturnType = Tuple[torch.Tensor, torch.Tensor, None, None, None]
+
 
 class CholmodSolveFunction(torch.autograd.Function):
     @staticmethod
-    def forward(ctx, *args, **kwargs):
-        At_val: torch.Tensor = args[0]
-        b: torch.Tensor = args[1]
-        sparse_structure: SparseStructure = args[2]
-        symbolic_decomposition: CholeskyDecomposition = args[3]
-        damping: float = args[4]
-
+    def forward(  # type: ignore
+        ctx: Any,
+        At_val: torch.Tensor,
+        b: torch.Tensor,
+        sparse_structure: SparseStructure,
+        symbolic_decomposition: CholeskyDecomposition,
+        damping: float,
+    ) -> torch.Tensor:
         At_val_cpu = At_val.cpu().double()
         b_cpu = b.cpu().double()
         batch_size = At_val.shape[0]
-        targs = {"dtype": At_val.dtype, "device": "cpu"}
-        x_cpu = torch.empty(size=(batch_size, sparse_structure.num_cols), **targs)
+        x_cpu = torch.empty(
+            size=(batch_size, sparse_structure.num_cols),
+            dtype=At_val.dtype,
+            device="cpu",
+        )
         cholesky_decompositions = []
 
         for i in range(batch_size):
@@ -88,12 +95,13 @@ class CholmodSolveFunction(torch.autograd.Function):
 
     # NOTE: in the torch docs the backward is also marked as "staticmethod", I think it makes sense
     @staticmethod
-    def backward(ctx, grad_output):
+    def backward(  # type: ignore
+        ctx: Any, grad_output: torch.Tensor
+    ) -> _CholmodSolveFunctionBwdReturnType:
 
         batch_size = grad_output.shape[0]
-        targs = {"dtype": grad_output.dtype, "device": "cpu"}  # grad_output.device}
-        H = torch.empty(size=(batch_size, ctx.sparse_structure.num_cols), **targs)
-        AH = torch.empty(size=(batch_size, ctx.sparse_structure.num_rows), **targs)
+        H = grad_output.new_empty(size=(batch_size, ctx.sparse_structure.num_cols))
+        AH = grad_output.new_empty(size=(batch_size, ctx.sparse_structure.num_rows))
         b_Ax = ctx.b_cpu.clone()
         grad_output_cpu = grad_output.cpu()
 

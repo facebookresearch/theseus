@@ -7,6 +7,7 @@ from typing import Any, Dict, Optional, Type, Union
 
 import torch
 
+from theseus.constants import DeviceType
 from theseus.core import Objective
 from theseus.optimizer import Linearization, SparseLinearization
 from theseus.optimizer.autograd import BaspachoSolveFunction
@@ -26,8 +27,8 @@ class BaspachoSparseSolver(LinearSolver):
         objective: Objective,
         linearization_cls: Optional[Type[Linearization]] = None,
         linearization_kwargs: Optional[Dict[str, Any]] = None,
-        num_solver_contexts=1,
-        dev=DEFAULT_DEVICE,
+        num_solver_contexts: int = 1,
+        dev: DeviceType = DEFAULT_DEVICE,
         **kwargs,
     ):
         linearization_cls = linearization_cls or SparseLinearization
@@ -45,7 +46,7 @@ class BaspachoSparseSolver(LinearSolver):
         if self.linearization.structure().num_rows:
             self.reset(dev)
 
-    def reset(self, dev=DEFAULT_DEVICE):
+    def reset(self, dev: DeviceType = DEFAULT_DEVICE):
         if dev == "cuda" and not torch.cuda.is_available():
             raise RuntimeError(
                 "BaspachoSparseSolver: Cuda requested (dev='cuda') but not\n"

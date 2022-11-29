@@ -9,7 +9,14 @@ import torch
 from scipy.sparse import csc_matrix, csr_matrix, lil_matrix
 
 
-def _mat_vec_cpu(batch_size, num_cols, A_row_ptr, A_col_ind, A_val, v):
+def _mat_vec_cpu(
+    batch_size: int,
+    num_cols: int,
+    A_row_ptr: torch.Tensor,
+    A_col_ind: torch.Tensor,
+    A_val: torch.Tensor,
+    v: torch.Tensor,
+) -> torch.Tensor:
     assert batch_size == A_val.shape[0]
     num_rows = len(A_row_ptr) - 1
     retv_data = np.array(
@@ -23,7 +30,14 @@ def _mat_vec_cpu(batch_size, num_cols, A_row_ptr, A_col_ind, A_val, v):
     return torch.tensor(retv_data, dtype=torch.float64)
 
 
-def mat_vec(batch_size, num_cols, A_row_ptr, A_col_ind, A_val, v):
+def mat_vec(
+    batch_size: int,
+    num_cols: int,
+    A_row_ptr: torch.Tensor,
+    A_col_ind: torch.Tensor,
+    A_val: torch.Tensor,
+    v: torch.Tensor,
+) -> torch.Tensor:
     if A_row_ptr.device.type == "cuda":
         try:
             from theseus.extlib.mat_mult import mat_vec as mat_vec_cuda
@@ -39,7 +53,14 @@ def mat_vec(batch_size, num_cols, A_row_ptr, A_col_ind, A_val, v):
         return _mat_vec_cpu(batch_size, num_cols, A_row_ptr, A_col_ind, A_val, v)
 
 
-def _tmat_vec_cpu(batch_size, num_cols, A_row_ptr, A_col_ind, A_val, v):
+def _tmat_vec_cpu(
+    batch_size: int,
+    num_cols: int,
+    A_row_ptr: torch.Tensor,
+    A_col_ind: torch.Tensor,
+    A_val: torch.Tensor,
+    v: torch.Tensor,
+) -> torch.Tensor:
     assert batch_size == A_val.shape[0]
     num_rows = len(A_row_ptr) - 1
     retv_data = np.array(
@@ -53,7 +74,14 @@ def _tmat_vec_cpu(batch_size, num_cols, A_row_ptr, A_col_ind, A_val, v):
     return torch.tensor(retv_data, dtype=torch.float64)
 
 
-def tmat_vec(batch_size, num_cols, A_row_ptr, A_col_ind, A_val, v):
+def tmat_vec(
+    batch_size: int,
+    num_cols: int,
+    A_row_ptr: torch.Tensor,
+    A_col_ind: torch.Tensor,
+    A_val: torch.Tensor,
+    v: torch.Tensor,
+):
     if A_row_ptr.device.type == "cuda":
         try:
             from theseus.extlib.mat_mult import tmat_vec as tmat_vec_cuda

@@ -2,15 +2,29 @@
 #
 # This source code is licensed under the MIT license found in the
 # LICENSE file in the root directory of this source tree.
-from typing import Optional, Tuple
+from typing import Any, Optional, Tuple
 import torch
 
 from ..linear_system import SparseStructure
 
+_LUCudaSolveFunctionBwdReturnType = Tuple[
+    torch.Tensor, torch.Tensor, None, None, None, None, None, None
+]
+
 
 class LUCudaSolveFunction(torch.autograd.Function):
     @staticmethod
-    def forward(ctx, *args, **kwargs):
+    def forward(  # type: ignore
+        ctx: Any,
+        A_val: torch.Tensor,
+        b: torch.Tensor,
+        sparse_structure: SparseStructure,
+        A_row_ptr: torch.Tensor,
+        A_col_ind: torch.Tensor,
+        solver_context: Any,  # actually CusolverLUSolver,
+        damping_alpha_beta: Optional[Tuple[torch.Tensor, torch.Tensor]],
+        check_factor_id,
+    ) -> torch.Tensor:
         if not torch.cuda.is_available():
             raise RuntimeError("Cuda not available, LUCudaSolveFunction cannot be used")
 
@@ -25,14 +39,7 @@ class LUCudaSolveFunction(torch.autograd.Function):
                 f"{type(e).__name__}: {e}"
             )
 
-        A_val: torch.Tensor = args[0]
-        b: torch.Tensor = args[1]
-        sparse_structure: SparseStructure = args[2]
-        A_row_ptr: torch.Tensor = args[3]
-        A_col_ind: torch.Tensor = args[4]
-        solver_context: CusolverLUSolver = args[5]
-        damping_alpha_beta: Optional[Tuple[torch.Tensor, torch.Tensor]] = args[6]
-        check_factor_id: bool = args[7]
+        assert isinstance(solver_context, CusolverLUSolver)
 
         AtA_row_ptr = solver_context.A_rowPtr
         AtA_col_ind = solver_context.A_colInd
@@ -116,7 +123,9 @@ class LUCudaSolveFunction(torch.autograd.Function):
     # 2 times the scalar product of A's an (A')'s j-th colum. Therefore
     # (A')'s j-th colum is multiplying A's j-th colum by 2*H[j]*alpha*x[j]
     @staticmethod
-    def backward(ctx, grad_output):
+    def backward(  # type: ignore
+        ctx, grad_output: torch.Tensor
+    ) -> _LUCudaSolveFunctionBwdReturnType:
 
         if not torch.cuda.is_available():
             raise RuntimeError("Cuda not available, LUCudaSolveFunction cannot be used")
@@ -138,7 +147,6 @@ class LUCudaSolveFunction(torch.autograd.Function):
             )
 
         batch_size = grad_output.shape[0]
-        targs = {"dtype": grad_output.dtype, "device": "cuda"}  # grad_output.device}
 
         H = grad_output.clone()
         ctx.solver_context.solve(H)  # solve in place
@@ -155,7 +163,7 @@ class LUCudaSolveFunction(torch.autograd.Function):
         A_row_ptr = ctx.sparse_structure.row_ptr
         batch_size = grad_output.shape[0]
         A_grad = torch.empty(
-            size=(batch_size, len(A_col_ind)), **targs
+            size=(batch_size, len(A_col_ind)), dtype=grad_output.dtype, device="cuda"
         )  # return value, A's grad
         for r in range(len(A_row_ptr) - 1):
             start, end = A_row_ptr[r], A_row_ptr[r + 1]

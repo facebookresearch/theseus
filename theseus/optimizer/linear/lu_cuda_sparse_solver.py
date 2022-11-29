@@ -21,7 +21,7 @@ class LUCudaSparseSolver(LinearSolver):
         objective: Objective,
         linearization_cls: Optional[Type[Linearization]] = None,
         linearization_kwargs: Optional[Dict[str, Any]] = None,
-        num_solver_contexts=1,
+        num_solver_contexts: int = 1,
         batch_size: Optional[int] = None,
         auto_reset: bool = True,
         **kwargs,

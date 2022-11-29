@@ -146,17 +146,17 @@ class SparseLinearization(Linearization):
 
     def _atb_impl(self) -> torch.Tensor:
         if self._Atb is None:
-            A_rowPtr = torch.tensor(self.A_row_ptr, dtype=torch.int32).to(
+            A_row_ptr = torch.tensor(self.A_row_ptr, dtype=torch.int32).to(
                 self.objective.device
             )
-            A_colInd = A_rowPtr.new_tensor(self.A_col_ind)
+            A_col_ind = A_row_ptr.new_tensor(self.A_col_ind)
 
             # unsqueeze at the end for consistency with DenseLinearization
             self._Atb = tmat_vec(
                 self.objective.batch_size,
                 self.num_cols,
-                A_rowPtr,
-                A_colInd,
+                A_row_ptr,
+                A_col_ind,
                 self.A_val,
                 self.b,
             ).unsqueeze(2)

@@ -8,7 +8,7 @@ import pytest  # noqa: F401
 import torch  # needed for import of Torch C++ extensions to work
 from scipy.sparse import csr_matrix
 
-from theseus.utils import random_sparse_binary_matrix
+from theseus.utils import random_sparse_matrix
 
 
 # ideally we would like to support batch_size <= init_batch_size, but
@@ -25,20 +25,17 @@ def check_lu_solver(
 
     rng = torch.Generator()
     rng.manual_seed(0)
-    A_skel = random_sparse_binary_matrix(
-        num_rows, num_cols, fill, min_entries_per_col=3, rng=rng
+    A_col_ind, A_row_ptr, A_val, _ = random_sparse_matrix(
+        batch_size, num_rows, num_cols, fill, 3, rng, "cuda:0"
     )
     A_num_cols = num_cols
-    A_rowPtr = torch.tensor(A_skel.indptr, dtype=torch.int).cuda()
-    A_colInd = torch.tensor(A_skel.indices, dtype=torch.int).cuda()
-    A_num_rows = A_rowPtr.size(0) - 1
-    A_nnz = A_colInd.size(0)
-    A_val = torch.rand((batch_size, A_nnz), dtype=torch.double).cuda()
+    A_num_rows = A_row_ptr.size(0) - 1
+
     b = torch.rand((batch_size, A_num_rows), dtype=torch.double).cuda()
 
     A_csr = [
         csr_matrix(
-            (A_val[i].cpu(), A_colInd.cpu(), A_rowPtr.cpu()), (A_num_rows, A_num_cols)
+            (A_val[i].cpu(), A_col_ind.cpu(), A_row_ptr.cpu()), (A_num_rows, A_num_cols)
         )
         for i in range(batch_size)
     ]
@@ -47,17 +44,16 @@ def check_lu_solver(
         print("b[0]:\n", b[0])
 
     AtA_csr = [(a.T @ a).tocsr() for a in A_csr]
-    AtA_rowPtr = torch.tensor(AtA_csr[0].indptr).cuda()
-    AtA_colInd = torch.tensor(AtA_csr[0].indices).cuda()
+    AtA_row_ptr = torch.tensor(AtA_csr[0].indptr).cuda()
+    AtA_col_ind = torch.tensor(AtA_csr[0].indices).cuda()
     AtA_val = torch.tensor(np.array([m.data for m in AtA_csr])).cuda()
-    AtA_num_rows = AtA_rowPtr.size(0) - 1
+    AtA_num_rows = AtA_row_ptr.size(0) - 1
     AtA_num_cols = AtA_num_rows
-    AtA_nnz = AtA_colInd.size(0)  # noqa: F841
 
     if verbose:
         print("AtA[0]:\n", AtA_csr[0].todense())
 
-    slv = CusolverLUSolver(init_batch_size, AtA_num_cols, AtA_rowPtr, AtA_colInd)
+    slv = CusolverLUSolver(init_batch_size, AtA_num_cols, AtA_row_ptr, AtA_col_ind)
     singularities = slv.factor(AtA_val)
 
     if verbose:

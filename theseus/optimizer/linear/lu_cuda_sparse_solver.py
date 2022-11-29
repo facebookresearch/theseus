@@ -21,7 +21,7 @@ class LUCudaSparseSolver(LinearSolver):
         objective: Objective,
         linearization_cls: Optional[Type[Linearization]] = None,
         linearization_kwargs: Optional[Dict[str, Any]] = None,
-        num_solver_contexts=1,
+        num_solver_contexts: int = 1,
         batch_size: Optional[int] = None,
         auto_reset: bool = True,
         **kwargs,
@@ -64,10 +64,10 @@ class LUCudaSparseSolver(LinearSolver):
                 f"{type(e).__name__}: {e}"
             )
 
-        self.A_rowPtr = torch.tensor(
+        self.A_row_ptr = torch.tensor(
             self.linearization.structure().row_ptr, dtype=torch.int32
         ).cuda()
-        self.A_colInd = torch.tensor(
+        self.A_col_ind = torch.tensor(
             self.linearization.structure().col_ind, dtype=torch.int32
         ).cuda()
         At_mock = self.linearization.structure().mock_csc_transpose()
@@ -76,14 +76,14 @@ class LUCudaSparseSolver(LinearSolver):
         # symbolic decomposition depending on the sparse structure, done with mock data
         # HACK: we generate several context, as by cublas the symbolic_decomposition is
         # also a context for factorization, and the two cannot be separated
-        AtA_rowPtr = torch.tensor(AtA_mock.indptr, dtype=torch.int32).cuda()
-        AtA_colInd = torch.tensor(AtA_mock.indices, dtype=torch.int32).cuda()
+        AtA_row_ptr = torch.tensor(AtA_mock.indptr, dtype=torch.int32).cuda()
+        AtA_col_ind = torch.tensor(AtA_mock.indices, dtype=torch.int32).cuda()
         self._solver_contexts: List[CusolverLUSolver] = [
             CusolverLUSolver(
                 batch_size,
                 AtA_mock.shape[1],
-                AtA_rowPtr,
-                AtA_colInd,
+                AtA_row_ptr,
+                AtA_col_ind,
             )
             for _ in range(self._num_solver_contexts)
         ]
@@ -124,8 +124,8 @@ class LUCudaSparseSolver(LinearSolver):
             self.linearization.A_val,
             self.linearization.b,
             self.linearization.structure(),
-            self.A_rowPtr,
-            self.A_colInd,
+            self.A_row_ptr,
+            self.A_col_ind,
             self._solver_contexts[self._last_solver_context],
             damping_alpha_beta,
             True,

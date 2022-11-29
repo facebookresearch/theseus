@@ -61,8 +61,8 @@ def test_sparse_backward_step():
         linearization.A_val,
         linearization.b,
         linearization.structure(),
-        solver.A_rowPtr,
-        solver.A_colInd,
+        solver.A_row_ptr,
+        solver.A_col_ind,
         solver._solver_contexts[solver._last_solver_context],
         damping_alpha_beta,
         False,  # it's the same matrix, so no overwrite problems

@@ -10,7 +10,7 @@ from scipy.sparse import csr_matrix, tril
 
 
 from tests.extlib.common import run_if_baspacho
-from theseus.utils import random_sparse_binary_matrix, split_into_param_sizes
+from theseus.utils import random_sparse_matrix, split_into_param_sizes
 
 
 def check_baspacho(
@@ -35,17 +35,11 @@ def check_baspacho(
 
     from theseus.extlib.baspacho_solver import SymbolicDecomposition
 
-    A_skel = random_sparse_binary_matrix(
-        num_rows, num_cols, fill, min_entries_per_col=1, rng=rng
+    A_col_ind, A_row_ptr, A_val, A_skel = random_sparse_matrix(
+        batch_size, num_rows, num_cols, fill, 1, rng, dev
     )
     A_num_cols = num_cols
-    A_rowPtr = torch.tensor(A_skel.indptr, dtype=torch.int64).to(dev)
-    A_colInd = torch.tensor(A_skel.indices, dtype=torch.int64).to(dev)
-    A_num_rows = A_rowPtr.size(0) - 1
-    A_nnz = A_colInd.size(0)
-    A_val = torch.rand(
-        (batch_size, A_nnz), device=dev, dtype=torch.double, generator=rng
-    )
+    A_num_rows = A_row_ptr.size(0) - 1
     b = torch.rand(
         (batch_size, A_num_rows), device=dev, dtype=torch.double, generator=rng
     )
@@ -65,7 +59,7 @@ def check_baspacho(
 
     A_csr = [
         csr_matrix(
-            (A_val[i].cpu(), A_colInd.cpu(), A_rowPtr.cpu()), (A_num_rows, A_num_cols)
+            (A_val[i].cpu(), A_col_ind.cpu(), A_row_ptr.cpu()), (A_num_rows, A_num_cols)
         )
         for i in range(batch_size)
     ]
@@ -86,7 +80,7 @@ def check_baspacho(
     )
     f = s.create_numeric_decomposition(batch_size)
 
-    f.add_MtM(A_val, A_rowPtr, A_colInd)
+    f.add_MtM(A_val, A_row_ptr, A_col_ind)
     beta = 0.01 * torch.rand(batch_size, device=dev, dtype=torch.double, generator=rng)
     alpha = torch.rand(batch_size, device=dev, dtype=torch.double, generator=rng)
     f.damp(alpha, beta)

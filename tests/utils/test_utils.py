@@ -5,6 +5,7 @@
 
 import numpy as np
 import pytest  # noqa: F401
+import scipy.sparse
 import torch
 import torch.nn as nn
 
@@ -93,3 +94,56 @@ def test_gather_from_rows_cols():
         for i in range(batch_size):
             for j in range(num_points):
                 assert torch.allclose(res[i, j], matrix[i, rows[i, j], cols[i, j]])
+
+
+def _check_sparse_mv(batch_size, num_rows, num_cols, fill, device):
+    A_col_ind, A_row_ptr, A_val, _ = thutils.random_sparse_matrix(
+        batch_size,
+        num_rows,
+        num_cols,
+        fill,
+        min(num_cols, 2),
+        torch.Generator(device),
+        device,
+    )
+    b = torch.randn(batch_size, num_cols, device=device).double()
+
+    # Check backward pass
+    if batch_size < 16:
+        A_val.requires_grad = True
+        b.requires_grad = True
+        torch.autograd.gradcheck(
+            thutils.sparse_mv, (num_cols, A_val, A_row_ptr, A_col_ind, b)
+        )
+
+    # Check forward pass
+    out = thutils.sparse_mv(num_cols, A_val, A_row_ptr, A_col_ind, b)
+    for i in range(batch_size):
+        A_csr = scipy.sparse.csr_matrix(
+            (
+                A_val[i].detach().cpu().numpy(),
+                A_col_ind.cpu().numpy(),
+                A_row_ptr.cpu().numpy(),
+            ),
+            (num_rows, num_cols),
+        )
+        expected_out = A_csr * b[i].detach().cpu().numpy()
+        diff = expected_out - out[i].detach().cpu().numpy()
+        assert np.linalg.norm(diff) < 1e-8
+
+
+@pytest.mark.parametrize("batch_size", [1, 4, 16])
+@pytest.mark.parametrize("num_rows", [1, 32])
+@pytest.mark.parametrize("num_cols", [1, 4, 32])
+@pytest.mark.parametrize("fill", [0.1, 0.9])
+def test_sparse_mv_cpu(batch_size, num_rows, num_cols, fill):
+    _check_sparse_mv(batch_size, num_rows, num_cols, fill, "cpu")
+
+
+@pytest.mark.cudaext
+@pytest.mark.parametrize("batch_size", [1, 4, 16])
+@pytest.mark.parametrize("num_rows", [1, 32])
+@pytest.mark.parametrize("num_cols", [1, 4, 32])
+@pytest.mark.parametrize("fill", [0.1, 0.9])
+def test_sparse_mv_cuda(batch_size, num_rows, num_cols, fill):
+    _check_sparse_mv(batch_size, num_rows, num_cols, fill, "cuda:0")

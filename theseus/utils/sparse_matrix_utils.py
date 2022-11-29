@@ -2,11 +2,13 @@
 #
 # This source code is licensed under the MIT license found in the
 # LICENSE file in the root directory of this source tree.
-from typing import List, Tuple
+from typing import Any, List, Tuple
 
 import numpy as np
 import torch
 from scipy.sparse import csc_matrix, csr_matrix, lil_matrix
+
+from theseus.constants import DeviceType
 
 
 def _mat_vec_cpu(
@@ -97,6 +99,48 @@ def tmat_vec(
         return _tmat_vec_cpu(batch_size, num_cols, A_row_ptr, A_col_ind, A_val, v)
 
 
+class _SparseMvPAutograd(torch.autograd.Function):
+    @staticmethod
+    def forward(  # type: ignore
+        ctx: Any,
+        num_cols: int,
+        A_val: torch.Tensor,
+        A_row_ptr: torch.Tensor,
+        A_col_ind: torch.Tensor,
+        v: torch.Tensor,
+    ) -> torch.Tensor:
+        assert (
+            A_row_ptr.ndim == 1
+            and A_col_ind.ndim == 1
+            and A_val.ndim == 2
+            and v.ndim == 2
+        )
+        ctx.save_for_backward(A_val, A_row_ptr, A_col_ind, v)
+        ctx.num_cols = num_cols
+        return mat_vec(A_val.shape[0], num_cols, A_row_ptr, A_col_ind, A_val, v)
+
+    @staticmethod
+    @torch.autograd.function.once_differentiable
+    def backward(  # type: ignore
+        ctx: Any, grad_output: torch.Tensor
+    ) -> Tuple[None, torch.Tensor, None, None, torch.Tensor]:
+        A_val, A_row_ptr, A_col_ind, v = ctx.saved_tensors
+        num_rows = len(A_row_ptr) - 1
+        A_grad = torch.zeros_like(A_val)  # (batch_size, nnz)
+        v_grad = torch.zeros_like(v)  # (batch_size, num_cols)
+        for row in range(num_rows):
+            start = A_row_ptr[row]
+            end = A_row_ptr[row + 1]
+            columns = A_col_ind[start:end]
+            A_grad[:, start:end] = v[:, columns] * grad_output[:, row].view(-1, 1)
+            v_grad[:, columns] += grad_output[:, row].view(-1, 1) * A_val[:, start:end]
+
+        return None, A_grad, None, None, v_grad
+
+
+sparse_mv = _SparseMvPAutograd.apply
+
+
 def random_sparse_binary_matrix(
     num_rows: int,
     num_cols: int,
@@ -106,7 +150,7 @@ def random_sparse_binary_matrix(
 ) -> csr_matrix:
     retv = lil_matrix((num_rows, num_cols))
 
-    if min_entries_per_col > 0:
+    if num_rows > 1 and min_entries_per_col > 0:
         min_entries_per_col = min(num_rows, min_entries_per_col)
         rows_array = torch.arange(num_rows, device=rng.device)
         rows_array_f = rows_array.to(dtype=torch.float)
@@ -138,7 +182,7 @@ def random_sparse_matrix(
     fill: float,
     min_entries_per_col: int,
     rng: torch.Generator,
-    device: torch.device,
+    device: DeviceType,
     int_dtype: torch.dtype = torch.int64,
     float_dtype: torch.dtype = torch.double,
 ) -> Tuple[torch.Tensor, torch.Tensor, torch.Tensor, torch.Tensor]:

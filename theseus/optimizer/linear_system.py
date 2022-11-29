@@ -6,6 +6,7 @@
 import abc
 
 import numpy as np
+import torch
 from scipy.sparse import csc_matrix, csr_matrix
 
 
@@ -24,14 +25,14 @@ class SparseStructure(abc.ABC):
         self.num_cols = num_cols
         self.dtype = dtype
 
-    def csr_straight(self, val: np.ndarray) -> csr_matrix:
+    def csr_straight(self, val: torch.Tensor) -> csr_matrix:
         return csr_matrix(
             (val, self.col_ind, self.row_ptr),
             (self.num_rows, self.num_cols),
             dtype=self.dtype,
         )
 
-    def csc_transpose(self, val: np.ndarray) -> csc_matrix:
+    def csc_transpose(self, val: torch.Tensor) -> csc_matrix:
         return csc_matrix(
             (val, self.col_ind, self.row_ptr),
             (self.num_cols, self.num_rows),

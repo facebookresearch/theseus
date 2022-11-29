@@ -100,8 +100,12 @@ class CholmodSolveFunction(torch.autograd.Function):
     ) -> _CholmodSolveFunctionBwdReturnType:
 
         batch_size = grad_output.shape[0]
-        H = grad_output.new_empty(size=(batch_size, ctx.sparse_structure.num_cols))
-        AH = grad_output.new_empty(size=(batch_size, ctx.sparse_structure.num_rows))
+        H = torch.empty(
+            size=(batch_size, ctx.sparse_structure.num_cols), dtype=grad_output.dtype
+        )
+        AH = torch.empty(
+            size=(batch_size, ctx.sparse_structure.num_rows), dtype=grad_output.dtype
+        )
         b_Ax = ctx.b_cpu.clone()
         grad_output_cpu = grad_output.cpu()
 
@@ -123,8 +127,7 @@ class CholmodSolveFunction(torch.autograd.Function):
         A_row_ptr = ctx.sparse_structure.row_ptr
         batch_size = grad_output.shape[0]
         A_grad = torch.empty(
-            size=(batch_size, len(A_col_ind)),
-            device="cpu",
+            size=(batch_size, len(A_col_ind))
         )  # return value, A's grad
         for r in range(len(A_row_ptr) - 1):
             start, end = A_row_ptr[r], A_row_ptr[r + 1]

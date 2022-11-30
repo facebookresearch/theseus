@@ -34,27 +34,30 @@ class BaspachoSolveFunction(torch.autograd.Function):
         numeric_decomposition = symbolic_decomposition.create_numeric_decomposition(
             batch_size
         )
-        numeric_decomposition.add_MtM(A_val, A_row_ptr, A_col_ind)
+        A_val_double = A_val.double()
+        numeric_decomposition.add_MtM(A_val_double, A_row_ptr, A_col_ind)
         if damping_alpha_beta is not None:
-            numeric_decomposition.damp(*damping_alpha_beta)
+            numeric_decomposition.damp(
+                damping_alpha_beta[0].double(), damping_alpha_beta[1].double()
+            )
         numeric_decomposition.factor()
 
-        A_args = sparse_structure.num_cols, A_row_ptr, A_col_ind, A_val
-        Atb = tmat_vec(batch_size, *A_args, b)
+        A_args = sparse_structure.num_cols, A_row_ptr, A_col_ind, A_val_double
+        Atb = tmat_vec(batch_size, *A_args, b.double())
 
         x = Atb.clone()
         numeric_decomposition.solve(x)  # solve in place
 
         ctx.b = b
         ctx.x = x
-        ctx.A_val = A_val
+        ctx.A_val_double = A_val_double
         ctx.A_row_ptr = A_row_ptr
         ctx.A_col_ind = A_col_ind
         ctx.sparse_structure = sparse_structure
         ctx.numeric_decomposition = numeric_decomposition
         ctx.damping_alpha_beta = damping_alpha_beta
 
-        return x
+        return x.to(A_val.dtype)
 
     # Let v row vector, and w column vector of dimension n, m, and
     # A an nxm matrix. Then
@@ -112,10 +115,16 @@ class BaspachoSolveFunction(torch.autograd.Function):
         batch_size = grad_output.shape[0]
 
         H = grad_output.clone()
-        ctx.numeric_decomposition.solve(H)  # solve in place
+        H_double = H.double()
+        ctx.numeric_decomposition.solve(H_double)  # solve in place
 
-        A_args = ctx.sparse_structure.num_cols, ctx.A_row_ptr, ctx.A_col_ind, ctx.A_val
-        AH = mat_vec(batch_size, *A_args, H)
+        A_args = (
+            ctx.sparse_structure.num_cols,
+            ctx.A_row_ptr,
+            ctx.A_col_ind,
+            ctx.A_val_double,
+        )
+        AH = mat_vec(batch_size, *A_args, H_double)
         b_Ax = ctx.b - mat_vec(batch_size, *A_args, ctx.x)
 
         # now we fill values of a matrix with structure identical to A with
@@ -130,12 +139,13 @@ class BaspachoSolveFunction(torch.autograd.Function):
             dtype=grad_output.dtype,
             device=grad_output.device,
         )  # return value, A's grad
+        x = ctx.x.to(grad_output.dtype)
         for r in range(len(A_row_ptr) - 1):
             start, end = A_row_ptr[r], A_row_ptr[r + 1]
             columns = A_col_ind[start:end]  # col indices, for this row
             A_grad[:, start:end] = (
                 b_Ax[:, r].unsqueeze(1) * H[:, columns]
-                - AH[:, r].unsqueeze(1) * ctx.x[:, columns]
+                - AH[:, r].unsqueeze(1) * x[:, columns]
             )
 
         # apply correction if there is a multiplicative damping
@@ -144,7 +154,10 @@ class BaspachoSolveFunction(torch.autograd.Function):
             and (ctx.damping_alpha_beta[0] > 0.0).any()
         ):
             alpha = ctx.damping_alpha_beta[0].view(-1, 1)
-            alpha2Hx = (alpha * 2.0) * H * ctx.x  # componentwise product
-            A_grad -= ctx.A_val * alpha2Hx[:, ctx.A_col_ind.type(torch.long)]
+            alpha2Hx = (alpha * 2.0) * H * x  # componentwise product
+            A_grad -= (
+                ctx.A_val_double.to(grad_output.dtype)
+                * alpha2Hx[:, ctx.A_col_ind.type(torch.long)]
+            )
 
         return A_grad, AH, None, None, None, None, None, None

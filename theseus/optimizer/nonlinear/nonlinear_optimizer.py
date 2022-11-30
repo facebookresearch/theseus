@@ -8,7 +8,7 @@ import math
 import warnings
 from dataclasses import dataclass
 from enum import Enum
-from typing import Any, Callable, Dict, NoReturn, Optional, Type, Union
+from typing import Any, Callable, Dict, NoReturn, Optional, Tuple, Type, Union
 
 import numpy as np
 import torch
@@ -95,7 +95,7 @@ EndIterCallbackType = Callable[
 #
 # The high level logic of a call to optimize is as follows:
 #
-# prev_err = objective.error_squared_norm()
+# prev_err = objective.error_squared_norm() / 2
 # do optimization loop:
 #    1. compute delta
 #    2. step(delta, prev_err)
@@ -496,6 +496,26 @@ class NonlinearOptimizer(Optimizer, abc.ABC):
         for v_tmp, v_order in zip(self._tmp_optim_vars, self.ordering):
             v_tmp.update(v_order.tensor)
 
+    def _compute_retracted_tensors_and_error(
+        self,
+        delta: torch.Tensor,
+        converged_indices: torch.Tensor,
+        force_update: bool,
+    ) -> Tuple[Dict[str, torch.Tensor], torch.Tensor]:
+        # makes sure tmp containers are up to date with current variables
+        self._update_tmp_optim_vars()
+        # stores the result of the retract step in `self._tmp_optim_vars`
+        self.objective.retract_vars_sequence(
+            delta,
+            self._tmp_optim_vars,
+            ignore_mask=converged_indices,
+            force_update=force_update,
+        )
+        tensor_dict = {v.name: v.tensor for v in self._tmp_optim_vars}
+        with torch.no_grad():
+            err = self.objective.error_squared_norm(tensor_dict, also_update=False) / 2
+        return tensor_dict, err
+
     # Given descent directions and step sizes, updates the optimization
     # variables.
     # Batch indices indicated by `converged_indices` mask are ignored
@@ -509,21 +529,11 @@ class NonlinearOptimizer(Optimizer, abc.ABC):
         force_update: bool,
         **kwargs,
     ) -> torch.Tensor:
-        # makes sure tmp containers are up to date with current variables
-        self._update_tmp_optim_vars()
-        # stores the result of the retract step in `self._tmp_optim_vars`
-        self.objective.retract_vars_sequence(
-            delta,
-            self._tmp_optim_vars,
-            ignore_mask=converged_indices,
-            force_update=force_update,
+        tensor_dict, err = self._compute_retracted_tensors_and_error(
+            delta, converged_indices, force_update
         )
-        tensor_map = {v.name: v.tensor for v in self._tmp_optim_vars}
-        with torch.no_grad():
-            err = self.objective.error_squared_norm(tensor_map, also_update=False)
-
         reject_indices = self._complete_step(delta, err, previous_err, **kwargs)
-        self.objective.update(tensor_map, batch_ignore_mask=reject_indices)
+        self.objective.update(tensor_dict, batch_ignore_mask=reject_indices)
 
         return err
 

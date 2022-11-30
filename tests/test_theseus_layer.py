@@ -388,7 +388,10 @@ def test_backward(
 ):
     optim_kwargs = {
         th.GaussNewton: {},
-        th.LevenbergMarquardt: {"damping": 0.01},
+        th.LevenbergMarquardt: {
+            "damping": 0.01,
+            "adaptive_damping": lin_solver_cls not in [th.CholmodSparseSolver],
+        },
     }[nonlinear_optim_cls]
     if learning_method == "leo":
         # CholmodSparseSolver doesn't support sampling from system's covariance

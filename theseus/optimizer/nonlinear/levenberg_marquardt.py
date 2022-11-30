@@ -96,7 +96,8 @@ class LevenbergMarquardt(NonlinearLeastSquares):
         if adaptive_damping and not self._allows_adaptive:
             raise NotImplementedError(
                 f"Adaptive damping is only supported by solvers with type "
-                f"[{_ADAPT_DAMP_SOLVERS_STR}]."
+                f"[{_ADAPT_DAMP_SOLVERS_STR}], but got solver of type "
+                f"{type(self.linear_solver)}."
             )
         if adaptive_damping:
             self._damping = damping * torch.ones(

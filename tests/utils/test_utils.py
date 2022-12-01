@@ -113,11 +113,11 @@ def _check_sparse_mv(batch_size, num_rows, num_cols, fill, device):
         A_val.requires_grad = True
         b.requires_grad = True
         torch.autograd.gradcheck(
-            thutils.sparse_mv, (num_cols, A_val, A_row_ptr, A_col_ind, b)
+            thutils.sparse_mv, (num_cols, A_row_ptr, A_col_ind, A_val, b)
         )
 
     # Check forward pass
-    out = thutils.sparse_mv(num_cols, A_val, A_row_ptr, A_col_ind, b)
+    out = thutils.sparse_mv(num_cols, A_row_ptr, A_col_ind, A_val, b)
     for i in range(batch_size):
         A_csr = scipy.sparse.csr_matrix(
             (

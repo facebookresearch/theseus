@@ -234,6 +234,9 @@ def _check_optimizer_returns_fail_status_on_singular(
         def _atb_impl(self) -> torch.Tensor:
             return self._Atb
 
+        def Av(self, v):
+            pass
+
     class MockCostFunction(th.CostFunction):
         def __init__(self, optim_vars, cost_weight):
             super().__init__(cost_weight)

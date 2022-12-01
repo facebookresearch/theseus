@@ -9,7 +9,7 @@ import numpy as np
 import torch
 
 from theseus.core import Objective
-from theseus.utils.sparse_matrix_utils import tmat_vec
+from theseus.utils.sparse_matrix_utils import sparse_mv, tmat_vec
 
 from .linear_system import SparseStructure
 from .linearization import Linearization
@@ -145,6 +145,10 @@ class SparseLinearization(Linearization):
         raise NotImplementedError("AtA is not yet implemented for SparseLinearization.")
 
     def _atb_impl(self) -> torch.Tensor:
+        if torch.is_grad_enabled():
+            raise NotImplementedError(
+                "Atb is not differentiable for SparseLinearization."
+            )
         if self._Atb is None:
             A_row_ptr = torch.tensor(self.A_row_ptr, dtype=torch.int32).to(
                 self.objective.device
@@ -161,3 +165,12 @@ class SparseLinearization(Linearization):
                 self.b.double(),
             ).unsqueeze(2)
         return self._Atb.to(dtype=self.A_val.dtype)
+
+    def Av(self, v: torch.Tensor) -> torch.Tensor:
+        A_row_ptr = torch.tensor(self.A_row_ptr, dtype=torch.int32).to(
+            self.objective.device
+        )
+        A_col_ind = A_row_ptr.new_tensor(self.A_col_ind)
+        return sparse_mv(
+            self.num_cols, A_row_ptr, A_col_ind, self.A_val.double(), v.double()
+        ).to(v.dtype)

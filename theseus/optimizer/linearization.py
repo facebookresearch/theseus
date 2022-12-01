@@ -75,3 +75,8 @@ class Linearization(abc.ABC):
     @property
     def Atb(self) -> torch.Tensor:
         return self._atb_impl()
+
+    # Returns self.A @ v
+    @abc.abstractmethod
+    def Av(self, v: torch.Tensor) -> torch.Tensor:
+        pass

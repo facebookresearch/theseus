@@ -104,17 +104,15 @@ class _SparseMvPAutograd(torch.autograd.Function):
     def forward(  # type: ignore
         ctx: Any,
         num_cols: int,
-        A_val: torch.Tensor,
         A_row_ptr: torch.Tensor,
         A_col_ind: torch.Tensor,
+        A_val: torch.Tensor,
         v: torch.Tensor,
     ) -> torch.Tensor:
-        assert (
-            A_row_ptr.ndim == 1
-            and A_col_ind.ndim == 1
-            and A_val.ndim == 2
-            and v.ndim == 2
-        )
+        assert A_row_ptr.ndim == 1
+        assert A_col_ind.ndim == 1
+        assert A_val.ndim == 2
+        assert v.ndim == 2
         ctx.save_for_backward(A_val, A_row_ptr, A_col_ind, v)
         ctx.num_cols = num_cols
         return mat_vec(A_val.shape[0], num_cols, A_row_ptr, A_col_ind, A_val, v)
@@ -123,7 +121,7 @@ class _SparseMvPAutograd(torch.autograd.Function):
     @torch.autograd.function.once_differentiable
     def backward(  # type: ignore
         ctx: Any, grad_output: torch.Tensor
-    ) -> Tuple[None, torch.Tensor, None, None, torch.Tensor]:
+    ) -> Tuple[None, None, None, torch.Tensor, torch.Tensor]:
         A_val, A_row_ptr, A_col_ind, v = ctx.saved_tensors
         num_rows = len(A_row_ptr) - 1
         A_grad = torch.zeros_like(A_val)  # (batch_size, nnz)
@@ -135,7 +133,7 @@ class _SparseMvPAutograd(torch.autograd.Function):
             A_grad[:, start:end] = v[:, columns] * grad_output[:, row].view(-1, 1)
             v_grad[:, columns] += grad_output[:, row].view(-1, 1) * A_val[:, start:end]
 
-        return None, A_grad, None, None, v_grad
+        return None, None, None, A_grad, v_grad
 
 
 sparse_mv = _SparseMvPAutograd.apply

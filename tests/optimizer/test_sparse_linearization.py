@@ -29,3 +29,11 @@ def test_sparse_linearization():
 
     for i in range(batch_size):
         assert b[i].isclose(linearization.b[i]).all()
+
+    rng = torch.Generator()
+    rng.manual_seed(1009)
+    for _ in range(20):
+        v = torch.randn(A.shape[0], A.shape[2], 1)
+        av_expected = A.bmm(v).squeeze(2)
+        av_out = linearization.Av(v.squeeze(2))
+        torch.testing.assert_close(av_expected, av_out)

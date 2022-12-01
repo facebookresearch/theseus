@@ -390,7 +390,8 @@ def test_backward(
         th.GaussNewton: {},
         th.LevenbergMarquardt: {
             "damping": 0.01,
-            "adaptive_damping": lin_solver_cls not in [th.CholmodSparseSolver],
+            "adaptive_damping": lin_solver_cls not in [th.CholmodSparseSolver]
+            and learning_method not in "leo",
         },
     }[nonlinear_optim_cls]
     if learning_method == "leo":

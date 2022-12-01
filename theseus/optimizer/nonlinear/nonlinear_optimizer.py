@@ -107,7 +107,7 @@ EndIterCallbackType = Callable[
 #                ignoring indices given by `reject_indices`
 #    3. Check convergence
 class NonlinearOptimizer(Optimizer, abc.ABC):
-    _DEFAULT_STEP_ALL_REJECT = 0.05
+    _MAX_ALL_REJECT_ATTEMPTS = 3
 
     def __init__(
         self,
@@ -311,8 +311,9 @@ class NonlinearOptimizer(Optimizer, abc.ABC):
         steps_tensor: torch.Tensor = None  # type: ignore
         converged_indices = torch.zeros_like(info.last_err).bool()
         iters_done = 0
-        for it_ in range(num_iter):
-            iters_done += 1
+        it_ = 0
+        all_reject_attempts = 0
+        while it_ < num_iter:
             # do optimizer step
             self.linear_solver.linearization.linearize()
             try:
@@ -360,15 +361,23 @@ class NonlinearOptimizer(Optimizer, abc.ABC):
 
             # For now, step size is combined with delta. If we add more sophisticated
             # line search, will probably need to pass it separately, or compute inside.
-            err = self._step(
+            err, all_rejected = self._step(
                 delta * steps_tensor,
                 info.last_err,
                 converged_indices,
                 force_update,
                 **kwargs,
             )  # err is shape (batch_size,)
+            if all_rejected:
+                # The optimizer rejected all steps so just continue, otherwise convergence
+                # check will stop prematurely. However, we put a max on this to guarantee
+                # this terminates
+                all_reject_attempts += 1
+                if all_reject_attempts < NonlinearOptimizer._MAX_ALL_REJECT_ATTEMPTS:
+                    continue
+            all_reject_attempts = 0
 
-            # check for convergence
+            # check for convergence if at least one step was accepted
             with torch.no_grad():
                 self._update_info(info, it_, err, converged_indices)
                 if verbose:
@@ -386,6 +395,9 @@ class NonlinearOptimizer(Optimizer, abc.ABC):
 
                 if end_iter_callback is not None:
                     end_iter_callback(self, info, delta, it_)
+
+            iters_done += 1
+            it_ += 1
 
         info.status[
             info.status == NonlinearOptimizerStatus.START
@@ -522,7 +534,8 @@ class NonlinearOptimizer(Optimizer, abc.ABC):
     # variables.
     # Batch indices indicated by `converged_indices` mask are ignored
     # unless `force_update = True`.
-    # Returns the total error tensor after the update
+    # Returns the total error tensor after the update and a boolean indicating
+    # if all steps were rejected
     def _step(
         self,
         delta: torch.Tensor,
@@ -530,27 +543,21 @@ class NonlinearOptimizer(Optimizer, abc.ABC):
         converged_indices: torch.Tensor,
         force_update: bool,
         **kwargs,
-    ) -> torch.Tensor:
+    ) -> Tuple[torch.Tensor, bool]:
         tensor_dict, err = self._compute_retracted_tensors_and_error(
             delta, converged_indices, force_update
         )
         reject_indices = self._complete_step(delta, err, previous_err, **kwargs)
 
         if reject_indices is not None and reject_indices.all():
-            # If all steps are marked as rejected, optimizer will think convergence
-            # has happened and stop. Taking a small step prevents this issue
-            tensor_dict, err = self._compute_retracted_tensors_and_error(
-                self._DEFAULT_STEP_ALL_REJECT * delta, converged_indices, force_update
-            )
-            self.objective.update(tensor_dict)
-            return err
+            return previous_err, True
 
         self.objective.update(tensor_dict, batch_ignore_mask=reject_indices)
         if reject_indices is not None and reject_indices.any():
             # Some steps were rejected so the error computed above is not accurate
             with torch.no_grad():
                 err = self.objective.error_squared_norm() / 2
-        return err
+        return err, False
 
     # Resets any internal state needed by the optimizer for a new optimization
     # problem. Optimizer loop will pass all optimizer kwargs to this method.

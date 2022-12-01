@@ -169,7 +169,7 @@ class NonlinearOptimizer(Optimizer, abc.ABC):
         track_state_history: bool,
     ) -> NonlinearOptimizerInfo:
         with torch.no_grad():
-            last_err = self.objective.error_squared_norm() / 2
+            last_err = self._error_metric()
         best_err = last_err.clone() if track_best_solution else None
         if track_err_history:
             err_history = (
@@ -297,6 +297,18 @@ class NonlinearOptimizer(Optimizer, abc.ABC):
         info.converged_iter[
             M & (grad_loop_info.status == NonlinearOptimizerStatus.MAX_ITERATIONS)
         ] = -1
+
+    def _error_metric(
+        self,
+        input_tensors: Optional[Dict[str, torch.Tensor]] = None,
+        also_update: bool = False,
+    ) -> torch.Tensor:
+        return (
+            self.objective.error_squared_norm(
+                input_tensors=input_tensors, also_update=also_update
+            )
+            / 2
+        )
 
     # loop for the iterative optimizer
     def _optimize_loop(
@@ -527,7 +539,7 @@ class NonlinearOptimizer(Optimizer, abc.ABC):
         )
         tensor_dict = {v.name: v.tensor for v in self._tmp_optim_vars}
         with torch.no_grad():
-            err = self.objective.error_squared_norm(tensor_dict, also_update=False) / 2
+            err = self._error_metric(tensor_dict, also_update=False)
         return tensor_dict, err
 
     # Given descent directions and step sizes, updates the optimization

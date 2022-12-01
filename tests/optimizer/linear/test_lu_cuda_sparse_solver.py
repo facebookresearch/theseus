@@ -86,9 +86,7 @@ def check_sparse_solver_multistep(batch_size: int, test_exception: bool):
     void_objective = th.Objective()
     void_ordering = th.VariableOrdering(void_objective, default_order=False)
     solver = th.LUCudaSparseSolver(
-        void_objective,
-        linearization_kwargs={"ordering": void_ordering},
-        num_solver_contexts=(num_steps - 1) if test_exception else num_steps,
+        void_objective, linearization_kwargs={"ordering": void_ordering}
     )
     linearization = solver.linearization
 
@@ -100,7 +98,10 @@ def check_sparse_solver_multistep(batch_size: int, test_exception: bool):
     linearization.A_row_ptr = row_ptr
 
     # Only need this line for the test since the objective is a mock
-    solver.reset(batch_size=batch_size)
+    solver.reset(
+        batch_size=batch_size,
+        num_solver_contexts=(num_steps - 1) if test_exception else num_steps,
+    )
 
     As = [
         torch.randn(

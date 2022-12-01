@@ -26,6 +26,10 @@ class LinearSolver(abc.ABC):
             objective, **linearization_kwargs
         )
 
+    # Deliberately not abstract since some solvers don't need this
+    def reset(self, **kwargs):
+        pass
+
     @abc.abstractmethod
     def solve(
         self, damping: Optional[Union[float, torch.Tensor]] = None, **kwargs

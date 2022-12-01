@@ -96,7 +96,8 @@ class LevenbergMarquardt(NonlinearLeastSquares):
         if adaptive_damping and not self._allows_adaptive:
             raise NotImplementedError(
                 f"Adaptive damping is only supported by solvers with type "
-                f"[{_ADAPT_DAMP_SOLVERS_STR}]."
+                f"[{_ADAPT_DAMP_SOLVERS_STR}], but got solver of type "
+                f"{type(self.linear_solver)}."
             )
         if adaptive_damping:
             self._damping = damping * torch.ones(
@@ -115,11 +116,17 @@ class LevenbergMarquardt(NonlinearLeastSquares):
         damping_eps: Optional[float] = None,
         **kwargs,
     ) -> torch.Tensor:
-        if ellipsoidal_damping and not self._allows_ellipsoidal:
-            raise NotImplementedError(
-                f"Ellipsoidal damping is only supported by solvers with type "
-                f"[{_EDAMP_SOLVERS_STR}]."
-            )
+        if ellipsoidal_damping:
+            if not self._allows_ellipsoidal:
+                raise NotImplementedError(
+                    f"Ellipsoidal damping is only supported by solvers with type "
+                    f"[{_EDAMP_SOLVERS_STR}]."
+                )
+            if isinstance(self._damping, torch.Tensor):
+                raise NotImplementedError(
+                    "Adaptive damping is not currently supported together with "
+                    "ellipsoidal_damping."
+                )
         if damping_eps is not None and not self._allows_ellipsoidal:
             raise NotImplementedError(
                 f"damping eps is only supported by solvers with type "
@@ -180,7 +187,7 @@ class LevenbergMarquardt(NonlinearLeastSquares):
         )
         # Deliberately using Atb before updating the variables, according to
         # the LM reference above
-        den = (delta * (damping * delta + linearization.Atb.squeeze(2))).sum(dim=1)
+        den = (delta * (damping * delta + linearization.Atb.squeeze(2))).sum(dim=1) / 2
         rho = (previous_err - err) / den
         reject_indices = rho <= damping_accept
         self._damping = torch.where(

@@ -237,6 +237,9 @@ def _check_optimizer_returns_fail_status_on_singular(
         def Av(self, v):
             pass
 
+        def diagonal_scaling(self, v):
+            pass
+
     class MockCostFunction(th.CostFunction):
         def __init__(self, optim_vars, cost_weight):
             super().__init__(cost_weight)

@@ -583,7 +583,6 @@ class NonlinearOptimizer(Optimizer, abc.ABC):
     # problem. Optimizer loop will pass all optimizer kwargs to this method.
     # Deliberately not abstract, since some optimizers might not need this
     def reset(self, **kwargs) -> None:
-        print(kwargs)
         backward_num_iters, _ = self._split_backward_iters(**kwargs)
         if (
             isinstance(self.linear_solver, LUCudaSparseSolver)

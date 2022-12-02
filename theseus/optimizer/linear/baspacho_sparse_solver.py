@@ -27,7 +27,6 @@ class BaspachoSparseSolver(LinearSolver):
         objective: Objective,
         linearization_cls: Optional[Type[Linearization]] = None,
         linearization_kwargs: Optional[Dict[str, Any]] = None,
-        num_solver_contexts: int = 1,
         dev: DeviceType = DEFAULT_DEVICE,
         **kwargs,
     ):
@@ -41,12 +40,14 @@ class BaspachoSparseSolver(LinearSolver):
         super().__init__(objective, linearization_cls, linearization_kwargs, **kwargs)
         self.linearization: SparseLinearization = self.linearization
 
-        self._num_solver_contexts: int = num_solver_contexts
-
+        self._has_been_reset = False
         if self.linearization.structure().num_rows:
             self.reset(dev)
 
-    def reset(self, dev: DeviceType = DEFAULT_DEVICE):
+    def reset(self, dev: DeviceType = DEFAULT_DEVICE, **kwargs):
+        if self._has_been_reset:
+            return
+        self._has_been_reset = True
         if dev == "cuda" and not torch.cuda.is_available():
             raise RuntimeError(
                 "BaspachoSparseSolver: Cuda requested (dev='cuda') but not\n"

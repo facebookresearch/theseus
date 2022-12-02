@@ -15,7 +15,7 @@ import torch
 
 from theseus.core import Objective
 from theseus.optimizer import Linearization, Optimizer, OptimizerInfo
-from theseus.optimizer.linear import LinearSolver
+from theseus.optimizer.linear import LinearSolver, LUCudaSparseSolver
 
 
 @dataclass
@@ -416,6 +416,29 @@ class NonlinearOptimizer(Optimizer, abc.ABC):
         ] = NonlinearOptimizerStatus.MAX_ITERATIONS
         return iters_done
 
+    # Returns how many iterations to do with and without autograd
+    def _split_backward_iters(self, **kwargs) -> Tuple[int, int]:
+        if kwargs["backward_mode"] == BackwardMode.TRUNCATED:
+            if "backward_num_iterations" not in kwargs:
+                raise ValueError("backward_num_iterations expected but not received.")
+            if kwargs["backward_num_iterations"] > self.params.max_iterations:
+                warnings.warn(
+                    f"Input backward_num_iterations "
+                    f"(={kwargs['backward_num_iterations']}) > "
+                    f"max_iterations (={self.params.max_iterations}). "
+                    f"Using backward_num_iterations=max_iterations."
+                )
+            backward_num_iters = min(
+                kwargs["backward_num_iterations"], self.params.max_iterations
+            )
+        else:
+            backward_num_iters = {
+                BackwardMode.UNROLL: self.params.max_iterations,
+                BackwardMode.DLM: self.params.max_iterations,
+                BackwardMode.IMPLICIT: 1,
+            }[kwargs["backward_mode"]]
+        return backward_num_iters, self.params.max_iterations - backward_num_iters
+
     # `track_best_solution` keeps a **detached** copy (as in no gradient info)
     # of the best variables found, but it is optional to avoid unnecessary copying
     # if this is not needed
@@ -432,8 +455,9 @@ class NonlinearOptimizer(Optimizer, abc.ABC):
         end_iter_callback: Optional[EndIterCallbackType] = None,
         **kwargs,
     ) -> OptimizerInfo:
-        self.reset(**kwargs)
         backward_mode = BackwardMode.resolve(backward_mode)
+        kwargs_plus_bwd_mode = {**kwargs, **{"backward_mode": backward_mode}}
+        self.reset(**kwargs_plus_bwd_mode)
         with torch.no_grad():
             info = self._init_info(
                 track_best_solution, track_err_history, track_state_history
@@ -445,10 +469,13 @@ class NonlinearOptimizer(Optimizer, abc.ABC):
                 f"Error: {info.last_err.mean().item()}"
             )
 
+        backward_num_iters, no_grad_num_iters = self._split_backward_iters(
+            **kwargs_plus_bwd_mode
+        )
         if backward_mode in [BackwardMode.UNROLL, BackwardMode.DLM]:
             self._optimize_loop(
                 start_iter=0,
-                num_iter=self.params.max_iterations,
+                num_iter=backward_num_iters,
                 info=info,
                 verbose=verbose,
                 truncated_grad_loop=False,
@@ -461,29 +488,10 @@ class NonlinearOptimizer(Optimizer, abc.ABC):
             ] = -1
             return info
         elif backward_mode in [BackwardMode.IMPLICIT, BackwardMode.TRUNCATED]:
-            if backward_mode == BackwardMode.IMPLICIT:
-                backward_num_iterations = 1
-            else:
-                if "backward_num_iterations" not in kwargs:
-                    raise ValueError(
-                        "backward_num_iterations expected but not received"
-                    )
-                if kwargs["backward_num_iterations"] > self.params.max_iterations:
-                    warnings.warn(
-                        f"Input backward_num_iterations "
-                        f"(={kwargs['backward_num_iterations']}) > "
-                        f"max_iterations (={self.params.max_iterations}). "
-                        f"Using backward_num_iterations=max_iterations."
-                    )
-                backward_num_iterations = min(
-                    kwargs["backward_num_iterations"], self.params.max_iterations
-                )
-
-            num_no_grad_iter = self.params.max_iterations - backward_num_iterations
             with torch.no_grad():
                 # actual_num_iters could be < num_iter due to early convergence
                 no_grad_iters_done = self._optimize_loop(
-                    num_iter=num_no_grad_iter,
+                    num_iter=no_grad_num_iters,
                     info=info,
                     verbose=verbose,
                     truncated_grad_loop=False,
@@ -495,7 +503,7 @@ class NonlinearOptimizer(Optimizer, abc.ABC):
                 track_best_solution, track_err_history, track_state_history
             )
             grad_iters_done = self._optimize_loop(
-                num_iter=backward_num_iterations,
+                num_iter=backward_num_iters,
                 info=grad_loop_info,
                 verbose=verbose,
                 truncated_grad_loop=True,
@@ -575,7 +583,14 @@ class NonlinearOptimizer(Optimizer, abc.ABC):
     # problem. Optimizer loop will pass all optimizer kwargs to this method.
     # Deliberately not abstract, since some optimizers might not need this
     def reset(self, **kwargs) -> None:
-        pass
+        backward_num_iters, _ = self._split_backward_iters(**kwargs)
+        if (
+            isinstance(self.linear_solver, LUCudaSparseSolver)
+            and "num_solver_contexts" not in kwargs
+        ):
+            # Auto set number of solver context for the given max iterations
+            kwargs["num_solver_contexts"] = backward_num_iters
+        self.linear_solver.reset(**kwargs)
 
     # Called at the end of step() but before variables are update to their new values.
     # This method can be used to update any internal state of the optimizer and

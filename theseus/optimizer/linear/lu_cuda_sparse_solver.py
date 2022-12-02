@@ -3,6 +3,8 @@
 # This source code is licensed under the MIT license found in the
 # LICENSE file in the root directory of this source tree.
 
+import copy
+import dataclasses
 from typing import Any, Dict, List, Optional, Type, Union
 
 import torch
@@ -16,12 +18,36 @@ from .utils import convert_to_alpha_beta_damping_tensors
 
 
 class LUCudaSparseSolver(LinearSolver):
+    # Class for keeping track of the inputs used when `reset()`` is called
+    # Mostly useful for the `fill_defaults()` method
+    @dataclasses.dataclass
+    class ResetCtx:
+        _DEFAULTS = {"batch_size": 16, "num_solver_contexts": 1}
+
+        batch_size: Optional[int]
+        num_solver_contexts: Optional[int]
+
+        def fill_defaults(
+            self, another_ctx: "LUCudaSparseSolver.ResetCtx"
+        ) -> "LUCudaSparseSolver.ResetCtx":
+            my_fields = dataclasses.asdict(self)
+            other_fields = dataclasses.asdict(another_ctx)
+            new_ctx_fields = copy.copy(LUCudaSparseSolver.ResetCtx._DEFAULTS)
+            for k, v in my_fields.items():
+                if v is None:
+                    other_v = other_fields[k]
+                    if other_v is not None:
+                        new_ctx_fields[k] = other_v
+                else:
+                    new_ctx_fields[k] = v
+            return LUCudaSparseSolver.ResetCtx(**new_ctx_fields)
+
     def __init__(
         self,
         objective: Objective,
         linearization_cls: Optional[Type[Linearization]] = None,
         linearization_kwargs: Optional[Dict[str, Any]] = None,
-        num_solver_contexts: int = 1,
+        num_solver_contexts: Optional[int] = None,
         batch_size: Optional[int] = None,
         auto_reset: bool = True,
         **kwargs,
@@ -39,21 +65,33 @@ class LUCudaSparseSolver(LinearSolver):
         super().__init__(objective, linearization_cls, linearization_kwargs, **kwargs)
         self.linearization: SparseLinearization = self.linearization
 
-        self._num_solver_contexts: int = num_solver_contexts
-
+        self._last_reset_ctx = LUCudaSparseSolver.ResetCtx(None, None)
         if self.linearization.structure().num_rows:
-            if batch_size is not None:
-                self.reset(batch_size=batch_size)
-            else:
-                self.reset()
+            self.reset(batch_size=batch_size, num_solver_contexts=num_solver_contexts)
 
         self._objective = objective
         self._auto_reset = auto_reset
 
-    def reset(self, batch_size: int = 16):
+    def reset(
+        self,
+        batch_size: Optional[int] = None,
+        num_solver_contexts: Optional[int] = None,
+        **kwargs,
+    ):
+        # For any inputs that are None, this tries to set their values to
+        # that used in the last call to `reset()`. If that value is also None,
+        # (i.e., reset has never been called before) then it fills them
+        # with the base default values
+        ctx = LUCudaSparseSolver.ResetCtx(
+            batch_size, num_solver_contexts
+        ).fill_defaults(self._last_reset_ctx)
+        # As a consequence of the above, reset() is only run if it either has
+        # never been run before, or if at least one of the parameters is
+        # explicitly requested to be different from those used in the last reset
+        if ctx == self._last_reset_ctx:
+            return
         if not torch.cuda.is_available():
             raise RuntimeError("Cuda not available, LUCudaSparseSolver cannot be used")
-
         try:
             from theseus.extlib.cusolver_lu_solver import CusolverLUSolver
         except Exception as e:
@@ -80,14 +118,15 @@ class LUCudaSparseSolver(LinearSolver):
         AtA_col_ind = torch.tensor(AtA_mock.indices, dtype=torch.int32).cuda()
         self._solver_contexts: List[CusolverLUSolver] = [
             CusolverLUSolver(
-                batch_size,
+                ctx.batch_size,
                 AtA_mock.shape[1],
                 AtA_row_ptr,
                 AtA_col_ind,
             )
-            for _ in range(self._num_solver_contexts)
+            for _ in range(ctx.num_solver_contexts)
         ]
-        self._last_solver_context: int = self._num_solver_contexts - 1
+        self._last_solver_context: int = ctx.num_solver_contexts - 1
+        self._last_reset_ctx = ctx
 
     def solve(
         self,
@@ -106,7 +145,7 @@ class LUCudaSparseSolver(LinearSolver):
 
         self._last_solver_context = (
             self._last_solver_context + 1
-        ) % self._num_solver_contexts
+        ) % self._last_reset_ctx.num_solver_contexts
 
         if damping is None:
             damping_alpha_beta = None

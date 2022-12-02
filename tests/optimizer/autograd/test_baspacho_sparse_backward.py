@@ -6,13 +6,13 @@
 import pytest  # noqa: F401
 import torch
 import numpy as np
-from torch.autograd import gradcheck
 from theseus.optimizer.autograd import BaspachoSolveFunction
 
 from tests.extlib.common import run_if_baspacho
 from theseus.utils import random_sparse_binary_matrix, split_into_param_sizes
 
 import theseus as th
+from .common import check_grad
 
 
 def get_linearization_and_solver_for_random_sparse(
@@ -86,8 +86,7 @@ def check_sparse_backward_step(
         solver.symbolic_decomposition,
         damping_alpha_beta,
     )
-
-    assert gradcheck(BaspachoSolveFunction.apply, inputs, eps=1e-5, atol=1e-5)
+    check_grad(BaspachoSolveFunction.apply, inputs, eps=1e-5, atol=1e-5, rtol=1e-4)
 
 
 @run_if_baspacho()

@@ -5,9 +5,9 @@
 
 import pytest  # noqa: F401
 import torch
-from torch.autograd import gradcheck
 
 import theseus as th
+from .common import check_grad
 
 
 def _build_sparse_mat(batch_size):
@@ -68,4 +68,4 @@ def test_sparse_backward_step():
         False,  # it's the same matrix, so no overwrite problems
     )
 
-    assert gradcheck(LUCudaSolveFunction.apply, inputs, eps=3e-4, atol=1e-3)
+    check_grad(LUCudaSolveFunction.apply, inputs, eps=3e-4, atol=1e-3, rtol=1e-4)

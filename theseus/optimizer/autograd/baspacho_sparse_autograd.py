@@ -136,16 +136,15 @@ class BaspachoSolveFunction(torch.autograd.Function):
         batch_size = grad_output.shape[0]
         A_grad = torch.empty(
             size=(batch_size, len(A_col_ind)),
-            dtype=grad_output.dtype,
+            dtype=torch.double,
             device=grad_output.device,
         )  # return value, A's grad
-        x = ctx.x.to(grad_output.dtype)
         for r in range(len(A_row_ptr) - 1):
             start, end = A_row_ptr[r], A_row_ptr[r + 1]
             columns = A_col_ind[start:end]  # col indices, for this row
             A_grad[:, start:end] = (
-                b_Ax[:, r].unsqueeze(1) * H[:, columns]
-                - AH[:, r].unsqueeze(1) * x[:, columns]
+                b_Ax[:, r].unsqueeze(1) * H_double[:, columns]
+                - AH[:, r].unsqueeze(1) * ctx.x[:, columns]
             )
 
         # apply correction if there is a multiplicative damping
@@ -154,10 +153,16 @@ class BaspachoSolveFunction(torch.autograd.Function):
             and (ctx.damping_alpha_beta[0] > 0.0).any()
         ):
             alpha = ctx.damping_alpha_beta[0].view(-1, 1)
-            alpha2Hx = (alpha * 2.0) * H * x  # componentwise product
-            A_grad -= (
-                ctx.A_val_double.to(grad_output.dtype)
-                * alpha2Hx[:, ctx.A_col_ind.type(torch.long)]
-            )
+            alpha2Hx = (alpha * 2.0) * H_double * ctx.x  # componentwise product
+            A_grad -= ctx.A_val_double * alpha2Hx[:, ctx.A_col_ind.type(torch.long)]
 
-        return A_grad, AH, None, None, None, None, None, None
+        return (
+            A_grad.to(dtype=grad_output.dtype),
+            AH.to(dtype=grad_output.dtype),
+            None,
+            None,
+            None,
+            None,
+            None,
+            None,
+        )

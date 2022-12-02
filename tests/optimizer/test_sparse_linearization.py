@@ -25,10 +25,10 @@ def test_sparse_linearization():
 
     for i in range(batch_size):
         csrAi = linearization.structure().csr_straight(linearization.A_val[i, :])
-        assert A[i, :, :].isclose(torch.Tensor(csrAi.todense())).all()
+        torch.testing.assert_close(A[i], torch.Tensor(csrAi.todense()))
 
     for i in range(batch_size):
-        assert b[i].isclose(linearization.b[i]).all()
+        torch.testing.assert_close(b[i], linearization.b[i])
 
     # Test Atb result
     atb_expected = A.transpose(1, 2).bmm(b.unsqueeze(2))
@@ -41,5 +41,10 @@ def test_sparse_linearization():
     for _ in range(20):
         v = torch.randn(A.shape[0], A.shape[2], 1)
         av_expected = A.bmm(v).squeeze(2)
-        av_out = linearization.Av(v.squeeze(2))
-        torch.testing.assert_close(av_expected, av_out)
+        av = linearization.Av(v.squeeze(2))
+        torch.testing.assert_close(av_expected, av)
+
+        v = v.squeeze(2)
+        scaled_v_expected = (A.transpose(1, 2).bmm(A)).diagonal(dim1=1, dim2=2) * v
+        scaled_v = linearization.diagonal_scaling(v)
+        torch.testing.assert_close(scaled_v_expected, scaled_v)

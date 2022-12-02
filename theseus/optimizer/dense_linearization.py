@@ -72,3 +72,6 @@ class DenseLinearization(Linearization):
 
     def Av(self, v: torch.Tensor) -> torch.Tensor:
         return self.A.bmm(v.unsqueeze(2)).squeeze(2)
+
+    def diagonal_scaling(self, v: torch.Tensor) -> torch.Tensor:
+        return v * self._AtA.diagonal(dim1=1, dim2=2)

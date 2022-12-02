@@ -2,7 +2,6 @@
 #
 # This source code is licensed under the MIT license found in the
 # LICENSE file in the root directory of this source tree.
-import contextlib
 import pytest  # noqa: F401
 import torch
 
@@ -25,20 +24,17 @@ def mock_objective():
 @pytest.mark.parametrize("ellipsoidal_damping", [True, False])
 @pytest.mark.parametrize("adaptive_damping", [True, False])
 def test_levenberg_marquardt(damping, ellipsoidal_damping, adaptive_damping):
-    with pytest.raises(
-        RuntimeError
-    ) if ellipsoidal_damping and adaptive_damping else contextlib.nullcontext():
-        run_nonlinear_least_squares_check(
-            th.LevenbergMarquardt,
-            {
-                "damping": damping,
-                "ellipsoidal_damping": ellipsoidal_damping,
-                "adaptive_damping": adaptive_damping,
-                "damping_eps": 0.0,
-                __FROM_THESEUS_LAYER_TOKEN__: True,
-            },
-            singular_check=damping < 0.001,
-        )
+    run_nonlinear_least_squares_check(
+        th.LevenbergMarquardt,
+        {
+            "damping": damping,
+            "ellipsoidal_damping": ellipsoidal_damping,
+            "adaptive_damping": adaptive_damping,
+            "damping_eps": 0.0,
+            __FROM_THESEUS_LAYER_TOKEN__: True,
+        },
+        singular_check=damping < 0.001,
+    )
 
 
 def test_ellipsoidal_damping_compatibility(mock_objective):

@@ -169,3 +169,15 @@ class SparseLinearization(Linearization):
         return sparse_mv(
             self.num_cols, A_row_ptr, A_col_ind, self.A_val.double(), v.double()
         ).to(v.dtype)
+
+    def diagonal_scaling(self, v: torch.Tensor) -> torch.Tensor:
+        assert v.ndim == 2
+        assert v.shape[1] == self.num_cols
+        A_val = self.A_val
+        diag = torch.zeros(A_val.shape[0], self.num_cols)
+        for row in range(self.num_rows):
+            start = self.A_row_ptr[row]
+            end = self.A_row_ptr[row + 1]
+            columns = self.A_col_ind[start:end]
+            diag[:, columns] += A_val[:, start:end] ** 2
+        return diag * v

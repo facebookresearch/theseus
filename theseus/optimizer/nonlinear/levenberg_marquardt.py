@@ -123,11 +123,6 @@ class LevenbergMarquardt(NonlinearLeastSquares):
                     f"Ellipsoidal damping is only supported by solvers with type "
                     f"[{_EDAMP_SOLVERS_STR}]."
                 )
-            if isinstance(self._damping, torch.Tensor):
-                raise NotImplementedError(
-                    "Adaptive damping is not currently supported together with "
-                    "ellipsoidal_damping."
-                )
         if damping_eps is not None and not self._allows_ellipsoidal:
             raise NotImplementedError(
                 f"damping eps is only supported by solvers with type "
@@ -150,6 +145,7 @@ class LevenbergMarquardt(NonlinearLeastSquares):
         down_damping_ratio: float = 9.0,
         up_damping_ratio: float = 11.0,
         damping_accept: float = 0.1,
+        ellipsoidal_damping: bool = False,
         **kwargs,
     ) -> Optional[torch.Tensor]:
         if adaptive_damping:
@@ -160,6 +156,7 @@ class LevenbergMarquardt(NonlinearLeastSquares):
                 damping_accept,
                 down_damping_ratio,
                 up_damping_ratio,
+                ellipsoidal_damping,
             )
         else:
             return None
@@ -179,13 +176,13 @@ class LevenbergMarquardt(NonlinearLeastSquares):
         damping_accept: float,
         down_damping_ratio: float,
         up_damping_ratio: float,
+        ellipsoidal_damping: bool,
     ) -> torch.Tensor:
         linearization = self.linear_solver.linearization
-        damping = (
-            self._damping.view(-1, 1)
-            if isinstance(self._damping, torch.Tensor)
-            else self._damping
-        )
+        assert isinstance(self._damping, torch.Tensor)
+        damping = self._damping.view(-1, 1)
+        if ellipsoidal_damping:
+            damping = linearization.diagonal_scaling(damping)
         # Deliberately using Atb before updating the variables, according to
         # the LM reference above
         den = (delta * (damping * delta + linearization.Atb.squeeze(2))).sum(dim=1) / 2

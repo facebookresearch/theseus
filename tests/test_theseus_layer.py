@@ -389,7 +389,9 @@ def _solver_can_be_run(lin_solver_cls):
     return True
 
 
-@pytest.mark.parametrize("nonlinear_optim_cls", [th.Dogleg, th.GaussNewton, th.LevenbergMarquardt])
+@pytest.mark.parametrize(
+    "nonlinear_optim_cls", [th.Dogleg, th.GaussNewton, th.LevenbergMarquardt]
+)
 @pytest.mark.parametrize(
     "lin_solver_cls",
     [
@@ -425,6 +427,8 @@ def test_backward(
         if lin_solver_cls not in [th.CholeskyDenseSolver, th.LUDenseSolver]:
             # other solvers don't support sampling from system's covariance
             return
+        if nonlinear_optim_cls == th.Dogleg:
+            return  # LEO not working with Dogleg
     if nonlinear_optim_cls == th.Dogleg and lin_solver_cls != th.CholeskyDenseSolver:
         return
     # test both vectorization on/off

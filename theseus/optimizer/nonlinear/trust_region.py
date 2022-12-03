@@ -96,7 +96,7 @@ class TrustRegion(NonlinearLeastSquares, abc.ABC):
         delta, self._trusted_step_idx = self._compute_delta_impl()
         if self._trusted_step_idx is None:
             self._trusted_step_idx = (
-                TrustRegion._detached_squared_norm(delta) <= self._trust_region**2
+                TrustRegion._squared_norm(delta) <= self._trust_region**2
             )
 
         # Storing the indices of delta exactly at the trust boundary.
@@ -106,15 +106,12 @@ class TrustRegion(NonlinearLeastSquares, abc.ABC):
         delta, self._at_trust_boundary_idx = self._compute_delta_impl()
         if self._at_trust_boundary_idx is None:
             self._at_trust_boundary_idx = (
-                TrustRegion._detached_squared_norm(delta) <= self._trust_region**2
+                TrustRegion._squared_norm(delta) <= self._trust_region**2
             )
         return delta
 
     @staticmethod
-    @torch.no_grad()
-    def _detached_squared_norm(
-        tensor: torch.Tensor, keepdim: bool = True
-    ) -> torch.Tensor:
+    def _squared_norm(tensor: torch.Tensor, keepdim: bool = True) -> torch.Tensor:
         return (tensor**2).sum(dim=1, keepdim=keepdim)
 
     # Computes m_k(delta) as defined in Eq. (4.2) of the above reference (p. 68)
@@ -138,7 +135,7 @@ class TrustRegion(NonlinearLeastSquares, abc.ABC):
         return (
             previous_error
             + delta_dot_grad
-            + 0.5 * TrustRegion._detached_squared_norm(Adelta, keepdim=False)
+            + 0.5 * TrustRegion._squared_norm(Adelta, keepdim=False)
         )
 
     @torch.no_grad()

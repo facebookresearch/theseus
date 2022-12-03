@@ -54,33 +54,31 @@ class Dogleg(TrustRegion):
     def _compute_delta_impl(self) -> Tuple[torch.Tensor, Optional[torch.Tensor]]:
         trust_region_2 = self._trust_region**2
         delta_gn = self.linear_solver.solve()
-        delta_gn_norm_2 = TrustRegion._detached_squared_norm(delta_gn)
+        delta_gn_norm_2 = TrustRegion._squared_norm(delta_gn)
         good_gn_idx = delta_gn_norm_2 < trust_region_2
         # All Gauss-Newton step are within trust-region, can return
         if good_gn_idx.all():
             # Return a False mask since no indices are at the boundary
             return delta_gn, torch.zeros_like(good_gn_idx).bool()
 
-        # If reach here, some steps are outside trust-region,
+        # ---------------------------------------------------------------------
+        # Some Gauss-Newton steps are outside trust-region,
         # need to compute dogleg step
+        # ---------------------------------------------------------------------
 
         linearization = self.linear_solver.linearization
-        # TODO: For sparse I'll add a method like linearization.Avp() for Jacobian
-        # vector product. The issue is that for the sparse linearization we need
-        # to make this differentiable, because we are not using torch's
-        # native functions
+        # TODO: For sparse the method Atb is not yet differentiable.
         assert isinstance(linearization, DenseLinearization)
 
         neg_grad = linearization.Atb.squeeze(2)
-        with torch.no_grad():
-            Adelta_sd = linearization.A.bmm(neg_grad.unsqueeze(2)).squeeze(2)
-            Adelta_sd_norm_2 = TrustRegion._detached_squared_norm(Adelta_sd)
-            grad_norm_2 = TrustRegion._detached_squared_norm(neg_grad)
-            t = grad_norm_2 / (Adelta_sd_norm_2 + Dogleg.EPS)
-            delta_sd = neg_grad * t
-            delta_sd_norm_2 = TrustRegion._detached_squared_norm(delta_sd)
-            not_near_zero_sd_idx = delta_sd_norm_2 > 1e-6
-            sd_within_region_idx = delta_sd_norm_2 <= trust_region_2
+        Adelta_sd = linearization.Av(neg_grad)
+        Adelta_sd_norm_2 = TrustRegion._squared_norm(Adelta_sd)
+        grad_norm_2 = TrustRegion._squared_norm(neg_grad)
+        t = grad_norm_2 / (Adelta_sd_norm_2 + Dogleg.EPS)
+        delta_sd = neg_grad * t
+        delta_sd_norm_2 = TrustRegion._squared_norm(delta_sd)
+        not_near_zero_sd_idx = delta_sd_norm_2 > 1e-6
+        sd_within_region_idx = delta_sd_norm_2 <= trust_region_2
 
         # First make sure that any steps beyond the trust region, are truncated
         if not sd_within_region_idx.all():
@@ -93,7 +91,7 @@ class Dogleg(TrustRegion):
             delta_dogleg = delta_sd
 
         # Now mask near zero indices so the next computation doesn't happen for them
-        sd_within_region_idx &= not_near_zero_sd_idx
+        sd_within_region_idx = sd_within_region_idx & not_near_zero_sd_idx
 
         if sd_within_region_idx.any():
             # In this case, some steepest descent steps are within region
@@ -102,13 +100,12 @@ class Dogleg(TrustRegion):
             # This can be written as
             # a * tau^2 + b * tau + c, with a, b, c given below
             diff = delta_gn - delta_sd
-            with torch.no_grad():
-                a = TrustRegion._detached_squared_norm(diff)
-                b = (2 * delta_sd * diff).sum(dim=1, keepdim=True)
-                c = delta_sd_norm_2 - trust_region_2
-                disc = ((b**2) - 4 * a * c) + Dogleg.EPS
-                tau = (-b + disc.sqrt()) / (2 * a + Dogleg.EPS)
-                tau[~sd_within_region_idx] = 0.0  # avoid nans in backward pass
+            a = TrustRegion._squared_norm(diff)
+            b = (2 * delta_sd * diff).sum(dim=1, keepdim=True)
+            c = delta_sd_norm_2 - trust_region_2
+            disc = ((b**2) - 4 * a * c).clamp(0.0)
+            # By taking min(tau, 1), this also covers the case when ||d_gn|| < TR
+            tau = ((-b + disc.sqrt()) / (2 * a + Dogleg.EPS)).minimum(disc.new_ones(1))
             delta_dogleg = torch.where(
                 sd_within_region_idx,
                 delta_sd + tau * diff,
@@ -125,8 +122,6 @@ class Dogleg(TrustRegion):
                 delta_gn / (delta_gn_norm_2 + Dogleg.EPS).sqrt() * self._trust_region,
             )
 
-        # Finally, use the Gauss-Newton step if it was within the boundary
-        delta_dogleg = torch.where(good_gn_idx, delta_gn, delta_dogleg)
         # The only steps that are within the trust region are those were
         # Gauss-Newton was "good". Every other step size will have
         # norm exactly equal to the trust region

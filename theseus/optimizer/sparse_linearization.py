@@ -86,12 +86,18 @@ class SparseLinearization(Linearization):
         # batched data
         self.A_val: torch.Tensor = None
         self.b: torch.Tensor = None
+
         # computed lazily by self._atb_impl() and reset to None by
         # self._linearize_jacobian_impl()
         self._Atb: torch.Tensor = None
 
+        # computed lazily by self.diagonal_scaling() and reset to None by
+        # self._linearize_jacobian_impl()
+        self._AtA_diag: torch.Tensor = None
+
     def _linearize_jacobian_impl(self):
         self._Atb = None
+        self._AtA_diag = None
 
         # those will be fully overwritten, no need to zero:
         self.A_val = torch.empty(
@@ -173,11 +179,12 @@ class SparseLinearization(Linearization):
     def diagonal_scaling(self, v: torch.Tensor) -> torch.Tensor:
         assert v.ndim == 2
         assert v.shape[1] == self.num_cols
-        A_val = self.A_val
-        diag = torch.zeros(A_val.shape[0], self.num_cols)
-        for row in range(self.num_rows):
-            start = self.A_row_ptr[row]
-            end = self.A_row_ptr[row + 1]
-            columns = self.A_col_ind[start:end]
-            diag[:, columns] += A_val[:, start:end] ** 2
-        return diag * v
+        if self._AtA_diag is None:
+            A_val = self.A_val
+            self._AtA_diag = torch.zeros(A_val.shape[0], self.num_cols)
+            for row in range(self.num_rows):
+                start = self.A_row_ptr[row]
+                end = self.A_row_ptr[row + 1]
+                columns = self.A_col_ind[start:end]
+                self._AtA_diag[:, columns] += A_val[:, start:end] ** 2
+        return self._AtA_diag * v

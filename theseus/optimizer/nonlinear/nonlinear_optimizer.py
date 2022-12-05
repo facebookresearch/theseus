@@ -589,7 +589,9 @@ class NonlinearOptimizer(Optimizer, abc.ABC):
             and "num_solver_contexts" not in kwargs
         ):
             # Auto set number of solver context for the given max iterations
-            kwargs["num_solver_contexts"] = backward_num_iters
+            kwargs["num_solver_contexts"] = (
+                backward_num_iters * NonlinearOptimizer._MAX_ALL_REJECT_ATTEMPTS
+            )
         self.linear_solver.reset(**kwargs)
 
     # Called at the end of step() but before variables are update to their new values.

@@ -8,6 +8,7 @@ from .sparse_matrix_utils import (
     random_sparse_matrix,
     random_sparse_binary_matrix,
     sparse_mv,
+    sparse_mtv,
     split_into_param_sizes,
     tmat_vec,
 )

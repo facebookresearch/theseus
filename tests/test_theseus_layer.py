@@ -195,6 +195,7 @@ def _run_optimizer_test(
     learning_method="default",
     force_vectorization=False,
     max_iterations=10,
+    lr=0.075,
 ):
     device = "cuda:0" if torch.cuda.is_available() else "cpu"
     print(f"_run_test_for: {device}")
@@ -263,7 +264,7 @@ def _run_optimizer_test(
         def cost_weight_fn():
             return cost_weight_params.clone().view(1, -1)
 
-        optimizer = torch.optim.Adam([cost_weight_params], lr=0.075)
+        optimizer = torch.optim.Adam([cost_weight_params], lr=lr)
 
     elif cost_weight_model == "mlp":
         mlp = thutils.build_mlp(num_points, 20, num_points, 2).to(device)
@@ -272,7 +273,7 @@ def _run_optimizer_test(
         def cost_weight_fn():
             return mlp(dummy_input)
 
-        optimizer = torch.optim.Adam(mlp.parameters(), lr=0.075)
+        optimizer = torch.optim.Adam(mlp.parameters(), lr=lr)
 
     layer_to_learn = create_qf_theseus_layer(
         xs,
@@ -442,6 +443,9 @@ def test_backward(
         force_vectorization=force_vectorization,
         learning_method=learning_method,
         max_iterations=10,
+        lr=1.0
+        if nonlinear_optim_cls == th.Dogleg and not torch.cuda.is_available()
+        else 0.075,
     )
 
 

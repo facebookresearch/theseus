@@ -115,20 +115,16 @@ class TrustRegion(NonlinearLeastSquares, abc.ABC):
         return (tensor**2).sum(dim=1, keepdim=keepdim)
 
     # Computes m_k(delta) as defined in Eq. (4.2) of the above reference (p. 68)
-    @torch.no_grad()
     def _predicted_error(
         self, previous_error: torch.Tensor, delta: torch.Tensor
     ) -> torch.Tensor:
         linearization = self.linear_solver.linearization
 
-        # TODO: For sparse I'll add a method like linearization.Avp() for Jacobian
-        # vector product. The issue is that for the sparse linearization we need
-        # to make this differentiable, because we are not using torch's
-        # native functions
+        # TODO: Atb is not yet differentiable for sparse linearization
         assert isinstance(linearization, DenseLinearization)
 
         # Note that B = |A^t@ A| so that p^tBp := delta^t A^t A delta = ||Adelta||^2
-        Adelta = linearization.A.bmm(delta.unsqueeze(2)).squeeze(2)
+        Adelta = linearization.Av(delta)
         grad = -linearization.Atb.squeeze(2)
         delta_dot_grad = (delta * grad).sum(dim=1)
 
@@ -138,7 +134,6 @@ class TrustRegion(NonlinearLeastSquares, abc.ABC):
             + 0.5 * TrustRegion._squared_norm(Adelta, keepdim=False)
         )
 
-    @torch.no_grad()
     def _complete_step(
         self,
         delta: torch.Tensor,
@@ -152,7 +147,7 @@ class TrustRegion(NonlinearLeastSquares, abc.ABC):
         **kwargs,
     ) -> Optional[torch.Tensor]:
         # "err" tensors passed as input refer to the squared norm of the
-        # error vector, as returned by self.objective.error_squared_norm() / 2
+        # error vector, as returned by self._error_metric()
         good_params = (0.0 < shrink_ratio <= 1.0) and (expand_ratio >= 1.0)
         good_params &= (shrink_threshold < expand_threshold) and (
             accept_threshold < shrink_threshold

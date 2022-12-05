@@ -7,7 +7,7 @@ from typing import Any, Dict, Optional, Tuple, Type
 import torch
 
 from theseus.core import Objective
-from theseus.optimizer import DenseLinearization, Linearization
+from theseus.optimizer import Linearization
 from theseus.optimizer.linear import LinearSolver
 
 from .trust_region import TrustRegion
@@ -45,11 +45,6 @@ class Dogleg(TrustRegion):
             step_size=step_size,
             **kwargs,
         )
-        if not isinstance(self.linear_solver.linearization, DenseLinearization):
-            # Since I will implement for sparse soon after,
-            # I'll avoid fancier error handling
-            # I expect this method to work with all our current solvers
-            raise NotImplementedError
 
     def _compute_delta_impl(self) -> Tuple[torch.Tensor, Optional[torch.Tensor]]:
         trust_region_2 = self._trust_region**2
@@ -67,8 +62,6 @@ class Dogleg(TrustRegion):
         # ---------------------------------------------------------------------
 
         linearization = self.linear_solver.linearization
-        # TODO: For sparse the method Atb is not yet differentiable.
-        assert isinstance(linearization, DenseLinearization)
 
         neg_grad = linearization.Atb.squeeze(2)
         Adelta_sd = linearization.Av(neg_grad)

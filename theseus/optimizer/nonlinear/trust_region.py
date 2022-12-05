@@ -8,7 +8,7 @@ from typing import Any, Dict, Optional, Tuple, Type
 import torch
 
 from theseus.core import Objective
-from theseus.optimizer import DenseLinearization, Linearization
+from theseus.optimizer import Linearization
 from theseus.optimizer.linear import LinearSolver
 
 from .nonlinear_least_squares import NonlinearLeastSquares
@@ -63,11 +63,6 @@ class TrustRegion(NonlinearLeastSquares, abc.ABC):
             step_size=step_size,
             **kwargs,
         )
-        if not isinstance(self.linear_solver.linearization, DenseLinearization):
-            # Since I will implement for sparse soon after,
-            # I'll avoid fancier error handling
-            # I expect this method to work with all our current solvers
-            raise NotImplementedError
         self._trust_region: torch.Tensor = None
         self._at_trust_boundary_idx: torch.Tensor = None
 
@@ -76,6 +71,7 @@ class TrustRegion(NonlinearLeastSquares, abc.ABC):
         trust_region_init: float = 0.5,
         **kwargs,
     ) -> None:
+        super().reset(**kwargs)
         self._trust_region = trust_region_init * torch.ones(
             self.objective.batch_size,
             1,
@@ -119,9 +115,6 @@ class TrustRegion(NonlinearLeastSquares, abc.ABC):
         self, previous_error: torch.Tensor, delta: torch.Tensor
     ) -> torch.Tensor:
         linearization = self.linear_solver.linearization
-
-        # TODO: Atb is not yet differentiable for sparse linearization
-        assert isinstance(linearization, DenseLinearization)
 
         # Note that B = |A^t@ A| so that p^tBp := delta^t A^t A delta = ||Adelta||^2
         Adelta = linearization.Av(delta)

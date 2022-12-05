@@ -93,6 +93,7 @@ class LevenbergMarquardt(NonlinearLeastSquares):
         adaptive_damping: bool = False,
         **kwargs,
     ) -> None:
+        super().reset(**kwargs)
         if adaptive_damping and not self._allows_adaptive:
             raise NotImplementedError(
                 f"Adaptive damping is only supported by solvers with type "

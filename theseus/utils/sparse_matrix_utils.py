@@ -130,7 +130,7 @@ def _sparse_mat_vec_bwd_backend(
     for row in range(num_rows):
         start = A_row_ptr[row]
         end = A_row_ptr[row + 1]
-        columns = A_col_ind[start:end]
+        columns = A_col_ind[start:end].long()
         if is_tmat:
             A_grad[:, start:end] = v[:, row].view(-1, 1) * grad_output[:, columns]
             v_grad[:, row] = (grad_output[:, columns] * A_val[:, start:end]).sum(dim=1)

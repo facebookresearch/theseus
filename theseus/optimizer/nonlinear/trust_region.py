@@ -3,7 +3,7 @@
 # This source code is licensed under the MIT license found in the
 # LICENSE file in the root directory of this source tree.
 import abc
-from typing import Any, Dict, Optional, Tuple, Type
+from typing import Any, Dict, Optional, Type
 
 import torch
 
@@ -64,7 +64,6 @@ class TrustRegion(NonlinearLeastSquares, abc.ABC):
             **kwargs,
         )
         self._trust_region: torch.Tensor = None
-        self._at_trust_boundary_idx: torch.Tensor = None
 
     def reset(
         self,
@@ -78,33 +77,14 @@ class TrustRegion(NonlinearLeastSquares, abc.ABC):
             device=self.objective.device,
             dtype=self.objective.dtype,
         )
-        self._at_trust_boundary_idx = None
 
-    # Return the computed delta and, optionally, the indices that with the
-    # steps that are exactly at the boundary of the trust region
+    # Return the computed delta
     @abc.abstractmethod
-    def _compute_delta_impl(self) -> Tuple[torch.Tensor, Optional[torch.Tensor]]:
+    def _compute_delta_impl(self) -> torch.Tensor:
         pass
 
     def compute_delta(self, **kwargs) -> torch.Tensor:
-        # Storing the indices at the trust boundary so that we can update the
-        # trust region inside self.complete_step()
-        delta, self._trusted_step_idx = self._compute_delta_impl()
-        if self._trusted_step_idx is None:
-            self._trusted_step_idx = (
-                TrustRegion._squared_norm(delta) <= self._trust_region**2
-            )
-
-        # Storing the indices of delta exactly at the trust boundary.
-        # If the step is at the boundary and the predicted error reduction agrees
-        # with real reduction, we can increase the trust region
-        # in self.complete_step()
-        delta, self._at_trust_boundary_idx = self._compute_delta_impl()
-        if self._at_trust_boundary_idx is None:
-            self._at_trust_boundary_idx = (
-                TrustRegion._squared_norm(delta) <= self._trust_region**2
-            )
-        return delta
+        return self._compute_delta_impl()
 
     @staticmethod
     def _squared_norm(tensor: torch.Tensor, keepdim: bool = True) -> torch.Tensor:
@@ -157,7 +137,7 @@ class TrustRegion(NonlinearLeastSquares, abc.ABC):
         self._trust_region = torch.where(
             shrink_idx, self._trust_region * shrink_ratio, self._trust_region
         )
-        expand_idx = (rho > expand_threshold) & self._at_trust_boundary_idx
+        expand_idx = rho > expand_threshold
         self._trust_region = torch.where(
             expand_idx, self._trust_region * expand_ratio, self._trust_region
         )

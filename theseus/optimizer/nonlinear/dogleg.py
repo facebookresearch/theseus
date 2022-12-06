@@ -2,7 +2,7 @@
 #
 # This source code is licensed under the MIT license found in the
 # LICENSE file in the root directory of this source tree.
-from typing import Any, Dict, Optional, Tuple, Type
+from typing import Any, Dict, Optional, Type
 
 import torch
 
@@ -46,15 +46,14 @@ class Dogleg(TrustRegion):
             **kwargs,
         )
 
-    def _compute_delta_impl(self) -> Tuple[torch.Tensor, Optional[torch.Tensor]]:
+    def _compute_delta_impl(self) -> torch.Tensor:
         trust_region_2 = self._trust_region**2
         delta_gn = self.linear_solver.solve()
         delta_gn_norm_2 = TrustRegion._squared_norm(delta_gn)
-        good_gn_idx = delta_gn_norm_2 < trust_region_2
         # All Gauss-Newton step are within trust-region, can return
-        if good_gn_idx.all():
+        if (delta_gn_norm_2 < trust_region_2).all():
             # Return a False mask since no indices are at the boundary
-            return delta_gn, torch.zeros_like(good_gn_idx).bool()
+            return delta_gn
 
         # ---------------------------------------------------------------------
         # Some Gauss-Newton steps are outside trust-region,
@@ -104,4 +103,4 @@ class Dogleg(TrustRegion):
         # The only steps that are within the trust region are those were
         # Gauss-Newton was "good". Every other step size will have
         # norm exactly equal to the trust region
-        return delta_dogleg, ~good_gn_idx
+        return delta_dogleg

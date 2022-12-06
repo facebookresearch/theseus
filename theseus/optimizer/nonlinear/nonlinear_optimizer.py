@@ -224,7 +224,7 @@ class NonlinearOptimizer(Optimizer, abc.ABC):
     ):
         info.converged_iter += 1 - converged_indices.long()
         if info.err_history is not None:
-            assert err.grad_fn is None
+            assert not torch.is_grad_enabled()
             info.err_history[:, current_iter + 1] = err.clone().cpu()
         if info.state_history is not None:
             self._update_state_history(current_iter, info)

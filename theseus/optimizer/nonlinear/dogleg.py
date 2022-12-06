@@ -70,7 +70,6 @@ class Dogleg(TrustRegion):
         cauchy_step_size = grad_norm_2 / (Adelta_sd_norm_2 + Dogleg.EPS)
         delta_c = delta_sd * cauchy_step_size
         delta_c_norm_2 = TrustRegion._squared_norm(delta_c)
-        not_near_zero_delta_c_idx = delta_c_norm_2 > 1e-6
         delta_c_within_region_idx = delta_c_norm_2 <= trust_region_2
 
         # First make sure that any steps beyond the trust region, are truncated
@@ -83,13 +82,8 @@ class Dogleg(TrustRegion):
         else:
             delta_dogleg = delta_c
 
-        # Now mask near zero indices so the next computation doesn't happen for them
-        delta_c_within_region_idx = (
-            delta_c_within_region_idx & not_near_zero_delta_c_idx
-        )
-
         if delta_c_within_region_idx.any():
-            # In this case, some steepest descent steps are within region
+            # In this case, some Cauchy steps are within the trust region
             # so need to extend towards boundary with Gauss-Newton step
             # Need to solve a quadratic || sd + tau * (gn - sd)|| == tr**2
             # This can be written as
@@ -98,23 +92,13 @@ class Dogleg(TrustRegion):
             a = TrustRegion._squared_norm(diff)
             b = (2 * delta_c * diff).sum(dim=1, keepdim=True)
             c = delta_c_norm_2 - trust_region_2
-            disc = ((b**2) - 4 * a * c).clamp(0.0)
+            disc = ((b**2) - 4 * a * c).clamp(Dogleg.EPS)
             # By taking min(tau, 1), this also covers the case when ||d_gn|| < TR
-            tau = ((-b + disc.sqrt()) / (2 * a + Dogleg.EPS)).minimum(disc.new_ones(1))
+            tau = ((-b + disc.sqrt()) / (2 * a + Dogleg.EPS)).clamp(max=1.0)
             delta_dogleg = torch.where(
                 delta_c_within_region_idx,
                 delta_c + tau * diff,
                 delta_dogleg,
-            )
-
-        # Finally, when the steepest descent direction is too close to zero, just use
-        # the Gauss-Newton direction truncated at the trust region, to avoid
-        # numerical errors.
-        if not not_near_zero_delta_c_idx.all():
-            delta_dogleg = torch.where(
-                not_near_zero_delta_c_idx,
-                delta_dogleg,
-                delta_gn / (delta_gn_norm_2 + Dogleg.EPS).sqrt() * self._trust_region,
             )
 
         # The only steps that are within the trust region are those were

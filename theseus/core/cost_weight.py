@@ -9,6 +9,7 @@ from typing import List, Optional, Sequence, Tuple, Union, cast
 
 import torch
 
+from theseus.constants import EPS
 from .theseus_function import TheseusFunction
 from .variable import Variable, as_variable
 
@@ -23,6 +24,11 @@ class CostWeight(TheseusFunction, abc.ABC):
         name: Optional[str] = None,
     ):
         super().__init__(name=name)
+
+    # Returns boolean indicators for zero weights in the batch
+    @abc.abstractmethod
+    def is_zero(self) -> torch.Tensor:
+        pass
 
     @abc.abstractmethod
     def weight_error(self, error: torch.Tensor) -> torch.Tensor:
@@ -67,6 +73,9 @@ class ScaleCostWeight(CostWeight):
         self.scale.tensor = self.scale.tensor.view(-1, 1)
         self.register_aux_vars(["scale"])
 
+    def is_zero(self) -> torch.Tensor:
+        return (self.scale.tensor.abs() < EPS).view(-1)
+
     def weight_error(self, error: torch.Tensor) -> torch.Tensor:
         return error * self.scale.tensor
 
@@ -106,6 +115,9 @@ class DiagonalCostWeight(CostWeight):
             )
             self.diagonal.tensor = self.diagonal.tensor.view(1, -1)
         self.register_aux_vars(["diagonal"])
+
+    def is_zero(self) -> torch.Tensor:
+        return self.diagonal.tensor.abs().max(dim=1)[0] < EPS
 
     def weight_error(self, error: torch.Tensor) -> torch.Tensor:
         return error * self.diagonal.tensor

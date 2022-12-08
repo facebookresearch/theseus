@@ -118,6 +118,9 @@ class GPCostWeight(CostWeight):
         )
         self.register_aux_vars(["Qc_inv", "dt"])
 
+    def is_zero(self) -> torch.Tensor:
+        raise NotImplementedError
+
     def _compute_cost_weight(self) -> torch.Tensor:
         batch_size, dof, _ = self.Qc_inv.shape
         cost_weight = torch.empty(

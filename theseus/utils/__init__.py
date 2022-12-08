@@ -10,4 +10,4 @@ from .sparse_matrix_utils import (
     split_into_param_sizes,
     tmat_vec,
 )
-from .utils import build_mlp, gather_from_rows_cols, numeric_jacobian
+from .utils import Timer, build_mlp, gather_from_rows_cols, numeric_jacobian

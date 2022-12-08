@@ -371,10 +371,34 @@ def _run_optimizer_test(
     assert solved
 
 
+def _solver_can_be_run(lin_solver_cls):
+    if lin_solver_cls == th.LUCudaSparseSolver:
+        if not torch.cuda.is_available():
+            return False
+        try:
+            import theseus.extlib.cusolver_lu_solver.CusolverLUSolver  # noqa: F401
+        except Exception:
+            return False
+    if lin_solver_cls == th.BaspachoSparseSolver:
+        try:
+            from theseus.extlib.baspacho_solver import (  # noqa: F401
+                SymbolicDecomposition,
+            )
+        except Exception:
+            return False
+    return True
+
+
 @pytest.mark.parametrize("nonlinear_optim_cls", [th.GaussNewton, th.LevenbergMarquardt])
 @pytest.mark.parametrize(
     "lin_solver_cls",
-    [th.CholeskyDenseSolver, th.LUDenseSolver, th.CholmodSparseSolver],
+    [
+        th.CholeskyDenseSolver,
+        th.LUDenseSolver,
+        th.CholmodSparseSolver,
+        th.LUCudaSparseSolver,
+        th.BaspachoSparseSolver,
+    ],
 )
 @pytest.mark.parametrize("use_learnable_error", [True, False])
 @pytest.mark.parametrize("cost_weight_model", ["direct", "mlp"])
@@ -386,6 +410,8 @@ def test_backward(
     cost_weight_model,
     learning_method,
 ):
+    if not _solver_can_be_run(lin_solver_cls):
+        return
     optim_kwargs = {
         th.GaussNewton: {},
         th.LevenbergMarquardt: {
@@ -395,8 +421,8 @@ def test_backward(
         },
     }[nonlinear_optim_cls]
     if learning_method == "leo":
-        # CholmodSparseSolver doesn't support sampling from system's covariance
-        if lin_solver_cls == th.CholmodSparseSolver:
+        if lin_solver_cls not in [th.CholeskyDenseSolver, th.LUDenseSolver]:
+            # other solvers don't support sampling from system's covariance
             return
     # test both vectorization on/off
     force_vectorization = torch.rand(1).item() > 0.5

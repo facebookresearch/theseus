@@ -157,7 +157,7 @@ class SparseLinearization(Linearization):
                 self.num_cols,
                 A_row_ptr,
                 A_col_ind,
-                self.A_val,
-                self.b,
+                self.A_val.double(),
+                self.b.double(),
             ).unsqueeze(2)
-        return self._Atb
+        return self._Atb.to(dtype=self.A_val.dtype)

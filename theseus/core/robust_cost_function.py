@@ -135,3 +135,12 @@ class RobustCostFunction(CostFunction):
     @weight.setter
     def weight(self, weight: CostWeight):
         self.cost_function.weight = weight
+
+    @property
+    def _supports_masking(self) -> bool:
+        return self.__supports_masking__
+
+    @_supports_masking.setter
+    def _supports_masking(self, val: bool):
+        self.cost_function._supports_masking = val
+        self.__supports_masking__ = val

@@ -9,7 +9,7 @@ import numpy as np
 import torch
 
 from theseus.core import Objective
-from theseus.utils.sparse_matrix_utils import tmat_vec
+from theseus.utils.sparse_matrix_utils import sparse_mv, sparse_mtv
 
 from .linear_system import SparseStructure
 from .linearization import Linearization
@@ -152,8 +152,7 @@ class SparseLinearization(Linearization):
             A_col_ind = A_row_ptr.new_tensor(self.A_col_ind)
 
             # unsqueeze at the end for consistency with DenseLinearization
-            self._Atb = tmat_vec(
-                self.objective.batch_size,
+            self._Atb = sparse_mtv(
                 self.num_cols,
                 A_row_ptr,
                 A_col_ind,
@@ -161,3 +160,12 @@ class SparseLinearization(Linearization):
                 self.b.double(),
             ).unsqueeze(2)
         return self._Atb.to(dtype=self.A_val.dtype)
+
+    def Av(self, v: torch.Tensor) -> torch.Tensor:
+        A_row_ptr = torch.tensor(self.A_row_ptr, dtype=torch.int32).to(
+            self.objective.device
+        )
+        A_col_ind = A_row_ptr.new_tensor(self.A_col_ind)
+        return sparse_mv(
+            self.num_cols, A_row_ptr, A_col_ind, self.A_val.double(), v.double()
+        ).to(v.dtype)

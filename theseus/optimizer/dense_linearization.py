@@ -69,3 +69,6 @@ class DenseLinearization(Linearization):
 
     def _atb_impl(self) -> torch.Tensor:
         return self._Atb
+
+    def Av(self, v: torch.Tensor) -> torch.Tensor:
+        return self.A.bmm(v.unsqueeze(2)).squeeze(2)

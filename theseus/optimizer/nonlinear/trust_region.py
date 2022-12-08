@@ -33,9 +33,6 @@ from .nonlinear_least_squares import NonlinearLeastSquares
 # then the trust region is reduced by `shrink_ratio`.
 # The trust region is initialized to `trust_region_init`.
 class TrustRegion(NonlinearLeastSquares, abc.ABC):
-    _MIN_TRUST_REGION = 1.0e-5
-    _MAX_TRUST_REGION = 1.0e5
-
     def __init__(
         self,
         objective: Objective,
@@ -117,6 +114,8 @@ class TrustRegion(NonlinearLeastSquares, abc.ABC):
         expand_threshold: float = 0.75,
         shrink_ratio: float = 0.25,
         expand_ratio: float = 2.0,
+        min_trust_region: float = 1.0e-5,
+        max_trust_region: float = 1.0e5,
         **kwargs,
     ) -> Optional[torch.Tensor]:
         # "err" tensors passed as input refer to the squared norm of the
@@ -142,6 +141,6 @@ class TrustRegion(NonlinearLeastSquares, abc.ABC):
             expand_idx, self._trust_region * expand_ratio, self._trust_region
         )
         self._trust_region = self._trust_region.clamp(
-            self._MIN_TRUST_REGION, self._MAX_TRUST_REGION
+            min_trust_region, max_trust_region
         )
         return (rho < accept_threshold).view(-1)

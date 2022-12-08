@@ -59,7 +59,6 @@ class Dogleg(TrustRegion):
         # Some Gauss-Newton steps are outside trust-region,
         # need to compute dogleg step
         # ---------------------------------------------------------------------
-
         linearization = self.linear_solver.linearization
 
         delta_sd = linearization.Atb.squeeze(2)
@@ -68,7 +67,7 @@ class Dogleg(TrustRegion):
         grad_norm_2 = TrustRegion._squared_norm(delta_sd)
         cauchy_step_size = grad_norm_2 / (Adelta_sd_norm_2 + Dogleg.EPS)
         delta_c = delta_sd * cauchy_step_size
-        delta_c_norm_2 = TrustRegion._squared_norm(delta_c)
+        delta_c_norm_2 = grad_norm_2 * (cauchy_step_size**2)
         delta_c_within_region_idx = delta_c_norm_2 <= trust_region_2
 
         # First make sure that any steps beyond the trust region, are truncated

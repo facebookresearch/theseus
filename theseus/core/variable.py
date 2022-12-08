@@ -4,7 +4,7 @@
 # LICENSE file in the root directory of this source tree.
 
 from itertools import count
-from typing import Optional, Sequence, Union
+from typing import Any, List, Optional, Sequence, Union
 
 import torch
 from theseus.constants import DeviceType
@@ -121,3 +121,27 @@ def as_variable(
     if isinstance(value, float):
         tensor = tensor.view(1, 1)
     return Variable(tensor, name=name)
+
+
+# This context can be used to temporarily use a masked version of a list of
+# variables. For example,
+#
+# with masked_variables([v1, v2], mask):
+#   some_computation(v1, v2)
+#
+# Performs `some_computation()` using v1.tensor[mask] and v2.tensor[mask].
+class masked_variables:
+    def __init__(self, vars: List[Variable], mask: torch.Tensor) -> None:
+        assert mask.dtype == torch.bool and mask.ndim == 1
+        self._vars = vars
+        self._original_tensors = [v.tensor for v in vars]
+        self._mask = mask
+
+    def __enter__(self) -> None:
+        for v in self._vars:
+            assert v.shape[0] == self._mask.shape[0]
+            v.update(v.tensor[self._mask])
+
+    def __exit__(self, exc_type: Any, exc_value: Any, traceback: Any) -> None:
+        for i, v in enumerate(self._vars):
+            v.update(self._original_tensors[i])

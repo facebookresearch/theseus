@@ -117,13 +117,14 @@ class Timer:
         self.device = torch.device(device)
         self.elapsed_time = 0.0
 
-    def __enter__(self) -> None:
+    def __enter__(self) -> "Timer":
         if self.device.type == "cuda":
             self._start_event = torch.cuda.Event(enable_timing=True)
             self._end_event = torch.cuda.Event(enable_timing=True)
             self._start_event.record()
         else:
             self._start_time = time.perf_counter_ns()
+        return self
 
     def __exit__(self, exc_type: Any, exc_value: Any, traceback: Any) -> None:
         if self.device.type == "cuda":

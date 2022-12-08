@@ -128,6 +128,7 @@ class Vectorize:
             vectorized_cost_fn.weight = base_cost_fn.weight.copy(
                 keep_variable_names=False
             )
+            vectorized_cost_fn._supports_masking = True
             self._vectorized_cost_fns[schema] = vectorized_cost_fn
 
         # Dict[_CostFunctionSchema, List[str]]

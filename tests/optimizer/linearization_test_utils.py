@@ -115,6 +115,9 @@ class MockCostWeight(th.CostWeight):
     def _copy_impl(self, new_name=None):
         raise NotImplementedError
 
+    def is_zero(self):
+        raise NotImplementedError
+
 
 def build_test_objective_and_linear_system():
     # This function creates the an objective that results in the

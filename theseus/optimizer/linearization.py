@@ -80,3 +80,8 @@ class Linearization(abc.ABC):
     @abc.abstractmethod
     def Av(self, v: torch.Tensor) -> torch.Tensor:
         pass
+
+    # Returns diag(self.A^T @ self.A) * v
+    @abc.abstractmethod
+    def diagonal_scaling(self, v: torch.Tensor) -> torch.Tensor:
+        pass

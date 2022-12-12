@@ -104,6 +104,12 @@ class TrustRegion(NonlinearLeastSquares, abc.ABC):
             + 0.5 * TrustRegion._squared_norm(Adelta, keepdim=False)
         )
 
+    def _compute_rho(
+        self, delta: torch.Tensor, previous_err: torch.Tensor, new_err: torch.Tensor
+    ) -> torch.Tensor:
+        pred_err = self._predicted_error(previous_err, delta)
+        return ((previous_err - new_err) / (previous_err - pred_err)).view(-1, 1)
+
     def _complete_step(
         self,
         delta: torch.Tensor,
@@ -130,8 +136,7 @@ class TrustRegion(NonlinearLeastSquares, abc.ABC):
                 "Values must satisfy <accept/shrink>_threshold < expand_threshold, "
                 "shrink_ratio in (0, 1], and expand_ratio > 1.0."
             )
-        pred_err = self._predicted_error(previous_err, delta)
-        rho = ((previous_err - new_err) / (previous_err - pred_err)).view(-1, 1)
+        rho = self._compute_rho(delta, previous_err, new_err)
         shrink_idx = rho < shrink_threshold
         self._trust_region = torch.where(
             shrink_idx, self._trust_region * shrink_ratio, self._trust_region

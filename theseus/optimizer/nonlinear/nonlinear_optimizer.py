@@ -91,7 +91,7 @@ EndIterCallbackType = Callable[
 #   - `reset`: resets any internal state needed by the optimizer.
 #   - `_complete_step`: called at the end of an optimization step, but before
 #     optimization variables are updated. Returns batch indices that should not
-#     any be updated (e.g., if the step is to be rejected).
+#     be updated (e.g., if the step is to be rejected).
 #
 # The high level logic of a call to optimize is as follows:
 #
@@ -224,7 +224,7 @@ class NonlinearOptimizer(Optimizer, abc.ABC):
     ):
         info.converged_iter += 1 - converged_indices.long()
         if info.err_history is not None:
-            assert err.grad_fn is None
+            assert not torch.is_grad_enabled()
             info.err_history[:, current_iter + 1] = err.clone().cpu()
         if info.state_history is not None:
             self._update_state_history(current_iter, info)
@@ -546,8 +546,7 @@ class NonlinearOptimizer(Optimizer, abc.ABC):
             force_update=force_update,
         )
         tensor_dict = {v.name: v.tensor for v in self._tmp_optim_vars}
-        with torch.no_grad():
-            err = self._error_metric(tensor_dict, also_update=False)
+        err = self._error_metric(tensor_dict, also_update=False)
         return tensor_dict, err
 
     # Given descent directions and step sizes, updates the optimization
@@ -555,7 +554,12 @@ class NonlinearOptimizer(Optimizer, abc.ABC):
     # Batch indices indicated by `converged_indices` mask are ignored
     # unless `force_update = True`.
     # Returns the total error tensor after the update and a boolean indicating
-    # if all steps were rejected
+    # if all steps were rejected.
+    #
+    # `previous_err` refes to the squared norm of the
+    # error vector, as returned by self._error_metric()
+    # The returned error must also refer to this quantity, but after the
+    # update.
     def _step(
         self,
         delta: torch.Tensor,
@@ -575,8 +579,7 @@ class NonlinearOptimizer(Optimizer, abc.ABC):
         self.objective.update(tensor_dict, batch_ignore_mask=reject_indices)
         if reject_indices is not None and reject_indices.any():
             # Some steps were rejected so the error computed above is not accurate
-            with torch.no_grad():
-                err = self.objective.error_squared_norm() / 2
+            err = self._error_metric()
         return err, False
 
     # Resets any internal state needed by the optimizer for a new optimization

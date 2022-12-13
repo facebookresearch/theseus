@@ -84,6 +84,7 @@ from .optimizer.linear import (  # usort: skip
 )
 from .optimizer.nonlinear import (  # usort: skip
     BackwardMode,
+    Dogleg,
     GaussNewton,
     LevenbergMarquardt,
     NonlinearLeastSquares,

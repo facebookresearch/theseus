@@ -151,6 +151,56 @@ def test_correct_schemas_and_shared_vars():
     assert seen_cnt == [1] * 7
 
 
+def test_correct_schemas_for_autodiffcosts():
+    v1_1 = th.Vector(1)
+    v1_2 = th.Vector(1)
+    v1_3 = th.Vector(1)
+    v2_1 = th.Vector(2)
+    v2_2 = th.Vector(2)
+
+    objective = th.Objective()
+
+    def err_fn_1(optim_vars, aux_vars):
+        return
+
+    def err_fn_2(optim_vars, aux_vars):
+        return
+
+    # these two can be grouped
+    cf1 = th.AutoDiffCostFunction([v1_1, v1_2], err_fn_1, 1, aux_vars=[v2_1])
+    cf2 = th.AutoDiffCostFunction([v1_1, v1_3], err_fn_1, 1, aux_vars=[v2_2])
+    objective.add(cf1)
+    objective.add(cf2)
+
+    # these two can be grouped, but the group is different because of the err fn
+    cf3 = th.AutoDiffCostFunction([v1_2, v1_3], err_fn_2, 1, aux_vars=[v2_1])
+    cf4 = th.AutoDiffCostFunction([v1_1, v1_3], err_fn_2, 1, aux_vars=[v2_2])
+    objective.add(cf3)
+    objective.add(cf4)
+
+    vectorization = th.Vectorize(objective)
+
+    assert len(vectorization._schema_dict) == 2
+    seen_cnt = [0] * 4
+    for schema, cost_fn_wrappers in vectorization._schema_dict.items():
+        cost_fns = [w.cost_fn for w in cost_fn_wrappers]
+        vectorized_cost = vectorization._vectorized_cost_fns[schema]
+        assert isinstance(vectorized_cost, th.AutoDiffCostFunction)
+        if cf1 in cost_fns:
+            assert len(cost_fns) == 2
+            assert cf2 in cost_fns
+            assert vectorized_cost._err_fn is err_fn_1
+            seen_cnt[0] += 1
+            seen_cnt[1] += 1
+        if cf3 in cost_fns:
+            assert len(cost_fns) == 2
+            assert cf4 in cost_fns
+            assert vectorized_cost._err_fn is err_fn_2
+            seen_cnt[2] += 1
+            seen_cnt[3] += 1
+    assert seen_cnt == [1] * 4
+
+
 def _check_vectorized_wrappers(vectorization, objective):
     for w in vectorization._cost_fn_wrappers:
         for cost_fn in objective.cost_functions.values():

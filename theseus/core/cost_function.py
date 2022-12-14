@@ -104,7 +104,8 @@ class CostFunction(TheseusFunction, abc.ABC):
         done = False
         if self.__supports_masking__:
             try:
-                mask = ~self.weight.is_zero()
+                with torch.no_grad():
+                    mask = ~self.weight.is_zero()
                 if mask.numel() > 1:  # no broadcasting for masks
                     jacobian, err = masked_jacobians(self, mask)
                     done = True

@@ -9,9 +9,11 @@ from typing import List, Optional, Sequence, Tuple, Union, cast
 
 import torch
 
-from theseus.constants import EPS
 from .theseus_function import TheseusFunction
 from .variable import Variable, as_variable
+
+
+_ZERO_EPS = 1.0e-15
 
 
 # Abstract class for representing cost weights (aka, precisions, inverse covariance)
@@ -74,7 +76,7 @@ class ScaleCostWeight(CostWeight):
         self.register_aux_vars(["scale"])
 
     def is_zero(self) -> torch.Tensor:
-        return (self.scale.tensor.abs() < EPS).view(-1)
+        return (self.scale.tensor.abs() < _ZERO_EPS).view(-1)
 
     def weight_error(self, error: torch.Tensor) -> torch.Tensor:
         return error * self.scale.tensor
@@ -117,7 +119,7 @@ class DiagonalCostWeight(CostWeight):
         self.register_aux_vars(["diagonal"])
 
     def is_zero(self) -> torch.Tensor:
-        return self.diagonal.tensor.abs().max(dim=1)[0] < EPS
+        return self.diagonal.tensor.abs().max(dim=1)[0] < _ZERO_EPS
 
     def weight_error(self, error: torch.Tensor) -> torch.Tensor:
         return error * self.diagonal.tensor

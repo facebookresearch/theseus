@@ -403,7 +403,9 @@ class Objective:
             if not also_update:
                 for var in self.optim_vars:
                     old_tensors[var] = self.optim_vars[var].tensor
-            self.update(input_tensors=input_tensors)
+            # Update vectorization only if the input tensors will be used for a
+            # persistent update.
+            self.update(input_tensors=input_tensors, _update_vectorization=also_update)
 
         # Current behavior when vectorization is on, is to always compute the error.
         # One could potentially optimize by only recompute when `input_tensors`` is
@@ -417,7 +419,11 @@ class Objective:
         )
 
         if input_tensors is not None and not also_update:
-            self.update(old_tensors)
+            # This line reverts back to the old tensors if a persistent update wasn't
+            # required (i.e., `also_update is False`).
+            # In this case, we pass _update_vectorization=False because
+            # vectorization wasn't updated in the first call to `update()`.
+            self.update(old_tensors, _update_vectorization=False)
         return error_vector
 
     def error_squared_norm(
@@ -510,6 +516,7 @@ class Objective:
         self,
         input_tensors: Optional[Dict[str, torch.Tensor]] = None,
         batch_ignore_mask: Optional[torch.Tensor] = None,
+        _update_vectorization: bool = True,
     ):
 
         input_tensors = input_tensors or {}
@@ -546,7 +553,8 @@ class Objective:
 
         # Check that the batch size of all tensors is consistent after update
         self._resolve_batch_size()
-        self.update_vectorization_if_needed()
+        if _update_vectorization:
+            self.update_vectorization_if_needed()
 
     def _vectorization_needs_update(self):
         num_updates = {name: v._num_updates for name, v in self._all_variables.items()}

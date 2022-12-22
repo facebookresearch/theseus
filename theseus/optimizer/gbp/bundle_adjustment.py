@@ -37,13 +37,6 @@ GBP_SCHEDULE = {
     "synchronous": GBPSchedule.SYNCHRONOUS,
 }
 
-BACKWARD_MODE = {
-    "full": th.BackwardMode.FULL,
-    "implicit": th.BackwardMode.IMPLICIT,
-    "truncated": th.BackwardMode.TRUNCATED,
-    "dlm": th.BackwardMode.DLM,
-}
-
 
 def start_timing():
     if torch.cuda.is_available():
@@ -281,7 +274,7 @@ def setup_layer(cfg: omegaconf.OmegaConf):
         "track_err_history": True,
         "track_state_history": cfg["optim"]["track_state_history"],
         "verbose": True,
-        "backward_mode": BACKWARD_MODE[cfg["optim"]["backward_mode"]],
+        "backward_mode": cfg["optim"]["backward_mode"],
         "backward_num_iterations": cfg["optim"]["backward_num_iterations"],
     }
     if isinstance(optimizer, GaussianBeliefPropagation):
@@ -531,13 +524,13 @@ def run_outer(cfg: omegaconf.OmegaConf, out_dir=None, do_sweep=False):
     print("\n=== Runtimes")
     k1, k2 = "fwd", "bwd"
     print(f"Forward: {np.mean(times[k1]):.2e} s +/- {np.std(times[k1]):.2e} s")
-    print(f"Backward (FULL): {np.mean(times[k2]):.2e} s +/- {np.std(times[k2]):.2e} s")
+    print(f"Backward (unroll): {np.mean(times[k2]):.2e} s +/- {np.std(times[k2]):.2e} s")
 
     print("\n=== Memory")
     k1, k2 = "fwd", "bwd"
     print(f"Forward: {np.mean(memory[k1]):.2e} MB +/- {np.std(memory[k1]):.2e} MB")
     print(
-        f"Backward (FULL): {np.mean(memory[k2]):.2e} MB +/- {np.std(memory[k2]):.2e} MB"
+        f"Backward (unroll): {np.mean(memory[k2]):.2e} MB +/- {np.std(memory[k2]):.2e} MB"
     )
 
     with open(f"{save_dir}/timings.txt", "w") as f:
@@ -632,5 +625,5 @@ if __name__ == "__main__":
 
                     run_outer(cfg_copy, dir_name)
             else:
-                do_sweep = True if backward_mode == "full" else False
+                do_sweep = True if backward_mode == "unroll" else False
                 run_outer(cfg_copy, dir_name, do_sweep=do_sweep)

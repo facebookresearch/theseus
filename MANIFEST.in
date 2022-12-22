@@ -1,0 +1,4 @@
+include LICENSE README.md
+include requirements/*.txt
+include py.typed
+graft theseus/extlib

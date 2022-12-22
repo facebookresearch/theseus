@@ -8,6 +8,7 @@ from typing import List, Optional, Union, cast
 import torch
 
 import theseus.constants
+from theseus.geometry.lie_group_check import no_lie_group_check
 
 from .lie_group import LieGroup
 from .point_types import Point2
@@ -43,7 +44,7 @@ class SE2(LieGroup):
         *size: int,
         generator: Optional[torch.Generator] = None,
         dtype: Optional[torch.dtype] = None,
-        device: Optional[torch.device] = None,
+        device: theseus.constants.DeviceType = None,
         requires_grad: bool = False,
     ) -> "SE2":
         if len(size) != 1:
@@ -65,7 +66,7 @@ class SE2(LieGroup):
         *size: int,
         generator: Optional[torch.Generator] = None,
         dtype: Optional[torch.dtype] = None,
-        device: Optional[torch.device] = None,
+        device: theseus.constants.DeviceType = None,
         requires_grad: bool = False,
     ) -> "SE2":
         if len(size) != 1:
@@ -120,32 +121,30 @@ class SE2(LieGroup):
 
     @property
     def rotation(self) -> SO2:
-        return SO2(tensor=self[:, 2:])
+        with no_lie_group_check(silent=True):
+            return SO2(tensor=self[:, 2:])
 
     def theta(self, jacobians: Optional[List[torch.Tensor]] = None) -> torch.Tensor:
         if jacobians is not None:
             self._check_jacobians_list(jacobians)
-            J_out = torch.zeros(
-                self.shape[0], 1, 3, device=self.device, dtype=self.dtype
-            )
+            J_out = self.tensor.new_zeros(self.shape[0], 1, 3)
             J_out[:, 0, 2] = 1
             jacobians.append(J_out)
         return self.rotation.theta()
 
     @property
     def translation(self) -> Point2:
-        return Point2(tensor=self[:, :2])
+        with no_lie_group_check(silent=True):
+            return self.xy()
 
-    def xy(self, jacobians: Optional[List[torch.Tensor]] = None) -> torch.Tensor:
+    def xy(self, jacobians: Optional[List[torch.Tensor]] = None) -> Point2:
         if jacobians is not None:
             self._check_jacobians_list(jacobians)
             rotation = self.rotation
-            J_out = torch.zeros(
-                self.shape[0], 2, 3, device=self.device, dtype=self.dtype
-            )
+            J_out = self.tensor.new_zeros(self.shape[0], 2, 3)
             J_out[:, :2, :2] = rotation.to_matrix()
             jacobians.append(J_out)
-        return self.translation.tensor
+        return Point2(tensor=self[:, :2])
 
     def update_from_x_y_theta(self, x_y_theta: torch.Tensor):
         rotation = SO2(theta=x_y_theta[:, 2:])
@@ -154,9 +153,7 @@ class SE2(LieGroup):
 
     def update_from_rot_and_trans(self, rotation: SO2, translation: Point2):
         batch_size = rotation.shape[0]
-        self.tensor = torch.empty(batch_size, 4).to(
-            device=rotation.device, dtype=rotation.dtype
-        )
+        self.tensor = rotation.tensor.new_empty(batch_size, 4)
         self[:, :2] = translation.tensor
         cosine, sine = rotation.to_cos_sin()
         self[:, 2] = cosine
@@ -186,12 +183,10 @@ class SE2(LieGroup):
 
         if jacobians is not None:
             SE2._check_jacobians_list(jacobians)
-            jac = torch.zeros(
+            jac = self.tensor.new_zeros(
                 self.shape[0],
                 3,
                 3,
-                dtype=self.dtype,
-                device=self.device,
             )
 
             theta2 = theta**2
@@ -272,12 +267,10 @@ class SE2(LieGroup):
             cosine_minus_one_by_theta2 = torch.where(
                 small_theta, -0.5 + theta2 / 24, (cosine - 1) / theta2_nz
             )
-            jac = torch.zeros(
+            jac = tangent_vector.new_zeros(
                 tangent_vector.shape[0],
                 3,
                 3,
-                dtype=tangent_vector.dtype,
-                device=tangent_vector.device,
             )
             jac[:, 0, 0] = sine_by_theta
             jac[:, 0, 1] = -cosine_minus_one_by_theta
@@ -304,7 +297,7 @@ class SE2(LieGroup):
         return torch.cat([tensor[:, :2], SO2.normalize(tensor[:, 2:])], dim=1)
 
     def _adjoint_impl(self) -> torch.Tensor:
-        ret = torch.zeros(self.shape[0], 3, 3).to(device=self.device, dtype=self.dtype)
+        ret = self.tensor.new_zeros(self.shape[0], 3, 3)
         ret[:, :2, :2] = self.rotation.to_matrix()
         ret[:, 0, 2] = self[:, 1]
         ret[:, 1, 2] = -self[:, 0]
@@ -339,11 +332,7 @@ class SE2(LieGroup):
         self, euclidean_grad: torch.Tensor, is_sparse: bool = False
     ) -> torch.Tensor:
         self._project_check(euclidean_grad, is_sparse)
-        ret = torch.zeros(
-            euclidean_grad.shape[:-1] + torch.Size([3]),
-            dtype=self.dtype,
-            device=self.device,
-        )
+        ret = self.tensor.new_zeros(euclidean_grad.shape[:-1] + torch.Size([3]))
 
         temp = torch.stack((-self[:, 3], self[:, 2]), dim=1)
 
@@ -366,9 +355,7 @@ class SE2(LieGroup):
         return ret
 
     def to_matrix(self) -> torch.Tensor:
-        matrix = torch.zeros(self.shape[0], 3, 3).to(
-            device=self.device, dtype=self.dtype
-        )
+        matrix = self.tensor.new_zeros(self.shape[0], 3, 3)
         matrix[:, :2, :2] = self.rotation.to_matrix()
         matrix[:, :2, 2] = self[:, :2]
         matrix[:, 2, 2] = 1.0
@@ -378,9 +365,7 @@ class SE2(LieGroup):
     def hat(tangent_vector: torch.Tensor) -> torch.Tensor:
         theta = tangent_vector[:, 2]
         u = tangent_vector[:, :2]
-        matrix = torch.zeros(tangent_vector.shape[0], 3, 3).to(
-            device=tangent_vector.device, dtype=tangent_vector.dtype
-        )
+        matrix = tangent_vector.new_zeros(tangent_vector.shape[0], 3, 3)
         matrix[:, 0, 1] = -theta
         matrix[:, 1, 0] = theta
         matrix[:, :2, 2] = u
@@ -396,9 +381,7 @@ class SE2(LieGroup):
         if not _check:
             raise ValueError("Invalid hat matrix for SE2.")
         batch_size = matrix.shape[0]
-        tangent_vector = torch.zeros(batch_size, 3).to(
-            device=matrix.device, dtype=matrix.dtype
-        )
+        tangent_vector = matrix.new_zeros(batch_size, 3)
         tangent_vector[:, 2] = matrix[:, 1, 0]
         tangent_vector[:, :2] = matrix[:, :2, 2]
         return tangent_vector
@@ -422,13 +405,13 @@ class SE2(LieGroup):
 
         if jacobians is not None:
             self._check_jacobians_list(jacobians)
-            Jg = torch.zeros(batch_size, 2, 3, dtype=self.dtype, device=self.device)
+            Jg = self.tensor.new_zeros(batch_size, 2, 3)
             Jg[:, 0, 0] = -1
             Jg[:, 1, 1] = -1
             Jg[:, 0, 2] = ret.y()
             Jg[:, 1, 2] = -ret.x()
 
-            Jpnt = torch.zeros(batch_size, 2, 2, dtype=self.dtype, device=self.device)
+            Jpnt = self.tensor.new_zeros(batch_size, 2, 2)
             Jpnt[:, 0, 0] = cosine
             Jpnt[:, 0, 1] = sine
             Jpnt[:, 1, 0] = -sine
@@ -453,7 +436,7 @@ class SE2(LieGroup):
 
         if jacobians is not None:
             self._check_jacobians_list(jacobians)
-            Jg = torch.zeros(batch_size, 2, 3, dtype=self.dtype, device=self.device)
+            Jg = self.tensor.new_zeros(batch_size, 2, 3)
             Jg[:, 0, 0] = cosine
             Jg[:, 0, 1] = -sine
             Jg[:, 1, 0] = sine
@@ -461,7 +444,7 @@ class SE2(LieGroup):
             Jg[:, 0, 2] = -temp.y()
             Jg[:, 1, 2] = temp.x()
 
-            Jpnt = torch.zeros(batch_size, 2, 2, dtype=self.dtype, device=self.device)
+            Jpnt = self.tensor.new_zeros(batch_size, 2, 2)
             Jpnt[:, 0, 0] = cosine
             Jpnt[:, 0, 1] = -sine
             Jpnt[:, 1, 0] = sine

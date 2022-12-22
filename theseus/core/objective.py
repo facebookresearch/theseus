@@ -3,12 +3,14 @@
 # This source code is licensed under the MIT license found in the
 # LICENSE file in the root directory of this source tree.
 
+import itertools
 import warnings
 from collections import OrderedDict
 from typing import Any, Callable, Dict, Iterable, List, Optional, Sequence, Union
 
 import torch
 
+from theseus.constants import DeviceType
 from theseus.core.theseus_function import TheseusFunction
 from theseus.geometry.manifold import Manifold
 
@@ -54,7 +56,7 @@ class Objective:
 
         self._batch_size: Optional[int] = None
 
-        self.device: torch.device = torch.device("cpu")
+        self.device: DeviceType = torch.device("cpu")
 
         self.dtype: Optional[torch.dtype] = dtype or torch.get_default_dtype()
 
@@ -64,11 +66,25 @@ class Objective:
         self.current_version = 0
 
         # ---- Callbacks for vectorization ---- #
-        # This gets replaced when cost function vectorization is used
-        self._cost_functions_iterable: Optional[Iterable[CostFunction]] = None
+        # This gets replaced when cost function vectorization is used.
+        #
+        # Normally, `_get_jacobians_iter()` returns an iterator over
+        #  `self.cost_functions.values()`, so
+        # that calling error() or jacobians() on the yielded cost functions
+        # computes these quantities on demand.
+        # But when vectorization is on, it will return this iterator that loops
+        # over containers that serve cached jacobians and errors that have been
+        # previously computed by the vectorization.
+        self._vectorized_jacobians_iter: Optional[Iterable[CostFunction]] = None
 
-        # Used to vectorize cost functions after update
+        # Used to vectorize cost functions error + jacobians after an update
+        # The results are cached so that the `self._get_jacobians_iter()` returns
+        # them whenever called if no other updates have been done
         self._vectorization_run: Optional[Callable] = None
+
+        # If vectorization is on, this gets replaced by a vectorized version
+        # This method doesn't update the cache used by `self._get_jacobians_iter()`
+        self._get_error_iter = self._get_error_iter_base
 
         # If vectorization is on, this will also handle vectorized containers
         self._vectorization_to: Optional[Callable] = None
@@ -105,6 +121,7 @@ class Objective:
             function_vars = function.aux_vars  # type: ignore
             self_var_to_fn_map = self.functions_for_aux_vars  # type: ignore
             self_vars_of_this_type = self.aux_vars  # type: ignore
+
         for variable in function_vars:
             # Check that variables have name and correct dtype
             if variable.name is None:
@@ -199,11 +216,28 @@ class Objective:
 
         self.cost_functions_for_weights[cost_function.weight].append(cost_function)
 
-        if self.optim_vars.keys() & self.aux_vars.keys():
-            raise ValueError(
-                "Objective does not support a variable being both "
-                "an optimization variable and an auxiliary variable."
+        optim_vars_names = [
+            var.name
+            for var in itertools.chain(
+                cost_function.optim_vars, cost_function.weight.optim_vars
             )
+        ]
+        aux_vars_names = [
+            var.name
+            for var in itertools.chain(
+                cost_function.aux_vars, cost_function.weight.aux_vars
+            )
+        ]
+        dual_var_err_msg = (
+            "Objective does not support a variable being both "
+            + "an optimization variable and an auxiliary variable."
+        )
+        for optim_name in optim_vars_names:
+            if self.has_aux_var(optim_name):
+                raise ValueError(dual_var_err_msg)
+        for aux_name in aux_vars_names:
+            if self.has_optim_var(aux_name):
+                raise ValueError(dual_var_err_msg)
 
     # returns a reference to the cost function with the given name
     def get_cost_function(self, name: str) -> CostFunction:
@@ -375,8 +409,15 @@ class Objective:
                     old_tensors[var] = self.optim_vars[var].tensor
             self.update(input_tensors=input_tensors)
 
+        # Current behavior when vectorization is on, is to always compute the error.
+        # One could potentially optimize by only recompute when `input_tensors`` is
+        # not None, and serving from the jacobians cache. However, when robust cost
+        # functions are present this results in incorrect rescaling of error terms
+        # so we are currently avoiding this optimization. Optimizers also compute error
+        # by passing `input_tensors`, so for optimizers the current version should be
+        # good enough.
         error_vector = torch.cat(
-            [cf.weighted_error() for cf in self._get_iterator()], dim=1
+            [cf.weighted_error() for cf in self._get_error_iter()], dim=1
         )
 
         if input_tensors is not None and not also_update:
@@ -448,7 +489,7 @@ class Objective:
         memo[id(self)] = the_copy
         return the_copy
 
-    def update(self, input_tensors: Optional[Dict[str, torch.Tensor]] = None):
+    def _resolve_batch_size(self):
         self._batch_size = None
 
         def _get_batch_size(batch_sizes: Sequence[int]) -> int:
@@ -462,6 +503,19 @@ class Objective:
                     return max_bs
             raise ValueError("Provided tensors must be broadcastable.")
 
+        batch_sizes = [v.tensor.shape[0] for v in self.optim_vars.values()]
+        batch_sizes.extend([v.tensor.shape[0] for v in self.aux_vars.values()])
+        self._batch_size = _get_batch_size(batch_sizes)
+
+    # batch_ignore_mask is a boolean list where batch_ignore_mask[i] = 1 means
+    # for any variable v, v[i] will *not* be updated. Shape must be equal to the
+    # batch size.
+    def update(
+        self,
+        input_tensors: Optional[Dict[str, torch.Tensor]] = None,
+        batch_ignore_mask: Optional[torch.Tensor] = None,
+    ):
+
         input_tensors = input_tensors or {}
         for var_name, tensor in input_tensors.items():
             if tensor.ndim < 2:
@@ -471,11 +525,17 @@ class Objective:
                     f"tensor with name {var_name}."
                 )
             if var_name in self.optim_vars:
-                self.optim_vars[var_name].update(tensor)
+                self.optim_vars[var_name].update(
+                    tensor, batch_ignore_mask=batch_ignore_mask
+                )
             elif var_name in self.aux_vars:
-                self.aux_vars[var_name].update(tensor)
+                self.aux_vars[var_name].update(
+                    tensor, batch_ignore_mask=batch_ignore_mask
+                )
             elif var_name in self.cost_weight_optim_vars:
-                self.cost_weight_optim_vars[var_name].update(tensor)
+                self.cost_weight_optim_vars[var_name].update(
+                    tensor, batch_ignore_mask=batch_ignore_mask
+                )
                 warnings.warn(
                     "Updated a variable declared as optimization, but it is "
                     "only associated to cost weights and not to any cost functions. "
@@ -489,14 +549,11 @@ class Objective:
                 )
 
         # Check that the batch size of all tensors is consistent after update
-        batch_sizes = [v.tensor.shape[0] for v in self.optim_vars.values()]
-        batch_sizes.extend([v.tensor.shape[0] for v in self.aux_vars.values()])
-        self._batch_size = _get_batch_size(batch_sizes)
+        self._resolve_batch_size()
+        self.update_vectorization_if_needed()
 
     def _vectorization_needs_update(self):
-        num_updates = dict(
-            (name, v._num_updates) for name, v in self._all_variables.items()
-        )
+        num_updates = {name: v._num_updates for name, v in self._all_variables.items()}
         needs = False
         if num_updates != self._num_updates_variables:
             self._num_updates_variables = num_updates
@@ -510,7 +567,7 @@ class Objective:
     def update_vectorization_if_needed(self):
         if self.vectorized and self._vectorization_needs_update():
             if self._batch_size is None:
-                self.update()
+                self._resolve_batch_size()
             self._vectorization_run()
             self._last_vectorization_has_grad = torch.is_grad_enabled()
 
@@ -518,11 +575,15 @@ class Objective:
     def __iter__(self):
         return iter([cf for cf in self.cost_functions.values()])
 
-    def _get_iterator(self):
+    def _get_error_iter_base(self) -> Iterable:
+        return iter(cf for cf in self.cost_functions.values())
+
+    def _get_jacobians_iter(self) -> Iterable:
         self.update_vectorization_if_needed()
-        if self._cost_functions_iterable is None:
-            return iter([cf for cf in self.cost_functions.values()])
-        return iter([cf for cf in self._cost_functions_iterable])
+        if self.vectorized:
+            return iter(cf for cf in self._vectorized_jacobians_iter)
+        # No vectorization is used, just serve from cost functions
+        return iter(cf for cf in self.cost_functions.values())
 
     # Applies to() with given args to all tensors in the objective
     def to(self, *args, **kwargs):
@@ -550,7 +611,13 @@ class Objective:
                 var.update(new_var.tensor, batch_ignore_mask=ignore_mask)
             var_idx += var.dof()
 
-    def retract_optim_vars(
+    # Retracts an ordered sequence of variables according to the
+    # corresponding `delta` tangent vectors.
+    # This function assumes that delta is constructed as follows:
+    #    For ordering = [v1 v2 ... vn]
+    #    delta = torch.cat([delta_v1, delta_v2, ..., delta_vn], dim=-1)
+    # where delta_vi.shape = (batch_size, vi.dof)
+    def retract_vars_sequence(
         self,
         delta: torch.Tensor,
         ordering: Iterable[Manifold],
@@ -560,15 +627,21 @@ class Objective:
         self._retract_method(
             delta, ordering, ignore_mask=ignore_mask, force_update=force_update
         )
+        # Updating immediately is useful, since it will keep grad history if
+        # needed. Otherwise, with lazy waitng we can be in a situation where
+        # vectorization is updated with torch.no_grad() (e.g., for error logging),
+        # and then it has to be run again later when grad is back on.
+        self.update_vectorization_if_needed()
 
     def _enable_vectorization(
         self,
-        cost_fns_iter: Iterable[CostFunction],
+        jacobians_iter: Iterable[CostFunction],
         vectorization_run_fn: Callable,
         vectorized_to: Callable,
         vectorized_retract_fn: Callable,
         vectorized_cost_fns: List[CostFunction],
         vectorized_cf_names: List[List[str]],
+        error_iter_fn: Callable[[], Iterable[CostFunction]],
         enabler: Any,
     ):
         # Hacky way to make Vectorize a "friend" class
@@ -576,33 +649,37 @@ class Objective:
             enabler.__module__ == "theseus.core.vectorizer"
             and enabler.__class__.__name__ == "Vectorize"
         )
-        self._cost_functions_iterable = cost_fns_iter
+        self._vectorized_jacobians_iter = jacobians_iter
         self._vectorization_run = vectorization_run_fn
         self._vectorization_to = vectorized_to
         self._retract_method = vectorized_retract_fn
         self.vectorized_cost_fns = vectorized_cost_fns
         self.vectorized_cf_names = vectorized_cf_names
+        self._get_error_iter = error_iter_fn
         self._vectorized = True
 
     # Making public, since this should be a safe operation
     def disable_vectorization(self):
-        self._cost_functions_iterable = None
+        self._vectorized_jacobians_iter = None
         self._vectorization_run = None
         self._vectorization_to = None
         self._retract_method = Objective._retract_base
         self.vectorized_cost_fns = None
         self.vectorized_cf_names = None
+        self._get_error_iter = self._get_error_iter_base
         self._vectorized = False
 
     @property
     def vectorized(self):
         assert (
             (not self._vectorized)
-            == (self._cost_functions_iterable is None)
+            == (self._vectorized_jacobians_iter is None)
             == (self._vectorization_run is None)
             == (self._vectorization_to is None)
             == (self._retract_method is Objective._retract_base)
             == (self.vectorized_cost_fns is None)
             == (self.vectorized_cf_names is None)
+            == (self._get_error_iter == self._get_error_iter_base)
+            == (self._retract_method == Objective._retract_base)
         )
         return self._vectorized

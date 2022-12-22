@@ -19,7 +19,7 @@ class GaussNewton(NonlinearLeastSquares):
         self,
         objective: Objective,
         linear_solver_cls: Optional[Type[LinearSolver]] = None,
-        vectorize: bool = True,
+        vectorize: bool = False,
         linearization_cls: Optional[Type[Linearization]] = None,
         linearization_kwargs: Optional[Dict[str, Any]] = None,
         linear_solver_kwargs: Optional[Dict[str, Any]] = None,
@@ -27,6 +27,7 @@ class GaussNewton(NonlinearLeastSquares):
         rel_err_tolerance: float = 1e-8,
         max_iterations: int = 20,
         step_size: float = 1.0,
+        **kwargs,
     ):
         super().__init__(
             objective,
@@ -39,6 +40,7 @@ class GaussNewton(NonlinearLeastSquares):
             rel_err_tolerance=rel_err_tolerance,
             max_iterations=max_iterations,
             step_size=step_size,
+            **kwargs,
         )
 
     def compute_delta(self, **kwargs) -> torch.Tensor:

@@ -309,7 +309,7 @@ class SwarmGBPAndGNN(nn.Module):
             "track_err_history": True,
             "track_state_history": True,
             "verbose": True,
-            "backward_mode": th.BackwardMode.FULL,
+            "backward_mode": th.BackwardMode.UNROLL,
         }
         if isinstance(optimizer, GaussianBeliefPropagation):
             gbp_args = cfg["optim"]["gbp_settings"].copy()

@@ -1,5 +1,6 @@
 seed: 1
 solver_device: "cuda"
+solver_type: "lucuda"
 
 num_poses: 256
 rotation_noise: 0.05
@@ -11,18 +12,21 @@ batch_size: 128
 
 
 inner_optim:
-  optimizer_cls: GaussNewton
+  optimizer_cls: LevenbergMarquardt
+  optimizer_kwargs:
+    backward_mode: implicit
+    verbose: true
+    track_err_history: true
+    __keep_final_step_size__: true
+    adaptive_damping: true
   solver: sparse
   max_iters: 10 
   step_size: 0.75
-  backward_mode: implicit
-  verbose: true
-  track_err_history: true
-  keep_step_size: true
   regularize: true
   ratio_known_poses: 0.1
   reg_w: 1e-3
   vectorize: true
+  empty_cuda_cache: false
 
 outer_optim:
   lr: 0.1

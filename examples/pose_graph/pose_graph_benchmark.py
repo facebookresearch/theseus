@@ -13,11 +13,23 @@ from scipy.io import savemat
 import theseus as th
 import theseus.utils.examples as theg
 
+# To run this example, you will need the cube datasets available at
+# https://dl.fbaipublicfiles.com/theseus/pose_graph_data.tar.gz
+#
+# The steps below should let you run the example.
+# From the root project folder do:
+#   mkdir datasets
+#   cd datasets
+#   cp your/path/pose_graph_data.tar.gz .
+#   tar -xzvf pose_graph_data.tar.gz
+#   cd ..
+#   python examples/pose_graph_benchmark.py
+
 # Logger
 log = logging.getLogger(__name__)
 
 
-DATASET_DIR = pathlib.Path.cwd() / "datasets"
+DATASET_DIR = pathlib.Path.cwd() / "datasets" / "pose_graph"
 
 
 @hydra.main(config_path="../configs/pose_graph", config_name="pose_graph_benchmark")

@@ -18,6 +18,7 @@ from theseus.core import (
     Variable,
     Vectorize,
 )
+from theseus.constants import __FROM_THESEUS_LAYER_TOKEN__, DeviceType
 from theseus.geometry import LieGroup, Manifold
 from theseus.optimizer import Optimizer, OptimizerInfo
 from theseus.optimizer.linear import LinearSolver
@@ -25,11 +26,16 @@ from theseus.optimizer.nonlinear import BackwardMode, GaussNewton
 
 
 class TheseusLayer(nn.Module):
-    def __init__(self, optimizer: Optimizer, vectorize: bool = True):
+    def __init__(
+        self,
+        optimizer: Optimizer,
+        vectorize: bool = True,
+        empty_cuda_cache: bool = False,
+    ):
         super().__init__()
         self.objective = optimizer.objective
         if vectorize and not self.objective.vectorized:
-            Vectorize(self.objective)
+            Vectorize(self.objective, empty_cuda_cache=empty_cuda_cache)
         self.optimizer = optimizer
         self._objectives_version = optimizer.objective.current_version
         self._dlm_bwd_objective = None
@@ -46,7 +52,10 @@ class TheseusLayer(nn.Module):
                 "currently not supported."
             )
         optimizer_kwargs = optimizer_kwargs or {}
-        backward_mode = optimizer_kwargs.get("backward_mode", None)
+        # Defaults to "unroll" to avoid error, we only care to see if it's not dlm.
+        backward_mode = BackwardMode.resolve(
+            optimizer_kwargs.get("backward_mode", "unroll")
+        )
         if backward_mode == BackwardMode.DLM:
             dlm_epsilon = optimizer_kwargs.get(
                 TheseusLayerDLMForward._DLM_EPSILON_STR, 1e-2
@@ -108,7 +117,7 @@ class TheseusLayer(nn.Module):
             mean=torch.zeros((n_vars, n_samples), device=delta.device),
             std=torch.ones((n_vars, n_samples), device=delta.device),
         )
-        delta_samples = (torch.triangular_solve(y, sqrt_AtA).solution) + (
+        delta_samples = (torch.linalg.solve_triangular(sqrt_AtA, y, upper=True)) + (
             delta.unsqueeze(-1)
         ).repeat(1, 1, n_samples)
 
@@ -130,7 +139,7 @@ class TheseusLayer(nn.Module):
         self.objective.to(*args, **kwargs)
 
     @property
-    def device(self) -> torch.device:
+    def device(self) -> DeviceType:
         return self.objective.device
 
     @property
@@ -138,8 +147,14 @@ class TheseusLayer(nn.Module):
         return self.objective.dtype
 
 
-def _forward(objective, optimizer, optimizer_kwargs, input_tensors):
+def _forward(
+    objective: Objective,
+    optimizer: Optimizer,
+    optimizer_kwargs: Dict[str, Any],
+    input_tensors: Dict[str, torch.Tensor],
+):
     objective.update(input_tensors)
+    optimizer_kwargs[__FROM_THESEUS_LAYER_TOKEN__] = True
     info = optimizer.optimize(**optimizer_kwargs)
     vars = [var.tensor for var in objective.optim_vars.values()]
     return vars, info
@@ -206,8 +221,8 @@ class TheseusLayerDLMForward(torch.autograd.Function):
         optim_tensors = saved_tensors[n + k + k :]
         grad_outputs = grad_outputs[:-1]
 
-        bwd_objective = ctx.bwd_objective
-        bwd_optimizer = ctx.bwd_optimizer
+        bwd_objective: Objective = ctx.bwd_objective
+        bwd_optimizer: Optimizer = ctx.bwd_optimizer
         epsilon = ctx.epsilon
         input_keys = ctx.input_keys
 
@@ -231,7 +246,7 @@ class TheseusLayerDLMForward(torch.autograd.Function):
         with torch.no_grad():
             bwd_optimizer.linear_solver.linearization.linearize()
             delta = bwd_optimizer.linear_solver.solve()
-            bwd_optimizer.objective.retract_optim_vars(
+            bwd_optimizer.objective.retract_vars_sequence(
                 delta, bwd_optimizer.linear_solver.linearization.ordering
             )
 
@@ -293,7 +308,7 @@ class _DLMPerturbation(CostFunction):
         return [self.var.project(euclidean_grad, is_sparse=True)], self.error()
 
     def dim(self) -> int:
-        return np.prod(self.var.tensor.shape[1:])
+        return int(np.prod(self.var.tensor.shape[1:]))
 
     def _copy_impl(self, new_name: Optional[str] = None) -> "CostFunction":
         return _DLMPerturbation(

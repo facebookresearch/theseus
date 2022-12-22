@@ -8,15 +8,14 @@ import math
 import warnings
 from dataclasses import dataclass
 from enum import Enum
-from typing import Any, Dict, Optional, Type
+from typing import Any, Callable, Dict, NoReturn, Optional, Tuple, Type, Union
 
 import numpy as np
 import torch
 
-import theseus.constants
 from theseus.core import Objective
 from theseus.optimizer import Linearization, Optimizer, OptimizerInfo
-from theseus.optimizer.linear import LinearSolver
+from theseus.optimizer.linear import LinearSolver, LUCudaSparseSolver
 
 
 @dataclass
@@ -53,29 +52,79 @@ class NonlinearOptimizerInfo(OptimizerInfo):
 
 
 class BackwardMode(Enum):
-    FULL = 0
+    UNROLL = 0
     IMPLICIT = 1
     TRUNCATED = 2
     DLM = 3
 
+    @staticmethod
+    def resolve(key: Union[str, "BackwardMode"]) -> "BackwardMode":
+        if isinstance(key, BackwardMode):
+            return key
 
+        if not isinstance(key, str):
+            raise ValueError("Backward mode must be th.BackwardMode or string.")
+
+        try:
+            backward_mode = BackwardMode[key.upper()]
+        except KeyError:
+            raise ValueError(
+                f"Unrecognized backward mode f{key}."
+                f"Valid choices are unroll, implicit, truncated, dlm."
+            )
+        return backward_mode
+
+
+EndIterCallbackType = Callable[
+    ["NonlinearOptimizer", NonlinearOptimizerInfo, torch.Tensor, int], NoReturn
+]
+
+
+# Base class for all nonlinear optimizers, providing the skeleton of the
+# optimization loop. Subclasses need to implement the following method:
+#
+#   - `compute_delta`: returns a descent direction given the current values
+#     of the objective's optimization vars.
+#
+# Optionally, they can also provide the following methods:
+#
+#   - `reset`: resets any internal state needed by the optimizer.
+#   - `_complete_step`: called at the end of an optimization step, but before
+#     optimization variables are updated. Returns batch indices that should not
+#     be updated (e.g., if the step is to be rejected).
+#
+# The high level logic of a call to optimize is as follows:
+#
+# prev_err = objective.error_squared_norm() / 2
+# do optimization loop:
+#    1. compute delta
+#    2. step(delta, prev_err)
+#           2.1. Store current optim var tensors in tmp_optim_vars containers
+#           2.2. Retract all tmp_optim_vars given delta
+#           2.3. Evaluate new error
+#           2.4. reject_indices = self._complete_step(delta, new_err, prev_err)
+#           2.5. Update objective's optim var containers with retracted values,
+#                ignoring indices given by `reject_indices`
+#    3. Check convergence
 class NonlinearOptimizer(Optimizer, abc.ABC):
+    _MAX_ALL_REJECT_ATTEMPTS = 3
+
     def __init__(
         self,
         objective: Objective,
         linear_solver_cls: Type[LinearSolver],
         *args,
-        vectorize: bool = True,
+        vectorize: bool = False,
         linearization_cls: Optional[Type[Linearization]] = None,
         linearization_kwargs: Optional[Dict[str, Any]] = None,
         linear_solver_kwargs: Optional[Dict[str, Any]] = None,
-        abs_err_tolerance: float = 1e-10,
-        rel_err_tolerance: float = 1e-8,
+        abs_err_tolerance: float = 1e-8,
+        rel_err_tolerance: float = 1e-5,
         max_iterations: int = 20,
         step_size: float = 1.0,
         **kwargs,
     ):
-        super().__init__(objective, vectorize=vectorize)
+        super().__init__(objective, vectorize=vectorize, **kwargs)
         linear_solver_kwargs = linear_solver_kwargs or {}
         self.linear_solver = linear_solver_cls(
             objective,
@@ -83,16 +132,18 @@ class NonlinearOptimizer(Optimizer, abc.ABC):
             linearization_kwargs=linearization_kwargs,
             **linear_solver_kwargs,
         )
+        self.ordering = self.linear_solver.linearization.ordering
         self.params = NonlinearOptimizerParams(
             abs_err_tolerance, rel_err_tolerance, max_iterations, step_size
         )
+        self._tmp_optim_vars = tuple(v.copy(new_name=v.name) for v in self.ordering)
 
     def set_params(self, **kwargs):
         self.params.update(kwargs)
 
+    @torch.no_grad()
     def _check_convergence(self, err: torch.Tensor, last_err: torch.Tensor):
-        assert not torch.is_grad_enabled()
-        if err.abs().mean() < theseus.constants.EPS:
+        if err.abs().mean() < self.params.abs_err_tolerance:
             return torch.ones_like(err).bool()
 
         abs_error = (last_err - err).abs()
@@ -107,7 +158,7 @@ class NonlinearOptimizer(Optimizer, abc.ABC):
         if not do_init:
             return None
         solution_dict = {}
-        for var in self.linear_solver.linearization.ordering:
+        for var in self.ordering:
             solution_dict[var.name] = var.tensor.detach().clone().cpu()
         return solution_dict
 
@@ -118,7 +169,7 @@ class NonlinearOptimizer(Optimizer, abc.ABC):
         track_state_history: bool,
     ) -> NonlinearOptimizerInfo:
         with torch.no_grad():
-            last_err = self.objective.error_squared_norm() / 2
+            last_err = self._error_metric()
         best_err = last_err.clone() if track_best_solution else None
         if track_err_history:
             err_history = (
@@ -173,7 +224,7 @@ class NonlinearOptimizer(Optimizer, abc.ABC):
     ):
         info.converged_iter += 1 - converged_indices.long()
         if info.err_history is not None:
-            assert err.grad_fn is None
+            assert not torch.is_grad_enabled()
             info.err_history[:, current_iter + 1] = err.clone().cpu()
         if info.state_history is not None:
             self._update_state_history(current_iter, info)
@@ -183,7 +234,7 @@ class NonlinearOptimizer(Optimizer, abc.ABC):
             assert info.best_err is not None
             good_indices = err < info.best_err
             info.best_iter[good_indices] = current_iter
-            for var in self.linear_solver.linearization.ordering:
+            for var in self.ordering:
                 info.best_solution[var.name][good_indices] = (
                     var.tensor.detach().clone()[good_indices].cpu()
                 )
@@ -247,6 +298,18 @@ class NonlinearOptimizer(Optimizer, abc.ABC):
             M & (grad_loop_info.status == NonlinearOptimizerStatus.MAX_ITERATIONS)
         ] = -1
 
+    def _error_metric(
+        self,
+        input_tensors: Optional[Dict[str, torch.Tensor]] = None,
+        also_update: bool = False,
+    ) -> torch.Tensor:
+        return (
+            self.objective.error_squared_norm(
+                input_tensors=input_tensors, also_update=also_update
+            )
+            / 2
+        )
+
     # loop for the iterative optimizer
     def _optimize_loop(
         self,
@@ -254,12 +317,15 @@ class NonlinearOptimizer(Optimizer, abc.ABC):
         info: NonlinearOptimizerInfo,
         verbose: bool,
         truncated_grad_loop: bool,
+        end_iter_callback: Optional[EndIterCallbackType] = None,
         **kwargs,
     ) -> int:
+        steps_tensor: torch.Tensor = None  # type: ignore
         converged_indices = torch.zeros_like(info.last_err).bool()
         iters_done = 0
-        for it_ in range(num_iter):
-            iters_done += 1
+        it_ = 0
+        all_reject_attempts = 0
+        while it_ < num_iter:
             # do optimizer step
             self.linear_solver.linearization.linearize()
             try:
@@ -292,25 +358,39 @@ class NonlinearOptimizer(Optimizer, abc.ABC):
                 # This is a "secret" option that is currently being tested in the
                 # context of implicit differentiation. Might be added as a supported
                 # kwarg in the future with a different name, or removed altogether.
-                if "__keep_final_step_size__" in kwargs:
-                    step_size = self.params.step_size
-                else:
-                    step_size = 1.0
+                # If the option is present and set to True, we don't use step size = 1
+                # 1 for the truncated steps, resulting in scaled gradients, but
+                # possibly better solution.
+                if not kwargs.get("__keep_final_step_size__", False):
+                    steps_tensor = torch.ones_like(delta)
                 force_update = True
             else:
-                step_size = self.params.step_size
                 force_update = False
 
-            self.objective.retract_optim_vars(
-                delta * step_size,
-                self.linear_solver.linearization.ordering,
-                ignore_mask=converged_indices,
-                force_update=force_update,
-            )
-
-            # check for convergence
             with torch.no_grad():
-                err = self.objective.error_squared_norm() / 2
+                if steps_tensor is None:
+                    steps_tensor = torch.ones_like(delta) * self.params.step_size
+
+            # For now, step size is combined with delta. If we add more sophisticated
+            # line search, will probably need to pass it separately, or compute inside.
+            err, all_rejected = self._step(
+                delta * steps_tensor,
+                info.last_err,
+                converged_indices,
+                force_update,
+                **kwargs,
+            )  # err is shape (batch_size,)
+            if all_rejected:
+                # The optimizer rejected all steps so just continue, otherwise convergence
+                # check will stop prematurely. However, we put a max on this to guarantee
+                # this terminates
+                all_reject_attempts += 1
+                if all_reject_attempts < NonlinearOptimizer._MAX_ALL_REJECT_ATTEMPTS:
+                    continue
+            all_reject_attempts = 0
+
+            # check for convergence if at least one step was accepted
+            with torch.no_grad():
                 self._update_info(info, it_, err, converged_indices)
                 if verbose:
                     print(
@@ -325,23 +405,59 @@ class NonlinearOptimizer(Optimizer, abc.ABC):
                     break  # nothing else will happen at this point
                 info.last_err = err
 
+                if end_iter_callback is not None:
+                    end_iter_callback(self, info, delta, it_)
+
+            iters_done += 1
+            it_ += 1
+
         info.status[
             info.status == NonlinearOptimizerStatus.START
         ] = NonlinearOptimizerStatus.MAX_ITERATIONS
         return iters_done
 
+    # Returns how many iterations to do with and without autograd
+    def _split_backward_iters(self, **kwargs) -> Tuple[int, int]:
+        if kwargs["backward_mode"] == BackwardMode.TRUNCATED:
+            if "backward_num_iterations" not in kwargs:
+                raise ValueError("backward_num_iterations expected but not received.")
+            if kwargs["backward_num_iterations"] > self.params.max_iterations:
+                warnings.warn(
+                    f"Input backward_num_iterations "
+                    f"(={kwargs['backward_num_iterations']}) > "
+                    f"max_iterations (={self.params.max_iterations}). "
+                    f"Using backward_num_iterations=max_iterations."
+                )
+            backward_num_iters = min(
+                kwargs["backward_num_iterations"], self.params.max_iterations
+            )
+        else:
+            backward_num_iters = {
+                BackwardMode.UNROLL: self.params.max_iterations,
+                BackwardMode.DLM: self.params.max_iterations,
+                BackwardMode.IMPLICIT: 1,
+            }[kwargs["backward_mode"]]
+        return backward_num_iters, self.params.max_iterations - backward_num_iters
+
     # `track_best_solution` keeps a **detached** copy (as in no gradient info)
     # of the best variables found, but it is optional to avoid unnecessary copying
     # if this is not needed
+    #
+    # If `end_iter_callback` is passed, it's called at the very end of each optimizer
+    # iteration, with four input arguments: (optimizer, info, delta, step_idx).
     def _optimize_impl(
         self,
         track_best_solution: bool = False,
         track_err_history: bool = False,
         track_state_history: bool = False,
         verbose: bool = False,
-        backward_mode: BackwardMode = BackwardMode.FULL,
+        backward_mode: Union[str, BackwardMode] = BackwardMode.UNROLL,
+        end_iter_callback: Optional[EndIterCallbackType] = None,
         **kwargs,
     ) -> OptimizerInfo:
+        backward_mode = BackwardMode.resolve(backward_mode)
+        kwargs_plus_bwd_mode = {**kwargs, **{"backward_mode": backward_mode}}
+        self.reset(**kwargs_plus_bwd_mode)
         with torch.no_grad():
             info = self._init_info(
                 track_best_solution, track_err_history, track_state_history
@@ -353,13 +469,17 @@ class NonlinearOptimizer(Optimizer, abc.ABC):
                 f"Error: {info.last_err.mean().item()}"
             )
 
-        if backward_mode in [BackwardMode.FULL, BackwardMode.DLM]:
+        backward_num_iters, no_grad_num_iters = self._split_backward_iters(
+            **kwargs_plus_bwd_mode
+        )
+        if backward_mode in [BackwardMode.UNROLL, BackwardMode.DLM]:
             self._optimize_loop(
                 start_iter=0,
-                num_iter=self.params.max_iterations,
+                num_iter=backward_num_iters,
                 info=info,
                 verbose=verbose,
                 truncated_grad_loop=False,
+                end_iter_callback=end_iter_callback,
                 **kwargs,
             )
             # If didn't coverge, remove misleading converged_iter value
@@ -368,32 +488,14 @@ class NonlinearOptimizer(Optimizer, abc.ABC):
             ] = -1
             return info
         elif backward_mode in [BackwardMode.IMPLICIT, BackwardMode.TRUNCATED]:
-            if backward_mode == BackwardMode.IMPLICIT:
-                backward_num_iterations = 1
-            else:
-                if "backward_num_iterations" not in kwargs:
-                    raise ValueError(
-                        "backward_num_iterations expected but not received"
-                    )
-                if kwargs["backward_num_iterations"] > self.params.max_iterations:
-                    warnings.warn(
-                        f"Input backward_num_iterations "
-                        f"(={kwargs['backward_num_iterations']}) > "
-                        f"max_iterations (={self.params.max_iterations}). "
-                        f"Using backward_num_iterations=max_iterations."
-                    )
-                backward_num_iterations = min(
-                    kwargs["backward_num_iterations"], self.params.max_iterations
-                )
-
-            num_no_grad_iter = self.params.max_iterations - backward_num_iterations
             with torch.no_grad():
                 # actual_num_iters could be < num_iter due to early convergence
                 no_grad_iters_done = self._optimize_loop(
-                    num_iter=num_no_grad_iter,
+                    num_iter=no_grad_num_iters,
                     info=info,
                     verbose=verbose,
                     truncated_grad_loop=False,
+                    end_iter_callback=end_iter_callback,
                     **kwargs,
                 )
 
@@ -401,10 +503,11 @@ class NonlinearOptimizer(Optimizer, abc.ABC):
                 track_best_solution, track_err_history, track_state_history
             )
             grad_iters_done = self._optimize_loop(
-                num_iter=backward_num_iterations,
+                num_iter=backward_num_iters,
                 info=grad_loop_info,
                 verbose=verbose,
                 truncated_grad_loop=True,
+                end_iter_callback=end_iter_callback,
                 **kwargs,
             )
 
@@ -418,3 +521,94 @@ class NonlinearOptimizer(Optimizer, abc.ABC):
     @abc.abstractmethod
     def compute_delta(self, **kwargs) -> torch.Tensor:
         pass
+
+    # Adds references to the current optim variable tensors in the the optimizer's
+    # _tmp_optim_varscontainers. This allow us to compute t_next = V.tensor + delta for
+    # any optimization variable, without changing the permanent optim var objects
+    # in the objective.
+    def _update_tmp_optim_vars(self):
+        for v_tmp, v_order in zip(self._tmp_optim_vars, self.ordering):
+            v_tmp.update(v_order.tensor)
+
+    def _compute_retracted_tensors_and_error(
+        self,
+        delta: torch.Tensor,
+        converged_indices: torch.Tensor,
+        force_update: bool,
+    ) -> Tuple[Dict[str, torch.Tensor], torch.Tensor]:
+        # makes sure tmp containers are up to date with current variables
+        self._update_tmp_optim_vars()
+        # stores the result of the retract step in `self._tmp_optim_vars`
+        self.objective.retract_vars_sequence(
+            delta,
+            self._tmp_optim_vars,
+            ignore_mask=converged_indices,
+            force_update=force_update,
+        )
+        tensor_dict = {v.name: v.tensor for v in self._tmp_optim_vars}
+        err = self._error_metric(tensor_dict, also_update=False)
+        return tensor_dict, err
+
+    # Given descent directions and step sizes, updates the optimization
+    # variables.
+    # Batch indices indicated by `converged_indices` mask are ignored
+    # unless `force_update = True`.
+    # Returns the total error tensor after the update and a boolean indicating
+    # if all steps were rejected.
+    #
+    # `previous_err` refes to the squared norm of the
+    # error vector, as returned by self._error_metric()
+    # The returned error must also refer to this quantity, but after the
+    # update.
+    def _step(
+        self,
+        delta: torch.Tensor,
+        previous_err: torch.Tensor,
+        converged_indices: torch.Tensor,
+        force_update: bool,
+        **kwargs,
+    ) -> Tuple[torch.Tensor, bool]:
+        tensor_dict, err = self._compute_retracted_tensors_and_error(
+            delta, converged_indices, force_update
+        )
+        reject_indices = self._complete_step(delta, err, previous_err, **kwargs)
+
+        if reject_indices is not None and reject_indices.all():
+            return previous_err, True
+
+        self.objective.update(tensor_dict, batch_ignore_mask=reject_indices)
+        if reject_indices is not None and reject_indices.any():
+            # Some steps were rejected so the error computed above is not accurate
+            err = self._error_metric()
+        return err, False
+
+    # Resets any internal state needed by the optimizer for a new optimization
+    # problem. Optimizer loop will pass all optimizer kwargs to this method.
+    # Deliberately not abstract, since some optimizers might not need this
+    def reset(self, **kwargs) -> None:
+        backward_num_iters, _ = self._split_backward_iters(**kwargs)
+        if (
+            isinstance(self.linear_solver, LUCudaSparseSolver)
+            and "num_solver_contexts" not in kwargs
+        ):
+            # Auto set number of solver context for the given max iterations
+            kwargs["num_solver_contexts"] = (
+                backward_num_iters * NonlinearOptimizer._MAX_ALL_REJECT_ATTEMPTS
+            )
+        self.linear_solver.reset(**kwargs)
+
+    # Called at the end of step() but before variables are update to their new values.
+    # This method can be used to update any internal state of the optimizer and
+    # also obtain an optional tensor of shape (batch_size,), representing
+    # a mask of booleans indicating if the step is to be rejected for any
+    # batch elements.
+    #
+    # Deliberately not abstract, since some optimizers might not need this.
+    def _complete_step(
+        self,
+        delta: torch.Tensor,
+        new_err: torch.Tensor,
+        previous_err: torch.Tensor,
+        **kwargs,
+    ) -> Optional[torch.Tensor]:
+        return None

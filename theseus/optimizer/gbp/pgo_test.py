@@ -182,7 +182,7 @@ def gbp_solve_pgo(backward_mode, max_iterations=20, implicit_method="gbp"):
     loss = torch.norm(gt_poses_tensor - out_gbp_tensor)
 
     loss.backward()
-    if backward_mode == th.BackwardMode.IMPLICIT:
+    if backward_mode == "implicit":
         if optimizer.implicit_method == "gauss_newton":
             meas_std_tensor.grad /= optimizer.implicit_step_size
 
@@ -194,15 +194,15 @@ def gbp_solve_pgo(backward_mode, max_iterations=20, implicit_method="gbp"):
 
 linear_solve_pgo()
 
-gbp_solve_pgo(backward_mode=th.BackwardMode.FULL, max_iterations=20)
+gbp_solve_pgo(backward_mode="unroll", max_iterations=20)
 
-gbp_solve_pgo(backward_mode=th.BackwardMode.TRUNCATED, max_iterations=20)
+gbp_solve_pgo(backward_mode="truncated", max_iterations=20)
 
 gbp_solve_pgo(
-    backward_mode=th.BackwardMode.IMPLICIT, max_iterations=20, implicit_method="gbp"
+    backward_mode="implicit", max_iterations=20, implicit_method="gbp"
 )
 gbp_solve_pgo(
-    backward_mode=th.BackwardMode.IMPLICIT,
+    backward_mode="implicit",
     max_iterations=20,
     implicit_method="gauss_newton",
 )

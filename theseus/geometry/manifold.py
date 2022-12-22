@@ -9,7 +9,10 @@ from typing import Any, List, Optional
 
 import torch
 
+from theseus.constants import _CHECK_DTYPE_SUPPORTED
 from theseus.core.variable import Variable
+
+from .lie_group_check import _LieGroupCheckContext
 
 OptionalJacobians = Optional[List[torch.Tensor]]
 
@@ -39,7 +42,15 @@ class Manifold(Variable, abc.ABC):
         if tensor is None and dtype is None:
             dtype = torch.get_default_dtype()
         if tensor is not None:
-            tensor = self._check_tensor(tensor, strict)
+            checks_enabled, silent_unchecks = _LieGroupCheckContext.get_context()
+            if checks_enabled:
+                tensor = self._check_tensor(tensor, strict)
+            elif not silent_unchecks:
+                warnings.warn(
+                    f"Manifold consistency checks are disabled "
+                    f"for {self.__class__.__name__}.",
+                    RuntimeWarning,
+                )
             if dtype is not None and tensor.dtype != dtype:
                 warnings.warn(
                     f"tensor.dtype {tensor.dtype} does not match given dtype {dtype}, "
@@ -47,6 +58,7 @@ class Manifold(Variable, abc.ABC):
                 )
             dtype = tensor.dtype
 
+        _CHECK_DTYPE_SUPPORTED(dtype)
         super().__init__(self.__class__._init_tensor(*args).to(dtype=dtype), name=name)
         if tensor is not None:
             self.update(tensor)
@@ -61,6 +73,9 @@ class Manifold(Variable, abc.ABC):
     @abc.abstractmethod
     def dof(self) -> int:
         pass
+
+    def numel(self) -> int:
+        return self.tensor[0].numel()
 
     @abc.abstractmethod
     def _local_impl(
@@ -137,6 +152,13 @@ class Manifold(Variable, abc.ABC):
         the_copy = self.copy()
         memo[id(self)] = the_copy
         return the_copy
+
+    # calls to() on the internal tensors
+    def to(self, *args, **kwargs):
+        _, dtype, *_ = torch._C._nn._parse_to(*args, **kwargs)
+        if dtype is not None:
+            _CHECK_DTYPE_SUPPORTED(dtype)
+        super().to(*args, **kwargs)
 
 
 # Alias for Manifold.local()

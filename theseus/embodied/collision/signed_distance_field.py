@@ -3,12 +3,13 @@
 # This source code is licensed under the MIT license found in the
 # LICENSE file in the root directory of this source tree.
 
-from typing import Optional, Tuple
+from typing import Optional, Tuple, Union
 
 import torch
 from scipy import ndimage
 
-from theseus.core import Variable
+from theseus.core import Variable, as_variable
+from theseus.geometry import Point2
 from theseus.utils import gather_from_rows_cols
 
 
@@ -17,35 +18,45 @@ class SignedDistanceField2D:
     # sdf_data shape is: batch_size x field_height x field_width
     def __init__(
         self,
-        origin: Variable,
-        cell_size: Variable,
-        sdf_data: Optional[Variable] = None,
-        occupancy_map: Optional[Variable] = None,
+        origin: Union[Point2, torch.Tensor],
+        cell_size: Union[float, torch.Tensor, Variable],
+        sdf_data: Optional[Union[torch.Tensor, Variable]] = None,
+        occupancy_map: Optional[Union[torch.Tensor, Variable]] = None,
     ):
         if occupancy_map is not None:
             if sdf_data is not None:
                 raise ValueError(
-                    "Only one of arguments sdf_data and occupancy_map should be provided."
+                    "Only one of sdf_data and occupancy_map should be provided."
                 )
-            sdf_data = self._compute_sdf_data_from_map(occupancy_map, cell_size)
+            sdf_data = self._compute_sdf_data_from_map(
+                occupancy_map, SignedDistanceField2D.convert_cell_size(cell_size).tensor
+            )
         else:
             if sdf_data is None:
                 raise ValueError(
-                    "Either argument sdf_data or argument occupancy_map should be provided."
+                    "Either sdf_data or argument occupancy_map should be provided."
                 )
         self.update_data(origin, sdf_data, cell_size)
         self._num_rows = sdf_data.shape[1]
         self._num_cols = sdf_data.shape[2]
 
     def _compute_sdf_data_from_map(
-        self, occupancy_map_batch: Variable, cell_size: Variable
+        self,
+        occupancy_map_batch: Union[Variable, torch.Tensor],
+        cell_size: torch.Tensor,
     ) -> Variable:
+        if isinstance(occupancy_map_batch, Variable):
+            occupancy_map_batch = occupancy_map_batch.tensor
+        if cell_size.shape[0] != occupancy_map_batch.shape[0]:
+            cell_size = cell_size.expand(occupancy_map_batch.shape[0], 1)
+
         # Code from https://github.com/gtrll/gpmp2/
         if occupancy_map_batch.ndim != 3:
             raise ValueError(
-                "Argument occupancy_map to SignedDistanceField2D must be a batch of matrices."
+                "Argument occupancy_map to SignedDistanceField2D must be "
+                "a batch of matrices."
             )
-        num_maps = occupancy_map_batch.tensor.size(0)
+        num_maps = occupancy_map_batch.shape[0]
         all_sdf_data = []
 
         for i in range(num_maps):
@@ -58,7 +69,7 @@ class SignedDistanceField2D:
                 map_x, map_y = occupancy_map.size(0), occupancy_map.size(1)
                 max_map_size = 2 * cell_size[i].item() * max(map_x, map_y)
                 sdf_data = (
-                    torch.ones(occupancy_map.shape, dtype=cell_size.dtype)
+                    torch.ones(occupancy_map.shape, dtype=occupancy_map.dtype)
                     * max_map_size
                 )
             else:
@@ -71,7 +82,9 @@ class SignedDistanceField2D:
 
                 sdf_data = map_dist - inv_map_dist
                 # metric
-                sdf_data = torch.tensor(sdf_data, dtype=cell_size.dtype) * cell_size[i]
+                sdf_data = (
+                    torch.tensor(sdf_data, dtype=occupancy_map.dtype) * cell_size[i]
+                )
 
             all_sdf_data.append(sdf_data)
 
@@ -79,29 +92,64 @@ class SignedDistanceField2D:
 
         return sdf_data_var
 
-    def update_data(self, origin: Variable, sdf_data: Variable, cell_size: Variable):
-        if sdf_data.ndim != 3:
+    @staticmethod
+    def convert_origin(origin: Union[torch.Tensor, Point2]) -> Point2:
+        if not isinstance(origin, Point2) and not isinstance(origin, torch.Tensor):
             raise ValueError(
-                "Argument sdf_data to SignedDistanceField2D must be a batch of matrices."
+                "Argument origin to SignedDistanceField2D must be either "
+                "a tensor or a Point2 variable."
             )
-        if not (origin.ndim == 2 or (origin.ndim == 3 and origin.shape[2] == 1)):
-            raise ValueError(
-                "Argument origin to SignedDistanceField2D must be a batch of 2-D tensors."
-            )
+        if not isinstance(origin, Point2):
+            try:
+                return Point2(tensor=origin)
+            except ValueError:
+                raise ValueError(
+                    "Argument origin to SignedDistanceField2D must be a batch of "
+                    "2D tensors."
+                )
+        return origin
+
+    @staticmethod
+    def convert_cell_size(cell_size: Union[float, torch.Tensor, Variable]) -> Variable:
+        if not isinstance(cell_size, Variable):
+            if not isinstance(cell_size, torch.Tensor):
+                if not isinstance(cell_size, float):
+                    raise ValueError(
+                        "Argument cell_size must be either a Variable, "
+                        "tensor, or float."
+                    )
+                cell_size = torch.tensor(cell_size).view(-1, 1)
+            return Variable(cell_size)
         if not (
             cell_size.ndim == 1 or (cell_size.ndim == 2 and cell_size.shape[1] == 1)
         ):
+            raise ValueError("Argument cell_size must be a batch of 0D or 1D tensors.")
+        return cell_size
+
+    @staticmethod
+    def convert_sdf_data(sdf_data: Union[torch.Tensor, Variable]) -> Variable:
+        sdf_data = as_variable(sdf_data)
+        if sdf_data.ndim != 3:
             raise ValueError(
-                "Argument cell_size must be a batch of 0-D or 1-D tensors."
+                "Argument sdf_data to SignedDistanceField2D must be a "
+                "batch of matrices."
             )
-        if (
-            origin.shape[0] != sdf_data.shape[0]
-            or origin.shape[0] != cell_size.shape[0]
-        ):
-            raise ValueError("Incompatible batch size between input arguments.")
-        self.origin = origin
-        self.sdf_data = sdf_data
-        self.cell_size = cell_size
+        return sdf_data
+
+    def update_data(
+        self,
+        origin: Union[torch.Tensor, Point2],
+        sdf_data: Union[torch.Tensor, Variable],
+        cell_size: Union[float, torch.Tensor, Variable],
+    ):
+        # Update origin
+        self.origin = SignedDistanceField2D.convert_origin(origin)
+
+        # Update cell size
+        self.cell_size = SignedDistanceField2D.convert_cell_size(cell_size)
+
+        # Update sdf_data
+        self.sdf_data = SignedDistanceField2D.convert_sdf_data(sdf_data)
 
     def convert_points_to_cell(
         self, points: torch.Tensor

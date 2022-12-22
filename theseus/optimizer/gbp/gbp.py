@@ -10,7 +10,7 @@ import warnings
 from dataclasses import dataclass
 from enum import Enum
 from itertools import count
-from typing import Dict, List, Optional, Sequence, Tuple, Type
+from typing import Dict, List, Optional, Sequence, Tuple, Type, Union
 
 import numpy as np
 import torch
@@ -903,9 +903,11 @@ class GaussianBeliefPropagation(Optimizer, abc.ABC):
             if self.objective.vectorized:
                 # create array for indexing the messages
                 base_cf_names = self.objective.vectorized_cf_names[i]
+
                 base_cfs = [
                     self.objective.get_cost_function(name) for name in base_cf_names
                 ]
+                # index of variables connected to vectorized factor
                 var_ixs = torch.tensor(
                     [
                         [self.ordering.index_of(var.name) for var in cf.optim_vars]
@@ -1069,7 +1071,7 @@ class GaussianBeliefPropagation(Optimizer, abc.ABC):
         track_err_history: bool = False,
         track_state_history: bool = False,
         verbose: bool = False,
-        backward_mode: BackwardMode = BackwardMode.FULL,
+        backward_mode: Union[str, BackwardMode] = BackwardMode.UNROLL,
         relin_threshold: float = 1e-8,
         ftov_msg_damping: float = 0.0,
         dropout: float = 0.0,
@@ -1080,6 +1082,8 @@ class GaussianBeliefPropagation(Optimizer, abc.ABC):
         implicit_method: str = "gbp",
         **kwargs,
     ) -> NonlinearOptimizerInfo:
+        backward_mode = BackwardMode.resolve(backward_mode)
+
         with torch.no_grad():
             info = self._init_info(
                 track_best_solution, track_err_history, track_state_history
@@ -1114,12 +1118,7 @@ class GaussianBeliefPropagation(Optimizer, abc.ABC):
                 f"GBP optimizer. Iteration: 0. " f"Error: {info.last_err.mean().item()}"
             )
 
-        assert backward_mode in [
-            BackwardMode.FULL,
-            BackwardMode.IMPLICIT,
-            BackwardMode.TRUNCATED,
-        ]
-        if backward_mode == BackwardMode.FULL:
+        if backward_mode == BackwardMode.UNROLL:
             self._optimize_loop(
                 num_iter=self.params.max_iterations,
                 info=info,

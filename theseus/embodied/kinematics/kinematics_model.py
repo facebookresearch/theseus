@@ -6,9 +6,9 @@
 import abc
 from typing import Dict, Optional, Union
 
-import differentiable_robot_model as drm
 import torch
 
+from theseus.constants import DeviceType
 from theseus.geometry import SE3, LieGroup, Point2, Vector
 
 RobotModelInput = Union[torch.Tensor, Vector]
@@ -37,8 +37,17 @@ class IdentityModel(KinematicsModel):
 
 
 class UrdfRobotModel(KinematicsModel):
-    def __init__(self, urdf_path: str):
-        self.drm_model = drm.DifferentiableRobotModel(urdf_path)
+    def __init__(self, urdf_path: str, device: DeviceType = None):
+        try:
+            import differentiable_robot_model as drm
+        except ModuleNotFoundError as e:
+            print(
+                "UrdfRobotModel requires installing differentiable-robot-model. "
+                "Please run `pip install differentiable-robot-model`."
+            )
+            raise e
+
+        self.drm_model = drm.DifferentiableRobotModel(urdf_path, device=device)
 
     def _postprocess_quaternion(self, quat):
         # Convert quaternion convention (DRM uses xyzw, Theseus uses wxyz)

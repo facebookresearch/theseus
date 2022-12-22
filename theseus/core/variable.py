@@ -4,9 +4,10 @@
 # LICENSE file in the root directory of this source tree.
 
 from itertools import count
-from typing import Optional, Union
+from typing import Optional, Sequence, Union
 
 import torch
+from theseus.constants import DeviceType
 
 
 class Variable:
@@ -100,3 +101,23 @@ class Variable:
 
     def __setitem__(self, item, value):
         self.tensor[item] = value
+
+
+# If value is a variable, this returns the same variable
+# Otherwise value is wrapper into a variable (and a tensor, if needed)
+# In this case, the device, dtype and name can be specified.
+def as_variable(
+    value: Union[float, Sequence[float], torch.Tensor, Variable],
+    device: DeviceType = None,
+    dtype: Optional[torch.dtype] = None,
+    name: Optional[str] = None,
+) -> Variable:
+    if isinstance(value, Variable):
+        return value
+    if isinstance(device, str):
+        # mypy doesn't like passing str to torch.as_tensor so convert
+        device = torch.device(device)
+    tensor = torch.as_tensor(value, dtype=dtype, device=device)
+    if isinstance(value, float):
+        tensor = tensor.view(1, 1)
+    return Variable(tensor, name=name)

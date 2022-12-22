@@ -1,0 +1,15 @@
+autograd_mode: vmap
+benchmarking_costs: true
+
+outer_optim:
+  num_epochs: 999
+  batch_size: 128
+  lr: 1e-4
+
+inner_optim:
+  max_iters: 50
+  step_size: 0.1
+
+hydra:
+  run:
+    dir: examples/outputs/homography_estimation

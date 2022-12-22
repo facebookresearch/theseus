@@ -15,23 +15,61 @@ Prerequisites
 
 Installing
 ^^^^^^^^^^
+
+pypi
+""""
+
 .. code-block:: bash
 
     pip install theseus-ai
 
-If you are interested in contributing to ``theseus``, instead install
+We currently provide wheels with our CUDA extensions compiled using CUDA 10.2 and Python 3.9.
+For other CUDA versions, consider installing from source or using our 
+`build script <https://github.com/facebookresearch/theseus/blob/main/build_scripts/build_wheel.sh>`_.
+
+From source
+"""""""""""
+The simplest way to install Theseus from source is by running the following (see further below to also include BaSpaCho)
 
 .. code-block:: bash
 
     git clone https://github.com/facebookresearch/theseus.git
+    pip install -e .
+    python -m pytest tests
+
+If you are interested in contributing to ``theseus``, instead install using 
+
+.. code-block:: bash
+
     pip install -e ".[dev]"
-    python -m pytest theseus
 
 and follow the more detailed instructions in `CONTRIBUTING <https://github.com/facebookresearch/theseus/blob/main/CONTRIBUTING.md>`_.
 
-By default, unit tests include tests for our CUDA extensions. You can add the option ``-m "not cudaext"`` to
-skip them when installing without CUDA support.
+**Installing BaSpaCho extensions from source**
+By default, installing from source doesn't include our BaSpaCho sparse 
+solver extension. For this, follow these steps:
 
+1. Compile BaSpaCho from source following instructions `here <https://github.com/facebookresearch/baspacho>`_. We recommend using flags `-DBLA_STATIC=ON -DBUILD_SHARED_LIBS=OFF`.
+2. Run 
+
+    .. code-block:: bash
+
+    git clone https://github.com/facebookresearch/theseus.git && cd theseus
+    BASPACHO_ROOT_DIR=<path/to/root/baspacho/dir> pip install -e .
+
+    where the BaSpaCho root dir must have binaries in the subdirectory `build`.
+
+Unit tests
+""""""""""
+With ``dev`` installation, you can run unit tests via
+
+.. code-block:: bash
+
+    python -m pytest tests
+
+By default, unit tests include tests for our CUDA extensions. You can add the option `-m "not cudaext"`
+to skip them when installing without CUDA support. Additionally, the tests for sparse solver BaSpaCho are automatically 
+skipped when its extlib is not compiled.
 
 Tutorials
 ---------

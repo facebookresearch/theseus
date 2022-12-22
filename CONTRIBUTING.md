@@ -44,7 +44,7 @@ pip install pre-commit && pre-commit install && pre-commit run --all-files
 ## Versioning
 
 We use [semantic versioning](https://semver.org/). For core Theseus team member, to prepare a release:
-- Update [version](version.txt) file.
+- Update version in [init](https://github.com/facebookresearch/theseus/blob/main/theseus/__init__.py) file.
 - Make sure all tests are passing.
 - Create a release tag with changelog summary using the github release interface.
 

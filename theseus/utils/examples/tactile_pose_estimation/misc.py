@@ -5,6 +5,8 @@ import matplotlib.pyplot as plt
 import numpy as np
 import torch
 
+import theseus as th
+
 # ----------------------------------------------------------------------------------- #
 # ------------------------------------ Data loading --------------------------------- #
 # ----------------------------------------------------------------------------------- #
@@ -19,7 +21,7 @@ class TactilePushingDataset:
         batch_size: int,
         max_episodes: int,
         max_steps: int,
-        device: torch.device,
+        device: th.DeviceType,
         split_episodes: bool = False,
         data_mode: str = "all",
         val_ratio: float = 0.1,
@@ -47,11 +49,11 @@ class TactilePushingDataset:
             stop = max(int(np.ceil(num_episodes * val_ratio)), 2)
             idx = order[:stop] if data_mode == "val" else order[stop:]
 
-        self.img_feats = data["img_feats"][idx]
-        self.eff_poses = data["eff_poses"][idx]
-        self.obj_poses = data["obj_poses"][idx]
-        self.contact_episode = data["contact_episode"][idx]
-        self.contact_flag = data["contact_flag"][idx]
+        self.img_feats = data["img_feats"][idx]  # type: ignore
+        self.eff_poses = data["eff_poses"][idx]  # type: ignore
+        self.obj_poses = data["obj_poses"][idx]  # type: ignore
+        self.contact_episode = data["contact_episode"][idx]  # type: ignore
+        self.contact_flag = data["contact_flag"][idx]  # type: ignore
         # Check sizes of the attributes assigned above
         self.dataset_size: int = -1
         for key in data:
@@ -71,7 +73,7 @@ class TactilePushingDataset:
         filename: str,
         episode_length: int,
         max_episodes: int,
-        device: torch.device,
+        device: th.DeviceType,
         split_episodes: bool = False,
     ) -> Dict[str, torch.Tensor]:
         # Load all episode data
@@ -148,7 +150,7 @@ class TactilePushingDataset:
 
     @staticmethod
     def _load_tactile_sdf_from_file(
-        filename: str, device: torch.device
+        filename: str, device: th.DeviceType
     ) -> Tuple[torch.Tensor, torch.Tensor, torch.Tensor]:
 
         with open(filename) as f:

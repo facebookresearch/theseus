@@ -32,7 +32,7 @@ update_and_install_python: &update_and_install_python
       command: |
         sudo add-apt-repository -y ppa:deadsnakes/ppa
         sudo apt-get update
-        sudo apt-get install -y python3.7 python3.7-dev python3.8 python3.8-dev
+        sudo apt-get install -y python3.9 python3.9-dev
 
 install_nox: &install_nox
   - run:
@@ -49,7 +49,7 @@ install_suitesparse: &install_suitesparse
 
 setup_cuda10_libs: &setup_cuda10_libs
   - run:
-      name: Setup CUDA drivers and libraries
+      name: Setup CUDA 10 drivers and libraries
       working_directory: ~/
       command: |
         # ubuntu's default gcc9.3 is too recent for cuda10.2
@@ -58,6 +58,10 @@ setup_cuda10_libs: &setup_cuda10_libs
         sudo update-alternatives --install /usr/bin/gcc gcc /usr/bin/gcc-8 20
         sudo update-alternatives --install /usr/bin/g++ g++ /usr/bin/g++-9 10
         sudo update-alternatives --install /usr/bin/g++ g++ /usr/bin/g++-8 20
+        sudo update-alternatives --install /usr/bin/x86_64-linux-gnu-gcc x86_64-linux-gnu-gcc /usr/bin/x86_64-linux-gnu-gcc-9 10
+        sudo update-alternatives --install /usr/bin/x86_64-linux-gnu-gcc x86_64-linux-gnu-gcc /usr/bin/x86_64-linux-gnu-gcc-8 20
+        sudo update-alternatives --install /usr/bin/x86_64-linux-gnu-g++ x86_64-linux-gnu-g++ /usr/bin/x86_64-linux-gnu-g++-9 10
+        sudo update-alternatives --install /usr/bin/x86_64-linux-gnu-g++ x86_64-linux-gnu-g++ /usr/bin/x86_64-linux-gnu-g++-8 20
         # download and install nvidia drivers, cuda, etc
         wget --quiet --no-clobber -P ~/nvidia-downloads https://developer.download.nvidia.com/compute/cuda/10.2/Prod/local_installers/cuda_10.2.89_440.33.01_linux.run
         time sudo /bin/bash nvidia-downloads/cuda_10.2.89_440.33.01_linux.run --no-drm --silent --driver --toolkit
@@ -67,12 +71,12 @@ setup_cuda10_libs: &setup_cuda10_libs
 
 setup_cuda11_libs: &setup_cuda11_libs
   - run:
-      name: Setup CUDA drivers and libraries
+      name: Setup CUDA 11 drivers and libraries
       working_directory: ~/
       command: |
         # download and install nvidia drivers, cuda, etc
-        wget --quiet --no-clobber -P ~/nvidia-downloads https://developer.download.nvidia.com/compute/cuda/11.3.0/local_installers/cuda_11.3.0_465.19.01_linux.run
-        time sudo /bin/bash nvidia-downloads/cuda_11.3.0_465.19.01_linux.run --no-drm --silent --driver --toolkit
+        wget --quiet --no-clobber -P ~/nvidia-downloads https://developer.download.nvidia.com/compute/cuda/11.7.1/local_installers/cuda_11.7.1_515.65.01_linux.run
+        time sudo /bin/bash nvidia-downloads/cuda_11.7.1_515.65.01_linux.run --no-drm --silent --driver --toolkit
         sudo ldconfig /usr/local/cuda/lib64
         echo "Done installing NVIDIA drivers and CUDA libraries."
         nvidia-smi
@@ -82,7 +86,7 @@ setup_environment: &setup_environment
       name: Setup virtualenv and tools
       working_directory: ~/project
       command: |
-        virtualenv ~/theseus_venv -p /usr/bin/python3
+        virtualenv ~/theseus_venv -p /usr/bin/python3.9
         echo ". ~/theseus_venv/bin/activate" >> $BASH_ENV
         . ~/theseus_venv/bin/activate
         pip install --progress-bar off --upgrade pip
@@ -93,7 +97,7 @@ install_torch_cuda10: &install_torch_cuda10
       name: Install Torch for cuda10
       working_directory: ~/project
       command: |
-        pip install --progress-bar off torch==1.10.0+cu102 torchvision==0.11.1+cu102 torchaudio==0.10.0+cu102 -f https://download.pytorch.org/whl/cu102/torch_stable.html
+        pip install --progress-bar off torch==1.12.1+cu102 torchvision==0.13.1+cu102 torchaudio==0.12.1+cu102 -f https://download.pytorch.org/whl/cu102/torch_stable.html
         python -c 'import torch; print("Torch version:", torch.__version__); assert torch.cuda.is_available()'
 
 install_torch_cuda11: &install_torch_cuda11
@@ -101,24 +105,97 @@ install_torch_cuda11: &install_torch_cuda11
       name: Install Torch for cuda11
       working_directory: ~/project
       command: |
-        pip install --progress-bar off torch==1.10.0+cu113 torchvision==0.11.1+cu113 torchaudio==0.10.0+cu113 -f https://download.pytorch.org/whl/cu113/torch_stable.html
+        pip install --progress-bar off torch==1.13.0 torchvision==0.14.0 torchaudio==0.13.0 --extra-index-url https://download.pytorch.org/whl/cu117
         python -c 'import torch; print("Torch version:", torch.__version__); assert torch.cuda.is_available()'
+
+install_functorch_021: &install_functorch_021
+  - run:
+      name: Install Functorch
+      working_directory: ~/project
+      command: |
+        pip install functorch==0.2.1
+
+install_functorch: &install_functorch
+  - run:
+      name: Install Functorch
+      working_directory: ~/project
+      command: |
+        pip install functorch
+
+install_recent_cmake_2004: &install_recent_cmake_2004
+  - run:
+      name: Installing recent CMake
+      working_directory: ~/
+      command: |
+        (lsb_release -c | grep focal) || (echo "Wrong Ubuntu, expected focal"; exit 1)
+        wget -O - https://apt.kitware.com/keys/kitware-archive-latest.asc 2>/dev/null | gpg --dearmor - | sudo tee /etc/apt/trusted.gpg.d/kitware.gpg >/dev/null
+        sudo apt-add-repository 'deb https://apt.kitware.com/ubuntu/ focal main'
+        sudo apt-get update
+        sudo apt-get install -y cmake
+
+build_baspacho_cpu: &build_baspacho_cpu
+  - run:
+      name: Install BaSpaCho (CPU)
+      working_directory: ~/
+      command: |
+        sudo apt-get install -y libopenblas-pthread-dev
+        git clone https://github.com/facebookresearch/baspacho.git
+        cd baspacho
+        cmake -S . -B build -DCMAKE_BUILD_TYPE=Release -DBLA_STATIC=ON \
+          -DBASPACHO_USE_CUBLAS=0 -DBUILD_SHARED_LIBS=OFF \
+          -DBASPACHO_BUILD_TESTS=OFF -DBASPACHO_BUILD_EXAMPLES=OFF
+        cmake --build build -- -j16
+
+build_baspacho_cuda: &build_baspacho_cuda
+  - run:
+      name: Install BaSpaCho (CUDA)
+      working_directory: ~/
+      command: |
+        sudo apt-get install -y libopenblas-pthread-dev
+        git clone https://github.com/facebookresearch/baspacho.git
+        cd baspacho
+        cmake -S . -B build -DCMAKE_BUILD_TYPE=Release -DBLA_STATIC=ON \
+          -DCMAKE_CUDA_COMPILER=/usr/local/cuda/bin/nvcc \
+          -DBUILD_SHARED_LIBS=OFF -DBASPACHO_CUDA_ARCHS='detect' \
+          -DBASPACHO_BUILD_TESTS=OFF -DBASPACHO_BUILD_EXAMPLES=OFF
+        cmake --build build -- -j16
 
 setup_project: &setup_project
   - run:
       name: Setting up project
       working_directory: ~/project
       command: |
-        pip install --progress-bar off -e .
         pip install -r requirements/dev.txt
+        BASPACHO_ROOT_DIR=~/baspacho pip install --progress-bar off -e .
 
 run_tests: &run_tests
   - run:
       name: Running tests
       working_directory: ~/project
       command: |
-        pytest -s theseus/tests/test_theseus_layer.py
-        pytest -s theseus -m "cudaext"
+        pytest -s tests/test_theseus_layer.py
+        pytest -s tests -m "cudaext"
+
+build_cuda11_wheel: &build_cuda11_wheel
+  - run:
+      name: Building wheel for CUDA 11
+      working_directory: /home/circleci
+      command: |
+        THESEUS_GIT_COMMIT=$(git --git-dir project/.git log --format="%H" -n 1)
+        THESEUS_VERSION=$(grep -Eo  "[0-9].[0-9].[0-9][.0-9a-z]*" project/theseus/__init__.py)
+        ./project/build_scripts/build_wheel.sh . ${THESEUS_GIT_COMMIT} 11.6 ${THESEUS_VERSION}
+        pip install $(ls */*.whl)
+        pip install -r project/requirements/dev.txt
+
+run_tests_from_wheel: &run_tests_from_wheel
+  - run:
+      name: Installing theseus from wheel and running tests
+      working_directory: ~/project
+      command: |
+          mv theseus theseus_tmp
+          python -m pytest tests/test_theseus_layer.py
+          pytest -s tests -m "cudaext"
+
 
 # -------------------------------------------------------------------------------------
 # Jobs
@@ -130,13 +207,15 @@ jobs:
     steps:
       - checkout
       - <<: *install_suitesparse
+      - <<: *install_functorch
+      - <<: *build_baspacho_cpu
       - <<: *install_nox
       - run:
           name: "Testing theseus"
           command: |
               export NOX_PYTHON_VERSIONS=3.7
               pip install nox==2020.8.22
-              nox
+              BASPACHO_ROOT_DIR=~/baspacho nox
 
   py38_linux:
     docker:
@@ -144,13 +223,15 @@ jobs:
     steps:
       - checkout
       - <<: *install_suitesparse
+      - <<: *install_functorch
+      - <<: *build_baspacho_cpu
       - <<: *install_nox
       - run:
           name: "Testing theseus"
           command: |
               export NOX_PYTHON_VERSIONS=3.8
               pip install nox==2020.8.22
-              nox
+              BASPACHO_ROOT_DIR=~/baspacho nox
 
   py39_linux:
     docker:
@@ -158,13 +239,15 @@ jobs:
     steps:
       - checkout
       - <<: *install_suitesparse
+      - <<: *install_functorch
+      - <<: *build_baspacho_cpu
       - <<: *install_nox
       - run:
           name: "Testing theseus"
           command: |
               export NOX_PYTHON_VERSIONS=3.9
               pip install nox==2020.8.22
-              nox
+              BASPACHO_ROOT_DIR=~/baspacho nox
 
   unittests_gpu17_cuda10:
     executor: gpu_cuda10
@@ -175,6 +258,9 @@ jobs:
       - <<: *setup_cuda10_libs
       - <<: *setup_environment
       - <<: *install_torch_cuda10
+      - <<: *install_functorch_021
+      - <<: *install_recent_cmake_2004
+      - <<: *build_baspacho_cuda
       - <<: *setup_project
       - <<: *run_tests
 
@@ -187,8 +273,24 @@ jobs:
       - <<: *setup_cuda11_libs
       - <<: *setup_environment
       - <<: *install_torch_cuda11
+      - <<: *install_functorch
+      - <<: *install_recent_cmake_2004
+      - <<: *build_baspacho_cuda
       - <<: *setup_project
       - <<: *run_tests
+
+  test_cuda11_wheel:
+    executor: gpu_cuda11
+    steps:
+      - checkout
+      - <<: *update_and_install_python
+      - <<: *install_suitesparse
+      - <<: *setup_cuda11_libs
+      - <<: *setup_environment
+      - <<: *build_cuda11_wheel
+      - <<: *run_tests_from_wheel
+
+
 
 workflows:
   version: 2
@@ -199,3 +301,4 @@ workflows:
       - py39_linux
       - unittests_gpu17_cuda10
       - unittests_gpu17_cuda11
+      - test_cuda11_wheel

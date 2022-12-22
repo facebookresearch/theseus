@@ -9,6 +9,7 @@ import numpy as np
 import torch
 
 from theseus.core import Objective
+from theseus.utils.sparse_matrix_utils import sparse_mv, sparse_mtv
 
 from .linear_system import SparseStructure
 from .linearization import Linearization
@@ -20,7 +21,7 @@ class SparseLinearization(Linearization):
         self,
         objective: Objective,
         ordering: Optional[VariableOrdering] = None,
-        **kwargs
+        **kwargs,
     ):
         super().__init__(objective, ordering)
 
@@ -38,7 +39,7 @@ class SparseLinearization(Linearization):
         cost_function_row_block_starts = []  # where data start for this row block
         cost_function_stride = []  # total jacobian cols
 
-        for _, cost_function in enumerate(self.objective._get_iterator()):
+        for _, cost_function in enumerate(self.objective._get_jacobians_iter()):
             num_rows = cost_function.dim()
             col_slices_indices = []
             for var_idx_in_cost_function, variable in enumerate(
@@ -85,9 +86,19 @@ class SparseLinearization(Linearization):
         # batched data
         self.A_val: torch.Tensor = None
         self.b: torch.Tensor = None
-        self.Atb: torch.Tensor = None
+
+        # computed lazily by self._atb_impl() and reset to None by
+        # self._linearize_jacobian_impl()
+        self._Atb: torch.Tensor = None
+
+        # computed lazily by self.diagonal_scaling() and reset to None by
+        # self._linearize_jacobian_impl()
+        self._AtA_diag: torch.Tensor = None
 
     def _linearize_jacobian_impl(self):
+        self._Atb = None
+        self._AtA_diag = None
+
         # those will be fully overwritten, no need to zero:
         self.A_val = torch.empty(
             size=(self.objective.batch_size, len(self.A_col_ind)),
@@ -101,7 +112,7 @@ class SparseLinearization(Linearization):
         )
 
         err_row_idx = 0
-        for f_idx, cost_function in enumerate(self.objective._get_iterator()):
+        for f_idx, cost_function in enumerate(self.objective._get_jacobians_iter()):
             jacobians, error = cost_function.weighted_jacobians_error()
             num_rows = cost_function.dim()
             row_slice = slice(err_row_idx, err_row_idx + num_rows)
@@ -135,3 +146,45 @@ class SparseLinearization(Linearization):
 
     def _linearize_hessian_impl(self):
         self._linearize_jacobian_impl()
+
+    def _ata_impl(self) -> torch.Tensor:
+        raise NotImplementedError("AtA is not yet implemented for SparseLinearization.")
+
+    def _atb_impl(self) -> torch.Tensor:
+        if self._Atb is None:
+            A_row_ptr = torch.tensor(self.A_row_ptr, dtype=torch.int32).to(
+                self.objective.device
+            )
+            A_col_ind = A_row_ptr.new_tensor(self.A_col_ind)
+
+            # unsqueeze at the end for consistency with DenseLinearization
+            self._Atb = sparse_mtv(
+                self.num_cols,
+                A_row_ptr,
+                A_col_ind,
+                self.A_val.double(),
+                self.b.double(),
+            ).unsqueeze(2)
+        return self._Atb.to(dtype=self.A_val.dtype)
+
+    def Av(self, v: torch.Tensor) -> torch.Tensor:
+        A_row_ptr = torch.tensor(self.A_row_ptr, dtype=torch.int32).to(
+            self.objective.device
+        )
+        A_col_ind = A_row_ptr.new_tensor(self.A_col_ind)
+        return sparse_mv(
+            self.num_cols, A_row_ptr, A_col_ind, self.A_val.double(), v.double()
+        ).to(v.dtype)
+
+    def diagonal_scaling(self, v: torch.Tensor) -> torch.Tensor:
+        assert v.ndim == 2
+        assert v.shape[1] == self.num_cols
+        if self._AtA_diag is None:
+            A_val = self.A_val
+            self._AtA_diag = torch.zeros(A_val.shape[0], self.num_cols)
+            for row in range(self.num_rows):
+                start = self.A_row_ptr[row]
+                end = self.A_row_ptr[row + 1]
+                columns = self.A_col_ind[start:end]
+                self._AtA_diag[:, columns] += A_val[:, start:end] ** 2
+        return self._AtA_diag * v

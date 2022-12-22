@@ -132,13 +132,34 @@ def _create_line_from_trajectory(
     return line
 
 
-def _add_robot_to_trajectory(x_list, y_list, radius, color="magenta", alpha=0.05):
+def _get_triangle_pts(x, y, theta, radius):
+    triangle_pts = []
+
+    def _append(new_theta, scale=1.0):
+        x_new = x + radius * np.cos(new_theta) * scale
+        y_new = y + radius * np.sin(new_theta) * scale
+        triangle_pts.append((x_new, y_new))
+
+    _append(theta, 1.0)
+    _append(theta + np.pi / 2, 0.5)
+    _append(theta - np.pi / 2, 0.5)
+    return triangle_pts
+
+
+def _add_robot_to_trajectory(
+    x_list, y_list, radius, color="magenta", alpha=0.05, theta=None
+):
     patches = []
     for i in range(x_list.shape[0]):
-        patch = mpl.patches.Circle((x_list[i], y_list[i]), radius)
-        patches.append(patch)
+        if theta is None:
+            patches.append(mpl.patches.Circle((x_list[i], y_list[i]), radius))
+            alpha_ = alpha
+        else:
+            triangle_pts = _get_triangle_pts(x_list[i], y_list[i], theta[i], radius)
+            patches.append(mpl.patches.Polygon(triangle_pts))
+            alpha_ = 2 * alpha
     patch_collection = mpl.collections.PatchCollection(
-        patches, alpha=alpha, color=color
+        patches, alpha=alpha_, color=color
     )
     return patch_collection
 
@@ -152,14 +173,23 @@ def generate_trajectory_figs(
     labels: Optional[List[str]] = None,
     fig_idx_robot: int = 1,
     figsize: Tuple[int, int] = (8, 8),
+    plot_sdf: bool = False,
+    invert_map: bool = False,
 ) -> List[plt.Figure]:
     # cell rows/cols for each batch of trajectories
     traj_rows = []
     traj_cols = []
+    traj_angles = []
+    # Trajectories in the list correspond to different sources
+    # (e.g., motion planner, expert, straight line, etc.)
+    # Each trajectory tensor has shape (num_maps, data_size, traj_len)
     for trajectory in trajectories:
         row, col, _ = sdf.convert_points_to_cell(trajectory[:, :2, :])
         traj_rows.append(np.clip(row, 0, map_tensor.shape[1] - 1))
         traj_cols.append(np.clip(col, 0, map_tensor.shape[1] - 1))
+        if trajectory.shape[1] == 7:  # SE2 trajectory
+            traj_angles.append(torch.atan2(trajectory[:, 3], trajectory[:, 2]).numpy())
+    assert len(traj_angles) == 0 or len(traj_angles) == len(traj_rows)
 
     # Generate a separate figure for each batch index
     colors = ["green", "blue", "red"]
@@ -169,26 +199,46 @@ def generate_trajectory_figs(
     for map_idx in range(map_tensor.shape[0]):
         if map_idx >= max_num_figures:
             continue
-        fig, axs = plt.subplots(1, 1, figsize=figsize)
+        fig, axs = plt.subplots(1, 2 if plot_sdf else 1, figsize=figsize)
+        if plot_sdf:
+            fig.subplots_adjust(right=0.8)
+            cbar_ax = fig.add_axes([0.85, 0.15, 0.10, 0.7])
+            cbar_ax.axis("off")
+
+        path_ax = axs[0] if plot_sdf else axs
         map_data = map_tensor[map_idx].clone().cpu().numpy()
-        map_data = np.tile(map_data, (3, 1, 1)).transpose((1, 2, 0))
-        axs.imshow(map_data)
+        if invert_map:
+            map_data = 1 - map_data
+        if map_data.ndim == 2:
+            map_data = np.tile(map_data, (3, 1, 1)).transpose((1, 2, 0))
+        path_ax.imshow(map_data)
         cell_size = sdf.cell_size.tensor
         patches = []
         for t_idx, trajectory in enumerate(trajectories):
             row = traj_rows[t_idx][map_idx]
             col = traj_cols[t_idx][map_idx]
+            theta = None if len(traj_angles) == 0 else traj_angles[t_idx][map_idx]
             line = _create_line_from_trajectory(col, row, color=colors[t_idx])
-            axs.add_line(line)
+            path_ax.add_line(line)
             if t_idx == fig_idx_robot:  # solution trajectory
-                radius = robot_radius / cell_size[map_idx][0]
-                patch_coll = _add_robot_to_trajectory(col, row, radius)
-                axs.add_collection(patch_coll)
+                cs_idx = map_idx if cell_size.shape[0] > 1 else 0
+                radius = robot_radius / cell_size[cs_idx][0]
+                patch_coll = _add_robot_to_trajectory(
+                    col, row, radius, alpha=0.10, theta=theta
+                )
+                path_ax.add_collection(patch_coll)
             patches.append(mpl.patches.Patch(color=colors[t_idx], label=labels[t_idx]))
         patches.append(
-            mpl.patches.Patch(color="magenta", label=f"radius = {robot_radius}")
+            mpl.patches.Patch(color="magenta", label=f"robot (radius={robot_radius})")
         )
-        axs.legend(handles=patches, fontsize=10)
-        fig.tight_layout()
+        path_ax.legend(handles=patches, fontsize=10)
+
+        if plot_sdf:
+            im = axs[1].imshow(
+                sdf.sdf_data.tensor[map_idx].cpu().numpy(), cmap="plasma_r"
+            )
+            fig.colorbar(im, ax=cbar_ax)
+        else:
+            fig.tight_layout()
         figures.append(fig)
     return figures

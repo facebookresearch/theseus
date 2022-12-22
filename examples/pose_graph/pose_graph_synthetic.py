@@ -24,22 +24,6 @@ import theseus.utils.examples as theg
 from theseus.optimizer.linear import LinearSolver
 from theseus.optimizer.linearization import Linearization
 
-BACKWARD_MODE = {
-    "implicit": th.BackwardMode.IMPLICIT,
-    "full": th.BackwardMode.FULL,
-    "truncated": th.BackwardMode.TRUNCATED,
-}
-
-LINEARIZATION_MODE: Dict[str, Type[Linearization]] = {
-    "sparse": th.SparseLinearization,
-    "dense": th.DenseLinearization,
-}
-
-LINEAR_SOLVER_MODE: Dict[str, Type[LinearSolver]] = {
-    "sparse": th.LUCudaSparseSolver,
-    "dense": th.CholeskyDenseSolver,
-}
-
 # Logger
 log = logging.getLogger(__name__)
 
@@ -98,12 +82,6 @@ def run(
     dtype = torch.float64
     pr = cProfile.Profile()
 
-    BACKWARD_MODE = {
-        "implicit": th.BackwardMode.IMPLICIT,
-        "full": th.BackwardMode.FULL,
-        "truncated": th.BackwardMode.TRUNCATED,
-    }
-
     LINEARIZATION_MODE: Dict[str, Type[Linearization]] = {
         "sparse": th.SparseLinearization,
         "dense": th.DenseLinearization,
@@ -112,7 +90,11 @@ def run(
     LINEAR_SOLVER_MODE: Dict[str, Type[LinearSolver]] = {
         "sparse": cast(
             Type[LinearSolver],
-            th.LUCudaSparseSolver
+            (
+                th.BaspachoSparseSolver
+                if cast(str, cfg.solver_type) == "baspacho"
+                else th.LUCudaSparseSolver
+            )
             if cast(str, cfg.solver_device) == "cuda"
             else th.CholmodSparseSolver,
         ),
@@ -196,11 +178,14 @@ def run(
         step_size=cfg.inner_optim.step_size,
         linearization_cls=LINEARIZATION_MODE[cast(str, cfg.inner_optim.solver)],
         linear_solver_cls=LINEAR_SOLVER_MODE[cast(str, cfg.inner_optim.solver)],
-        vectorize=cfg.inner_optim.vectorize,
     )
 
     # Set up Theseus layer
-    theseus_optim = th.TheseusLayer(optimizer, vectorize=cfg.inner_optim.vectorize)
+    theseus_optim = th.TheseusLayer(
+        optimizer,
+        vectorize=cfg.inner_optim.vectorize,
+        empty_cuda_cache=cfg.inner_optim.empty_cuda_cache,
+    )
     theseus_optim.to(device=device)
 
     # Outer optimization loop
@@ -228,12 +213,7 @@ def run(
         pr.enable()
         theseus_outputs, _ = theseus_optim.forward(
             input_tensors=theseus_inputs,
-            optimizer_kwargs={
-                "verbose": cfg.inner_optim.verbose,
-                "track_err_history": cfg.inner_optim.track_err_history,
-                "backward_mode": BACKWARD_MODE[cfg.inner_optim.backward_mode],
-                "__keep_final_step_size__": cfg.inner_optim.keep_step_size,
-            },
+            optimizer_kwargs={**cfg.inner_optim.optimizer_kwargs},
         )
         pr.disable()
         end_event.record()

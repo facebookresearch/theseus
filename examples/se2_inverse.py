@@ -10,9 +10,9 @@
 import torch
 
 import theseus as th
+from tests.geometry.test_se2 import create_random_se2
 from theseus import LieGroupTensor
 from theseus.geometry.lie_group import LieGroup
-from theseus.geometry.tests.test_se2 import create_random_se2
 
 # Create two random SE2
 rng = torch.Generator()

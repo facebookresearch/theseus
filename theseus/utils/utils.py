@@ -2,13 +2,13 @@
 #
 # This source code is licensed under the MIT license found in the
 # LICENSE file in the root directory of this source tree.
-
-from typing import Callable, List, Optional, Type
+import time
+from typing import Any, Callable, List, Optional, Type
 
 import torch
 import torch.nn as nn
 
-import theseus.geometry as th
+import theseus as th
 
 
 def build_mlp(
@@ -110,3 +110,26 @@ def numeric_jacobian(
     for group_idx in range(len(group_args)):
         jacs.append(_compute(group_idx))
     return jacs
+
+
+class Timer:
+    def __init__(self, device: th.DeviceType) -> None:
+        self.device = torch.device(device)
+        self.elapsed_time = 0.0
+
+    def __enter__(self) -> "Timer":
+        if self.device.type == "cuda":
+            self._start_event = torch.cuda.Event(enable_timing=True)
+            self._end_event = torch.cuda.Event(enable_timing=True)
+            self._start_event.record()
+        else:
+            self._start_time = time.perf_counter_ns()
+        return self
+
+    def __exit__(self, exc_type: Any, exc_value: Any, traceback: Any) -> None:
+        if self.device.type == "cuda":
+            self._end_event.record()
+            torch.cuda.synchronize()
+            self.elapsed_time = self._start_event.elapsed_time(self._end_event) / 1e3
+        else:
+            self.elapsed_time = (time.perf_counter_ns() - self._start_time) / 1e9

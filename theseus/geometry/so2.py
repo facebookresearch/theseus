@@ -3,6 +3,7 @@
 # This source code is licensed under the MIT license found in the
 # LICENSE file in the root directory of this source tree.
 
+import warnings
 from typing import List, Optional, Tuple, Union, cast
 
 import torch
@@ -10,6 +11,7 @@ import torch
 import theseus.constants
 
 from .lie_group import LieGroup
+from .lie_group_check import _LieGroupCheckContext
 from .point_types import Point2
 
 
@@ -41,7 +43,7 @@ class SO2(LieGroup):
         *size: int,
         generator: Optional[torch.Generator] = None,
         dtype: Optional[torch.dtype] = None,
-        device: Optional[torch.device] = None,
+        device: theseus.constants.DeviceType = None,
         requires_grad: bool = False,
     ) -> "SO2":
         if len(size) != 1:
@@ -65,7 +67,7 @@ class SO2(LieGroup):
         *size: int,
         generator: Optional[torch.Generator] = None,
         dtype: Optional[torch.dtype] = None,
-        device: Optional[torch.device] = None,
+        device: theseus.constants.DeviceType = None,
         requires_grad: bool = False,
     ) -> "SO2":
         if len(size) != 1:
@@ -133,6 +135,25 @@ class SO2(LieGroup):
             ).abs().max().item() <= MATRIX_EPS
 
         return _check
+
+    @staticmethod
+    def _hat_matrix_check(matrix: torch.Tensor):
+        _check = matrix.ndim == 3 and matrix.shape[1:] == (2, 2)
+
+        checks_enabled, silent_unchecks = _LieGroupCheckContext.get_context()
+        if checks_enabled:
+            _check &= matrix[:, 0, 0].abs().max().item() < theseus.constants.EPS
+            _check &= matrix[:, 1, 1].abs().max().item() < theseus.constants.EPS
+            _check &= torch.allclose(matrix[:, 0, 1], -matrix[:, 1, 0])
+        elif not silent_unchecks:
+            warnings.warn(
+                "Lie group checks are disabled, so the skew-symmetry of hat matrices is "
+                "not checked for SO2.",
+                RuntimeWarning,
+            )
+
+        if not _check:
+            raise ValueError("Invalid hat matrix for SO2.")
 
     @staticmethod
     def exp_map(
@@ -228,7 +249,6 @@ class SO2(LieGroup):
         cosine: torch.Tensor,
         sine: torch.Tensor,
     ) -> Point2:
-        batch_size = max(point.shape[0], cosine.shape[0])
         if isinstance(point, torch.Tensor):
             if point.ndim != 2 or point.shape[1] != 2:
                 raise ValueError(
@@ -239,12 +259,11 @@ class SO2(LieGroup):
         else:
             point_tensor = point.tensor
         px, py = point_tensor[:, 0], point_tensor[:, 1]
-        new_point_tensor = torch.empty(
-            batch_size, 2, device=cosine.device, dtype=cosine.dtype
+        return Point2(
+            tensor=torch.stack(
+                [cosine * px - sine * py, sine * px + cosine * py], dim=1
+            )
         )
-        new_point_tensor[:, 0] = cosine * px - sine * py
-        new_point_tensor[:, 1] = sine * px + cosine * py
-        return Point2(tensor=new_point_tensor)
 
     def rotate(
         self,
@@ -280,9 +299,7 @@ class SO2(LieGroup):
         return self[:, 0], self[:, 1]
 
     def to_matrix(self) -> torch.Tensor:
-        matrix = torch.empty(self.shape[0], 2, 2).to(
-            device=self.device, dtype=self.dtype
-        )
+        matrix = self.tensor.new_empty(self.shape[0], 2, 2)
         cosine, sine = self.to_cos_sin()
         matrix[:, 0, 0] = cosine
         matrix[:, 0, 1] = -sine
@@ -292,22 +309,14 @@ class SO2(LieGroup):
 
     @staticmethod
     def hat(tangent_vector: torch.Tensor) -> torch.Tensor:
-        matrix = torch.zeros(tangent_vector.shape[0], 2, 2).to(
-            dtype=tangent_vector.dtype,
-            device=tangent_vector.device,
-        )
+        matrix = tangent_vector.new_zeros(tangent_vector.shape[0], 2, 2)
         matrix[:, 0, 1] = -tangent_vector.view(-1)
         matrix[:, 1, 0] = tangent_vector.view(-1)
         return matrix
 
     @staticmethod
     def vee(matrix: torch.Tensor) -> torch.Tensor:
-        _check = matrix.ndim == 3 and matrix.shape[1:] == (2, 2)
-        _check &= matrix[:, 0, 0].abs().max().item() < theseus.constants.EPS
-        _check &= matrix[:, 1, 1].abs().max().item() < theseus.constants.EPS
-        _check &= torch.allclose(matrix[:, 0, 1], -matrix[:, 1, 0])
-        if not _check:
-            raise ValueError("Invalid hat matrix for SO2.")
+        SO2._hat_matrix_check(matrix)
         return matrix[:, 1, 0].clone().view(-1, 1)
 
     def _copy_impl(self, new_name: Optional[str] = None) -> "SO2":

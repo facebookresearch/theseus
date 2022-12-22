@@ -7,7 +7,7 @@ from typing import List, Optional, Tuple, Union, cast
 
 import torch
 
-from theseus.core import CostFunction, CostWeight, Variable
+from theseus.core import CostFunction, CostWeight, Variable, as_variable
 from theseus.embodied.kinematics import IdentityModel
 from theseus.geometry import SE2, Point2
 
@@ -19,9 +19,9 @@ class EffectorObjectContactPlanar(CostFunction):
         self,
         obj: SE2,
         eff: SE2,
-        sdf_origin: Variable,
-        sdf_data: Variable,
-        sdf_cell_size: Variable,
+        sdf_origin: Union[Point2, torch.Tensor],
+        sdf_data: Union[torch.Tensor, Variable],
+        sdf_cell_size: Union[float, torch.Tensor, Variable],
         eff_radius: Union[float, Variable, torch.Tensor],
         cost_weight: CostWeight,
         name: Optional[str] = None,
@@ -30,15 +30,10 @@ class EffectorObjectContactPlanar(CostFunction):
         super().__init__(cost_weight, name=name)
         self.obj = obj
         self.eff = eff
-        self.sdf_origin = sdf_origin
-        self.sdf_data = sdf_data
-        self.sdf_cell_size = sdf_cell_size
-        if not isinstance(eff_radius, Variable):
-            if not isinstance(eff_radius, torch.Tensor):
-                eff_radius = torch.tensor(eff_radius)
-            self.eff_radius = Variable(eff_radius)
-        else:
-            self.eff_radius = eff_radius
+        self.sdf_origin = SignedDistanceField2D.convert_origin(sdf_origin)
+        self.sdf_data = SignedDistanceField2D.convert_sdf_data(sdf_data)
+        self.sdf_cell_size = SignedDistanceField2D.convert_cell_size(sdf_cell_size)
+        self.eff_radius = as_variable(eff_radius)
         if self.eff_radius.tensor.squeeze().ndim > 1:
             raise ValueError("eff_radius must be a 0-D or 1-D tensor.")
         self.eff_radius.tensor = self.eff_radius.tensor.view(-1, 1)
@@ -47,7 +42,9 @@ class EffectorObjectContactPlanar(CostFunction):
             ["sdf_origin", "sdf_data", "sdf_cell_size", "eff_radius"]
         )
         self.robot = IdentityModel()
-        self.sdf = SignedDistanceField2D(sdf_origin, sdf_cell_size, sdf_data)
+        self.sdf = SignedDistanceField2D(
+            self.sdf_origin, self.sdf_cell_size, self.sdf_data
+        )
         self._use_huber = use_huber_loss
 
         if use_huber_loss:
@@ -61,7 +58,7 @@ class EffectorObjectContactPlanar(CostFunction):
         J_transf: List[torch.Tensor] = []
         J_xy: List[torch.Tensor] = []
         eff__obj = self.obj.transform_to(
-            self.eff.xy(jacobians=J_xy), jacobians=J_transf
+            self.eff.xy(jacobians=J_xy).tensor, jacobians=J_transf
         )
         J_transf_obj = J_transf[0]
         J_transf_eff = J_transf[1].matmul(J_xy[0])

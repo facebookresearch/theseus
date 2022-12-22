@@ -4,6 +4,11 @@
 # LICENSE file in the root directory of this source tree.
 
 from .lie_group import LieGroup, adjoint, between, compose, exp_map, inverse, log_map
+from .lie_group_check import (
+    enable_lie_group_check,
+    no_lie_group_check,
+    set_lie_group_check_enabled,
+)
 from .manifold import Manifold, OptionalJacobians, local, retract
 from .point_types import (
     Point2,
@@ -24,3 +29,4 @@ from .utils import (
     set_lie_tangent_enabled,
 )
 from .vector import Vector, rand_vector, randn_vector
+import theseus.geometry.functional

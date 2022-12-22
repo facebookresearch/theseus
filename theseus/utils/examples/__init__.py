@@ -10,6 +10,7 @@ try:
     from .motion_planning import (
         InitialTrajectoryModel,
         MotionPlanner,
+        MotionPlannerObjective,
         ScalarCollisionWeightAndCostEpstModel,
         ScalarCollisionWeightModel,
         TrajectoryDataset,

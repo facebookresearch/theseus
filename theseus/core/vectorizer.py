@@ -4,6 +4,7 @@
 # LICENSE file in the root directory of this source tree.
 
 from collections import defaultdict
+from enum import Enum
 from typing import Dict, Iterable, List, Optional, Set, Tuple, Type
 
 import torch
@@ -31,6 +32,24 @@ def _get_cost_function_schema(cost_function: CostFunction) -> _CostFunctionSchem
         + (_fullname(cost_function.weight),)
         + tuple(_varinfo(v) for v in cost_function.weight.aux_vars)
     )
+
+
+# Identifies what quantities vectorizaton computes for all cost functions
+#
+# Currently we select it manually in two places:
+# 1.) when requesting to compute Objective.error() we select WEIGHTED_ERROR,
+# so that we compute the vectorized error w/o modifying the permanent caches.
+# 2.) when Objective requests that the vectorization is updated, then we use
+# FULL so that we compute jacobians and replace the permanent caches.
+class _VectorizationMode(Enum):
+    # Only computes cf.error()
+    ERROR = 0
+    # Only computes cf.weighted_error()
+    WEIGHTED_ERROR = 1
+    # Computes cf.weighted_jacobians_error()
+    # For this mode the results are stored in a persistent cache.
+    # For the other two modes, the results are stored in a temporary one.
+    FULL = 2
 
 
 # This wrapper allows the weighted error and jacobians to be replaced by pre-computed
@@ -84,7 +103,7 @@ class _CostFunctionWrapper(CostFunction):
 class Vectorize:
     _SHARED_TOKEN = "__shared__"
 
-    def __init__(self, objective: Objective):
+    def __init__(self, objective: Objective, empty_cuda_cache: bool = False):
         # Each cost function is assigned a wrapper. The wrapper will hold the error
         # and jacobian after vectorization.
         self._cost_fn_wrappers: List[_CostFunctionWrapper] = []
@@ -129,10 +148,12 @@ class Vectorize:
             self._vectorized_retract_optim_vars,
             list(self._vectorized_cost_fns.values()),
             list(schema_cf_names_dict.values()),
+            self._get_vectorized_error_iter,
             self,
         )
 
         self._objective = objective
+        self._empty_cuda_cache = empty_cuda_cache
 
     # Returns a dictionary which maps every schema to information about its shared
     # variables.
@@ -233,7 +254,11 @@ class Vectorize:
                 # when updating the vectorized variable containers.
                 tensor = (
                     var.tensor
-                    if (var_batch_size > 1 or Vectorize._SHARED_TOKEN in name)
+                    if (
+                        var_batch_size > 1
+                        or objective_batch_size == 1
+                        or Vectorize._SHARED_TOKEN in name
+                    )
                     else Vectorize._expand(var.tensor, objective_batch_size)
                 )
                 names_to_tensors[name].append(tensor)
@@ -270,6 +295,17 @@ class Vectorize:
                 var_tensor = torch.cat(all_var_tensors, dim=0)
             var.update(var_tensor)
 
+    @staticmethod
+    def _get_fn_results_for_mode(
+        mode: _VectorizationMode, cost_fn: CostFunction
+    ) -> Tuple[List[torch.Tensor], torch.Tensor]:
+        if mode == _VectorizationMode.FULL:
+            return cost_fn.weighted_jacobians_error()
+        elif mode == _VectorizationMode.ERROR:
+            return None, cost_fn.error()
+        else:
+            return None, cost_fn.weighted_error()
+
     # Computes the error of the vectorized cost function and distributes the error
     # to the cost function wrappers. The list of wrappers must correspond to the
     # same schema from which the vectorized cost function was obtained.
@@ -278,15 +314,17 @@ class Vectorize:
         vectorized_cost_fn: CostFunction,
         cost_fn_wrappers: List[_CostFunctionWrapper],
         batch_size: int,
+        mode: _VectorizationMode,
     ):
-        v_jac, v_err = vectorized_cost_fn.weighted_jacobians_error()
+        v_jac, v_err = Vectorize._get_fn_results_for_mode(mode, vectorized_cost_fn)
         start_idx = 0
         for wrapper in cost_fn_wrappers:
             assert wrapper._cached_error is None
             assert wrapper._cached_jacobians is None
             v_slice = slice(start_idx, start_idx + batch_size)
             wrapper._cached_error = v_err[v_slice]
-            wrapper._cached_jacobians = [jac[v_slice] for jac in v_jac]
+            if v_jac is not None:
+                wrapper._cached_jacobians = [jac[v_slice] for jac in v_jac]
             start_idx += batch_size
 
     def _clear_wrapper_caches(self):
@@ -294,20 +332,27 @@ class Vectorize:
             for cf in cost_fn_wrappers:
                 cf._cached_error = None
                 cf._cached_jacobians = None
+        if self._empty_cuda_cache:
+            torch.cuda.empty_cache()
 
-    # This could be a static method, but writing like this makes some unit tests
-    # easier
+    # This could be a static method, but writing like this makes some unit tests easier
     def _handle_singleton_wrapper(
-        self, _: _CostFunctionSchema, cost_fn_wrappers: List[_CostFunctionWrapper]
+        self,
+        _: _CostFunctionSchema,
+        cost_fn_wrappers: List[_CostFunctionWrapper],
+        mode: _VectorizationMode,
     ):
         wrapper = cost_fn_wrappers[0]
         (
             wrapper._cached_jacobians,
             wrapper._cached_error,
-        ) = wrapper.cost_fn.weighted_jacobians_error()
+        ) = Vectorize._get_fn_results_for_mode(mode, wrapper.cost_fn)
 
     def _handle_schema_vectorization(
-        self, schema: _CostFunctionSchema, cost_fn_wrappers: List[_CostFunctionWrapper]
+        self,
+        schema: _CostFunctionSchema,
+        cost_fn_wrappers: List[_CostFunctionWrapper],
+        mode: _VectorizationMode,
     ):
         var_names = self._var_names[schema]
         vectorized_cost_fn = self._vectorized_cost_fns[schema]
@@ -327,16 +372,35 @@ class Vectorize:
             len(cost_fn_wrappers),
         )
         Vectorize._compute_error_and_replace_wrapper_caches(
-            vectorized_cost_fn, cost_fn_wrappers, batch_size
+            vectorized_cost_fn, cost_fn_wrappers, batch_size, mode
         )
 
-    def _vectorize(self):
-        self._clear_wrapper_caches()
-        for schema, cost_fn_wrappers in self._schema_dict.items():
+    def _vectorize(
+        self, mode: _VectorizationMode = _VectorizationMode.FULL
+    ) -> Iterable[_CostFunctionWrapper]:
+        if mode == _VectorizationMode.FULL:
+            # In full mode we compute error and jacobians and update the vectorizer's
+            # permanent cache.
+            self._clear_wrapper_caches()
+            schema_dict = self._schema_dict
+            ret = self._cost_fn_wrappers
+        else:
+            # If not full vectorization, just copy the containers so that we don't override the
+            # permanent cache. The results will be returned in these temp containers.
+            schema_dict = {
+                schema: [_CostFunctionWrapper(cf.cost_fn) for cf in cf_list]
+                for schema, cf_list in self._schema_dict.items()
+            }
+            ret = [cf for cf_list in schema_dict.values() for cf in cf_list]
+        for schema, cost_fn_wrappers in schema_dict.items():
             if len(cost_fn_wrappers) == 1:
-                self._handle_singleton_wrapper(schema, cost_fn_wrappers)
+                self._handle_singleton_wrapper(schema, cost_fn_wrappers, mode)
             else:
-                self._handle_schema_vectorization(schema, cost_fn_wrappers)
+                self._handle_schema_vectorization(schema, cost_fn_wrappers, mode)
+        return ret
+
+    def _get_vectorized_error_iter(self) -> Iterable[_CostFunctionWrapper]:
+        return self._vectorize(_VectorizationMode.WEIGHTED_ERROR)
 
     @staticmethod
     def _vectorized_retract_optim_vars(

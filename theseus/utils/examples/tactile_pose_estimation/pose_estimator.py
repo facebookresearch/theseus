@@ -17,7 +17,7 @@ class TactilePoseEstimator:
         max_window_moving_frame: int,
         step_window_moving_frame: int,
         rectangle_shape: Tuple[float, float],
-        device: torch.device,
+        device: th.DeviceType,
         optimizer_cls: Optional[Type[th.NonlinearLeastSquares]] = LevenbergMarquardt,
         max_iterations: int = 3,
         step_size: float = 1.0,
@@ -63,7 +63,7 @@ class TactilePoseEstimator:
 
         sdf_data = th.Variable(dataset.sdf_data_tensor, name="sdf_data")
         sdf_cell_size = th.Variable(dataset.sdf_cell_size, name="sdf_cell_size")
-        sdf_origin = th.Variable(dataset.sdf_origin, name="sdf_origin")
+        sdf_origin = th.Point2(dataset.sdf_origin, name="sdf_origin")
         eff_radius = th.Variable(torch.zeros(1, 1), name="eff_radius")
 
         # -------------------------------------------------------------------- #

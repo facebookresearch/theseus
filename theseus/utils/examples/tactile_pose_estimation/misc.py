@@ -152,7 +152,6 @@ class TactilePushingDataset:
     def _load_tactile_sdf_from_file(
         filename: str, device: th.DeviceType
     ) -> Tuple[torch.Tensor, torch.Tensor, torch.Tensor]:
-
         with open(filename) as f:
             import json
 
@@ -197,7 +196,6 @@ class TactilePushingDataset:
 # ---------------------------------- Visualization ---------------------------------- #
 # ----------------------------------------------------------------------------------- #
 def _draw_tactile_effector(poses: np.ndarray, label: str = "groundtruth"):
-
     linestyle = "-"
     color = "tab:orange"
     if label == "groundtruth":
@@ -231,7 +229,6 @@ def _draw_tactile_effector(poses: np.ndarray, label: str = "groundtruth"):
 def _draw_tactile_object(
     poses: np.ndarray, rect_len_x: float, rect_len_y: float, label: str = "optimizer"
 ):
-
     linestyle = "-"
     color = "tab:orange"
     if label == "groundtruth":
@@ -275,7 +272,6 @@ def visualize_tactile_push2d(
     rect_len_y: float,
     save_fname: Optional[str] = None,
 ):
-
     plt.cla()
     plt.xlim((-2, 2))
     plt.ylim((-2, 2))

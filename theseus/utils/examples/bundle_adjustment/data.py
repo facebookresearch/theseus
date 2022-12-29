@@ -279,7 +279,6 @@ class BundleAdjustmentDataset:
         prob_feat_is_outlier: float = 0.02,
         outlier_feat_random: float = 70,
     ):
-
         # add cameras
         gt_cameras = [
             Camera.generate_synthetic(

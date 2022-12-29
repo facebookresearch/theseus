@@ -32,7 +32,6 @@ class TactileMeasModel(nn.Module):
 
 
 def init_tactile_model_from_file(model: nn.Module, filename: pathlib.Path):
-
     model_saved = torch.jit.load(filename)
     state_dict_saved = model_saved.state_dict()
     state_dict_new = collections.OrderedDict()

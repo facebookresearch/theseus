@@ -19,7 +19,7 @@ import theseus as th
 import theseus.constants
 from theseus.core import CostFunction, Objective
 from theseus.geometry import Manifold
-from theseus.optimizer import Optimizer, VariableOrdering
+from theseus.optimizer import Optimizer, VariableOrdering, ManifoldGaussian
 from theseus.optimizer.nonlinear.nonlinear_optimizer import (
     BackwardMode,
     NonlinearOptimizerInfo,
@@ -106,7 +106,7 @@ def synchronous_schedule(max_iters, n_edges) -> torch.Tensor:
 
 
 # Initialises message precision to zero
-class Message(th.ManifoldGaussian):
+class Message(ManifoldGaussian):
     def __init__(
         self,
         mean: Sequence[Manifold],
@@ -885,9 +885,9 @@ class GaussianBeliefPropagation(Optimizer, abc.ABC):
 
     def _create_factors_beliefs(self, lin_system_damping):
         self.factors: List[Factor] = []
-        self.beliefs: List[th.ManifoldGaussian] = []
+        self.beliefs: List[ManifoldGaussian] = []
         for var in self.ordering:
-            self.beliefs.append(th.ManifoldGaussian([var]))
+            self.beliefs.append(ManifoldGaussian([var]))
 
         if self.objective.vectorized:
             cf_iterator = iter(self.objective.vectorized_cost_fns)

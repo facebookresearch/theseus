@@ -66,7 +66,7 @@ def check_unit_quaternion(quaternion: torch.Tensor):
 
 
 def check_left_act_matrix(matrix: torch.Tensor):
-    if matrix.ndim != 3 or matrix.shape[-2] != 3:
+    if matrix.shape[-2] != 3:
         raise ValueError("Inconsistent shape for the matrix.")
 
 
@@ -675,7 +675,7 @@ def _left_act_impl(group: torch.Tensor, matrix: torch.Tensor) -> torch.Tensor:
         raise ValueError("Invalid data tensor for SO3.")
     check_left_act_matrix(matrix)
 
-    return group @ matrix
+    return torch.einsum("nij,n...jk->n...ik", group, matrix)
 
 
 def _jleft_act_impl(
@@ -683,10 +683,12 @@ def _jleft_act_impl(
 ) -> Tuple[List[torch.Tensor], torch.Tensor]:
     if not check_group_tensor(group):
         raise ValueError("Invalid data tensor for SO3.")
+    if matrix.ndim != 3:
+        raise ValueError("The dimension of matrix must be 3.")
     check_left_act_matrix(matrix)
     jacobians = []
     jacobians.append(
-        -torch.einsum("nij,nljk->nlik", group, lift(matrix.transpose(1, 2)))
+        -torch.einsum("nij,n...jk->n...ik", group, lift(matrix.transpose(1, 2)))
     )
     jacobians.append(group.new_zeros(matrix.shape + matrix.shape[1:]))
     cols = torch.arange(matrix.shape[-1])
@@ -694,7 +696,7 @@ def _jleft_act_impl(
         matrix.shape[-1:] + group.shape
     )
 
-    return jacobians, group @ matrix
+    return jacobians, torch.einsum("nij,n...jk->n...ik", group, matrix)
 
 
 class LeftAct(lie_group.BinaryOperator):
@@ -709,13 +711,15 @@ class LeftAct(lie_group.BinaryOperator):
     @classmethod
     def backward(cls, ctx, grad_output):
         group, matrix = ctx.saved_tensors
-        return (
-            grad_output @ matrix.transpose(1, 2),
-            group.transpose(1, 2) @ grad_output,
-        )
+        jac_g = torch.einsum("n...ij,n...kj->n...ik", grad_output, matrix)
+        if matrix.ndim > 3:
+            dims = list(range(1, matrix.ndim - 2))
+            jac_g = jac_g.sum(dims)
+        jac_mat = torch.einsum("nji, n...jk->n...ik", group, grad_output)
+        return jac_g, jac_mat
 
 
 _left_act_autograd_fn = LeftAct.apply
-_jleft_act_autograd_fn = _jleft_act_impl
+_jleft_act_autograd_fn = None
 
-left_act, jleft_act = lie_group.BinaryOperatorFactory(_module, "left_act")
+left_act = lie_group.BinaryOperatorFactory(_module, "left_act")

@@ -24,6 +24,17 @@ def test_exp(batch_size: int, dtype: torch.dtype):
 
 @pytest.mark.parametrize("batch_size", [1, 20, 100])
 @pytest.mark.parametrize("dtype", [torch.float32, torch.float64])
+def test_log(batch_size: int, dtype: torch.dtype):
+    rng = torch.Generator()
+    rng.manual_seed(0)
+    group = so3.rand(batch_size, generator=rng, dtype=dtype)
+
+    # check analytic backward for the operator
+    check_lie_group_function(so3, "log", TEST_EPS, group)
+
+
+@pytest.mark.parametrize("batch_size", [1, 20, 100])
+@pytest.mark.parametrize("dtype", [torch.float32, torch.float64])
 def test_adjoint(batch_size: int, dtype: torch.dtype):
     rng = torch.Generator()
     rng.manual_seed(0)

@@ -415,12 +415,13 @@ class Log(lie_group.UnaryOperator):
 
     @classmethod
     def backward(cls, ctx, grad_output):
-        tangent_vector: torch.Tensor = ctx.saved_tensors[0]
         group: torch.Tensor = ctx.saved_tensors[1]
         if not hasattr(ctx, "jacobians"):
-            ctx.jacobians: torch.Tensor = _jlog_impl(tangent_vector)[0][0]
+            ctx.jacobians: torch.Tensor = _jlog_impl(group)[0][0]
 
-        temp = lift(ctx.jacobians.transpose(1, 2) @ grad_output)
+        temp = lift(
+            (ctx.jacobians.transpose(1, 2) @ grad_output.unsqueeze(-1)).squeeze(-1)
+        )
         return torch.einsum("nij,n...jk->n...ik", group, temp)
 
 

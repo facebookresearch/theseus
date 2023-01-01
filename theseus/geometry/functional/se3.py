@@ -49,6 +49,11 @@ def check_project_matrix(matrix: torch.Tensor):
     return matrix.shape[-2:] == (3, 4)
 
 
+def check_left_act_matrix(matrix: torch.Tensor):
+    if matrix.shape[-2] != 3:
+        raise ValueError("Inconsistent shape for the matrix.")
+
+
 # -----------------------------------------------------------------------------
 # Rand
 # -----------------------------------------------------------------------------
@@ -653,3 +658,45 @@ _project_autograd_fn = Project.apply
 _jproject_autograd_fn = None
 
 project = lie_group.UnaryOperatorFactory(_module, "project")
+
+
+# -----------------------------------------------------------------------------
+# Left Act
+# -----------------------------------------------------------------------------
+def _left_act_impl(group: torch.Tensor, matrix: torch.Tensor) -> torch.Tensor:
+    if not check_group_tensor(group):
+        raise ValueError("Invalid data tensor for SE3.")
+    check_left_act_matrix(matrix)
+    shape = list(matrix.shape)
+    ndim = matrix.ndim
+    ret = so3._left_act_impl(group[:, :, :3], matrix)
+    ret += group[:, :, 3:].view(shape[:1] + [1] * (ndim - 3) + [3, 1]).expand(shape)
+    return ret
+
+
+class LeftAct(lie_group.BinaryOperator):
+    @classmethod
+    def forward(cls, ctx, group, matrix):
+        group: torch.Tensor = cast(torch.Tensor, group)
+        matrix: torch.Tensor = cast(torch.Tensor, matrix)
+        ret = _left_act_impl(group, matrix)
+        ctx.save_for_backward(group, matrix)
+        return ret
+
+    @classmethod
+    def backward(cls, ctx, grad_output):
+        group, matrix = ctx.saved_tensors
+        jac_rot = torch.einsum("n...ij,n...kj->n...ik", grad_output, matrix)
+        jac_t = grad_output.sum(-1, keepdim=True)
+        jac_g = torch.cat((jac_rot, jac_t), dim=-1)
+        if matrix.ndim > 3:
+            dims = list(range(1, matrix.ndim - 2))
+            jac_g = jac_g.sum(dims)
+        jac_mat = torch.einsum("nji, n...jk->n...ik", group[:, :, :3], grad_output)
+        return jac_g, jac_mat
+
+
+_left_act_autograd_fn = LeftAct.apply
+_jleft_act_autograd_fn = None
+
+left_act = lie_group.BinaryOperatorFactory(_module, "left_act")

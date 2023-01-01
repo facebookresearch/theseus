@@ -572,7 +572,7 @@ class Log(lie_group.UnaryOperator):
         group: torch.Tensor = ctx.saved_tensors[1]
         if not hasattr(ctx, "jacobians"):
             ctx.jacobians: torch.Tensor = _jlog_impl(group)[0][0]
-            ctx.jacobians[:, 3:] *= 0.5
+            ctx.jacobians[:, :, 3:] *= 0.5
 
         temp = lift(
             (ctx.jacobians.transpose(1, 2) @ grad_output.unsqueeze(-1)).squeeze(-1)

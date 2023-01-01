@@ -31,6 +31,16 @@ def check_tangent_vector(tangent_vector: torch.Tensor) -> bool:
     return _check
 
 
+def check_hat_matrix(matrix: torch.Tensor):
+    if matrix.ndim != 3 or matrix.shape[1:] != (4, 4):
+        raise ValueError("Hat matrices of SE(3) can only be 3x4 matrices")
+
+    if matrix[:, -1].abs().max() > constants._SE3_NEAR_ZERO_EPS[matrix.dtype]:
+        raise ValueError("The last row for hat matrices of SE(3) must be zero")
+
+    so3.check_hat_matrix(matrix[:, :3, :3])
+
+
 # -----------------------------------------------------------------------------
 # Exponential Map
 # -----------------------------------------------------------------------------
@@ -427,6 +437,50 @@ _hat_autograd_fn = Hat.apply
 _jhat_autograd_fn = None
 
 hat = lie_group.UnaryOperatorFactory(_module, "hat")
+
+
+# -----------------------------------------------------------------------------
+# Vee
+# -----------------------------------------------------------------------------
+def _vee_impl(matrix: torch.Tensor) -> torch.Tensor:
+    check_hat_matrix(matrix)
+    ret = matrix.new_zeros(matrix.shape[0], 6)
+    ret[:, :3] = matrix[:, :3, 3]
+    ret[:, 3:] = 0.5 * torch.stack(
+        (
+            matrix[:, 2, 1] - matrix[:, 1, 2],
+            matrix[:, 0, 2] - matrix[:, 2, 0],
+            matrix[:, 1, 0] - matrix[:, 0, 1],
+        ),
+        dim=1,
+    )
+    return ret
+
+
+# NOTE: No jacobian is defined for the vee operator
+_jvee_impl = None
+
+
+class Vee(lie_group.UnaryOperator):
+    @classmethod
+    def forward(cls, ctx, tangent_vector):
+        tangent_vector: torch.Tensor = cast(torch.Tensor, tangent_vector)
+        ret = _vee_impl(tangent_vector)
+        return ret
+
+    @classmethod
+    def backward(cls, ctx, grad_output):
+        grad_output: torch.Tensor = cast(torch.Tensor, grad_output)
+        grad_input = grad_output.new_zeros(grad_output.shape[0], 4, 4)
+        grad_input[:, :3, 3] = grad_output[:, :3]
+        grad_input[:, :3, :3] = 0.5 * so3.hat(grad_output[:, 3:])
+        return grad_input
+
+
+_vee_autograd_fn = Vee.apply
+_jvee_autograd_fn = None
+
+vee = lie_group.UnaryOperatorFactory(_module, "vee")
 
 
 # -----------------------------------------------------------------------------

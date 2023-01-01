@@ -53,3 +53,19 @@ def test_hat(batch_size: int, dtype: torch.dtype):
 
     # check analytic backward for the operator
     check_lie_group_function(se3, "hat", TEST_EPS, (tangent_vector,))
+
+
+@pytest.mark.parametrize("batch_size", [1, 20, 100])
+@pytest.mark.parametrize("dtype", [torch.float32, torch.float64])
+def test_vee(batch_size: int, dtype: torch.dtype):
+    rng = torch.Generator()
+    rng.manual_seed(0)
+    tangent_vector = torch.rand(batch_size, 6, dtype=dtype, generator=rng)
+    matrix = se3.hat(tangent_vector)
+
+    # check analytic backward for the operator
+    check_lie_group_function(se3, "vee", TEST_EPS, (matrix,))
+
+    # check the correctness of hat and vee
+    actual_tangent_vector = se3.vee(matrix)
+    assert torch.allclose(actual_tangent_vector, tangent_vector, atol=TEST_EPS)

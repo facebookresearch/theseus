@@ -668,13 +668,15 @@ def _left_act_impl(group: torch.Tensor, matrix: torch.Tensor) -> torch.Tensor:
         raise ValueError("Invalid data tensor for SE3.")
     check_left_act_matrix(matrix)
     ret = so3._left_act_impl(group[:, :, :3], matrix)
-    shape = list(matrix.shape)
-    ndim = matrix.ndim
-    if ndim > 3:
-        ret += group[:, :, 3:].view([-1] + [1] * (ndim - 3) + [3, 1]).expand(shape)
-    else:
-        ret += group[:, :, 3:].expand(shape)
     return ret
+
+
+def _left_act_backward_helper(group, matrix, grad_output) -> torch.Tensor:
+    jac_rot = torch.einsum("n...ij,n...kj->n...ik", grad_output, matrix)
+    if matrix.ndim > 3:
+        dims = list(range(1, matrix.ndim - 2))
+        jac_rot = jac_rot.sum(dims)
+    return torch.cat((jac_rot, jac_rot.new_zeros(jac_rot.shape[0], 3, 1)), dim=-1)
 
 
 class LeftAct(lie_group.BinaryOperator):
@@ -689,12 +691,7 @@ class LeftAct(lie_group.BinaryOperator):
     @classmethod
     def backward(cls, ctx, grad_output):
         group, matrix = ctx.saved_tensors
-        jac_rot = torch.einsum("n...ij,n...kj->n...ik", grad_output, matrix)
-        jac_t = grad_output.sum(-1, keepdim=True)
-        jac_g = torch.cat((jac_rot, jac_t), dim=-1)
-        if matrix.ndim > 3:
-            dims = list(range(1, matrix.ndim - 2))
-            jac_g = jac_g.sum(dims)
+        jac_g = _left_act_backward_helper(group, matrix, grad_output)
         jac_mat = torch.einsum("nji, n...jk->n...ik", group[:, :, :3], grad_output)
         return jac_g, jac_mat
 

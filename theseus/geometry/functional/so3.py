@@ -755,12 +755,12 @@ def _lift_impl(matrix: torch.Tensor) -> torch.Tensor:
         raise ValueError("Inconsistent shape for the matrix to lift.")
 
     ret = matrix.new_zeros(matrix.shape[:-1] + (3, 3))
-    ret[..., 0, 1] = -matrix[..., 2]
-    ret[..., 0, 2] = matrix[..., 1]
-    ret[..., 1, 2] = -matrix[..., 0]
-    ret[..., 1, 0] = matrix[..., 2]
-    ret[..., 2, 0] = -matrix[..., 1]
-    ret[..., 2, 1] = matrix[..., 0]
+    ret[..., 0, 1] = -0.5 * matrix[..., 2]
+    ret[..., 0, 2] = 0.5 * matrix[..., 1]
+    ret[..., 1, 2] = -0.5 * matrix[..., 0]
+    ret[..., 1, 0] = 0.5 * matrix[..., 2]
+    ret[..., 2, 0] = -0.5 * matrix[..., 1]
+    ret[..., 2, 1] = 0.5 * matrix[..., 0]
 
     return ret
 

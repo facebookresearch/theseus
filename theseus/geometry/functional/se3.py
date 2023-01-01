@@ -306,7 +306,7 @@ def rand(
 # -----------------------------------------------------------------------------
 def _adjoint_impl(group: torch.Tensor) -> torch.Tensor:
     if not check_group_tensor(group):
-        raise ValueError("Invalid data tensor for SO3.")
+        raise ValueError("Invalid data tensor for SE3.")
     ret = group.new_zeros(group.shape[0], 6, 6)
     ret[:, :3, :3] = group[:, :3, :3]
     ret[:, 3:, 3:] = group[:, :3, :3]
@@ -344,6 +344,42 @@ _adjoint_autograd_fn = Adjoint.apply
 _jadjoint_autograd_fn = None
 
 adjoint = lie_group.UnaryOperatorFactory(_module, "adjoint")
+
+
+# -----------------------------------------------------------------------------
+# Inverse
+# -----------------------------------------------------------------------------
+def _inverse_impl(group: torch.Tensor) -> torch.Tensor:
+    if not check_group_tensor(group):
+        raise ValueError("Invalid data tensor for SE3.")
+    R = group[:, :, :3].transpose(1, 2)
+    return torch.cat((R, -R @ group[:, :, 3:]), dim=2)
+
+
+_jinverse_impl = lie_group.JInverseImplFactory(_module)
+
+
+class Inverse(lie_group.UnaryOperator):
+    @classmethod
+    def forward(cls, ctx, group):
+        group: torch.Tensor = cast(torch.Tensor, group)
+        ctx.save_for_backward(group)
+        return _inverse_impl(group)
+
+    @classmethod
+    def backward(cls, ctx, grad_output):
+        group: torch.Tensor = ctx.saved_tensors[0]
+        grad_input_rot = grad_output[:, :, :3].transpose(1, 2) - group[
+            :, :, 3:
+        ] @ grad_output[:, :, 3:].transpose(1, 2)
+        grad_input_t = -group[:, :, :3] @ grad_output[:, :, 3:]
+        return torch.cat((grad_input_rot, grad_input_t), dim=2)
+
+
+_inverse_autograd_fn = Inverse.apply
+_jinverse_autograd_fn = _jinverse_impl
+
+inverse, jinverse = lie_group.UnaryOperatorFactory(_module, "inverse")
 
 
 # -----------------------------------------------------------------------------

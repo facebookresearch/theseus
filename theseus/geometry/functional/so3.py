@@ -354,7 +354,7 @@ def _jlog_impl(group: torch.Tensor) -> Tuple[List[torch.Tensor], torch.Tensor]:
         1 + sine**2 / 6,
         theta / sine_nz,
     )
-    ret = sine_axis * scale.view(-1, 1)
+    tangent_vector = sine_axis * scale.view(-1, 1)
 
     # # theta ~ pi
     ddiag = torch.diagonal(group, dim1=1, dim2=2)
@@ -373,7 +373,7 @@ def _jlog_impl(group: torch.Tensor) -> Tuple[List[torch.Tensor], torch.Tensor]:
     sign_tmp = sine_axis[aux, major].sign()
     sign = torch.where(sign_tmp != 0, sign_tmp, torch.ones_like(sign_tmp))
     tangent_vector = torch.where(
-        near_pi.view(-1, 1), axis * (theta * sign).view(-1, 1), ret
+        near_pi.view(-1, 1), axis * (theta * sign).view(-1, 1), tangent_vector
     )
 
     theta2 = theta**2
@@ -389,9 +389,11 @@ def _jlog_impl(group: torch.Tensor) -> Tuple[List[torch.Tensor], torch.Tensor]:
         (sine_theta + two_cosine_minus_two) / (theta2_nz * two_cosine_minus_two_nz),
     )
 
-    jac = (b.view(-1, 1) * ret).view(-1, 3, 1) * ret.view(-1, 1, 3)
+    jac = (b.view(-1, 1) * tangent_vector).view(-1, 3, 1) * tangent_vector.view(
+        -1, 1, 3
+    )
 
-    half_ret = 0.5 * ret
+    half_ret = 0.5 * tangent_vector
     jac[:, 0, 1] -= half_ret[:, 2]
     jac[:, 1, 0] += half_ret[:, 2]
     jac[:, 0, 2] += half_ret[:, 1]
@@ -417,7 +419,7 @@ class Log(lie_group.UnaryOperator):
     def backward(cls, ctx, grad_output):
         group: torch.Tensor = ctx.saved_tensors[1]
         if not hasattr(ctx, "jacobians"):
-            ctx.jacobians: torch.Tensor = _jlog_impl(group)[0][0]
+            ctx.jacobians: torch.Tensor = 0.5 * _jlog_impl(group)[0][0]
 
         temp = lift(
             (ctx.jacobians.transpose(1, 2) @ grad_output.unsqueeze(-1)).squeeze(-1)
@@ -431,11 +433,10 @@ _jlog_autograd_fn = _jlog_impl
 
 log, jlog = lie_group.UnaryOperatorFactory(_module, "log")
 
+
 # -----------------------------------------------------------------------------
 # Adjoint Transformation
 # -----------------------------------------------------------------------------
-
-
 def _adjoint_impl(group: torch.Tensor) -> torch.Tensor:
     if not check_group_tensor(group):
         raise ValueError("Invalid data tensor for SO3.")
@@ -755,12 +756,12 @@ def _lift_impl(matrix: torch.Tensor) -> torch.Tensor:
         raise ValueError("Inconsistent shape for the matrix to lift.")
 
     ret = matrix.new_zeros(matrix.shape[:-1] + (3, 3))
-    ret[..., 0, 1] = -0.5 * matrix[..., 2]
-    ret[..., 0, 2] = 0.5 * matrix[..., 1]
-    ret[..., 1, 2] = -0.5 * matrix[..., 0]
-    ret[..., 1, 0] = 0.5 * matrix[..., 2]
-    ret[..., 2, 0] = -0.5 * matrix[..., 1]
-    ret[..., 2, 1] = 0.5 * matrix[..., 0]
+    ret[..., 0, 1] = -matrix[..., 2]
+    ret[..., 0, 2] = matrix[..., 1]
+    ret[..., 1, 2] = -matrix[..., 0]
+    ret[..., 1, 0] = matrix[..., 2]
+    ret[..., 2, 0] = -matrix[..., 1]
+    ret[..., 2, 1] = matrix[..., 0]
 
     return ret
 
@@ -778,7 +779,6 @@ class Lift(lie_group.UnaryOperator):
 
     @classmethod
     def backward(cls, ctx, grad_output):
-        grad_output: torch.Tensor = cast(torch.Tensor, grad_output)
         grad_output: torch.Tensor = cast(torch.Tensor, grad_output)
         return project(grad_output)
 

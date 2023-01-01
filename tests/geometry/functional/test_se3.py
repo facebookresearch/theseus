@@ -81,3 +81,36 @@ def test_compose(batch_size: int, dtype: torch.dtype):
 
     # check analytic backward for the operator
     check_lie_group_function(se3, "compose", TEST_EPS, (group0, group1))
+
+
+@pytest.mark.parametrize("batch_size", [1, 20, 100])
+@pytest.mark.parametrize("dtype", [torch.float32, torch.float64])
+def test_lift(batch_size: int, dtype: torch.dtype):
+    rng = torch.Generator()
+    matrix = torch.rand(
+        batch_size,
+        int(torch.randint(1, 20, (1,), generator=rng)),
+        6,
+        dtype=dtype,
+        generator=rng,
+    )
+
+    # check analytic backward for the operator
+    check_lie_group_function(se3, "lift", TEST_EPS, (matrix,))
+
+
+@pytest.mark.parametrize("batch_size", [1, 20, 100])
+@pytest.mark.parametrize("dtype", [torch.float32, torch.float64])
+def test_project(batch_size: int, dtype: torch.dtype):
+    rng = torch.Generator()
+    matrix = torch.rand(
+        batch_size,
+        int(torch.randint(1, 20, (1,), generator=rng)),
+        3,
+        4,
+        dtype=dtype,
+        generator=rng,
+    )
+
+    # check analytic backward for the operator
+    check_lie_group_function(se3, "project", TEST_EPS, (matrix,))

@@ -727,17 +727,11 @@ class LeftProject(lie_group.BinaryOperator):
     def backward(cls, ctx, grad_output):
         group, matrix = ctx.saved_tensors
         grad_output_lifted = lift(grad_output)
-        jac_rot_inv = torch.einsum("n...ij,n...kj->n...ik", grad_output_lifted, matrix)
-        jac_t_inv = grad_output_lifted.sum(-1, keepdim=True)
-        jac_g_inv = torch.cat((jac_rot_inv, jac_t_inv), dim=-1)
+        jac_rot = torch.einsum("n...ij,n...kj->n...ik", matrix, grad_output_lifted)
         if matrix.ndim > 3:
             dims = list(range(1, matrix.ndim - 2))
-            jac_g_inv = jac_g_inv.sum(dims)
-        jac_rot = jac_g_inv[:, :, :3].transpose(1, 2) - group[:, :, 3:] @ jac_g_inv[
-            :, :, 3:
-        ].transpose(1, 2)
-        jac_t = -group[:, :, :3] @ jac_g_inv[:, :, 3:]
-        jac_g = torch.cat((jac_rot, jac_t), dim=-1)
+            jac_rot = jac_rot.sum(dims)
+        jac_g = torch.cat((jac_rot, jac_rot.new_zeros(jac_rot.shape[0], 3, 1)), dim=-1)
         jac_mat = torch.einsum(
             "nij, n...jk->n...ik", group[:, :, :3], grad_output_lifted
         )

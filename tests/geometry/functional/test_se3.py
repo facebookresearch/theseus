@@ -42,3 +42,14 @@ def test_inverse(batch_size: int, dtype: torch.dtype):
 
     # check analytic backward for the operator
     check_lie_group_function(se3, "inverse", TEST_EPS, (group,))
+
+
+@pytest.mark.parametrize("batch_size", [1, 20, 100])
+@pytest.mark.parametrize("dtype", [torch.float32, torch.float64])
+def test_hat(batch_size: int, dtype: torch.dtype):
+    rng = torch.Generator()
+    rng.manual_seed(0)
+    tangent_vector = torch.rand(batch_size, 6, dtype=dtype, generator=rng)
+
+    # check analytic backward for the operator
+    check_lie_group_function(se3, "hat", TEST_EPS, (tangent_vector,))

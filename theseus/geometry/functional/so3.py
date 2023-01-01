@@ -71,7 +71,7 @@ def check_left_act_matrix(matrix: torch.Tensor):
 
 
 def check_left_project_matrix(matrix: torch.Tensor):
-    if matrix.ndim != 3 or matrix.shape[-2:] != (3, 3):
+    if matrix.shape[-2:] != (3, 3):
         raise ValueError("Inconsistent shape for the matrix.")
 
 
@@ -729,10 +729,12 @@ class LeftProject(lie_group.BinaryOperator):
     def backward(cls, ctx, grad_output):
         group, matrix = ctx.saved_tensors
         grad_output_lifted = lift(grad_output)
-        return (
-            -matrix @ grad_output_lifted,
-            group @ grad_output_lifted,
-        )
+        jac_g = -torch.einsum("n...ij,n...jk->n...ik", matrix, grad_output_lifted)
+        if matrix.ndim > 3:
+            dims = list(range(1, matrix.ndim - 2))
+            jac_g = jac_g.sum(dims)
+        jac_mat = torch.einsum("nij, n...jk->n...ik", group, grad_output_lifted)
+        return jac_g, jac_mat
 
 
 _left_project_autograd_fn = LeftProject.apply

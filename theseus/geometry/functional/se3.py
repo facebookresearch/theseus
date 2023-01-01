@@ -671,7 +671,7 @@ def _left_act_impl(group: torch.Tensor, matrix: torch.Tensor) -> torch.Tensor:
     shape = list(matrix.shape)
     ndim = matrix.ndim
     if ndim > 3:
-        ret += group[:, :, 3:].view(shape[:1] + [1] * (ndim - 3) + [3, 1]).expand(shape)
+        ret += group[:, :, 3:].view([-1] + [1] * (ndim - 3) + [3, 1]).expand(shape)
     else:
         ret += group[:, :, 3:].expand(shape)
     return ret

@@ -12,7 +12,7 @@ from .utils import get_module
 
 
 NAME: str = "SE3"
-DIM: int = 3
+DIM: int = 6
 
 
 _module = get_module(__name__)

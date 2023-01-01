@@ -54,6 +54,11 @@ def check_left_act_matrix(matrix: torch.Tensor):
         raise ValueError("Inconsistent shape for the matrix.")
 
 
+def check_left_project_matrix(matrix: torch.Tensor):
+    if matrix.shape[-2:] != (3, 4):
+        raise ValueError("Inconsistent shape for the matrix.")
+
+
 # -----------------------------------------------------------------------------
 # Rand
 # -----------------------------------------------------------------------------
@@ -700,3 +705,46 @@ _left_act_autograd_fn = LeftAct.apply
 _jleft_act_autograd_fn = None
 
 left_act = lie_group.BinaryOperatorFactory(_module, "left_act")
+
+
+# -----------------------------------------------------------------------------
+# Left Project
+# -----------------------------------------------------------------------------
+_left_project_impl = lie_group.LeftProjectImplFactory(_module)
+_jleft_project_impl = None
+
+
+class LeftProject(lie_group.BinaryOperator):
+    @classmethod
+    def forward(cls, ctx, group, matrix):
+        group: torch.Tensor = cast(torch.Tensor, group)
+        matrix: torch.Tensor = cast(torch.Tensor, matrix)
+        ret = _left_project_impl(group, matrix)
+        ctx.save_for_backward(group, matrix)
+        return ret
+
+    @classmethod
+    def backward(cls, ctx, grad_output):
+        group, matrix = ctx.saved_tensors
+        grad_output_lifted = lift(grad_output)
+        jac_rot_inv = torch.einsum("n...ij,n...kj->n...ik", grad_output_lifted, matrix)
+        jac_t_inv = grad_output_lifted.sum(-1, keepdim=True)
+        jac_g_inv = torch.cat((jac_rot_inv, jac_t_inv), dim=-1)
+        if matrix.ndim > 3:
+            dims = list(range(1, matrix.ndim - 2))
+            jac_g_inv = jac_g_inv.sum(dims)
+        jac_rot = jac_g_inv[:, :, :3].transpose(1, 2) - group[:, :, 3:] @ jac_g_inv[
+            :, :, 3:
+        ].transpose(1, 2)
+        jac_t = -group[:, :, :3] @ jac_g_inv[:, :, 3:]
+        jac_g = torch.cat((jac_rot, jac_t), dim=-1)
+        jac_mat = torch.einsum(
+            "nij, n...jk->n...ik", group[:, :, :3], grad_output_lifted
+        )
+        return jac_g, jac_mat
+
+
+_left_project_autograd_fn = LeftProject.apply
+_jleft_project_autograd_fn = _jleft_project_impl
+
+left_project = lie_group.BinaryOperatorFactory(_module, "left_project")

@@ -484,6 +484,60 @@ vee = lie_group.UnaryOperatorFactory(_module, "vee")
 
 
 # -----------------------------------------------------------------------------
+# Compose
+# -----------------------------------------------------------------------------
+def _compose_impl(group0: torch.Tensor, group1: torch.Tensor) -> torch.Tensor:
+    if not check_group_tensor(group0) or not check_group_tensor(group1):
+        raise ValueError("Invalid data tensor for SE3.")
+    ret_rot = group0[:, :, :3] @ group1[:, :, :3]
+    ret_t = group0[:, :, :3] @ group1[:, :, 3:] + group0[:, :, 3:]
+    return torch.cat((ret_rot, ret_t), dim=2)
+
+
+def _jcompose_impl(
+    group0: torch.Tensor, group1: torch.Tensor
+) -> Tuple[List[torch.Tensor], torch.Tensor]:
+    if not check_group_tensor(group0) or not check_group_tensor(group1):
+        raise ValueError("Invalid data tensor for SE3.")
+    jacobians = []
+    jacobians.append(adjoint(inverse(group1)))
+    jacobians.append(group0.new_zeros(group0.shape[0], 6, 6))
+    jacobians[1][:, 0, 0] = 1
+    jacobians[1][:, 1, 1] = 1
+    jacobians[1][:, 2, 2] = 1
+    jacobians[1][:, 3, 3] = 1
+    jacobians[1][:, 4, 4] = 1
+    jacobians[1][:, 5, 5] = 1
+    return jacobians, _compose_impl(group0, group1)
+
+
+class Compose(lie_group.BinaryOperator):
+    @classmethod
+    def forward(cls, ctx, group0, group1):
+        group0: torch.Tensor = cast(torch.Tensor, group0)
+        group1: torch.Tensor = cast(torch.Tensor, group1)
+        ret = _compose_impl(group0, group1)
+        ctx.save_for_backward(group0, group1)
+        return ret
+
+    @classmethod
+    def backward(cls, ctx, grad_output):
+        group0: torch.Tensor = ctx.saved_tensors[0]
+        group1: torch.Tensor = ctx.saved_tensors[1]
+        grad_input0 = group0.new_zeros(grad_output.shape[0], 3, 4)
+        grad_input0[:, :, :3] = grad_output @ group1.transpose(1, 2)
+        grad_input0[:, :, 3] = grad_output[:, :, 3]
+        grad_input1 = group0[:, :, :3].transpose(1, 2) @ grad_output
+        return grad_input0, grad_input1
+
+
+_compose_autograd_fn = Compose.apply
+_jcompose_autograd_fn = _jcompose_impl
+
+compose, jcompose = lie_group.BinaryOperatorFactory(_module, "compose")
+
+
+# -----------------------------------------------------------------------------
 # Rand
 # -----------------------------------------------------------------------------
 def randn(

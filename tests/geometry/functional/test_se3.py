@@ -69,3 +69,15 @@ def test_vee(batch_size: int, dtype: torch.dtype):
     # check the correctness of hat and vee
     actual_tangent_vector = se3.vee(matrix)
     assert torch.allclose(actual_tangent_vector, tangent_vector, atol=TEST_EPS)
+
+
+@pytest.mark.parametrize("batch_size", [1, 20, 100])
+@pytest.mark.parametrize("dtype", [torch.float32, torch.float64])
+def test_compose(batch_size: int, dtype: torch.dtype):
+    rng = torch.Generator()
+    rng.manual_seed(0)
+    group0 = se3.rand(batch_size, generator=rng, dtype=dtype)
+    group1 = se3.rand(batch_size, generator=rng, dtype=dtype)
+
+    # check analytic backward for the operator
+    check_lie_group_function(se3, "compose", TEST_EPS, (group0, group1))

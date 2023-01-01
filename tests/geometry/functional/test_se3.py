@@ -5,6 +5,7 @@
 
 import pytest
 from .common import check_lie_group_function
+from theseus.geometry.functional.constants import TEST_EPS
 import theseus.geometry.functional.se3 as se3
 
 import torch
@@ -19,3 +20,14 @@ def test_exp(batch_size: int, dtype: torch.dtype):
 
     # check analytic backward for the operator
     check_lie_group_function(se3, "exp", 1e-6, (tangent_vector,))
+
+
+@pytest.mark.parametrize("batch_size", [1, 20, 100])
+@pytest.mark.parametrize("dtype", [torch.float32, torch.float64])
+def test_adjoint(batch_size: int, dtype: torch.dtype):
+    rng = torch.Generator()
+    rng.manual_seed(0)
+    group = se3.rand(batch_size, generator=rng, dtype=dtype)
+
+    # check analytic backward for the operator
+    check_lie_group_function(se3, "adjoint", TEST_EPS, (group,))

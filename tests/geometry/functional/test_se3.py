@@ -31,3 +31,14 @@ def test_adjoint(batch_size: int, dtype: torch.dtype):
 
     # check analytic backward for the operator
     check_lie_group_function(se3, "adjoint", TEST_EPS, (group,))
+
+
+@pytest.mark.parametrize("batch_size", [1, 20, 100])
+@pytest.mark.parametrize("dtype", [torch.float32, torch.float64])
+def test_inverse(batch_size: int, dtype: torch.dtype):
+    rng = torch.Generator()
+    rng.manual_seed(0)
+    group = se3.rand(batch_size, generator=rng, dtype=dtype)
+
+    # check analytic backward for the operator
+    check_lie_group_function(se3, "inverse", TEST_EPS, (group,))

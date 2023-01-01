@@ -4,7 +4,7 @@
 # LICENSE file in the root directory of this source tree.
 
 import pytest
-from .common import check_lie_group_function
+from .common import check_lie_group_function, left_project_func
 from theseus.geometry.functional.constants import TEST_EPS
 import theseus.geometry.functional.se3 as se3
 
@@ -20,6 +20,19 @@ def test_exp(batch_size: int, dtype: torch.dtype):
 
     # check analytic backward for the operator
     check_lie_group_function(se3, "exp", 1e-6, (tangent_vector,))
+
+
+@pytest.mark.parametrize("batch_size", [1, 20, 100])
+@pytest.mark.parametrize("dtype", [torch.float32, torch.float64])
+def test_log(batch_size: int, dtype: torch.dtype):
+    rng = torch.Generator()
+    rng.manual_seed(0)
+    group = se3.rand(batch_size, generator=rng, dtype=dtype)
+    left_project = left_project_func(se3, group)
+
+    # check analytic backward for the operator
+    EPS = 5e-6 if dtype == torch.float32 else TEST_EPS
+    check_lie_group_function(se3, "log", EPS, (group,), (left_project,))
 
 
 @pytest.mark.parametrize("batch_size", [1, 20, 100])

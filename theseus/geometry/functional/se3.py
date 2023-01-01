@@ -580,11 +580,11 @@ compose, jcompose = lie_group.BinaryOperatorFactory(_module, "compose")
 # Lift
 # -----------------------------------------------------------------------------
 def _lift_impl(matrix: torch.Tensor) -> torch.Tensor:
-    if check_lift_matrix(matrix):
+    if not check_lift_matrix(matrix):
         raise ValueError("Inconsistent shape for the matrix to lift.")
     ret = matrix.new_zeros(matrix.shape[:-1] + (3, 4))
-    ret[..., :, :3] = so3._lift_impl(matrix[..., :3])
-    ret[..., :, 3] = matrix[..., 3]
+    ret[..., :, :3] = so3._lift_impl(matrix[..., 3:])
+    ret[..., :, 3] = matrix[..., :3]
 
     return ret
 
@@ -616,7 +616,7 @@ lift = lie_group.UnaryOperatorFactory(_module, "lift")
 # Project
 # -----------------------------------------------------------------------------
 def _project_impl(matrix: torch.Tensor) -> torch.Tensor:
-    if check_project_matrix(matrix):
+    if not check_project_matrix(matrix):
         raise ValueError("Inconsistent shape for the matrix to project.")
 
     return torch.stack(

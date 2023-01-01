@@ -42,6 +42,68 @@ def check_hat_matrix(matrix: torch.Tensor):
 
 
 # -----------------------------------------------------------------------------
+# Rand
+# -----------------------------------------------------------------------------
+def rand(
+    *size: int,
+    generator: Optional[torch.Generator] = None,
+    dtype: Optional[torch.dtype] = None,
+    device: constants.DeviceType = None,
+    requires_grad: bool = False,
+) -> torch.Tensor:
+    if len(size) != 1:
+        raise ValueError("The size should be 1D.")
+    rotation = so3.rand(
+        size[0],
+        generator=generator,
+        dtype=dtype,
+        device=device,
+        requires_grad=requires_grad,
+    )
+    translation = torch.rand(
+        size[0],
+        3,
+        1,
+        generator=generator,
+        dtype=dtype,
+        device=device,
+        requires_grad=requires_grad,
+    )
+    return torch.cat((rotation, translation), dim=2)
+
+
+# -----------------------------------------------------------------------------
+# Randn
+# -----------------------------------------------------------------------------
+def randn(
+    *size: int,
+    generator: Optional[torch.Generator] = None,
+    dtype: Optional[torch.dtype] = None,
+    device: constants.DeviceType = None,
+    requires_grad: bool = False,
+) -> torch.Tensor:
+    if len(size) != 1:
+        raise ValueError("The size should be 1D.")
+    rotation = so3.randn(
+        size[0],
+        generator=generator,
+        dtype=dtype,
+        device=device,
+        requires_grad=requires_grad,
+    )
+    translation = torch.randn(
+        size[0],
+        3,
+        1,
+        generator=generator,
+        dtype=dtype,
+        device=device,
+        requires_grad=requires_grad,
+    )
+    return torch.cat((rotation, translation), dim=2)
+
+
+# -----------------------------------------------------------------------------
 # Exponential Map
 # -----------------------------------------------------------------------------
 def _exp_impl(tangent_vector: torch.Tensor) -> torch.Tensor:
@@ -281,37 +343,6 @@ exp, jexp = lie_group.UnaryOperatorFactory(_module, "exp")
 
 
 # -----------------------------------------------------------------------------
-# Rand
-# -----------------------------------------------------------------------------
-def rand(
-    *size: int,
-    generator: Optional[torch.Generator] = None,
-    dtype: Optional[torch.dtype] = None,
-    device: constants.DeviceType = None,
-    requires_grad: bool = False,
-) -> torch.Tensor:
-    if len(size) != 1:
-        raise ValueError("The size should be 1D.")
-    rotation = so3.rand(
-        size[0],
-        generator=generator,
-        dtype=dtype,
-        device=device,
-        requires_grad=requires_grad,
-    )
-    translation = torch.rand(
-        size[0],
-        3,
-        1,
-        generator=generator,
-        dtype=dtype,
-        device=device,
-        requires_grad=requires_grad,
-    )
-    return torch.cat((rotation, translation), dim=2)
-
-
-# -----------------------------------------------------------------------------
 # Adjoint Transformation
 # -----------------------------------------------------------------------------
 def _adjoint_impl(group: torch.Tensor) -> torch.Tensor:
@@ -535,34 +566,3 @@ _compose_autograd_fn = Compose.apply
 _jcompose_autograd_fn = _jcompose_impl
 
 compose, jcompose = lie_group.BinaryOperatorFactory(_module, "compose")
-
-
-# -----------------------------------------------------------------------------
-# Rand
-# -----------------------------------------------------------------------------
-def randn(
-    *size: int,
-    generator: Optional[torch.Generator] = None,
-    dtype: Optional[torch.dtype] = None,
-    device: constants.DeviceType = None,
-    requires_grad: bool = False,
-) -> torch.Tensor:
-    if len(size) != 1:
-        raise ValueError("The size should be 1D.")
-    rotation = so3.randn(
-        size[0],
-        generator=generator,
-        dtype=dtype,
-        device=device,
-        requires_grad=requires_grad,
-    )
-    translation = torch.randn(
-        size[0],
-        3,
-        1,
-        generator=generator,
-        dtype=dtype,
-        device=device,
-        requires_grad=requires_grad,
-    )
-    return torch.cat((rotation, translation), dim=2)

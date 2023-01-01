@@ -383,6 +383,53 @@ inverse, jinverse = lie_group.UnaryOperatorFactory(_module, "inverse")
 
 
 # -----------------------------------------------------------------------------
+# Hat
+# -----------------------------------------------------------------------------
+def _hat_impl(tangent_vector: torch.Tensor) -> torch.Tensor:
+    if not check_tangent_vector(tangent_vector):
+        raise ValueError("Tangent vectors of SE3 should be 6-D vectors.")
+
+    matrix = tangent_vector.new_zeros(tangent_vector.shape[0], 4, 4)
+    matrix[:, :3, :3] = so3.hat(tangent_vector[:, 3:])
+    matrix[:, :3, 3] = tangent_vector[:, :3]
+
+    return matrix
+
+
+# NOTE: No jacobian is defined for the hat operator
+_jhat_impl = None
+
+
+class Hat(lie_group.UnaryOperator):
+    @classmethod
+    def forward(cls, ctx, tangent_vector):
+        tangent_vector: torch.Tensor = cast(torch.Tensor, tangent_vector)
+        ret = _hat_impl(tangent_vector)
+        return ret
+
+    @classmethod
+    def backward(cls, ctx, grad_output):
+        grad_output: torch.Tensor = cast(torch.Tensor, grad_output)
+        return torch.stack(
+            (
+                grad_output[:, 0, 3],
+                grad_output[:, 1, 3],
+                grad_output[:, 2, 3],
+                grad_output[:, 2, 1] - grad_output[:, 1, 2],
+                grad_output[:, 0, 2] - grad_output[:, 2, 0],
+                grad_output[:, 1, 0] - grad_output[:, 0, 1],
+            ),
+            dim=1,
+        )
+
+
+_hat_autograd_fn = Hat.apply
+_jhat_autograd_fn = None
+
+hat = lie_group.UnaryOperatorFactory(_module, "hat")
+
+
+# -----------------------------------------------------------------------------
 # Rand
 # -----------------------------------------------------------------------------
 def randn(

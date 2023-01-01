@@ -4,7 +4,7 @@
 # LICENSE file in the root directory of this source tree.
 
 import torch
-from typing import cast, List, Tuple
+from typing import cast, List, Tuple, Optional
 
 from . import constants
 from . import lie_group, so3
@@ -261,3 +261,65 @@ _exp_autograd_fn = Exp.apply
 _jexp_autograd_fn = _jexp_impl
 
 exp, jexp = lie_group.UnaryOperatorFactory(_module, "exp")
+
+
+# -----------------------------------------------------------------------------
+# Rand
+# -----------------------------------------------------------------------------
+def rand(
+    *size: int,
+    generator: Optional[torch.Generator] = None,
+    dtype: Optional[torch.dtype] = None,
+    device: constants.DeviceType = None,
+    requires_grad: bool = False,
+) -> torch.Tensor:
+    if len(size) != 1:
+        raise ValueError("The size should be 1D.")
+    rotation = so3.rand(
+        size[0],
+        generator=generator,
+        dtype=dtype,
+        device=device,
+        requires_grad=requires_grad,
+    )
+    translation = torch.rand(
+        size[0],
+        3,
+        1,
+        generator=generator,
+        dtype=dtype,
+        device=device,
+        requires_grad=requires_grad,
+    )
+    return torch.cat((rotation, translation), dim=2)
+
+
+# -----------------------------------------------------------------------------
+# Rand
+# -----------------------------------------------------------------------------
+def randn(
+    *size: int,
+    generator: Optional[torch.Generator] = None,
+    dtype: Optional[torch.dtype] = None,
+    device: constants.DeviceType = None,
+    requires_grad: bool = False,
+) -> torch.Tensor:
+    if len(size) != 1:
+        raise ValueError("The size should be 1D.")
+    rotation = so3.randn(
+        size[0],
+        generator=generator,
+        dtype=dtype,
+        device=device,
+        requires_grad=requires_grad,
+    )
+    translation = torch.randn(
+        size[0],
+        3,
+        1,
+        generator=generator,
+        dtype=dtype,
+        device=device,
+        requires_grad=requires_grad,
+    )
+    return torch.cat((rotation, translation), dim=2)

@@ -78,8 +78,6 @@ def check_left_project_matrix(matrix: torch.Tensor):
 # -----------------------------------------------------------------------------
 # Rand
 # -----------------------------------------------------------------------------
-
-
 def rand(
     *size: int,
     generator: Optional[torch.Generator] = None,

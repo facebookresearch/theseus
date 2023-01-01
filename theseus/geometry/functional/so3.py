@@ -678,27 +678,6 @@ def _left_act_impl(group: torch.Tensor, matrix: torch.Tensor) -> torch.Tensor:
     return torch.einsum("nij,n...jk->n...ik", group, matrix)
 
 
-def _jleft_act_impl(
-    group: torch.Tensor, matrix: torch.Tensor
-) -> Tuple[List[torch.Tensor], torch.Tensor]:
-    if not check_group_tensor(group):
-        raise ValueError("Invalid data tensor for SO3.")
-    if matrix.ndim != 3:
-        raise ValueError("The dimension of matrix must be 3.")
-    check_left_act_matrix(matrix)
-    jacobians = []
-    jacobians.append(
-        -torch.einsum("nij,n...jk->n...ik", group, lift(matrix.transpose(1, 2)))
-    )
-    jacobians.append(group.new_zeros(matrix.shape + matrix.shape[1:]))
-    cols = torch.arange(matrix.shape[-1])
-    jacobians[1][:, :, cols, :, cols] = group.view((1,) + group.shape).expand(
-        matrix.shape[-1:] + group.shape
-    )
-
-    return jacobians, torch.einsum("nij,n...jk->n...ik", group, matrix)
-
-
 class LeftAct(lie_group.BinaryOperator):
     @classmethod
     def forward(cls, ctx, group, matrix):

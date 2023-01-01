@@ -41,6 +41,14 @@ def check_hat_matrix(matrix: torch.Tensor):
     so3.check_hat_matrix(matrix[:, :3, :3])
 
 
+def check_lift_matrix(matrix: torch.Tensor):
+    return matrix.shape[-1] == 6
+
+
+def check_project_matrix(matrix: torch.Tensor):
+    return matrix.shape[-2:] == (3, 4)
+
+
 # -----------------------------------------------------------------------------
 # Rand
 # -----------------------------------------------------------------------------
@@ -351,7 +359,7 @@ def _adjoint_impl(group: torch.Tensor) -> torch.Tensor:
     ret = group.new_zeros(group.shape[0], 6, 6)
     ret[:, :3, :3] = group[:, :3, :3]
     ret[:, 3:, 3:] = group[:, :3, :3]
-    ret[:, :3, 3:] = so3.hat(group[:, :3, 3]) @ group[:, :3, :3]
+    ret[:, :3, 3:] = so3._hat_impl(group[:, :3, 3]) @ group[:, :3, :3]
     return ret
 
 
@@ -372,9 +380,9 @@ class Adjoint(lie_group.UnaryOperator):
         grad_input_rot = (
             grad_output[:, :3, :3]
             + grad_output[:, 3:, 3:]
-            - so3.hat(group[:, :, 3]) @ grad_output[:, :3, 3:]
+            - so3._hat_impl(group[:, :, 3]) @ grad_output[:, :3, 3:]
         )
-        grad_input_t = so3.project(
+        grad_input_t = so3._project_impl(
             grad_output[:, :3, 3:] @ group[:, :, :3].transpose(1, 2)
         ).view(-1, 3, 1)
 
@@ -431,7 +439,7 @@ def _hat_impl(tangent_vector: torch.Tensor) -> torch.Tensor:
         raise ValueError("Tangent vectors of SE3 should be 6-D vectors.")
 
     matrix = tangent_vector.new_zeros(tangent_vector.shape[0], 4, 4)
-    matrix[:, :3, :3] = so3.hat(tangent_vector[:, 3:])
+    matrix[:, :3, :3] = so3._hat_impl(tangent_vector[:, 3:])
     matrix[:, :3, 3] = tangent_vector[:, :3]
 
     return matrix
@@ -504,7 +512,7 @@ class Vee(lie_group.UnaryOperator):
         grad_output: torch.Tensor = cast(torch.Tensor, grad_output)
         grad_input = grad_output.new_zeros(grad_output.shape[0], 4, 4)
         grad_input[:, :3, 3] = grad_output[:, :3]
-        grad_input[:, :3, :3] = 0.5 * so3.hat(grad_output[:, 3:])
+        grad_input[:, :3, :3] = 0.5 * so3._hat_impl(grad_output[:, 3:])
         return grad_input
 
 
@@ -566,3 +574,82 @@ _compose_autograd_fn = Compose.apply
 _jcompose_autograd_fn = _jcompose_impl
 
 compose, jcompose = lie_group.BinaryOperatorFactory(_module, "compose")
+
+
+# -----------------------------------------------------------------------------
+# Lift
+# -----------------------------------------------------------------------------
+def _lift_impl(matrix: torch.Tensor) -> torch.Tensor:
+    if check_lift_matrix(matrix):
+        raise ValueError("Inconsistent shape for the matrix to lift.")
+    ret = matrix.new_zeros(matrix.shape[:-1] + (3, 4))
+    ret[..., :, :3] = so3._lift_impl(matrix[..., :3])
+    ret[..., :, 3] = matrix[..., 3]
+
+    return ret
+
+
+# NOTE: No jacobian is defined for the project operator
+_jlift_impl = None
+
+
+class Lift(lie_group.UnaryOperator):
+    @classmethod
+    def forward(cls, ctx, matrix):
+        matrix: torch.Tensor = cast(torch.Tensor, matrix)
+        ret = _lift_impl(matrix)
+        return ret
+
+    @classmethod
+    def backward(cls, ctx, grad_output):
+        grad_output: torch.Tensor = cast(torch.Tensor, grad_output)
+        return project(grad_output)
+
+
+_lift_autograd_fn = Lift.apply
+_jlift_autograd_fn = None
+
+lift = lie_group.UnaryOperatorFactory(_module, "lift")
+
+
+# -----------------------------------------------------------------------------
+# Project
+# -----------------------------------------------------------------------------
+def _project_impl(matrix: torch.Tensor) -> torch.Tensor:
+    if check_project_matrix(matrix):
+        raise ValueError("Inconsistent shape for the matrix to project.")
+
+    return torch.stack(
+        (
+            matrix[..., 0, 3],
+            matrix[..., 1, 3],
+            matrix[..., 2, 3],
+            matrix[..., 2, 1] - matrix[..., 1, 2],
+            matrix[..., 0, 2] - matrix[..., 2, 0],
+            matrix[..., 1, 0] - matrix[..., 0, 1],
+        ),
+        dim=-1,
+    )
+
+
+# NOTE: No jacobian is defined for the project operator
+_jproject_impl = None
+
+
+class Project(lie_group.UnaryOperator):
+    @classmethod
+    def forward(cls, ctx, matrix):
+        matrix: torch.Tensor = cast(torch.Tensor, matrix)
+        ret = _project_impl(matrix)
+        return ret
+
+    @classmethod
+    def backward(cls, ctx, grad_output):
+        grad_output: torch.Tensor = cast(torch.Tensor, grad_output)
+        return lift(grad_output)
+
+
+_project_autograd_fn = Project.apply
+_jproject_autograd_fn = None
+
+project = lie_group.UnaryOperatorFactory(_module, "project")

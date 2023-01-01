@@ -91,7 +91,7 @@ def test_compose(batch_size: int, dtype: torch.dtype):
     group1 = so3.rand(batch_size, generator=rng, dtype=dtype)
 
     # check analytic backward for the operator
-    check_lie_group_function(so3, "compose", TEST_EPS, group0, group1)
+    check_lie_group_function(so3, "compose", TEST_EPS, (group0, group1))
 
 
 @pytest.mark.parametrize("batch_size", [1, 20, 100])
@@ -153,7 +153,7 @@ def test_left_act(batch_size: int, dtype: torch.dtype):
     )
 
     # check analytic backward for the operator
-    check_lie_group_function(so3, "left_act", TEST_EPS, group, matrix)
+    check_lie_group_function(so3, "left_act", TEST_EPS, (group, matrix))
 
     matrix = torch.rand(
         batch_size,
@@ -166,7 +166,7 @@ def test_left_act(batch_size: int, dtype: torch.dtype):
     )
 
     # check analytic backward for the operator
-    check_lie_group_function(so3, "left_act", TEST_EPS, group, matrix)
+    check_lie_group_function(so3, "left_act", TEST_EPS, (group, matrix))
 
 
 @pytest.mark.parametrize("batch_size", [1, 20, 100])
@@ -183,7 +183,7 @@ def test_left_project(batch_size: int, dtype: torch.dtype):
     )
 
     # check analytic backward for the operator
-    check_lie_group_function(so3, "left_project", TEST_EPS, group, matrix)
+    check_lie_group_function(so3, "left_project", TEST_EPS, (group, matrix))
 
     matrix = torch.rand(
         batch_size,
@@ -195,4 +195,4 @@ def test_left_project(batch_size: int, dtype: torch.dtype):
     )
 
     # check analytic backward for the operator
-    check_lie_group_function(so3, "left_project", TEST_EPS, group, matrix)
+    check_lie_group_function(so3, "left_project", TEST_EPS, (group, matrix))

@@ -667,10 +667,13 @@ def _left_act_impl(group: torch.Tensor, matrix: torch.Tensor) -> torch.Tensor:
     if not check_group_tensor(group):
         raise ValueError("Invalid data tensor for SE3.")
     check_left_act_matrix(matrix)
+    ret = so3._left_act_impl(group[:, :, :3], matrix)
     shape = list(matrix.shape)
     ndim = matrix.ndim
-    ret = so3._left_act_impl(group[:, :, :3], matrix)
-    ret += group[:, :, 3:].view(shape[:1] + [1] * (ndim - 3) + [3, 1]).expand(shape)
+    if ndim > 3:
+        ret += group[:, :, 3:].view(shape[:1] + [1] * (ndim - 3) + [3, 1]).expand(shape)
+    else:
+        ret += group[:, :, 3:].expand(shape)
     return ret
 
 

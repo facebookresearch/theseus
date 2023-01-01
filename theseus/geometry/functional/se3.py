@@ -18,6 +18,13 @@ DIM: int = 3
 _module = get_module(__name__)
 
 
+def check_group_tensor(tensor: torch.Tensor) -> bool:
+    with torch.no_grad():
+        if tensor.ndim != 3 or tensor.shape[1:] != (3, 4):
+            raise ValueError("SE3 data tensors can only be 3x4 matrices.")
+    return so3.check_group_tensor(tensor[:, :, :3])
+
+
 def check_tangent_vector(tangent_vector: torch.Tensor) -> bool:
     _check = tangent_vector.ndim == 3 and tangent_vector.shape[1:] == (6, 1)
     _check |= tangent_vector.ndim == 2 and tangent_vector.shape[1] == 6
@@ -292,6 +299,51 @@ def rand(
         requires_grad=requires_grad,
     )
     return torch.cat((rotation, translation), dim=2)
+
+
+# -----------------------------------------------------------------------------
+# Adjoint Transformation
+# -----------------------------------------------------------------------------
+def _adjoint_impl(group: torch.Tensor) -> torch.Tensor:
+    if not check_group_tensor(group):
+        raise ValueError("Invalid data tensor for SO3.")
+    ret = group.new_zeros(group.shape[0], 6, 6)
+    ret[:, :3, :3] = group[:, :3, :3]
+    ret[:, 3:, 3:] = group[:, :3, :3]
+    ret[:, :3, 3:] = so3.hat(group[:, :3, 3]) @ group[:, :3, :3]
+    return ret
+
+
+# NOTE: No jacobian is defined for the adjoint transformation
+_jadjoint_impl = None
+
+
+class Adjoint(lie_group.UnaryOperator):
+    @classmethod
+    def forward(cls, ctx, group):
+        group: torch.Tensor = cast(torch.Tensor, group)
+        ctx.save_for_backward(group)
+        return _adjoint_impl(group)
+
+    @classmethod
+    def backward(cls, ctx, grad_output):
+        group: torch.Tensor = ctx.saved_tensors[0]
+        grad_input_rot = (
+            grad_output[:, :3, :3]
+            + grad_output[:, 3:, 3:]
+            - so3.hat(group[:, :, 3]) @ grad_output[:, :3, 3:]
+        )
+        grad_input_t = so3.project(
+            grad_output[:, :3, 3:] @ group[:, :, :3].transpose(1, 2)
+        ).view(-1, 3, 1)
+
+        return torch.cat((grad_input_rot, grad_input_t), dim=2)
+
+
+_adjoint_autograd_fn = Adjoint.apply
+_jadjoint_autograd_fn = None
+
+adjoint = lie_group.UnaryOperatorFactory(_module, "adjoint")
 
 
 # -----------------------------------------------------------------------------

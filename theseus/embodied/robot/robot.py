@@ -103,20 +103,20 @@ class Robot(abc.ABC):
         num_joints = 0
         root.set_id(0)
         robot._links.append(root)
+        robot._dof = 0
         joints_to_visit = joints_to_visit + root.children
 
         while joints_to_visit:
             joint = joints_to_visit.pop(0)
             if not isinstance(joint, FixedJoint):
                 joint.set_id(num_joints)
+                robot._dof += joint.dof()
                 robot._joints.append(joint)
                 num_joints = num_joints + 1
                 joint.child.set_id(num_joints)
                 robot._links.append(joint.child)
 
                 joints_to_visit = joints_to_visit + joint.child.children
-
-        robot._dof = num_joints
 
         for _, joint in robot.joint_map.items():
             if joint.id >= 0:

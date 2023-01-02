@@ -135,6 +135,12 @@ class Robot(abc.ABC):
         for link in robot.links:
             if link.parent is not None:
                 link.set_ancestors(link.parent.parent.ancestors + [link.parent.parent])
+                angle_ids = (
+                    link.parent.parent.angle_ids
+                    if isinstance(link.parent, FixedJoint)
+                    else link.parent.parent.angle_ids + [link.parent.id]
+                )
+                link.set_angle_ids(angle_ids)
 
         return robot
 

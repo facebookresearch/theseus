@@ -15,6 +15,7 @@ class Link(abc.ABC):
     def __init__(
         self,
         name: str,
+        id: int,
         parent: int = -1,
         child: int = -1,
         origin: Optional[torch.Tensor] = None,
@@ -39,6 +40,7 @@ class Link(abc.ABC):
             origin[:, 2, 2] = 1
 
         self._name = name
+        self._id = id
         self._parent = parent
         self._child = child
         self._origin = origin
@@ -47,6 +49,10 @@ class Link(abc.ABC):
     @property
     def name(self) -> str:
         return self._name
+
+    @property
+    def id(self) -> int:
+        return self._id
 
     @property
     def parent(self) -> int:

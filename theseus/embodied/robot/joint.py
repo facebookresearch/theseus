@@ -36,10 +36,26 @@ class Joint(abc.ABC):
             origin[:, 1, 1] = 1
             origin[:, 2, 2] = 1
 
-        self.origin = origin
-        self.dtype = dtype
-        self.name = name
-        self.axis: torch.Tensor = torch.zeros(6, 1, dtype=dtype)
+        self._origin = origin
+        self._dtype = dtype
+        self._name = name
+        self._axis: torch.Tensor = torch.zeros(6, 1, dtype=dtype)
+
+    @property
+    def origin(self) -> torch.Tensor:
+        return self._origin
+
+    @property
+    def dtype(self) -> torch.dtype:
+        return self._dtype
+
+    @property
+    def name(self) -> str:
+        return self._name
+
+    @property
+    def axis(self) -> torch.Tensor:
+        return self._axis
 
     @abc.abstractmethod
     def dof(self) -> int:
@@ -69,7 +85,7 @@ class RevoluteJoint(Joint):
         if angle_axis.dtype != self.dtype:
             raise ValueError(f"The dtype of angle_axis should be {self.dtype}.")
 
-        self.axis[3:] = angle_axis
+        self._axis[3:] = angle_axis
 
     def dof(self) -> int:
         return 1

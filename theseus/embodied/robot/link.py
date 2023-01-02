@@ -21,6 +21,7 @@ class Link(abc.ABC):
         self._id = id
         self._parent = parent
         self._children = children if children else []
+        self._ancestors: List[Link] = []
         self._dtype = dtype
 
     @property
@@ -40,6 +41,10 @@ class Link(abc.ABC):
         return self._children
 
     @property
+    def ancestors(self) -> List["Link"]:
+        return self._ancestors
+
+    @property
     def dtype(self) -> torch.dtype:
         return self._dtype
 
@@ -51,6 +56,17 @@ class Link(abc.ABC):
 
     def set_children(self, children: List[Any]):
         self._children = children
+
+    def set_ancestors(self, ancesotrs: List["Link"]):
+        self._ancestors = ancesotrs
+
+    def update_ancestors(self):
+        joint = self.parent
+        self._ancestors = []
+        while joint is not None:
+            link = joint.parent
+            self._ancestors.insert(0, link)
+            joint = link.parent
 
     def add_child(self, child: Any):
         self._children.append(child)

@@ -132,6 +132,10 @@ class Robot(abc.ABC):
         robot._num_links = len(robot.links)
         robot._num_joints = len(robot.joints)
 
+        for link in robot.links:
+            if link.parent is not None:
+                link.set_ancestors(link.parent.parent.ancestors + [link.parent.parent])
+
         return robot
 
     @property

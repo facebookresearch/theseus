@@ -94,7 +94,7 @@ class Joint(abc.ABC):
         pass
 
     @abc.abstractmethod
-    def relative_pose(self, angle: torch.Tensor) -> torch.Tensor:
+    def relative_pose(self, angle: Optional[torch.Tensor] = None) -> torch.Tensor:
         pass
 
 
@@ -113,7 +113,9 @@ class FixedJoint(Joint):
     def dof(self) -> int:
         return 0
 
-    def relative_pose(self, angle: torch.Tensor) -> torch.Tensor:
+    def relative_pose(self, *args) -> torch.Tensor:
+        if len(args) != 1:
+            raise ValueError("Fixed joint has no inputs.")
         return self.origin
 
 
@@ -136,7 +138,10 @@ class _RevoluteJointImpl(Joint):
     def _rotation_impl(self, angle: torch.Tensor) -> torch.Tensor:
         pass
 
-    def relative_pose(self, angle: torch.Tensor) -> torch.Tensor:
+    def relative_pose(self, *args) -> torch.Tensor:
+        if len(args) != 1:
+            raise ValueError("Revolute joint requires one input.")
+        angle: torch.Tensor = args[0]
         rot = self._rotation_impl(angle)
         ret = angle.new_empty(angle.shape[0], 3, 4)
         ret[:, :, :3] = self.origin[:, :, :3] @ rot
@@ -276,7 +281,10 @@ class _PrismaticJointImpl(Joint):
     def _translation_impl(self, angle: torch.Tensor) -> torch.Tensor:
         pass
 
-    def relative_pose(self, angle: torch.Tensor) -> torch.Tensor:
+    def relative_pose(self, *args) -> torch.Tensor:
+        if len(args) != 1:
+            raise ValueError("Prismatic joint requires one input.")
+        angle: torch.Tensor = args[0]
         trans = self._translation_impl(angle)
         ret = angle.new_empty(angle.shape[0], 3, 4)
         ret[:, :, :3] = self.origin[:, :, :3]
@@ -340,7 +348,10 @@ class PrismaticJointX(_PrismaticJointImpl):
         trans[:, 0] = angle
         return trans
 
-    def relative_pose(self, angle: torch.Tensor) -> torch.Tensor:
+    def relative_pose(self, *args) -> torch.Tensor:
+        if len(args) != 1:
+            raise ValueError("Prismatic joint requires one input.")
+        angle: torch.Tensor = args[0]
         if angle.ndim == 1:
             angle = angle.view(-1, 1)
         if angle.ndim != 2 or angle.shape[1] != 1:
@@ -373,7 +384,10 @@ class PrismaticJointY(_PrismaticJointImpl):
         trans[:, 1] = angle
         return trans
 
-    def relative_pose(self, angle: torch.Tensor) -> torch.Tensor:
+    def relative_pose(self, *args) -> torch.Tensor:
+        if len(args) != 1:
+            raise ValueError("Prismatic joint requires one input.")
+        angle: torch.Tensor = args[0]
         if angle.ndim == 1:
             angle = angle.view(-1, 1)
         if angle.ndim != 2 or angle.shape[1] != 1:
@@ -406,7 +420,10 @@ class PrismaticJointZ(_PrismaticJointImpl):
         trans[:, 2] = angle
         return trans
 
-    def relative_pose(self, angle: torch.Tensor) -> torch.Tensor:
+    def relative_pose(self, *args) -> torch.Tensor:
+        if len(args) != 1:
+            raise ValueError("Prismatic joint requires one input.")
+        angle: torch.Tensor = args[0]
         if angle.ndim == 1:
             angle = angle.view(-1, 1)
         if angle.ndim != 2 or angle.shape[1] != 1:

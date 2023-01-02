@@ -15,7 +15,7 @@ class Link(abc.ABC):
     def __init__(
         self,
         name: str,
-        id: int,
+        id: int = -1,
         parent: int = -1,
         child: int = -1,
         origin: Optional[torch.Tensor] = None,

@@ -113,8 +113,8 @@ class _RevoluteJointImpl(Joint):
 class RevoluteJoint(_RevoluteJointImpl):
     def __init__(
         self,
-        revolute_axis: torch.Tensor,
         name: str,
+        revolute_axis: torch.Tensor,
         parent: int = -1,
         child: int = -1,
         origin: Optional[torch.Tensor] = None,
@@ -223,10 +223,12 @@ class _PrismaticJointImpl(Joint):
     def __init__(
         self,
         name: str,
+        parent: int = -1,
+        child: int = -1,
         origin: Optional[torch.Tensor] = None,
         dtype: Optional[torch.dtype] = None,
     ):
-        super().__init__(name, origin, dtype)
+        super().__init__(name, parent, child, origin, dtype)
 
     def dof(self) -> int:
         return 1
@@ -250,6 +252,8 @@ class PrismaticJoint(_PrismaticJointImpl):
         self,
         name: str,
         prismatic_axis: torch.Tensor,
+        parent: int = -1,
+        child: int = -1,
         origin: Optional[torch.Tensor] = None,
         dtype: Optional[torch.dtype] = None,
     ):
@@ -259,7 +263,7 @@ class PrismaticJoint(_PrismaticJointImpl):
         if prismatic_axis.ndim != 2 or prismatic_axis.shape != (3, 1):
             raise ValueError("The prismatic axis must be a 3-D vector.")
 
-        super().__init__(name, origin, dtype)
+        super().__init__(name, parent, child, origin, dtype)
 
         if prismatic_axis.dtype != self.dtype:
             raise ValueError(f"The dtype of prismatic_axis should be {self.dtype}.")
@@ -278,10 +282,12 @@ class PrismaticJointX(_PrismaticJointImpl):
     def __init__(
         self,
         name: str,
+        parent: int = -1,
+        child: int = -1,
         origin: Optional[torch.Tensor] = None,
         dtype: Optional[torch.dtype] = None,
     ):
-        super().__init__(name, origin, dtype)
+        super().__init__(name, parent, child, origin, dtype)
         self._axis[3] = 1
 
     def _translation_impl(self, angle: torch.Tensor) -> torch.Tensor:
@@ -308,10 +314,12 @@ class PrismaticJointY(_PrismaticJointImpl):
     def __init__(
         self,
         name: str,
+        parent: int = -1,
+        child: int = -1,
         origin: Optional[torch.Tensor] = None,
         dtype: Optional[torch.dtype] = None,
     ):
-        super().__init__(name, origin, dtype)
+        super().__init__(name, parent, child, origin, dtype)
         self._axis[4] = 1
 
     def _translation_impl(self, angle: torch.Tensor) -> torch.Tensor:
@@ -338,10 +346,12 @@ class PrismaticJointZ(_PrismaticJointImpl):
     def __init__(
         self,
         name: str,
+        parent: int = -1,
+        child: int = -1,
         origin: Optional[torch.Tensor] = None,
         dtype: Optional[torch.dtype] = None,
     ):
-        super().__init__(name, origin, dtype)
+        super().__init__(name, parent, child, origin, dtype)
         self._axis[5] = 1
 
     def _translation_impl(self, angle: torch.Tensor) -> torch.Tensor:

@@ -23,14 +23,14 @@ def ForwardKinematicFactory(robot: Robot, link_names: Optional[List[str]] = None
     else:
         links = [robot.link_map[name] for name in link_names]
 
+    link_ids: List[int] = [link.id for link in links]
+
     ancestors = []
-
     for link in links:
-        ancestors += [anc.id for anc in link.ancestors]
+        ancestors += [anc for anc in link.ancestors]
+    pose_ids = sorted(list(set([anc.id for anc in ancestors] + link_ids)))
 
-    link_ids = sorted(list(set(ancestors)))
-
-    def ForwardKinematicsImpl(angles: torch.Tensor):
+    def _forward_kinematics_helper(angles: torch.Tensor):
         if angles.ndim != 2 or angles.shape[1] != robot.dof:
             raise ValueError(
                 f"Joint angles for {robot.name} should be {robot.dof}-D vectors"
@@ -42,7 +42,7 @@ def ForwardKinematicFactory(robot: Robot, link_names: Optional[List[str]] = None
         poses[0][:, 1, 1] = 1
         poses[0][:, 2, 2] = 1
 
-        for id in link_ids[1:]:
+        for id in pose_ids[1:]:
             curr: Link = robot.links[id]
             joint: Joint = robot.links[id].parent
             prev: Link = joint.parent
@@ -53,6 +53,40 @@ def ForwardKinematicFactory(robot: Robot, link_names: Optional[List[str]] = None
             )
             poses[curr.id] = se3.compose(poses[prev.id], relative_pose)
 
+        return poses
+
+    def _forward_kinematics_impl(angles: torch.Tensor):
+        poses = _forward_kinematics_helper(angles)
         return tuple(poses[id] for id in link_ids)
 
-    return ForwardKinematicsImpl
+    def _jforward_kinematics_helper(poses: List[Optional[torch.Tensor]]):
+        jposes = poses[0].new_zeros(poses[0].shape[0], 6, robot.dof)
+
+        for id in pose_ids[1:]:
+            joint: Joint = robot.links[id].parent
+            prev: Link = joint.parent
+            if joint.id >= robot.dof:
+                break
+            jposes[:, :, joint.id : joint.id + 1] = (
+                se3.adjoint(poses[prev.id]) @ joint.axis
+            )
+
+        return jposes
+
+    def _jforward_kinematics_impl(angles: torch.Tensor):
+        poses = _forward_kinematics_helper(angles)
+        jposes = _jforward_kinematics_helper(poses)
+
+        rets = tuple(poses[id] for id in link_ids)
+        jacs: List[torch.Tensor] = []
+
+        for link_id in link_ids:
+            pose = poses[link_id]
+            jac = jposes.new_zeros(angles.shape[0], 6, robot.dof)
+            sel = robot.links[link_id].angle_ids
+            jac[:, :, sel] = se3.adjoint(se3.inverse(pose)) @ jposes[:, :, sel]
+            jacs.append(jac)
+
+        return jacs, rets
+
+    return _forward_kinematics_impl, _jforward_kinematics_impl

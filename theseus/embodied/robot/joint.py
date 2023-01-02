@@ -8,6 +8,7 @@ import warnings
 from typing import Optional
 import torch
 
+from .link import Link
 from theseus.labs.lie_functional import so3, se3
 
 
@@ -16,8 +17,8 @@ class Joint(abc.ABC):
         self,
         name: str,
         id: int = -1,
-        parent: int = -1,
-        child: int = -1,
+        parent: Optional[Link] = None,
+        child: Optional[Link] = None,
         origin: Optional[torch.Tensor] = None,
         dtype: Optional[torch.dtype] = None,
     ):
@@ -56,11 +57,11 @@ class Joint(abc.ABC):
         return self._id
 
     @property
-    def parent(self) -> int:
+    def parent(self) -> Optional[Link]:
         return self._parent
 
     @property
-    def child(self) -> int:
+    def child(self) -> Optional[Link]:
         return self._child
 
     @property
@@ -90,13 +91,32 @@ class Joint(abc.ABC):
         pass
 
 
+class FixedJoint(Joint):
+    def __init__(
+        self,
+        name: str,
+        id: int = -1,
+        parent: Optional[Link] = None,
+        child: Optional[Link] = None,
+        origin: Optional[torch.Tensor] = None,
+        dtype: Optional[torch.dtype] = None,
+    ):
+        super().__init__(name, id, parent, child, origin, dtype)
+
+    def dof(self) -> int:
+        return 0
+
+    def relative_pose(self, angle: torch.Tensor) -> torch.Tensor:
+        return self.origin
+
+
 class _RevoluteJointImpl(Joint):
     def __init__(
         self,
         name: str,
         id: int = -1,
-        parent: int = -1,
-        child: int = -1,
+        parent: Optional[Link] = None,
+        child: Optional[Link] = None,
         origin: Optional[torch.Tensor] = None,
         dtype: Optional[torch.dtype] = None,
     ):
@@ -123,8 +143,8 @@ class RevoluteJoint(_RevoluteJointImpl):
         name: str,
         revolute_axis: torch.Tensor,
         id: int = -1,
-        parent: int = -1,
-        child: int = -1,
+        parent: Optional[Link] = None,
+        child: Optional[Link] = None,
         origin: Optional[torch.Tensor] = None,
         dtype: Optional[torch.dtype] = None,
     ):
@@ -154,8 +174,8 @@ class RevoluteJointX(_RevoluteJointImpl):
         self,
         name: str,
         id: int = -1,
-        parent: int = -1,
-        child: int = -1,
+        parent: Optional[Link] = None,
+        child: Optional[Link] = None,
         origin: Optional[torch.Tensor] = None,
         dtype: Optional[torch.dtype] = None,
     ):
@@ -181,8 +201,8 @@ class RevoluteJointY(_RevoluteJointImpl):
         self,
         name: str,
         id: int = -1,
-        parent: int = -1,
-        child: int = -1,
+        parent: Optional[Link] = None,
+        child: Optional[Link] = None,
         origin: Optional[torch.Tensor] = None,
         dtype: Optional[torch.dtype] = None,
     ):
@@ -208,8 +228,8 @@ class RevoluteJointZ(_RevoluteJointImpl):
         self,
         name: str,
         id: int = -1,
-        parent: int = -1,
-        child: int = -1,
+        parent: Optional[Link] = None,
+        child: Optional[Link] = None,
         origin: Optional[torch.Tensor] = None,
         dtype: Optional[torch.dtype] = None,
     ):
@@ -235,8 +255,8 @@ class _PrismaticJointImpl(Joint):
         self,
         name: str,
         id: int = -1,
-        parent: int = -1,
-        child: int = -1,
+        parent: Optional[Link] = None,
+        child: Optional[Link] = None,
         origin: Optional[torch.Tensor] = None,
         dtype: Optional[torch.dtype] = None,
     ):
@@ -265,8 +285,8 @@ class PrismaticJoint(_PrismaticJointImpl):
         name: str,
         prismatic_axis: torch.Tensor,
         id: int = -1,
-        parent: int = -1,
-        child: int = -1,
+        parent: Optional[Link] = None,
+        child: Optional[Link] = None,
         origin: Optional[torch.Tensor] = None,
         dtype: Optional[torch.dtype] = None,
     ):
@@ -296,8 +316,8 @@ class PrismaticJointX(_PrismaticJointImpl):
         self,
         name: str,
         id: int = -1,
-        parent: int = -1,
-        child: int = -1,
+        parent: Optional[Link] = None,
+        child: Optional[Link] = None,
         origin: Optional[torch.Tensor] = None,
         dtype: Optional[torch.dtype] = None,
     ):
@@ -329,8 +349,8 @@ class PrismaticJointY(_PrismaticJointImpl):
         self,
         name: str,
         id: int = -1,
-        parent: int = -1,
-        child: int = -1,
+        parent: Optional[Link] = None,
+        child: Optional[Link] = None,
         origin: Optional[torch.Tensor] = None,
         dtype: Optional[torch.dtype] = None,
     ):
@@ -362,8 +382,8 @@ class PrismaticJointZ(_PrismaticJointImpl):
         self,
         name: str,
         id: int = -1,
-        parent: int = -1,
-        child: int = -1,
+        parent: Optional[Link] = None,
+        child: Optional[Link] = None,
         origin: Optional[torch.Tensor] = None,
         dtype: Optional[torch.dtype] = None,
     ):

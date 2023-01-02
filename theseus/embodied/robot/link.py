@@ -5,7 +5,7 @@
 
 import abc
 import warnings
-from typing import Optional
+from typing import List, Optional, Any
 import torch
 
 from theseus.geometry.functional import se3
@@ -16,8 +16,8 @@ class Link(abc.ABC):
         self,
         name: str,
         id: int = -1,
-        parent: int = -1,
-        child: int = -1,
+        parent: Any = None,
+        children: List[Any] = [],
         origin: Optional[torch.Tensor] = None,
         dtype: Optional[torch.dtype] = None,
     ):
@@ -42,7 +42,7 @@ class Link(abc.ABC):
         self._name = name
         self._id = id
         self._parent = parent
-        self._child = child
+        self._children = children
         self._origin = origin
         self._dtype = dtype
 
@@ -55,12 +55,12 @@ class Link(abc.ABC):
         return self._id
 
     @property
-    def parent(self) -> int:
+    def parent(self) -> Any:
         return self._parent
 
     @property
-    def child(self) -> int:
-        return self._child
+    def children(self) -> List[Any]:
+        return self._children
 
     @property
     def origin(self) -> torch.Tensor:

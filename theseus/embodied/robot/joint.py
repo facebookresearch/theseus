@@ -15,6 +15,7 @@ class Joint(abc.ABC):
     def __init__(
         self,
         name: str,
+        id: int = -1,
         parent: int = -1,
         child: int = -1,
         origin: Optional[torch.Tensor] = None,
@@ -39,6 +40,7 @@ class Joint(abc.ABC):
             origin[:, 2, 2] = 1
 
         self._name = name
+        self._id = id
         self._parent = parent
         self._child = child
         self._origin = origin
@@ -48,6 +50,10 @@ class Joint(abc.ABC):
     @property
     def name(self) -> str:
         return self._name
+
+    @property
+    def id(self) -> int:
+        return self._id
 
     @property
     def parent(self) -> int:
@@ -88,12 +94,13 @@ class _RevoluteJointImpl(Joint):
     def __init__(
         self,
         name: str,
+        id: int = -1,
         parent: int = -1,
         child: int = -1,
         origin: Optional[torch.Tensor] = None,
         dtype: Optional[torch.dtype] = None,
     ):
-        super().__init__(name, parent, child, origin, dtype)
+        super().__init__(name, id, parent, child, origin, dtype)
 
     def dof(self) -> int:
         return 1
@@ -115,6 +122,7 @@ class RevoluteJoint(_RevoluteJointImpl):
         self,
         name: str,
         revolute_axis: torch.Tensor,
+        id: int = -1,
         parent: int = -1,
         child: int = -1,
         origin: Optional[torch.Tensor] = None,
@@ -126,7 +134,7 @@ class RevoluteJoint(_RevoluteJointImpl):
         if revolute_axis.ndim != 2 or revolute_axis.shape != (3, 1):
             raise ValueError("The revolute axis must be a 3-D vector.")
 
-        super().__init__(name, parent, child, origin, dtype)
+        super().__init__(name, id, parent, child, origin, dtype)
 
         if revolute_axis.dtype != self.dtype:
             raise ValueError(f"The dtype of revolute_axis should be {self.dtype}.")
@@ -145,12 +153,13 @@ class RevoluteJointX(_RevoluteJointImpl):
     def __init__(
         self,
         name: str,
+        id: int = -1,
         parent: int = -1,
         child: int = -1,
         origin: Optional[torch.Tensor] = None,
         dtype: Optional[torch.dtype] = None,
     ):
-        super().__init__(name, parent, child, origin, dtype)
+        super().__init__(name, id, parent, child, origin, dtype)
         self._axis[3] = 1
 
     def _rotation_impl(self, angle: torch.Tensor) -> torch.Tensor:
@@ -171,12 +180,13 @@ class RevoluteJointY(_RevoluteJointImpl):
     def __init__(
         self,
         name: str,
+        id: int = -1,
         parent: int = -1,
         child: int = -1,
         origin: Optional[torch.Tensor] = None,
         dtype: Optional[torch.dtype] = None,
     ):
-        super().__init__(name, parent, child, origin, dtype)
+        super().__init__(name, id, parent, child, origin, dtype)
         self._axis[4] = 1
 
     def _rotation_impl(self, angle: torch.Tensor) -> torch.Tensor:
@@ -197,12 +207,13 @@ class RevoluteJointZ(_RevoluteJointImpl):
     def __init__(
         self,
         name: str,
+        id: int = -1,
         parent: int = -1,
         child: int = -1,
         origin: Optional[torch.Tensor] = None,
         dtype: Optional[torch.dtype] = None,
     ):
-        super().__init__(name, parent, child, origin, dtype)
+        super().__init__(name, id, parent, child, origin, dtype)
         self._axis[5] = 1
 
     def _rotation_impl(self, angle: torch.Tensor) -> torch.Tensor:
@@ -223,12 +234,13 @@ class _PrismaticJointImpl(Joint):
     def __init__(
         self,
         name: str,
+        id: int = -1,
         parent: int = -1,
         child: int = -1,
         origin: Optional[torch.Tensor] = None,
         dtype: Optional[torch.dtype] = None,
     ):
-        super().__init__(name, parent, child, origin, dtype)
+        super().__init__(name, id, parent, child, origin, dtype)
 
     def dof(self) -> int:
         return 1
@@ -252,6 +264,7 @@ class PrismaticJoint(_PrismaticJointImpl):
         self,
         name: str,
         prismatic_axis: torch.Tensor,
+        id: int = -1,
         parent: int = -1,
         child: int = -1,
         origin: Optional[torch.Tensor] = None,
@@ -263,7 +276,7 @@ class PrismaticJoint(_PrismaticJointImpl):
         if prismatic_axis.ndim != 2 or prismatic_axis.shape != (3, 1):
             raise ValueError("The prismatic axis must be a 3-D vector.")
 
-        super().__init__(name, parent, child, origin, dtype)
+        super().__init__(name, id, parent, child, origin, dtype)
 
         if prismatic_axis.dtype != self.dtype:
             raise ValueError(f"The dtype of prismatic_axis should be {self.dtype}.")
@@ -282,12 +295,13 @@ class PrismaticJointX(_PrismaticJointImpl):
     def __init__(
         self,
         name: str,
+        id: int = -1,
         parent: int = -1,
         child: int = -1,
         origin: Optional[torch.Tensor] = None,
         dtype: Optional[torch.dtype] = None,
     ):
-        super().__init__(name, parent, child, origin, dtype)
+        super().__init__(name, id, parent, child, origin, dtype)
         self._axis[3] = 1
 
     def _translation_impl(self, angle: torch.Tensor) -> torch.Tensor:
@@ -314,12 +328,13 @@ class PrismaticJointY(_PrismaticJointImpl):
     def __init__(
         self,
         name: str,
+        id: int = -1,
         parent: int = -1,
         child: int = -1,
         origin: Optional[torch.Tensor] = None,
         dtype: Optional[torch.dtype] = None,
     ):
-        super().__init__(name, parent, child, origin, dtype)
+        super().__init__(name, id, parent, child, origin, dtype)
         self._axis[4] = 1
 
     def _translation_impl(self, angle: torch.Tensor) -> torch.Tensor:
@@ -346,12 +361,13 @@ class PrismaticJointZ(_PrismaticJointImpl):
     def __init__(
         self,
         name: str,
+        id: int = -1,
         parent: int = -1,
         child: int = -1,
         origin: Optional[torch.Tensor] = None,
         dtype: Optional[torch.dtype] = None,
     ):
-        super().__init__(name, parent, child, origin, dtype)
+        super().__init__(name, id, parent, child, origin, dtype)
         self._axis[5] = 1
 
     def _translation_impl(self, angle: torch.Tensor) -> torch.Tensor:

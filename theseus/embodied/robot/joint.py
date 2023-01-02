@@ -91,8 +91,45 @@ class RevoluteJoint(Joint):
         return 1
 
     def relative_pose(self, angle: torch.Tensor) -> torch.Tensor:
-        rot = self.origin[:, :, :3] @ so3.exp(
-            angle.view(-1, 1) @ self.axis[3:].view(1, -1)
+        if angle.ndim == 1:
+            angle = angle.view(-1, 1)
+        if angle.ndim != 2 or angle.shape[1] != 1:
+            raise ValueError("The joint angle must be a vector.")
+        ret = angle.new_empty(angle.shape[0], 3, 4)
+        ret[:, :, :3] = self.origin[:, :, :3] @ so3.exp(
+            angle @ self.axis[3:].view(1, -1)
         )
-        t = self.origin[:, :, 3:].expand(angle.shape[:1] + (3, 1))
-        return torch.cat((rot, t), dim=-1)
+        ret[:, :, 3] = self.origin[:, :, 3]
+        return ret
+
+
+class RevoluteJointX(Joint):
+    def __init__(
+        self,
+        name: str,
+        origin: Optional[torch.Tensor] = None,
+        dtype: Optional[torch.dtype] = None,
+    ):
+        super().__init__(name, origin, dtype)
+
+        self._axis[3] = 1
+
+    def dof(self) -> int:
+        return 1
+
+    def relative_pose(self, angle: torch.Tensor) -> torch.Tensor:
+        if angle.ndim == 2 and angle.shape[1] == 1:
+            angle = angle.view(-1)
+        if angle.ndim != 1:
+            raise ValueError("The joint angle must be a vector.")
+        rot = angle.new_zeros(angle.shape[0], 3, 3)
+        rot[:, 0, 0] = 1
+        rot[:, 1, 1] = angle.cos()
+        rot[:, 2, 1] = angle.sin()
+        rot[:, 1, 2] = -rot[:, 2, 1]
+        rot[:, 2, 2] = rot[:, 1, 1]
+
+        ret = angle.new_empty(angle.shape[0], 3, 4)
+        ret[:, :, :3] = self.origin[:, :, :3] @ rot
+        ret[:, :, 3] = self.origin[:, :, 3]
+        return ret

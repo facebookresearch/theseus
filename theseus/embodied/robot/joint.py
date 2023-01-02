@@ -15,6 +15,8 @@ class Joint(abc.ABC):
     def __init__(
         self,
         name: str,
+        parent: int = -1,
+        child: int = -1,
         origin: Optional[torch.Tensor] = None,
         dtype: Optional[torch.dtype] = None,
     ):
@@ -36,10 +38,24 @@ class Joint(abc.ABC):
             origin[:, 1, 1] = 1
             origin[:, 2, 2] = 1
 
+        self._name = name
+        self._parent = parent
+        self._child = child
         self._origin = origin
         self._dtype = dtype
-        self._name = name
         self._axis: torch.Tensor = torch.zeros(6, 1, dtype=dtype)
+
+    @property
+    def name(self) -> str:
+        return self._name
+
+    @property
+    def parent(self) -> int:
+        return self._parent
+
+    @property
+    def child(self) -> int:
+        return self._child
 
     @property
     def origin(self) -> torch.Tensor:
@@ -50,12 +66,14 @@ class Joint(abc.ABC):
         return self._dtype
 
     @property
-    def name(self) -> str:
-        return self._name
-
-    @property
     def axis(self) -> torch.Tensor:
         return self._axis
+
+    def set_parent(self, parent: int):
+        self._parent = parent
+
+    def set_child(self, child: int):
+        self._child = child
 
     @abc.abstractmethod
     def dof(self) -> int:
@@ -70,10 +88,12 @@ class _RevoluteJointImpl(Joint):
     def __init__(
         self,
         name: str,
+        parent: int = -1,
+        child: int = -1,
         origin: Optional[torch.Tensor] = None,
         dtype: Optional[torch.dtype] = None,
     ):
-        super().__init__(name, origin, dtype)
+        super().__init__(name, parent, child, origin, dtype)
 
     def dof(self) -> int:
         return 1
@@ -93,8 +113,10 @@ class _RevoluteJointImpl(Joint):
 class RevoluteJoint(_RevoluteJointImpl):
     def __init__(
         self,
-        name: str,
         angle_axis: torch.Tensor,
+        name: str,
+        parent: int = -1,
+        child: int = -1,
         origin: Optional[torch.Tensor] = None,
         dtype: Optional[torch.dtype] = None,
     ):
@@ -104,7 +126,7 @@ class RevoluteJoint(_RevoluteJointImpl):
         if angle_axis.ndim != 2 or angle_axis.shape != (3, 1):
             raise ValueError("The angle axis must be a 3-D vector.")
 
-        super().__init__(name, origin, dtype)
+        super().__init__(name, parent, child, origin, dtype)
 
         if angle_axis.dtype != self.dtype:
             raise ValueError(f"The dtype of angle_axis should be {self.dtype}.")
@@ -123,10 +145,12 @@ class RevoluteJointX(_RevoluteJointImpl):
     def __init__(
         self,
         name: str,
+        parent: int = -1,
+        child: int = -1,
         origin: Optional[torch.Tensor] = None,
         dtype: Optional[torch.dtype] = None,
     ):
-        super().__init__(name, origin, dtype)
+        super().__init__(name, parent, child, origin, dtype)
         self._axis[3] = 1
 
     def _rotation_impl(self, angle: torch.Tensor) -> torch.Tensor:
@@ -147,10 +171,12 @@ class RevoluteJointY(_RevoluteJointImpl):
     def __init__(
         self,
         name: str,
+        parent: int = -1,
+        child: int = -1,
         origin: Optional[torch.Tensor] = None,
         dtype: Optional[torch.dtype] = None,
     ):
-        super().__init__(name, origin, dtype)
+        super().__init__(name, parent, child, origin, dtype)
         self._axis[4] = 1
 
     def _rotation_impl(self, angle: torch.Tensor) -> torch.Tensor:
@@ -171,10 +197,12 @@ class RevoluteJointZ(_RevoluteJointImpl):
     def __init__(
         self,
         name: str,
+        parent: int = -1,
+        child: int = -1,
         origin: Optional[torch.Tensor] = None,
         dtype: Optional[torch.dtype] = None,
     ):
-        super().__init__(name, origin, dtype)
+        super().__init__(name, parent, child, origin, dtype)
         self._axis[5] = 1
 
     def _rotation_impl(self, angle: torch.Tensor) -> torch.Tensor:

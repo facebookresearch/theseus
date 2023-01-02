@@ -25,8 +25,7 @@ class Joint(abc.ABC):
         if origin is None and dtype is None:
             dtype = torch.get_default_dtype()
         if origin is not None:
-            if origin.shape[0] != 1 or not se3.check_group_tensor(origin):
-                raise ValueError("Origin must be an element of SE(3).")
+            self.set_origin(origin)
 
             if dtype is not None and origin.dtype != dtype:
                 warnings.warn(
@@ -76,11 +75,19 @@ class Joint(abc.ABC):
     def axis(self) -> torch.Tensor:
         return self._axis
 
-    def set_parent(self, parent: int):
+    def set_id(self, id: int):
+        self._id = id
+
+    def set_parent(self, parent: Optional[Link]):
         self._parent = parent
 
-    def set_child(self, child: int):
+    def set_child(self, child: Optional[Link]):
         self._child = child
+
+    def set_origin(self, origin: torch.Tensor):
+        if origin.shape[0] != 1 or not se3.check_group_tensor(origin):
+            raise ValueError("Origin must be an element of SE(3).")
+        self._origin = origin
 
     @abc.abstractmethod
     def dof(self) -> int:

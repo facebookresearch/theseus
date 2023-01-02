@@ -4,11 +4,8 @@
 # LICENSE file in the root directory of this source tree.
 
 import abc
-import warnings
 from typing import List, Optional, Any
 import torch
-
-from theseus.geometry.functional import se3
 
 
 class Link(abc.ABC):
@@ -18,32 +15,12 @@ class Link(abc.ABC):
         id: int = -1,
         parent: Any = None,
         children: List[Any] = [],
-        origin: Optional[torch.Tensor] = None,
         dtype: Optional[torch.dtype] = None,
     ):
-        if origin is None and dtype is None:
-            dtype = torch.get_default_dtype()
-        if origin is not None:
-            if origin.shape[0] != 1 or not se3.check_group_tensor(origin):
-                raise ValueError("Origin must be an element of SE(3).")
-
-            if dtype is not None and origin.dtype != dtype:
-                warnings.warn(
-                    f"tensor.dtype {origin.dtype} does not match given dtype {dtype}, "
-                    "tensor.dtype will take precendence."
-                )
-            dtype = origin.dtype
-        else:
-            origin = torch.zeros(1, 3, 4, dtype=dtype)
-            origin[:, 0, 0] = 1
-            origin[:, 1, 1] = 1
-            origin[:, 2, 2] = 1
-
         self._name = name
         self._id = id
         self._parent = parent
         self._children = children
-        self._origin = origin
         self._dtype = dtype
 
     @property
@@ -63,15 +40,20 @@ class Link(abc.ABC):
         return self._children
 
     @property
-    def origin(self) -> torch.Tensor:
-        return self._origin
-
-    @property
     def dtype(self) -> torch.dtype:
         return self._dtype
 
-    def set_parent(self, parent: int):
+    def set_id(self, id: int):
+        self._id = id
+
+    def set_parent(self, parent: Any):
         self._parent = parent
 
-    def set_child(self, child: int):
-        self._child = child
+    def set_children(self, children: List[Any]):
+        self._children = children
+
+    def add_child(self, child: Any):
+        self._children.append(child)
+
+    def remove_child(self, child: Any):
+        self._children.remove(child)

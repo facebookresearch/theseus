@@ -10,13 +10,18 @@ from .link import Link
 
 
 class Robot(abc.ABC):
-    def __init__(self):
+    def __init__(self, name: str):
+        self._name: str = name
         self._num_joints: int = 0
         self._num_links: int = 0
         self._joints: List[Joint] = []
         self._links: List[Link] = []
         self._joint_map: Dict[str, Joint] = {}
         self._link_map: Dict[str, Link] = {}
+
+    @property
+    def name(self) -> str:
+        return self._name
 
     @property
     def num_joints(self) -> int:

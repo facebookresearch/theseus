@@ -55,7 +55,7 @@ class Robot(abc.ABC):
                 rot_x = so3.exp(torch.tensor([[rpy[0], 0, 0]], dtype=dtype))
                 rot_y = so3.exp(torch.tensor([[0, rpy[1], 0]], dtype=dtype))
                 rot_z = so3.exp(torch.tensor([[0, 0, rpy[2]]], dtype=dtype))
-                origin = rot_x @ rot_y @ rot_z
+                origin[:, :, :3] = rot_x @ rot_y @ rot_z
 
             return origin
 
@@ -68,7 +68,7 @@ class Robot(abc.ABC):
 
         for urdf_joint in urdf_model.joints:
             origin = get_origin(urdf_joint.origin)
-            joint_type = get_joint_type(urdf_joint.type)
+            joint_type = get_joint_type(urdf_joint)
             parent = robot.link_map[urdf_joint.parent]
             child = robot.link_map[urdf_joint.child]
             if joint_type == RevoluteJoint or joint_type == PrismaticJoint:
@@ -91,7 +91,6 @@ class Robot(abc.ABC):
         for _, link in robot.link_map.items():
             for joint in link._children:
                 if isinstance(joint, FixedJoint):
-                    link.remove_child(joint)
                     subjoints: List[Joint] = joint.child.children
                     joint.child.set_children([])
                     for subjoint in subjoints:
@@ -104,9 +103,10 @@ class Robot(abc.ABC):
         num_joints = 0
         root.set_id(0)
         robot._links.append(root)
-        joints_to_visit = root.children
+        joints_to_visit = joints_to_visit + root.children
 
-        for joint in joints_to_visit:
+        while joints_to_visit:
+            joint = joints_to_visit.pop(0)
             if not isinstance(joint, FixedJoint):
                 joint.set_id(num_joints)
                 robot._joints.append(joint)
@@ -121,7 +121,7 @@ class Robot(abc.ABC):
         for _, joint in robot.joint_map.items():
             if joint.id >= 0:
                 continue
-            if not isinstance(joint.parent, FixedJoint):
+            if not isinstance(joint, FixedJoint):
                 raise ValueError(f"{joint.name} is expected to a fixed joint.")
             joint.set_id(num_joints)
             robot._joints.append(joint)

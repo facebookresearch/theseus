@@ -14,13 +14,13 @@ class Link(abc.ABC):
         name: str,
         id: int = -1,
         parent: Any = None,
-        children: List[Any] = [],
+        children: Optional[List[Any]] = None,
         dtype: Optional[torch.dtype] = None,
     ):
         self._name = name
         self._id = id
         self._parent = parent
-        self._children = children
+        self._children = children if children else []
         self._dtype = dtype
 
     @property

@@ -114,7 +114,7 @@ class FixedJoint(Joint):
         return 0
 
     def relative_pose(self, *args) -> torch.Tensor:
-        if len(args) != 1:
+        if len(args) != 0:
             raise ValueError("Fixed joint has no inputs.")
         return self.origin
 

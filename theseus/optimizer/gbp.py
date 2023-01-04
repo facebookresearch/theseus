@@ -973,6 +973,9 @@ class GaussianBeliefPropagation(Optimizer, abc.ABC):
         # not automatically updated when objective.update is called.
         if clear_messages:
             self._create_factors_beliefs(lin_system_damping)
+        else:
+            self.objective.update_vectorization_if_needed()
+
         if implicit_gbp_loop:
             relin_threshold = 1e10  # no relinearisation
             if self.objective.vectorized:

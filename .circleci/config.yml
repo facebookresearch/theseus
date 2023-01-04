@@ -34,6 +34,14 @@ update_and_install_python: &update_and_install_python
         sudo apt-get update
         sudo apt-get install -y python3.9 python3.9-dev
 
+update_and_install_python_310: &update_and_install_python_310
+  - run:
+      name: "Preparing environment: python"
+      command: |
+        sudo add-apt-repository -y ppa:deadsnakes/ppa
+        sudo apt-get update
+        sudo apt-get install -y python3.10 python3.10-dev
+
 install_nox: &install_nox
   - run:
       name: "Preparing environment: nox"
@@ -87,6 +95,17 @@ setup_environment: &setup_environment
       working_directory: ~/project
       command: |
         virtualenv ~/theseus_venv -p /usr/bin/python3.9
+        echo ". ~/theseus_venv/bin/activate" >> $BASH_ENV
+        . ~/theseus_venv/bin/activate
+        pip install --progress-bar off --upgrade pip
+        pip install --progress-bar off --upgrade setuptools
+
+setup_environment_310: &setup_environment_310
+  - run:
+      name: Setup virtualenv and tools
+      working_directory: ~/project
+      command: |
+        virtualenv ~/theseus_venv -p /usr/bin/python3.10
         echo ". ~/theseus_venv/bin/activate" >> $BASH_ENV
         . ~/theseus_venv/bin/activate
         pip install --progress-bar off --upgrade pip
@@ -283,10 +302,10 @@ jobs:
     executor: gpu_cuda11
     steps:
       - checkout
-      - <<: *update_and_install_python
+      - <<: *update_and_install_python_310
       - <<: *install_suitesparse
       - <<: *setup_cuda11_libs
-      - <<: *setup_environment
+      - <<: *setup_environment_310
       - <<: *build_cuda11_wheel
       - <<: *run_tests_from_wheel
 

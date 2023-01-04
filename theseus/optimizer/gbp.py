@@ -893,7 +893,7 @@ class GaussianBeliefPropagation(Optimizer, abc.ABC):
             cf_iterator = iter(self.objective.vectorized_cost_fns)
             self._pass_var_to_fac_messages = self._pass_var_to_fac_messages_vectorized
         else:
-            cf_iterator = self.objective._get_iterator()
+            cf_iterator = iter(self.objective)
             self._pass_var_to_fac_messages = self._pass_var_to_fac_messages_loop
 
         # compute factor potentials for the first time
@@ -1032,12 +1032,12 @@ class GaussianBeliefPropagation(Optimizer, abc.ABC):
                 self.objective.update_vectorization_if_needed()
                 t_vec = time.time() - t1
 
-            t_tot = time.time() - t0
-            if verbose:
-                print(
-                    f"Timings ----- relin {t_relin:.4f}, ftov {t_ftov:.4f}, vtof {t_vtof:.4f},"
-                    f" vectorization {t_vec:.4f}, TOTAL {t_tot:.4f}"
-                )
+            # if verbose:
+            #     t_tot = time.time() - t0
+            #     print(
+            #         f"Timings ----- relin {t_relin:.4f}, ftov {t_ftov:.4f}, vtof {t_vtof:.4f},"
+            #         f" vectorization {t_vec:.4f}, TOTAL {t_tot:.4f}"
+            #     )
 
             # check for convergence
             if it_ >= 0:
@@ -1210,7 +1210,7 @@ class GaussianBeliefPropagation(Optimizer, abc.ABC):
                 gauss_newton_optimizer = th.GaussNewton(self.objective)
                 gauss_newton_optimizer.linear_solver.linearization.linearize()
                 delta = gauss_newton_optimizer.linear_solver.solve()
-                self.objective.retract_optim_vars(
+                self.objective.retract_vars_sequence(
                     delta * implicit_step_size,
                     gauss_newton_optimizer.linear_solver.linearization.ordering,
                     force_update=True,

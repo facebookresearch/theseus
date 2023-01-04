@@ -393,10 +393,10 @@ class Vectorize:
             }
             ret = [cf for cf_list in schema_dict.values() for cf in cf_list]
         for schema, cost_fn_wrappers in schema_dict.items():
-            if len(cost_fn_wrappers) == 1:
-                self._handle_singleton_wrapper(schema, cost_fn_wrappers, mode)
-            else:
-                self._handle_schema_vectorization(schema, cost_fn_wrappers, mode)
+            # if len(cost_fn_wrappers) == 1:
+            #     self._handle_singleton_wrapper(schema, cost_fn_wrappers, mode)
+            # else:
+            self._handle_schema_vectorization(schema, cost_fn_wrappers, mode)
         return ret
 
     def _get_vectorized_error_iter(self) -> Iterable[_CostFunctionWrapper]:

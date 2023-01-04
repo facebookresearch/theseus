@@ -8,7 +8,7 @@ from typing import List, Dict, Optional
 import urdf_parser_py.urdf as urdf
 import torch
 
-from theseus.geometry.functional import so3, se3
+from theseus.geometry.functional import se3
 from .joint import Joint, FixedJoint, RevoluteJoint, PrismaticJoint
 from .link import Link
 
@@ -51,11 +51,18 @@ class Robot(abc.ABC):
                 origin[:, :, 3] = torch.tensor(urdf_origin.xyz, dtype=dtype)
 
             if urdf_origin.rpy is not None:
-                rpy = urdf_origin.rpy
-                rot_x = so3.exp(torch.tensor([[rpy[0], 0, 0]], dtype=dtype))
-                rot_y = so3.exp(torch.tensor([[0, rpy[1], 0]], dtype=dtype))
-                rot_z = so3.exp(torch.tensor([[0, 0, rpy[2]]], dtype=dtype))
-                origin[:, :, :3] = rot_x @ rot_y @ rot_z
+                rpy = torch.tensor(urdf_origin.rpy, dtype=dtype)
+                c3, c2, c1 = rpy.cos()
+                s3, s2, s1 = rpy.sin()
+                origin[:, 0, 0] = c1 * c2
+                origin[:, 0, 1] = (c1 * s2 * s3) - (c3 * s1)
+                origin[:, 0, 2] = (s1 * s3) + (c1 * c3 * s2)
+                origin[:, 1, 0] = c2 * s1
+                origin[:, 1, 1] = (c1 * c3) + (s1 * s2 * s3)
+                origin[:, 1, 2] = (c3 * s1 * s2) - (c1 * s3)
+                origin[:, 2, 0] = -s2
+                origin[:, 2, 1] = c2 * s3
+                origin[:, 2, 2] = c2 * c3
 
             return origin
 

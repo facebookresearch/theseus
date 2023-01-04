@@ -20,7 +20,7 @@ urdf_path = os.path.join(os.path.dirname(__file__), URDF_REL_PATH)
 
 @pytest.mark.parametrize("batch_size", [1, 20, 40])
 @pytest.mark.parametrize("dtype", [torch.float32, torch.float64])
-def test_exp(batch_size: int, dtype: torch.dtype):
+def test_forward_kinematics(batch_size: int, dtype: torch.dtype):
     robot = Robot.from_urdf_file(urdf_path, dtype)
     selected_links = ["panda_link2", "panda_link5", "panda_virtual_ee_link"]
     _, fkin_impl, _, _, _ = ForwardKinematicsFactory(robot, selected_links)

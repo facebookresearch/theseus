@@ -39,11 +39,6 @@ class Camera:
             float(self.calib_k2[0, 0]),
         ]
 
-    def position(self) -> torch.Tensor:
-        R = self.pose.tensor[:, :, :3].squeeze(0)
-        t = self.pose.tensor[:, :, 3].squeeze(0)
-        return -R.T @ t
-
     @staticmethod
     def from_params(params: List[float], name: str = "Cam") -> "Camera":
         r = th.SO3.exp_map(torch.tensor(params[:3], dtype=torch.float64).unsqueeze(0))
@@ -169,7 +164,7 @@ class BundleAdjustmentDataset:
         self.gt_points = gt_points
 
     @staticmethod
-    def load_bal_dataset(path: str, drop_obs=0.0):
+    def load_bal_dataset(path: str):
         observations = []
         cameras = []
         points = []
@@ -177,41 +172,26 @@ class BundleAdjustmentDataset:
             num_cameras, num_points, num_observations = [
                 int(x) for x in out.readline().rstrip().split()
             ]
-
-            fields = out.readline().rstrip().split()
-            intrinsics = None
-            if "." in fields[0]:
-                intrinsics = [
-                    (float(fields[0]) + float(fields[1])) / 2.0,
-                    float(fields[2]),
-                    float(fields[3]),
-                ]
-
             for i in range(num_observations):
-                if i > 0 or intrinsics is not None:
-                    fields = out.readline().rstrip().split()
-                if np.random.rand() > drop_obs:
-                    feat = th.Point2(
-                        tensor=torch.tensor(
-                            [float(fields[2]), float(fields[3])], dtype=torch.float64
-                        ).unsqueeze(0),
-                        name=f"Feat{i}",
+                fields = out.readline().rstrip().split()
+                feat = th.Point2(
+                    tensor=torch.tensor(
+                        [float(fields[2]), float(fields[3])], dtype=torch.float64
+                    ).unsqueeze(0),
+                    name=f"Feat{i}",
+                )
+                observations.append(
+                    Observation(
+                        camera_index=int(fields[0]),
+                        point_index=int(fields[1]),
+                        image_feature_point=feat,
                     )
-                    observations.append(
-                        Observation(
-                            camera_index=int(fields[0]),
-                            point_index=int(fields[1]),
-                            image_feature_point=feat,
-                        )
-                    )
+                )
 
             for i in range(num_cameras):
                 params = []
-                n_params = 6 if intrinsics is not None else 9
-                for _ in range(n_params):
+                for _ in range(9):
                     params.append(float(out.readline().rstrip()))
-                if intrinsics is not None:
-                    params.extend(intrinsics)
                 cameras.append(Camera.from_params(params, name=f"Cam{i}"))
 
             for i in range(num_points):
@@ -298,9 +278,6 @@ class BundleAdjustmentDataset:
         feat_random: float = 1.5,
         prob_feat_is_outlier: float = 0.02,
         outlier_feat_random: float = 70,
-        cam_pos_rand: float = 0.2,
-        cam_rot_rand: float = 0.1,
-        point_rand: float = 0.2,
     ):
 
         # add cameras
@@ -313,10 +290,7 @@ class BundleAdjustmentDataset:
             )
             for i in range(num_cameras)
         ]
-        cameras = [
-            cam.perturbed(rot_random=cam_rot_rand, pos_random=cam_pos_rand)
-            for cam in gt_cameras
-        ]
+        cameras = [cam.perturbed() for cam in gt_cameras]
 
         # add points
         gt_points = [
@@ -329,7 +303,7 @@ class BundleAdjustmentDataset:
         ]
         points = [
             th.Point3(
-                tensor=gt_points[i].tensor + (torch.rand((1, 3)) * 2 - 1) * point_rand,
+                tensor=gt_points[i].tensor + (torch.rand((1, 3)) * 2 - 1) * 0.2,
                 name=gt_points[i].name + "_copy",
             )
             for i in range(num_points)

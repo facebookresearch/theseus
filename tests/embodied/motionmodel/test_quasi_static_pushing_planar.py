@@ -13,7 +13,6 @@ from theseus.utils import numeric_jacobian
 
 
 def test_error_quasi_static_pushing_planar_se2():
-
     # c_square is c**2, c = max_torque / max_force is a hyper param dependent on object
     c_square = torch.Tensor([1.0])
     cost_weight = th.ScaleCostWeight(1)

@@ -48,7 +48,6 @@ class LinearOptimizer(Optimizer):
         self,
         **kwargs,
     ) -> OptimizerInfo:
-
         info = OptimizerInfo(
             best_solution={},
             status=np.array([LinearOptimizerStatus.START] * self.objective.batch_size),

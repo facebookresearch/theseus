@@ -110,7 +110,6 @@ def run_learning_loop(cfg):
         epoch_grad_norm = 0
         epoch_params_norm = 0
         for batch in data_loader:
-
             model_optimizer.zero_grad()
 
             start = batch["expert_trajectory"][:, :2, 0]

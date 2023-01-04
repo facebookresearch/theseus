@@ -73,7 +73,6 @@ def test_jacobian_moving_frame_between():
 
 
 def test_error_moving_frame_between_se2():
-
     measurement = thgeom.SE2(
         x_y_theta=torch.DoubleTensor([0.0, 0.0, np.pi / 6]).unsqueeze(0)
     )

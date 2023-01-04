@@ -13,7 +13,6 @@ from tests.optimizer.linearization_test_utils import (
 
 
 def test_sparse_linearization():
-
     objective, ordering, A, b = build_test_objective_and_linear_system()
 
     linearization = th.SparseLinearization(objective, ordering=ordering)

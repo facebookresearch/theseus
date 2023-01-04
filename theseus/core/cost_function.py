@@ -123,7 +123,7 @@ class AutogradMode(Enum):
 def _tmp_tensors(vars: Sequence[Variable]):
     tensors = [v.tensor for v in vars]
     yield
-    for (v, tensor) in zip(vars, tensors):
+    for v, tensor in zip(vars, tensors):
         v.update(tensor)
 
 

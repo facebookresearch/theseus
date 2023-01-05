@@ -60,7 +60,6 @@ def test_eff_obj_interesect_jacobians():
 
 
 def _load_sdf_data_from_file(filename):
-
     with open(filename) as f:
         import json
 
@@ -82,7 +81,6 @@ def _load_sdf_data_from_file(filename):
 
 
 def _create_sdf_data(sdf_idx=0):
-
     cell_size = 0.01
     origin_x, origin_y = 0.0, 0.0
     sdf_data = np.loadtxt(
@@ -100,7 +98,6 @@ def _create_sdf_data(sdf_idx=0):
 
 
 def test_eff_obj_interesect_errors():
-
     eff_radius = torch.Tensor([0.0])
     cost_weight = th.ScaleCostWeight(1.0)
 

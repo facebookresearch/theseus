@@ -106,7 +106,6 @@ class Objective:
         optim_vars: bool = True,
         is_cost_weight: bool = False,
     ):
-
         if optim_vars:
             function_vars = function.optim_vars
             self_var_to_fn_map = self.functions_for_optim_vars
@@ -511,7 +510,6 @@ class Objective:
         input_tensors: Optional[Dict[str, torch.Tensor]] = None,
         batch_ignore_mask: Optional[torch.Tensor] = None,
     ):
-
         input_tensors = input_tensors or {}
         for var_name, tensor in input_tensors.items():
             if tensor.ndim < 2:

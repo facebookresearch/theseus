@@ -69,7 +69,7 @@ else
     BASPACHO_CUDA_ARGS="-DCMAKE_CUDA_COMPILER=/usr/local/cuda-${CUDA_VERSION}/bin/nvcc -DBASPACHO_CUDA_ARCHS='${BASPACHO_CUDA_ARCHS}'"
 fi
 
-for PYTHON_VERSION in 3.9; do
+for PYTHON_VERSION in 3.10; do
     # Create dockerfile to build in manylinux container
     DOCKER_DIR=${ROOT_DIR}/theseus_docker_${PYTHON_VERSION}
     mkdir -p ${DOCKER_DIR}

@@ -33,7 +33,6 @@ class CholmodSolveFunction(torch.autograd.Function):
         cholesky_decompositions = []
 
         for i in range(batch_size):
-
             # compute decomposition from symbolic decomposition
             At_i = sparse_structure.csc_transpose(At_val_cpu[i, :])
             cholesky_decomposition = symbolic_decomposition.cholesky_AAt(At_i, damping)
@@ -98,7 +97,6 @@ class CholmodSolveFunction(torch.autograd.Function):
     def backward(  # type: ignore
         ctx: Any, grad_output: torch.Tensor
     ) -> _CholmodSolveFunctionBwdReturnType:
-
         batch_size = grad_output.shape[0]
         H = torch.empty(
             size=(batch_size, ctx.sparse_structure.num_cols), dtype=grad_output.dtype
@@ -110,7 +108,6 @@ class CholmodSolveFunction(torch.autograd.Function):
         grad_output_cpu = grad_output.cpu()
 
         for i in range(batch_size):
-
             H[i, :] = torch.Tensor(
                 ctx.cholesky_decompositions[i](grad_output_cpu[i, :])
             )

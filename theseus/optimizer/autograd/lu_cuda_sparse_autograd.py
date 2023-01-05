@@ -127,7 +127,6 @@ class LUCudaSolveFunction(torch.autograd.Function):
     def backward(  # type: ignore
         ctx, grad_output: torch.Tensor
     ) -> _LUCudaSolveFunctionBwdReturnType:
-
         if not torch.cuda.is_available():
             raise RuntimeError("Cuda not available, LUCudaSolveFunction cannot be used")
 

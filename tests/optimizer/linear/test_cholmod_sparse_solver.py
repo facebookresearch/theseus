@@ -24,7 +24,6 @@ def _build_sparse_mat(batch_size):
 
 
 def test_sparse_solver():
-
     void_objective = th.Objective()
     void_ordering = th.VariableOrdering(void_objective, default_order=False)
     damping = 0.2  # set big value for checking

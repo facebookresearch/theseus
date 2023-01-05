@@ -126,7 +126,6 @@ class SparseLinearization(Linearization):
             block_pointers = self.cost_function_block_pointers[f_idx]
 
             for var_idx_in_cost_function, var_jacobian in enumerate(jacobians):
-
                 # the proper block is written, using the precomputed index in `block_pointers`
                 num_cols = var_jacobian.shape[2]
                 pointer = block_pointers[var_idx_in_cost_function]

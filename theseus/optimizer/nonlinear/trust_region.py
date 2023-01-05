@@ -17,6 +17,7 @@ from .nonlinear_least_squares import NonlinearLeastSquares
 # See Nocedal and Wright, Numerical Optimization, Chapter 4
 # https://www.csie.ntu.edu.tw/~r97002/temp/num_optimization.pdf
 
+
 # This optimizer optimize() receives the following keywords (see p. 69):
 #       - trust_region_init (default 1.0)
 #       - accept_threshold (default 0.25)

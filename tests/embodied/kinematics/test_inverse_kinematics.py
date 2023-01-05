@@ -56,6 +56,7 @@ def ee_pose_target(batch_size):
 @pytest.mark.parametrize("is_grad_enabled", [True, False])
 def test_ik_optimization(robot_model, batch_size, ee_pose_target, is_grad_enabled):
     """Sets up inverse kinematics as an optimization problem that uses forward kinematics"""
+
     # Define cost (distance between desired and current ee pose)
     def ee_pose_err_fn(optim_vars, aux_vars):
         (theta,) = optim_vars

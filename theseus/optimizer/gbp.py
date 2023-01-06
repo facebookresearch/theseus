@@ -939,7 +939,7 @@ class GaussianBeliefPropagation(Optimizer, abc.ABC):
                 dtype=self.ordering[0].dtype,
             )
             # dropout is implemented by changing the schedule
-            if dropout != 0.0 and it_ != 0:
+            if dropout != 0.0 and it_ > 1:
                 dropout_ixs = torch.rand(self.n_edges) < dropout
                 ftov_schedule[it_, dropout_ixs] = False
 

@@ -11,7 +11,17 @@ import warnings
 from dataclasses import dataclass
 from enum import Enum
 from itertools import count
-from typing import Dict, List, Optional, Sequence, Tuple, Type, Union
+from typing import (
+    Callable,
+    Dict,
+    List,
+    NoReturn,
+    Optional,
+    Sequence,
+    Tuple,
+    Type,
+    Union,
+)
 
 import numpy as np
 import torch
@@ -37,6 +47,10 @@ TODO
 """
 Utitily functions
 """
+
+EndIterCallbackType = Callable[
+    ["GaussianBeliefPropagation", NonlinearOptimizerInfo, None, int], NoReturn
+]
 
 
 # Same of NonlinearOptimizerParams but without step size
@@ -887,6 +901,7 @@ class GaussianBeliefPropagation(Optimizer, abc.ABC):
         lin_system_damping: torch.Tensor,
         clear_messages: bool = True,
         implicit_gbp_loop: bool = False,
+        end_iter_callback: Optional[EndIterCallbackType] = None,
         **kwargs,
     ):
         # we only create the factors and beliefs right before runnig GBP as they are
@@ -971,6 +986,9 @@ class GaussianBeliefPropagation(Optimizer, abc.ABC):
                         break  # nothing else will happen at this point
                     info.last_err = err
 
+                    if end_iter_callback is not None:
+                        end_iter_callback(self, info, None, it_)
+
         info.status[
             info.status == NonlinearOptimizerStatus.START
         ] = NonlinearOptimizerStatus.MAX_ITERATIONS
@@ -993,6 +1011,7 @@ class GaussianBeliefPropagation(Optimizer, abc.ABC):
         lin_system_damping: torch.Tensor = torch.Tensor([1e-4]),
         implicit_step_size: float = 1e-4,
         implicit_method: str = "gbp",
+        end_iter_callback: Optional[EndIterCallbackType] = None,
         **kwargs,
     ) -> NonlinearOptimizerInfo:
         backward_mode = BackwardMode.resolve(backward_mode)
@@ -1042,6 +1061,7 @@ class GaussianBeliefPropagation(Optimizer, abc.ABC):
                 dropout=dropout,
                 schedule=schedule,
                 lin_system_damping=lin_system_damping,
+                end_iter_callback=end_iter_callback,
                 **kwargs,
             )
 
@@ -1090,6 +1110,7 @@ class GaussianBeliefPropagation(Optimizer, abc.ABC):
                     dropout=dropout,
                     schedule=schedule,
                     lin_system_damping=lin_system_damping,
+                    end_iter_callback=end_iter_callback,
                     **kwargs,
                 )
 
@@ -1108,6 +1129,7 @@ class GaussianBeliefPropagation(Optimizer, abc.ABC):
                     schedule=schedule,
                     lin_system_damping=lin_system_damping,
                     clear_messages=False,
+                    end_iter_callback=end_iter_callback,
                     **kwargs,
                 )
                 # Adds grad_loop_info results to original info
@@ -1145,6 +1167,7 @@ class GaussianBeliefPropagation(Optimizer, abc.ABC):
                     lin_system_damping=lin_system_damping,
                     clear_messages=False,
                     implicit_gbp_loop=True,
+                    end_iter_callback=end_iter_callback,
                     **kwargs,
                 )
 

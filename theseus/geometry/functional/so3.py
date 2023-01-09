@@ -42,6 +42,16 @@ def check_tangent_vector(tangent_vector: torch.Tensor) -> bool:
     return _check
 
 
+def check_hat_matrix(matrix: torch.Tensor):
+    if matrix.ndim != 3 or matrix.shape[1:] != (3, 3):
+        raise ValueError("Hat matrices of SO(3) can only be 3x3 matrices")
+
+    if (matrix.transpose(1, 2) + matrix).abs().max().item() > constants._SO3_HAT_EPS[
+        matrix.dtype
+    ]:
+        raise ValueError("Hat matrices of SO(3) can only be skew-symmetric.")
+
+
 # -----------------------------------------------------------------------------
 # Exponential Map
 # -----------------------------------------------------------------------------
@@ -233,3 +243,89 @@ _inverse_autograd_fn = Inverse.apply
 _jinverse_autograd_fn = _jinverse_impl
 
 inverse, jinverse = lie_group.UnaryOperatorFactory(_module, "inverse")
+
+
+# -----------------------------------------------------------------------------
+# Hat
+# -----------------------------------------------------------------------------
+def _hat_impl(tangent_vector: torch.Tensor) -> torch.Tensor:
+    if not check_tangent_vector(tangent_vector):
+        raise ValueError("Tangent vectors of SO3 should be 3-D vectors.")
+
+    matrix = tangent_vector.new_zeros(tangent_vector.shape[0], 3, 3)
+    matrix[:, 0, 1] = -tangent_vector[:, 2].view(-1)
+    matrix[:, 0, 2] = tangent_vector[:, 1].view(-1)
+    matrix[:, 1, 2] = -tangent_vector[:, 0].view(-1)
+    matrix[:, 1, 0] = tangent_vector[:, 2].view(-1)
+    matrix[:, 2, 0] = -tangent_vector[:, 1].view(-1)
+    matrix[:, 2, 1] = tangent_vector[:, 0].view(-1)
+
+    return matrix
+
+
+# NOTE: No jacobian is defined for the hat operator
+_jhat_impl = None
+
+
+class Hat(lie_group.UnaryOperator):
+    @classmethod
+    def forward(cls, ctx, tangent_vector):
+        tangent_vector: torch.Tensor = cast(torch.Tensor, tangent_vector)
+        ret = _hat_impl(tangent_vector)
+        return ret
+
+    @classmethod
+    def backward(cls, ctx, grad_output):
+        grad_output: torch.Tensor = cast(torch.Tensor, grad_output)
+        return torch.stack(
+            (
+                grad_output[:, 2, 1] - grad_output[:, 1, 2],
+                grad_output[:, 0, 2] - grad_output[:, 2, 0],
+                grad_output[:, 1, 0] - grad_output[:, 0, 1],
+            ),
+            dim=1,
+        )
+
+
+_hat_autograd_fn = Hat.apply
+_jhat_autograd_fn = None
+
+hat = lie_group.UnaryOperatorFactory(_module, "hat")
+
+
+# -----------------------------------------------------------------------------
+# Vee
+# -----------------------------------------------------------------------------
+def _vee_impl(matrix: torch.Tensor) -> torch.Tensor:
+    check_hat_matrix(matrix)
+    return 0.5 * torch.stack(
+        (
+            matrix[:, 2, 1] - matrix[:, 1, 2],
+            matrix[:, 0, 2] - matrix[:, 2, 0],
+            matrix[:, 1, 0] - matrix[:, 0, 1],
+        ),
+        dim=1,
+    )
+
+
+# NOTE: No jacobian is defined for the vee operator
+_jvee_impl = None
+
+
+class Vee(lie_group.UnaryOperator):
+    @classmethod
+    def forward(cls, ctx, tangent_vector):
+        tangent_vector: torch.Tensor = cast(torch.Tensor, tangent_vector)
+        ret = _vee_impl(tangent_vector)
+        return ret
+
+    @classmethod
+    def backward(cls, ctx, grad_output):
+        grad_output: torch.Tensor = cast(torch.Tensor, grad_output)
+        return 0.5 * hat(grad_output)
+
+
+_vee_autograd_fn = Vee.apply
+_jvee_autograd_fn = None
+
+vee = lie_group.UnaryOperatorFactory(_module, "vee")

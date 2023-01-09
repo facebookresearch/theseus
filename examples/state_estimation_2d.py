@@ -116,7 +116,6 @@ def get_weights_dict_from_model(
             if i < path_length_ - 1:
                 weights_dict[f"scale_between_{i}"] = unique_weight_[0, 1].view(1, 1)
     else:
-
         weights_dict = {}
         all_states_ = []
         # will compute weight for all cost weights in the path
@@ -194,7 +193,6 @@ def get_average_sample_cost(x_samples, cost_weights_model, objective, mode_):
 # --------------------------- Learning ------------------------ #
 # ------------------------------------------------------------- #
 def run_learning(mode_, path_data_, gps_targets_, measurements_):
-
     # first input is scale for GPS costs, second is scale for Between costs
     if mode_ == "constant":
         model_params = nn.Parameter(10 * torch.rand(1, 2, device=device))

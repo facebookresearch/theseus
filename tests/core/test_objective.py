@@ -249,7 +249,6 @@ def test_objective_error():
             assert error_.allclose(expected_error.norm(dim=1) ** 2)
 
     def _check_variables(objective, input_tensors, v1_data, v2_data, also_update):
-
         if also_update:
             assert objective.optim_vars["v1"].tensor is input_tensors["v1"]
             assert objective.optim_vars["v2"].tensor is input_tensors["v2"]
@@ -263,7 +262,6 @@ def test_objective_error():
     def _check_error_and_variables(
         v1_data_, v2_data_, error_, error_type, objective, input_tensors, also_update
     ):
-
         _check_error_for_data(v1_data_, v2_data_, error_, error_type)
 
         _check_variables(objective, input_tensors, v1_data, v2_data, also_update)

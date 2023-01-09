@@ -103,7 +103,6 @@ class RandomGeoAug(object):
         shear_y_param: Optional[GeoAugParam] = None,
         perspective_param: Optional[GeoAugParam] = None,
     ):
-
         self.rotate_param = (
             GeoAugParam(min=-180, max=180) if rotate_param is None else rotate_param
         )
@@ -356,7 +355,6 @@ class RandomPhotoAug(object):
         gaussian_noise_param: Optional[PhotoAugParam] = None,
         salt_and_pepper_param: Optional[PhotoAugParam] = None,
     ):
-
         self.contrast_param = (
             PhotoAugParam() if contrast_param is None else contrast_param
         )

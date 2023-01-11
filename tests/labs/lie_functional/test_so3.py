@@ -5,8 +5,8 @@
 
 import pytest
 from .common import check_lie_group_function
-from theseus.geometry.functional.constants import TEST_EPS
-import theseus.geometry.functional.so3 as so3
+from theseus.labs.lie_functional.constants import TEST_EPS
+import theseus.labs.lie_functional.so3 as so3
 
 import torch
 

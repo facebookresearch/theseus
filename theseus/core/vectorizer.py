@@ -11,7 +11,7 @@ import torch
 
 from theseus.geometry.manifold import Manifold
 
-from .cost_function import CostFunction
+from .cost_function import AutoDiffCostFunction, CostFunction
 from .objective import Objective
 from .variable import Variable
 
@@ -20,7 +20,10 @@ _CostFunctionSchema = Tuple[str, ...]
 
 def _get_cost_function_schema(cost_function: CostFunction) -> _CostFunctionSchema:
     def _fullname(obj) -> str:
-        return f"{obj.__module__}.{obj.__class__.__name__}"
+        _name = f"{obj.__module__}.{obj.__class__.__name__}"
+        if isinstance(obj, AutoDiffCostFunction):
+            _name += f"__{id(obj._err_fn)}"
+        return _name
 
     def _varinfo(var) -> str:
         return f"{_fullname(var)}{tuple(var.shape[1:])}"

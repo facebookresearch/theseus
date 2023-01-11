@@ -26,10 +26,13 @@ def ForwardKinematicsFactory(robot: Robot, link_names: Optional[List[str]] = Non
 
     link_ids: List[int] = [link.id for link in links]
 
-    ancestors = []
+    ancestors: List[Link] = []
+    joint_ids: List[int] = []
     for link in links:
         ancestors += [anc for anc in link.ancestors]
+        joint_ids += link.angle_ids
     pose_ids = sorted(list(set([anc.id for anc in ancestors] + link_ids)))
+    joint_ids = sorted(list(set(joint_ids)))
 
     def _forward_kinematics_helper(angles: torch.Tensor):
         if angles.ndim != 2 or angles.shape[1] != robot.dof:
@@ -106,6 +109,9 @@ def ForwardKinematicsFactory(robot: Robot, link_names: Optional[List[str]] = Non
             if not hasattr(ctx, "jposes"):
                 ctx.jposes: torch.Tensor = _jforward_kinematics_helper(ctx.poses)
             rets: tuple(torch.Tensor) = ctx.rets
+            grad_pose = grad_outputs[0].new_zeros(
+                grad_outputs[0].shape[0], 6, robot.dof
+            )
             grad_input = grad_outputs[0].new_zeros(grad_outputs[0].shape[0], robot.dof)
 
             for link_id, ret, grad_output in zip(link_ids, rets, grad_outputs):
@@ -116,9 +122,10 @@ def ForwardKinematicsFactory(robot: Robot, link_names: Optional[List[str]] = Non
                         dim=-1,
                     )
                 ).unsqueeze(-1)
-                grad_input[:, angle_ids] += (
-                    ctx.jposes[:, :, angle_ids].transpose(1, 2) @ temp
-                ).squeeze(-1)
+                grad_pose[:, :, angle_ids] += temp
+            grad_input[:, joint_ids] = (
+                ctx.jposes[:, :, joint_ids] * grad_pose[:, :, joint_ids]
+            ).sum(-2)
 
             return grad_input
 

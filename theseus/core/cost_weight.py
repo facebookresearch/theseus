@@ -13,9 +13,6 @@ from .theseus_function import TheseusFunction
 from .variable import Variable, as_variable
 
 
-_ZERO_EPS = 1.0e-15
-
-
 # Abstract class for representing cost weights (aka, precisions, inverse covariance)
 # Concrete classes must implement two methods:
 #   - `weight_error`: return an error tensor weighted by the cost weight
@@ -76,7 +73,7 @@ class ScaleCostWeight(CostWeight):
         self.register_aux_vars(["scale"])
 
     def is_zero(self) -> torch.Tensor:
-        return (self.scale.tensor.abs() < _ZERO_EPS).view(-1)
+        return self.scale.tensor == 0
 
     def weight_error(self, error: torch.Tensor) -> torch.Tensor:
         return error * self.scale.tensor
@@ -119,7 +116,8 @@ class DiagonalCostWeight(CostWeight):
         self.register_aux_vars(["diagonal"])
 
     def is_zero(self) -> torch.Tensor:
-        return self.diagonal.tensor.abs().max(dim=1)[0] < _ZERO_EPS
+        # The minimum of each (diagonal[b] == 0) is True only if all its elements are 0
+        return (self.diagonal.tensor == 0).min(dim=1)[0]
 
     def weight_error(self, error: torch.Tensor) -> torch.Tensor:
         return error * self.diagonal.tensor

@@ -106,6 +106,8 @@ class GPCostWeight(CostWeight):
             raise ValueError("dt must be a 0-D or 1-D tensor.")
         self.dt = dt
         self.dt.tensor = self.dt.tensor.view(-1, 1)
+        if not (self.dt.tensor > 0).all():
+            raise ValueError("dt must be greater than 0.")
 
         Qc_inv = as_variable(Qc_inv)
         if Qc_inv.ndim not in [2, 3]:
@@ -116,10 +118,15 @@ class GPCostWeight(CostWeight):
         self.Qc_inv.tensor = (
             Qc_inv.tensor if Qc_inv.ndim == 3 else Qc_inv.tensor.unsqueeze(0)
         )
+        try:
+            torch.linalg.cholesky(Qc_inv.tensor)
+        except RuntimeError:
+            raise ValueError("Qc_inv must be positive definite.")
+
         self.register_aux_vars(["Qc_inv", "dt"])
 
     def is_zero(self) -> torch.Tensor:
-        raise NotImplementedError
+        return torch.zeros(self.Qc_inv.shape[0]).bool()
 
     def _compute_cost_weight(self) -> torch.Tensor:
         batch_size, dof, _ = self.Qc_inv.shape

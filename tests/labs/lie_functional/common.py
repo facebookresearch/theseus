@@ -6,6 +6,9 @@
 import torch
 
 
+TEST_EPS = 5e-7
+
+
 def check_lie_group_function(module, op_name: str, atol: float, *args):
     op_impl = getattr(module, "_" + op_name + "_impl")
     op = getattr(module, op_name)

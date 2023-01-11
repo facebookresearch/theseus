@@ -6,7 +6,7 @@
 import pytest  # noqa: F401
 import torch
 
-from tests.extlib.common import run_if_baspacho
+from tests.decorators import run_if_baspacho
 from tests.optimizer.autograd.test_baspacho_sparse_backward import (
     get_linearization_and_solver_for_random_sparse,
 )

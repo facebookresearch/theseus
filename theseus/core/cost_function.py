@@ -46,7 +46,7 @@ def masked_jacobians(
     err = aux_tensor.new_zeros(batch_size, cost_fn.dim())
     with masked_variables(cost_fn_vars, mask):
         masked_jacobians_, err[mask] = cost_fn.jacobians()
-        for (masked_jac, jac) in zip(masked_jacobians_, jacobians):
+        for masked_jac, jac in zip(masked_jacobians_, jacobians):
             jac[mask] = masked_jac
     return jacobians, err
 

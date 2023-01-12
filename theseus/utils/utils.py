@@ -112,6 +112,18 @@ def numeric_jacobian(
     return jacs
 
 
+# A basic timer utility that adapts to the device. Useful for removing
+# boilerplate code when benchmarking tasks.
+# For CPU it uses time.perf_counter_ns()
+# For GPU it uses torch.cuda.Event()
+#
+# Usage:
+#
+# from thesus.utils import Timer
+#
+# with Timer("cuda:0") as timer:
+#    do_some_stuff()
+# print(timer.elapsed_time)
 class Timer:
     def __init__(self, device: th.DeviceType) -> None:
         self.device = torch.device(device)

@@ -277,6 +277,164 @@ exp, jexp = lie_group.UnaryOperatorFactory(_module, "exp")
 
 
 # -----------------------------------------------------------------------------
+# Logarithm Map
+# -----------------------------------------------------------------------------
+def _log_impl(group: torch.Tensor) -> torch.Tensor:
+    if not check_group_tensor(group):
+        raise ValueError("Invalid data tensor for SO3.")
+
+    sine_axis = group.new_zeros(group.shape[0], 3)
+    sine_axis[:, 0] = 0.5 * (group[:, 2, 1] - group[:, 1, 2])
+    sine_axis[:, 1] = 0.5 * (group[:, 0, 2] - group[:, 2, 0])
+    sine_axis[:, 2] = 0.5 * (group[:, 1, 0] - group[:, 0, 1])
+    cosine = 0.5 * (group[:, 0, 0] + group[:, 1, 1] + group[:, 2, 2] - 1)
+    sine = sine_axis.norm(dim=1)
+    theta = torch.atan2(sine, cosine)
+
+    near_zero = theta < constants._SO3_NEAR_ZERO_EPS[group.dtype]
+
+    near_pi = 1 + cosine <= constants._SO3_NEAR_PI_EPS[group.dtype]
+    # theta != pi
+    near_zero_or_near_pi = torch.logical_or(near_zero, near_pi)
+    # Compute the approximation of theta / sin(theta) when theta is near to 0
+    non_zero = torch.ones(1, dtype=group.dtype, device=group.device)
+    sine_nz = torch.where(near_zero_or_near_pi, non_zero, sine)
+    scale = torch.where(
+        near_zero_or_near_pi,
+        1 + sine**2 / 6,
+        theta / sine_nz,
+    )
+    ret = sine_axis * scale.view(-1, 1)
+
+    # # theta ~ pi
+    ddiag = torch.diagonal(group, dim1=1, dim2=2)
+    # Find the index of major coloumns and diagonals
+    major = torch.logical_and(
+        ddiag[:, 1] > ddiag[:, 0], ddiag[:, 1] > ddiag[:, 2]
+    ) + 2 * torch.logical_and(ddiag[:, 2] > ddiag[:, 0], ddiag[:, 2] > ddiag[:, 1])
+    aux = torch.ones(group.shape[0], dtype=torch.bool)
+    sel_rows = 0.5 * (group[aux, major] + group[aux, :, major])
+    sel_rows[aux, major] -= cosine
+    axis = sel_rows / torch.where(
+        near_zero,
+        non_zero,
+        sel_rows.norm(dim=1),
+    ).view(-1, 1)
+    sign_tmp = sine_axis[aux, major].sign()
+    sign = torch.where(sign_tmp != 0, sign_tmp, torch.ones_like(sign_tmp))
+    tangent_vector = torch.where(
+        near_pi.view(-1, 1), axis * (theta * sign).view(-1, 1), ret
+    )
+
+    return tangent_vector
+
+
+def _jlog_impl(group: torch.Tensor) -> Tuple[List[torch.Tensor], torch.Tensor]:
+    if not check_group_tensor(group):
+        raise ValueError("Invalid data tensor for SO3.")
+
+    sine_axis = group.new_zeros(group.shape[0], 3)
+    sine_axis[:, 0] = 0.5 * (group[:, 2, 1] - group[:, 1, 2])
+    sine_axis[:, 1] = 0.5 * (group[:, 0, 2] - group[:, 2, 0])
+    sine_axis[:, 2] = 0.5 * (group[:, 1, 0] - group[:, 0, 1])
+    cosine = 0.5 * (group[:, 0, 0] + group[:, 1, 1] + group[:, 2, 2] - 1)
+    sine = sine_axis.norm(dim=1)
+    theta = torch.atan2(sine, cosine)
+
+    near_zero = theta < constants._SO3_NEAR_ZERO_EPS[group.dtype]
+
+    near_pi = 1 + cosine <= constants._SO3_NEAR_PI_EPS[group.dtype]
+    # theta != pi
+    near_zero_or_near_pi = torch.logical_or(near_zero, near_pi)
+    # Compute the approximation of theta / sin(theta) when theta is near to 0
+    non_zero = torch.ones(1, dtype=group.dtype, device=group.device)
+    sine_nz = torch.where(near_zero_or_near_pi, non_zero, sine)
+    scale = torch.where(
+        near_zero_or_near_pi,
+        1 + sine**2 / 6,
+        theta / sine_nz,
+    )
+    tangent_vector = sine_axis * scale.view(-1, 1)
+
+    # # theta ~ pi
+    ddiag = torch.diagonal(group, dim1=1, dim2=2)
+    # Find the index of major coloumns and diagonals
+    major = torch.logical_and(
+        ddiag[:, 1] > ddiag[:, 0], ddiag[:, 1] > ddiag[:, 2]
+    ) + 2 * torch.logical_and(ddiag[:, 2] > ddiag[:, 0], ddiag[:, 2] > ddiag[:, 1])
+    aux = torch.ones(group.shape[0], dtype=torch.bool)
+    sel_rows = 0.5 * (group[aux, major] + group[aux, :, major])
+    sel_rows[aux, major] -= cosine
+    axis = sel_rows / torch.where(
+        near_zero,
+        non_zero,
+        sel_rows.norm(dim=1),
+    ).view(-1, 1)
+    sign_tmp = sine_axis[aux, major].sign()
+    sign = torch.where(sign_tmp != 0, sign_tmp, torch.ones_like(sign_tmp))
+    tangent_vector = torch.where(
+        near_pi.view(-1, 1), axis * (theta * sign).view(-1, 1), tangent_vector
+    )
+
+    theta2 = theta**2
+    sine_theta = sine * theta
+    two_cosine_minus_two = 2 * cosine - 2
+    two_cosine_minus_two_nz = torch.where(near_zero, non_zero, two_cosine_minus_two)
+    theta2_nz = torch.where(near_zero, non_zero, theta2)
+
+    a = torch.where(near_zero, 1 - theta2 / 12, -sine_theta / two_cosine_minus_two_nz)
+    b = torch.where(
+        near_zero,
+        1.0 / 12 + theta2 / 720,
+        (sine_theta + two_cosine_minus_two) / (theta2_nz * two_cosine_minus_two_nz),
+    )
+
+    jac = (b.view(-1, 1) * tangent_vector).view(-1, 3, 1) * tangent_vector.view(
+        -1, 1, 3
+    )
+
+    half_ret = 0.5 * tangent_vector
+    jac[:, 0, 1] -= half_ret[:, 2]
+    jac[:, 1, 0] += half_ret[:, 2]
+    jac[:, 0, 2] += half_ret[:, 1]
+    jac[:, 2, 0] -= half_ret[:, 1]
+    jac[:, 1, 2] -= half_ret[:, 0]
+    jac[:, 2, 1] += half_ret[:, 0]
+
+    diag_jac = torch.diagonal(jac, dim1=1, dim2=2)
+    diag_jac += a.view(-1, 1)
+
+    return [jac], tangent_vector
+
+
+class Log(lie_group.UnaryOperator):
+    @classmethod
+    def forward(cls, ctx, group):
+        group: torch.Tensor = cast(torch.Tensor, group)
+        tangent_vector = _log_impl(group)
+        ctx.save_for_backward(tangent_vector, group)
+        return tangent_vector
+
+    @classmethod
+    def backward(cls, ctx, grad_output):
+        group: torch.Tensor = ctx.saved_tensors[1]
+        if not hasattr(ctx, "jacobians"):
+            ctx.jacobians: torch.Tensor = 0.5 * _jlog_impl(group)[0][0]
+
+        temp = lift(
+            (ctx.jacobians.transpose(1, 2) @ grad_output.unsqueeze(-1)).squeeze(-1)
+        )
+        return torch.einsum("nij,n...jk->n...ik", group, temp)
+
+
+# TODO: Implement analytic backward for _jlog_impl
+_log_autograd_fn = Log.apply
+_jlog_autograd_fn = _jlog_impl
+
+log, jlog = lie_group.UnaryOperatorFactory(_module, "log")
+
+
+# -----------------------------------------------------------------------------
 # Adjoint Transformation
 # -----------------------------------------------------------------------------
 def _adjoint_impl(group: torch.Tensor) -> torch.Tensor:
@@ -621,7 +779,6 @@ class Lift(lie_group.UnaryOperator):
 
     @classmethod
     def backward(cls, ctx, grad_output):
-        grad_output: torch.Tensor = cast(torch.Tensor, grad_output)
         grad_output: torch.Tensor = cast(torch.Tensor, grad_output)
         return project(grad_output)
 

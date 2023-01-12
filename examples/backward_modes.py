@@ -68,7 +68,9 @@ optimizer = th.GaussNewton(
     objective,
     max_iterations=15,
     step_size=1.0,
+    abs_err_tolerance = 1e-15,
 )
+
 
 theseus_inputs = {
     "a": 2 * torch.ones((1, 1)).requires_grad_(),

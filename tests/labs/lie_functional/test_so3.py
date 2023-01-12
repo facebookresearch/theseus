@@ -28,6 +28,7 @@ def test_exp(batch_size: int, dtype: torch.dtype):
     check_lie_group_function(so3, "exp", 1e-6, (tangent_vector,))
 
 
+@run_if_labs()
 @pytest.mark.parametrize("batch_size", [1, 20, 100])
 @pytest.mark.parametrize("dtype", [torch.float32, torch.float64])
 def test_log(batch_size: int, dtype: torch.dtype):
@@ -102,6 +103,7 @@ def test_vee(batch_size: int, dtype: torch.dtype):
     assert torch.allclose(actual_tangent_vector, tangent_vector, atol=TEST_EPS)
 
 
+@run_if_labs()
 @pytest.mark.parametrize("batch_size", [1, 20, 100])
 @pytest.mark.parametrize("dtype", [torch.float32, torch.float64])
 def test_compose(batch_size: int, dtype: torch.dtype):
@@ -114,6 +116,7 @@ def test_compose(batch_size: int, dtype: torch.dtype):
     check_lie_group_function(so3, "compose", TEST_EPS, (group0, group1))
 
 
+@run_if_labs()
 @pytest.mark.parametrize("batch_size", [1, 20, 100])
 @pytest.mark.parametrize("dtype", [torch.float32, torch.float64])
 def test_quaternion_to_rotation(batch_size: int, dtype: torch.dtype):
@@ -126,6 +129,7 @@ def test_quaternion_to_rotation(batch_size: int, dtype: torch.dtype):
     check_lie_group_function(so3, "quaternion_to_rotation", TEST_EPS, (quaternion,))
 
 
+@run_if_labs()
 @pytest.mark.parametrize("batch_size", [1, 20, 100])
 @pytest.mark.parametrize("dtype", [torch.float32, torch.float64])
 def test_lift(batch_size: int, dtype: torch.dtype):
@@ -142,6 +146,7 @@ def test_lift(batch_size: int, dtype: torch.dtype):
     check_lie_group_function(so3, "lift", TEST_EPS, (matrix,))
 
 
+@run_if_labs()
 @pytest.mark.parametrize("batch_size", [1, 20, 100])
 @pytest.mark.parametrize("dtype", [torch.float32, torch.float64])
 def test_project(batch_size: int, dtype: torch.dtype):
@@ -159,6 +164,7 @@ def test_project(batch_size: int, dtype: torch.dtype):
     check_lie_group_function(so3, "project", TEST_EPS, (matrix,))
 
 
+@run_if_labs()
 @pytest.mark.parametrize("batch_size", [1, 20, 100])
 @pytest.mark.parametrize("dtype", [torch.float32, torch.float64])
 def test_left_act(batch_size: int, dtype: torch.dtype):
@@ -189,6 +195,7 @@ def test_left_act(batch_size: int, dtype: torch.dtype):
     check_lie_group_function(so3, "left_act", TEST_EPS, (group, matrix))
 
 
+@run_if_labs()
 @pytest.mark.parametrize("batch_size", [1, 20, 100])
 @pytest.mark.parametrize("dtype", [torch.float32, torch.float64])
 def test_left_project(batch_size: int, dtype: torch.dtype):

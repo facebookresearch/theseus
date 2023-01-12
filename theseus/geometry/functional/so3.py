@@ -4,7 +4,7 @@
 # LICENSE file in the root directory of this source tree.
 
 import torch
-from typing import cast, List, Tuple
+from typing import cast, List, Tuple, Optional
 
 from . import constants
 from . import lie_group
@@ -63,6 +63,83 @@ def check_unit_quaternion(quaternion: torch.Tensor):
 
     if (torch.linalg.norm(quaternion, dim=1) - 1).abs().max().item() >= QUANTERNION_EPS:
         raise ValueError("Not unit quaternions.")
+
+
+def check_left_act_matrix(matrix: torch.Tensor):
+    if matrix.shape[-2] != 3:
+        raise ValueError("Inconsistent shape for the matrix.")
+
+
+def check_left_project_matrix(matrix: torch.Tensor):
+    if matrix.shape[-2:] != (3, 3):
+        raise ValueError("Inconsistent shape for the matrix.")
+
+
+# -----------------------------------------------------------------------------
+# Rand
+# -----------------------------------------------------------------------------
+
+
+def rand(
+    *size: int,
+    generator: Optional[torch.Generator] = None,
+    dtype: Optional[torch.dtype] = None,
+    device: constants.DeviceType = None,
+    requires_grad: bool = False,
+) -> torch.Tensor:
+    # Reference:
+    # https://web.archive.org/web/20211105205926/http://planning.cs.uiuc.edu/node198.html
+    if len(size) != 1:
+        raise ValueError("The size should be 1D.")
+    u = torch.rand(
+        3,
+        size[0],
+        generator=generator,
+        dtype=dtype,
+        device=device,
+        requires_grad=requires_grad,
+    )
+    u1 = u[0]
+    u2, u3 = u[1:3] * 2 * constants.PI
+
+    a = torch.sqrt(1.0 - u1)
+    b = torch.sqrt(u1)
+    quaternion = torch.stack(
+        [
+            a * torch.sin(u2),
+            a * torch.cos(u2),
+            b * torch.sin(u3),
+            b * torch.cos(u3),
+        ],
+        dim=1,
+    )
+    assert quaternion.shape == (size[0], 4)
+    return quaternion_to_rotation(quaternion)
+
+
+# -----------------------------------------------------------------------------
+# Randn
+# -----------------------------------------------------------------------------
+def randn(
+    *size: int,
+    generator: Optional[torch.Generator] = None,
+    dtype: Optional[torch.dtype] = None,
+    device: constants.DeviceType = None,
+    requires_grad: bool = False,
+) -> torch.Tensor:
+    if len(size) != 1:
+        raise ValueError("The size should be 1D.")
+    return exp(
+        constants.PI
+        * torch.randn(
+            size[0],
+            3,
+            generator=generator,
+            dtype=dtype,
+            device=device,
+            requires_grad=requires_grad,
+        )
+    )
 
 
 # -----------------------------------------------------------------------------
@@ -197,6 +274,164 @@ _exp_autograd_fn = Exp.apply
 _jexp_autograd_fn = _jexp_impl
 
 exp, jexp = lie_group.UnaryOperatorFactory(_module, "exp")
+
+
+# -----------------------------------------------------------------------------
+# Logarithm Map
+# -----------------------------------------------------------------------------
+def _log_impl(group: torch.Tensor) -> torch.Tensor:
+    if not check_group_tensor(group):
+        raise ValueError("Invalid data tensor for SO3.")
+
+    sine_axis = group.new_zeros(group.shape[0], 3)
+    sine_axis[:, 0] = 0.5 * (group[:, 2, 1] - group[:, 1, 2])
+    sine_axis[:, 1] = 0.5 * (group[:, 0, 2] - group[:, 2, 0])
+    sine_axis[:, 2] = 0.5 * (group[:, 1, 0] - group[:, 0, 1])
+    cosine = 0.5 * (group[:, 0, 0] + group[:, 1, 1] + group[:, 2, 2] - 1)
+    sine = sine_axis.norm(dim=1)
+    theta = torch.atan2(sine, cosine)
+
+    near_zero = theta < constants._SO3_NEAR_ZERO_EPS[group.dtype]
+
+    near_pi = 1 + cosine <= constants._SO3_NEAR_PI_EPS[group.dtype]
+    # theta != pi
+    near_zero_or_near_pi = torch.logical_or(near_zero, near_pi)
+    # Compute the approximation of theta / sin(theta) when theta is near to 0
+    non_zero = torch.ones(1, dtype=group.dtype, device=group.device)
+    sine_nz = torch.where(near_zero_or_near_pi, non_zero, sine)
+    scale = torch.where(
+        near_zero_or_near_pi,
+        1 + sine**2 / 6,
+        theta / sine_nz,
+    )
+    ret = sine_axis * scale.view(-1, 1)
+
+    # # theta ~ pi
+    ddiag = torch.diagonal(group, dim1=1, dim2=2)
+    # Find the index of major coloumns and diagonals
+    major = torch.logical_and(
+        ddiag[:, 1] > ddiag[:, 0], ddiag[:, 1] > ddiag[:, 2]
+    ) + 2 * torch.logical_and(ddiag[:, 2] > ddiag[:, 0], ddiag[:, 2] > ddiag[:, 1])
+    aux = torch.ones(group.shape[0], dtype=torch.bool)
+    sel_rows = 0.5 * (group[aux, major] + group[aux, :, major])
+    sel_rows[aux, major] -= cosine
+    axis = sel_rows / torch.where(
+        near_zero,
+        non_zero,
+        sel_rows.norm(dim=1),
+    ).view(-1, 1)
+    sign_tmp = sine_axis[aux, major].sign()
+    sign = torch.where(sign_tmp != 0, sign_tmp, torch.ones_like(sign_tmp))
+    tangent_vector = torch.where(
+        near_pi.view(-1, 1), axis * (theta * sign).view(-1, 1), ret
+    )
+
+    return tangent_vector
+
+
+def _jlog_impl(group: torch.Tensor) -> Tuple[List[torch.Tensor], torch.Tensor]:
+    if not check_group_tensor(group):
+        raise ValueError("Invalid data tensor for SO3.")
+
+    sine_axis = group.new_zeros(group.shape[0], 3)
+    sine_axis[:, 0] = 0.5 * (group[:, 2, 1] - group[:, 1, 2])
+    sine_axis[:, 1] = 0.5 * (group[:, 0, 2] - group[:, 2, 0])
+    sine_axis[:, 2] = 0.5 * (group[:, 1, 0] - group[:, 0, 1])
+    cosine = 0.5 * (group[:, 0, 0] + group[:, 1, 1] + group[:, 2, 2] - 1)
+    sine = sine_axis.norm(dim=1)
+    theta = torch.atan2(sine, cosine)
+
+    near_zero = theta < constants._SO3_NEAR_ZERO_EPS[group.dtype]
+
+    near_pi = 1 + cosine <= constants._SO3_NEAR_PI_EPS[group.dtype]
+    # theta != pi
+    near_zero_or_near_pi = torch.logical_or(near_zero, near_pi)
+    # Compute the approximation of theta / sin(theta) when theta is near to 0
+    non_zero = torch.ones(1, dtype=group.dtype, device=group.device)
+    sine_nz = torch.where(near_zero_or_near_pi, non_zero, sine)
+    scale = torch.where(
+        near_zero_or_near_pi,
+        1 + sine**2 / 6,
+        theta / sine_nz,
+    )
+    tangent_vector = sine_axis * scale.view(-1, 1)
+
+    # # theta ~ pi
+    ddiag = torch.diagonal(group, dim1=1, dim2=2)
+    # Find the index of major coloumns and diagonals
+    major = torch.logical_and(
+        ddiag[:, 1] > ddiag[:, 0], ddiag[:, 1] > ddiag[:, 2]
+    ) + 2 * torch.logical_and(ddiag[:, 2] > ddiag[:, 0], ddiag[:, 2] > ddiag[:, 1])
+    aux = torch.ones(group.shape[0], dtype=torch.bool)
+    sel_rows = 0.5 * (group[aux, major] + group[aux, :, major])
+    sel_rows[aux, major] -= cosine
+    axis = sel_rows / torch.where(
+        near_zero,
+        non_zero,
+        sel_rows.norm(dim=1),
+    ).view(-1, 1)
+    sign_tmp = sine_axis[aux, major].sign()
+    sign = torch.where(sign_tmp != 0, sign_tmp, torch.ones_like(sign_tmp))
+    tangent_vector = torch.where(
+        near_pi.view(-1, 1), axis * (theta * sign).view(-1, 1), tangent_vector
+    )
+
+    theta2 = theta**2
+    sine_theta = sine * theta
+    two_cosine_minus_two = 2 * cosine - 2
+    two_cosine_minus_two_nz = torch.where(near_zero, non_zero, two_cosine_minus_two)
+    theta2_nz = torch.where(near_zero, non_zero, theta2)
+
+    a = torch.where(near_zero, 1 - theta2 / 12, -sine_theta / two_cosine_minus_two_nz)
+    b = torch.where(
+        near_zero,
+        1.0 / 12 + theta2 / 720,
+        (sine_theta + two_cosine_minus_two) / (theta2_nz * two_cosine_minus_two_nz),
+    )
+
+    jac = (b.view(-1, 1) * tangent_vector).view(-1, 3, 1) * tangent_vector.view(
+        -1, 1, 3
+    )
+
+    half_ret = 0.5 * tangent_vector
+    jac[:, 0, 1] -= half_ret[:, 2]
+    jac[:, 1, 0] += half_ret[:, 2]
+    jac[:, 0, 2] += half_ret[:, 1]
+    jac[:, 2, 0] -= half_ret[:, 1]
+    jac[:, 1, 2] -= half_ret[:, 0]
+    jac[:, 2, 1] += half_ret[:, 0]
+
+    diag_jac = torch.diagonal(jac, dim1=1, dim2=2)
+    diag_jac += a.view(-1, 1)
+
+    return [jac], tangent_vector
+
+
+class Log(lie_group.UnaryOperator):
+    @classmethod
+    def forward(cls, ctx, group):
+        group: torch.Tensor = cast(torch.Tensor, group)
+        tangent_vector = _log_impl(group)
+        ctx.save_for_backward(tangent_vector, group)
+        return tangent_vector
+
+    @classmethod
+    def backward(cls, ctx, grad_output):
+        group: torch.Tensor = ctx.saved_tensors[1]
+        if not hasattr(ctx, "jacobians"):
+            ctx.jacobians: torch.Tensor = 0.5 * _jlog_impl(group)[0][0]
+
+        temp = lift(
+            (ctx.jacobians.transpose(1, 2) @ grad_output.unsqueeze(-1)).squeeze(-1)
+        )
+        return torch.einsum("nij,n...jk->n...ik", group, temp)
+
+
+# TODO: Implement analytic backward for _jlog_impl
+_log_autograd_fn = Log.apply
+_jlog_autograd_fn = _jlog_impl
+
+log, jlog = lie_group.UnaryOperatorFactory(_module, "log")
 
 
 # -----------------------------------------------------------------------------
@@ -511,3 +746,155 @@ _jquaternion_to_rotation_autograd_fn = _jquaternion_to_rotation_impl
 quaternion_to_rotation, jquaternion_to_rotation = lie_group.UnaryOperatorFactory(
     _module, "quaternion_to_rotation"
 )
+
+
+# -----------------------------------------------------------------------------
+# Lift
+# -----------------------------------------------------------------------------
+def _lift_impl(matrix: torch.Tensor) -> torch.Tensor:
+    if matrix.shape[-1] != 3:
+        raise ValueError("Inconsistent shape for the matrix to lift.")
+
+    ret = matrix.new_zeros(matrix.shape[:-1] + (3, 3))
+    ret[..., 0, 1] = -matrix[..., 2]
+    ret[..., 0, 2] = matrix[..., 1]
+    ret[..., 1, 2] = -matrix[..., 0]
+    ret[..., 1, 0] = matrix[..., 2]
+    ret[..., 2, 0] = -matrix[..., 1]
+    ret[..., 2, 1] = matrix[..., 0]
+
+    return ret
+
+
+# NOTE: No jacobian is defined for the project operator
+_jlift_impl = None
+
+
+class Lift(lie_group.UnaryOperator):
+    @classmethod
+    def forward(cls, ctx, matrix):
+        matrix: torch.Tensor = cast(torch.Tensor, matrix)
+        ret = _lift_impl(matrix)
+        return ret
+
+    @classmethod
+    def backward(cls, ctx, grad_output):
+        grad_output: torch.Tensor = cast(torch.Tensor, grad_output)
+        return project(grad_output)
+
+
+_lift_autograd_fn = Lift.apply
+_jlift_autograd_fn = None
+
+lift = lie_group.UnaryOperatorFactory(_module, "lift")
+
+
+# -----------------------------------------------------------------------------
+# Project
+# -----------------------------------------------------------------------------
+def _project_impl(matrix: torch.Tensor) -> torch.Tensor:
+    if matrix.shape[-2:] != (3, 3):
+        raise ValueError("Inconsistent shape for the matrix to project.")
+
+    return torch.stack(
+        (
+            matrix[..., 2, 1] - matrix[..., 1, 2],
+            matrix[..., 0, 2] - matrix[..., 2, 0],
+            matrix[..., 1, 0] - matrix[..., 0, 1],
+        ),
+        dim=-1,
+    )
+
+
+# NOTE: No jacobian is defined for the project operator
+_jproject_impl = None
+
+
+class Project(lie_group.UnaryOperator):
+    @classmethod
+    def forward(cls, ctx, matrix):
+        matrix: torch.Tensor = cast(torch.Tensor, matrix)
+        ret = _project_impl(matrix)
+        return ret
+
+    @classmethod
+    def backward(cls, ctx, grad_output):
+        grad_output: torch.Tensor = cast(torch.Tensor, grad_output)
+        return lift(grad_output)
+
+
+_project_autograd_fn = Project.apply
+_jproject_autograd_fn = None
+
+project = lie_group.UnaryOperatorFactory(_module, "project")
+
+
+# -----------------------------------------------------------------------------
+# Left Act
+# -----------------------------------------------------------------------------
+def _left_act_impl(group: torch.Tensor, matrix: torch.Tensor) -> torch.Tensor:
+    if not check_group_tensor(group):
+        raise ValueError("Invalid data tensor for SO3.")
+    check_left_act_matrix(matrix)
+
+    return torch.einsum("nij,n...jk->n...ik", group, matrix)
+
+
+class LeftAct(lie_group.BinaryOperator):
+    @classmethod
+    def forward(cls, ctx, group, matrix):
+        group: torch.Tensor = cast(torch.Tensor, group)
+        matrix: torch.Tensor = cast(torch.Tensor, matrix)
+        ret = _left_act_impl(group, matrix)
+        ctx.save_for_backward(group, matrix)
+        return ret
+
+    @classmethod
+    def backward(cls, ctx, grad_output):
+        group, matrix = ctx.saved_tensors
+        jac_g = torch.einsum("n...ij,n...kj->n...ik", grad_output, matrix)
+        if matrix.ndim > 3:
+            dims = list(range(1, matrix.ndim - 2))
+            jac_g = jac_g.sum(dims)
+        jac_mat = torch.einsum("nji, n...jk->n...ik", group, grad_output)
+        return jac_g, jac_mat
+
+
+_left_act_autograd_fn = LeftAct.apply
+_jleft_act_autograd_fn = None
+
+left_act = lie_group.BinaryOperatorFactory(_module, "left_act")
+
+
+# -----------------------------------------------------------------------------
+# Left Project
+# -----------------------------------------------------------------------------
+_left_project_impl = lie_group.LeftProjectImplFactory(_module)
+_jleft_project_impl = None
+
+
+class LeftProject(lie_group.BinaryOperator):
+    @classmethod
+    def forward(cls, ctx, group, matrix):
+        group: torch.Tensor = cast(torch.Tensor, group)
+        matrix: torch.Tensor = cast(torch.Tensor, matrix)
+        ret = _left_project_impl(group, matrix)
+        ctx.save_for_backward(group, matrix)
+        return ret
+
+    @classmethod
+    def backward(cls, ctx, grad_output):
+        group, matrix = ctx.saved_tensors
+        grad_output_lifted = lift(grad_output)
+        jac_g = -torch.einsum("n...ij,n...jk->n...ik", matrix, grad_output_lifted)
+        if matrix.ndim > 3:
+            dims = list(range(1, matrix.ndim - 2))
+            jac_g = jac_g.sum(dims)
+        jac_mat = torch.einsum("nij, n...jk->n...ik", group, grad_output_lifted)
+        return jac_g, jac_mat
+
+
+_left_project_autograd_fn = LeftProject.apply
+_jleft_project_autograd_fn = _jleft_project_impl
+
+left_project = lie_group.BinaryOperatorFactory(_module, "left_project")

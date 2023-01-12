@@ -26,6 +26,18 @@ def JInverseImplFactory(module):
     return _jinverse_impl
 
 
+def LeftProjectImplFactory(module):
+    def _left_project_impl(group: torch.Tensor, matrix: torch.Tensor) -> torch.Tensor:
+        if not module.check_group_tensor(group):
+            raise ValueError("Invalid data tensor for SO3.")
+        module.check_left_project_matrix(matrix)
+        group_inverse = module.inverse(group)
+
+        return module.project(module.left_act(group_inverse, matrix))
+
+    return _left_project_impl
+
+
 class UnaryOperator(torch.autograd.Function):
     @classmethod
     @abc.abstractmethod

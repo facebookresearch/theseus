@@ -16,7 +16,7 @@ def _new_robust_cf(
     v1 = th.rand_se3(batch_size, generator=generator)
     v2 = th.rand_se3(batch_size, generator=generator)
     if masked_weight:
-        mask = torch.randint(2, (batch_size, 1), generator=generator)
+        mask = torch.randint(2, (batch_size, 1), generator=generator).bool()
         assert mask.any()
         assert not mask.all()
         w_tensor = torch.randn(batch_size, 1, generator=generator) * mask

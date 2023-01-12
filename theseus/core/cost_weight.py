@@ -73,7 +73,7 @@ class ScaleCostWeight(CostWeight):
         self.register_aux_vars(["scale"])
 
     def is_zero(self) -> torch.Tensor:
-        return self.scale.tensor == 0
+        return self.scale.tensor.squeeze(1) == 0
 
     def weight_error(self, error: torch.Tensor) -> torch.Tensor:
         return error * self.scale.tensor
@@ -117,7 +117,7 @@ class DiagonalCostWeight(CostWeight):
 
     def is_zero(self) -> torch.Tensor:
         # The minimum of each (diagonal[b] == 0) is True only if all its elements are 0
-        return (self.diagonal.tensor == 0).min(dim=1)[0]
+        return (self.diagonal.tensor == 0).min(dim=1)[0].bool()
 
     def weight_error(self, error: torch.Tensor) -> torch.Tensor:
         return error * self.diagonal.tensor

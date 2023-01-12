@@ -50,7 +50,7 @@ class DenseLinearization(Linearization):
                 num_cols = var_jacobian.shape[2]
                 row_slice = slice(err_row_idx, err_row_idx + num_rows)
                 col_slice = slice(var_start_col, var_start_col + num_cols)
-                self.A[:, row_slice, col_slice] = var_jacobian
+                self.A[:, row_slice, col_slice] = var_jacobian.detach()
 
             self.b[:, row_slice] = -error
             err_row_idx += cost_function.dim()

@@ -129,7 +129,7 @@ class SparseLinearization(Linearization):
                 # the proper block is written, using the precomputed index in `block_pointers`
                 num_cols = var_jacobian.shape[2]
                 pointer = block_pointers[var_idx_in_cost_function]
-                block[:, :, pointer : pointer + num_cols] = var_jacobian
+                block[:, :, pointer : pointer + num_cols] = var_jacobian.detach()
 
             self.b[:, row_slice] = -error
             err_row_idx += cost_function.dim()

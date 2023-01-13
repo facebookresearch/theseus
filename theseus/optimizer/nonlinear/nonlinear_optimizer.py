@@ -317,6 +317,7 @@ class NonlinearOptimizer(Optimizer, abc.ABC):
         info: NonlinearOptimizerInfo,
         verbose: bool,
         truncated_grad_loop: bool,
+        detach_jacobians: bool = False,
         end_iter_callback: Optional[EndIterCallbackType] = None,
         **kwargs,
     ) -> int:
@@ -329,7 +330,7 @@ class NonlinearOptimizer(Optimizer, abc.ABC):
             # do optimizer step
             # See comment inside `if truncated_grad_loop` case
             self.linear_solver.linearization.linearize(
-                _detach_jacobians=truncated_grad_loop
+                _detach_jacobians=detach_jacobians or it_ == (num_iter - 1),
             )
             try:
                 if truncated_grad_loop:
@@ -509,11 +510,13 @@ class NonlinearOptimizer(Optimizer, abc.ABC):
             grad_loop_info = self._init_info(
                 track_best_solution, track_err_history, track_state_history
             )
+            detach_jacobians = backward_mode == BackwardMode.IMPLICIT
             grad_iters_done = self._optimize_loop(
                 num_iter=backward_num_iters,
                 info=grad_loop_info,
                 verbose=verbose,
                 truncated_grad_loop=True,
+                detach_jacobians=detach_jacobians,
                 end_iter_callback=end_iter_callback,
                 **kwargs,
             )

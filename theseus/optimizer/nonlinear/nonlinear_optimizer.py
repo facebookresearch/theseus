@@ -327,7 +327,10 @@ class NonlinearOptimizer(Optimizer, abc.ABC):
         all_reject_attempts = 0
         while it_ < num_iter:
             # do optimizer step
-            self.linear_solver.linearization.linearize()
+            # See comment inside `if truncated_grad_loop` case
+            self.linear_solver.linearization.linearize(
+                _detach_jacobians=truncated_grad_loop
+            )
             try:
                 if truncated_grad_loop:
                     # The derivation for implicit differentiation states that
@@ -335,6 +338,10 @@ class NonlinearOptimizer(Optimizer, abc.ABC):
                     # must be done using Gauss-Newton steps. Well, technically,
                     # full Newton, but it seems less stable numerically and
                     # GN is working well so far.
+                    #
+                    # We also need to detach the jacobians when computing
+                    # linearization above, as higher order terms introduce errors
+                    # in the derivative if the fixed point is not accurate enough.
                     delta = self.linear_solver.solve()
                 else:
                     delta = self.compute_delta(**kwargs)

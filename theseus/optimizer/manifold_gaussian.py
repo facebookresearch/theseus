@@ -101,8 +101,8 @@ class ManifoldGaussian:
                 f"Tried to update using tensor on device: {precision.dtype} but precision "
                 f"is on device: {self.device}."
             )
-        # if not torch.allclose(precision, precision.transpose(1, 2)):
-        #     raise ValueError("Tried to update precision with non-symmetric matrix.")
+        if not torch.allclose(precision, precision.transpose(1, 2), atol=1e-5):
+            raise ValueError("Tried to update precision with non-symmetric matrix.")
 
         self.precision = precision
 

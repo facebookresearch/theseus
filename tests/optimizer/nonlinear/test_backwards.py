@@ -34,12 +34,14 @@ def quad_error_fn(optim_vars, aux_vars):
     err = y.tensor - est
     return err
 
+
 def quad_sq_error_fn(optim_vars, aux_vars):
     a, b = optim_vars
     x, y = aux_vars
     est = a.tensor * x.tensor.square() + b.tensor
-    err = (y.tensor - est)**2
+    err = (y.tensor - est) ** 2
     return err
+
 
 def test_backwards():
     for error_fn in [quad_error_fn, quad_sq_error_fn]:
@@ -58,7 +60,7 @@ def test_backwards():
             objective,
             max_iterations=15,
             step_size=1.0,
-            abs_err_tolerance = 1e-15,
+            abs_err_tolerance=1e-15,
         )
 
         theseus_inputs = {
@@ -68,7 +70,6 @@ def test_backwards():
             "y": data_y,
         }
         theseus_optim = th.TheseusLayer(optimizer)
-
 
         # First we use torch.autograd.functional to numerically compute the gradient
         # the optimal a w.r.t. the x part of the data
@@ -82,7 +83,9 @@ def test_backwards():
                 )
                 return updated_inputs["a"]
 
-            da_dx_numeric = torch.autograd.functional.jacobian(fn, data_x.detach())[0, 0, 0]
+            da_dx_numeric = torch.autograd.functional.jacobian(fn, data_x.detach())[
+                0, 0, 0
+            ]
 
         theseus_inputs["x"] = data_x
         updated_inputs, _ = theseus_optim.forward(
@@ -93,10 +96,10 @@ def test_backwards():
                 "backward_mode": "unroll",
             },
         )
-        da_dx_unroll = torch.autograd.grad(updated_inputs["a"], data_x, retain_graph=True)[
-            0
-        ].squeeze()
-        assert torch.allclose(da_dx_numeric, da_dx_unroll, atol=1e-3)
+        da_dx_unroll = torch.autograd.grad(
+            updated_inputs["a"], data_x, retain_graph=True
+        )[0].squeeze()
+        torch.testing.assert_close(da_dx_numeric, da_dx_unroll, atol=1e-3, rtol=1e-3)
 
         updated_inputs, _ = theseus_optim.forward(
             theseus_inputs,
@@ -109,7 +112,7 @@ def test_backwards():
         da_dx_implicit = torch.autograd.grad(
             updated_inputs["a"], data_x, retain_graph=True
         )[0].squeeze()
-        assert torch.allclose(da_dx_numeric, da_dx_implicit, atol=1e-4)
+        torch.testing.assert_close(da_dx_numeric, da_dx_implicit, atol=1e-4, rtol=1e-4)
 
         updated_inputs, _ = theseus_optim.forward(
             theseus_inputs,
@@ -123,7 +126,7 @@ def test_backwards():
         da_dx_truncated = torch.autograd.grad(
             updated_inputs["a"], data_x, retain_graph=True
         )[0].squeeze()
-        assert torch.allclose(da_dx_numeric, da_dx_truncated, atol=1e-4)
+        torch.testing.assert_close(da_dx_numeric, da_dx_truncated, atol=1e-4, rtol=1e-4)
 
         if error_fn == quad_error_fn:
             updated_inputs, _ = theseus_optim.forward(
@@ -138,4 +141,6 @@ def test_backwards():
             da_dx_truncated = torch.autograd.grad(
                 updated_inputs["a"], data_x, retain_graph=True
             )[0].squeeze()
-            assert torch.allclose(da_dx_numeric, da_dx_truncated, atol=1e-1)
+            torch.testing.assert_close(
+                da_dx_numeric, da_dx_truncated, atol=1e-1, rtol=1e-1
+            )

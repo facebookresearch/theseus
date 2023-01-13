@@ -26,7 +26,7 @@ class DenseLinearization(Linearization):
         self._AtA: torch.Tensor = None
         self._Atb: torch.Tensor = None
 
-    def _linearize_jacobian_impl(self):
+    def _linearize_jacobian_impl(self, _detach_jacobians: bool = False):
         err_row_idx = 0
         self.A = torch.zeros(
             (self.objective.batch_size, self.num_rows, self.num_cols),
@@ -50,13 +50,15 @@ class DenseLinearization(Linearization):
                 num_cols = var_jacobian.shape[2]
                 row_slice = slice(err_row_idx, err_row_idx + num_rows)
                 col_slice = slice(var_start_col, var_start_col + num_cols)
-                self.A[:, row_slice, col_slice] = var_jacobian.detach()
+                self.A[:, row_slice, col_slice] = (
+                    var_jacobian.detach() if _detach_jacobians else var_jacobian
+                )
 
             self.b[:, row_slice] = -error
             err_row_idx += cost_function.dim()
 
-    def _linearize_hessian_impl(self):
-        self._linearize_jacobian_impl()
+    def _linearize_hessian_impl(self, _detach_jacobians: bool = False):
+        self._linearize_jacobian_impl(_detach_jacobians=_detach_jacobians)
         At = self.A.transpose(1, 2)
         self._AtA = At.bmm(self.A)
         self._Atb = At.bmm(self.b.unsqueeze(2))

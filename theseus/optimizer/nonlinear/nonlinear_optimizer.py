@@ -330,7 +330,7 @@ class NonlinearOptimizer(Optimizer, abc.ABC):
             # do optimizer step
             # See comment inside `if truncated_grad_loop` case
             self.linear_solver.linearization.linearize(
-                _detach_jacobians=detach_jacobians or it_ == (num_iter - 1),
+                _detach_jacobians=detach_jacobians,
             )
             try:
                 if truncated_grad_loop:

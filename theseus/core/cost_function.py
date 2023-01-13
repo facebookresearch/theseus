@@ -19,7 +19,36 @@ from theseus.geometry.lie_group_check import no_lie_group_check
 
 from .cost_weight import CostWeight, ScaleCostWeight
 from .theseus_function import TheseusFunction
-from .variable import Variable
+from .variable import Variable, masked_variables
+
+
+# This function returns the jacobians and error of the cost function
+# evaluated as if all cost function variables (optim and aux) are
+# masked with the given mask (applied over batch dimension).
+#
+# The mask is applied temporarily, so that the variables will retain
+# their original tensors after the function returns. The jacobians and error
+# will have their normal unmasked shapes, and elements masked out will be
+# set to zero.
+def masked_jacobians(
+    cost_fn: "CostFunction", mask: torch.Tensor
+) -> Tuple[List[torch.Tensor], torch.Tensor]:
+    cost_fn_vars: List[Variable] = cast(
+        List[Variable], list(cost_fn.optim_vars)
+    ) + list(cost_fn.aux_vars)
+    batch_size = max(v.shape[0] for v in cost_fn_vars)
+    aux_tensor = cost_fn_vars[0].tensor
+    # use cost_fn_vars[0] to get dtype and device
+    jacobians = [
+        aux_tensor.new_zeros(batch_size, cost_fn.dim(), v.dof())
+        for v in cost_fn.optim_vars
+    ]
+    err = aux_tensor.new_zeros(batch_size, cost_fn.dim())
+    with masked_variables(cost_fn_vars, mask):
+        masked_jacobians_, err[mask] = cost_fn.jacobians()
+        for masked_jac, jac in zip(masked_jacobians_, jacobians):
+            jac[mask] = masked_jac
+    return jacobians, err
 
 
 # A cost function is defined by the variables interacting in it,
@@ -36,6 +65,13 @@ class CostFunction(TheseusFunction, abc.ABC):
     ):
         super().__init__(name=name)
         self._weight = cost_weight
+
+        # For now this is only supported inside vectorized cost functions
+        # When set to true, `weighted_jacobians_error()` first queries the
+        # weight to check indices of zero elements, then uses
+        # `masked_jacobians()` to evaluate jacobians only over non-zero
+        # elements.
+        self.__supports_masking__ = False
 
     @property
     def weight(self) -> CostWeight:
@@ -65,7 +101,18 @@ class CostFunction(TheseusFunction, abc.ABC):
     def weighted_jacobians_error(
         self,
     ) -> Tuple[List[torch.Tensor], torch.Tensor]:
-        jacobian, err = self.jacobians()
+        done = False
+        if self.__supports_masking__:
+            try:
+                with torch.no_grad():
+                    mask = ~self.weight.is_zero()
+                if mask.numel() > 1:  # no broadcasting for masks
+                    jacobian, err = masked_jacobians(self, mask)
+                    done = True
+            except NotImplementedError:
+                pass
+        if not done:
+            jacobian, err = self.jacobians()
         return self.weight.weight_jacobians_and_error(jacobian, err)
 
     # Must copy everything
@@ -86,6 +133,14 @@ class CostFunction(TheseusFunction, abc.ABC):
     def to(self, *args, **kwargs):
         super().to(*args, **kwargs)
         self.weight.to(*args, **kwargs)
+
+    @property
+    def _supports_masking(self) -> bool:
+        return self.__supports_masking__
+
+    @_supports_masking.setter
+    def _supports_masking(self, val: bool):
+        self.__supports_masking__ = val
 
 
 # Function protocol for learnable cost functions. `optim_vars` and `aux_vars` are

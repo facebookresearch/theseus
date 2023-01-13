@@ -24,6 +24,11 @@ class CostWeight(TheseusFunction, abc.ABC):
     ):
         super().__init__(name=name)
 
+    # Returns boolean indicators for zero weights in the batch
+    @abc.abstractmethod
+    def is_zero(self) -> torch.Tensor:
+        pass
+
     @abc.abstractmethod
     def weight_error(self, error: torch.Tensor) -> torch.Tensor:
         pass
@@ -67,6 +72,9 @@ class ScaleCostWeight(CostWeight):
         self.scale.tensor = self.scale.tensor.view(-1, 1)
         self.register_aux_vars(["scale"])
 
+    def is_zero(self) -> torch.Tensor:
+        return self.scale.tensor.squeeze(1) == 0
+
     def weight_error(self, error: torch.Tensor) -> torch.Tensor:
         return error * self.scale.tensor
 
@@ -106,6 +114,10 @@ class DiagonalCostWeight(CostWeight):
             )
             self.diagonal.tensor = self.diagonal.tensor.view(1, -1)
         self.register_aux_vars(["diagonal"])
+
+    def is_zero(self) -> torch.Tensor:
+        # The minimum of each (diagonal[b] == 0) is True only if all its elements are 0
+        return (self.diagonal.tensor == 0).min(dim=1)[0].bool()
 
     def weight_error(self, error: torch.Tensor) -> torch.Tensor:
         return error * self.diagonal.tensor

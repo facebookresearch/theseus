@@ -21,6 +21,8 @@ from .core import (  # usort: skip
     Vectorize,
     WelschLoss,
     as_variable,
+    masked_jacobians,
+    masked_variables,
 )
 from .geometry import (  # usort: skip
     LieGroup,

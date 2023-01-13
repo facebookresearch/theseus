@@ -55,6 +55,7 @@ def test_gp_motion_model_cost_weight_weights():
 
 def test_gp_motion_model_cost_weight_copy():
     q_inv = torch.randn(10, 2, 2)
+    q_inv = torch.bmm(q_inv.transpose(1, 2), q_inv)  # make it pos. def.
     dt = torch.rand(1)
     cost_weight = th.eb.GPCostWeight(q_inv, dt, name="gp")
     check_another_theseus_function_is_copy(
@@ -103,6 +104,7 @@ def test_gp_motion_model_cost_function_error_vector_vars():
             dt = th.Variable(torch.rand(1).double())
 
             q_inv = torch.randn(batch_size, dof, dof).double()
+            q_inv = torch.bmm(q_inv.transpose(1, 2), q_inv)  # make it pos. def.
             # won't be used for the test, but it's required by cost_function's constructor
             cost_weight = th.eb.GPCostWeight(q_inv, dt)
             cost_function = th.eb.GPMotionModel(

@@ -80,6 +80,9 @@ class MockCostWeight(th.CostWeight):
     def _copy_impl(self, new_name=None):
         return MockCostWeight(self.the_data.copy(), name=new_name)
 
+    def is_zero(self):
+        raise NotImplementedError
+
 
 class NullCostWeight(th.CostWeight):
     def __init__(self):
@@ -96,6 +99,9 @@ class NullCostWeight(th.CostWeight):
 
     def _copy_impl(self, new_name=None):
         return NullCostWeight()
+
+    def is_zero(self):
+        raise NotImplementedError
 
 
 class MockCostFunction(th.CostFunction):

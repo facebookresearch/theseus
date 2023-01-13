@@ -39,8 +39,19 @@ from theseus.optimizer.nonlinear.nonlinear_optimizer import (
 
 """
 TODO
- - solving inverse problem to compute message mean
- - factor inherits CF class
+- replace generic nonlinear optimizer components.
+
+Summary.
+This file contains the factor class used to wrap cost functions for GBP.
+Factor to variable message passing functions are within the factor class.
+Variable to factor message passing functions are within GBP optimizer class.
+
+
+References for understanding GBP:
+- https://gaussianbp.github.io/
+- https://arxiv.org/abs/1910.14139
+Reference for GBP with non-Euclidean variables:
+- https://arxiv.org/abs/2202.03314
 """
 
 
@@ -85,7 +96,8 @@ def synchronous_schedule(max_iters, n_edges) -> torch.Tensor:
 #     return schedule
 
 
-# Initialises message precision to zero
+# GBP message class, messages are Gaussian distributions
+# Has additional fn to initialise messages with zero precision
 class Message(ManifoldGaussian):
     def __init__(
         self,
@@ -120,11 +132,7 @@ class Message(ManifoldGaussian):
         self.update(mean=new_mean, precision=new_precision)
 
 
-"""
-GBP functions
-"""
-
-
+# Factor class, one is created for each cost function
 class Factor:
     _ids = count(0)
 
@@ -151,6 +159,7 @@ class Factor:
         device = cf.optim_var_at(0).device
         dtype = cf.optim_var_at(0).dtype
         self._dof = sum([var.dof() for var in cf.optim_vars])
+        # for storing factor linearization
         self.potential_eta = torch.zeros(self.batch_size, self.dof).to(
             dtype=dtype, device=device
         )
@@ -160,7 +169,6 @@ class Factor:
         self.lin_point: List[Manifold] = [
             var.copy(new_name=f"{cf.name}_{var.name}_lp") for var in cf.optim_vars
         ]
-
         self.steps_since_lin = torch.zeros(
             self.batch_size, device=device, dtype=torch.int
         )
@@ -172,6 +180,7 @@ class Factor:
         self.a = 2
         self.b = 10
 
+        # messages incoming and outgoing from the factor, they are updated in place
         self.vtof_msgs: List[Message] = []
         self.ftov_msgs: List[Message] = []
         for var in cf.optim_vars:
@@ -189,11 +198,7 @@ class Factor:
 
     # Linearizes factors at current belief if beliefs have deviated
     # from the linearization point by more than the threshold.
-    def linearize(
-        self,
-        relin_threshold: float = None,
-        lie=True,
-    ):
+    def linearize(self, relin_threshold: float = None, lie=True):
         self.steps_since_lin += 1
 
         if relin_threshold is None:
@@ -217,7 +222,9 @@ class Factor:
             J, error = self.cf.weighted_jacobians_error()
             J_stk = torch.cat(J, dim=-1)
 
+            # eqn 30 - https://arxiv.org/pdf/2202.03314.pdf
             lam = torch.bmm(J_stk.transpose(-2, -1), J_stk)
+            # eqn 31 - https://arxiv.org/pdf/2202.03314.pdf
             eta = -torch.matmul(J_stk.transpose(-2, -1), error.unsqueeze(-1))
             if lie is False:
                 optim_vars_stk = torch.cat(
@@ -226,7 +233,7 @@ class Factor:
                 eta = eta + torch.matmul(lam, optim_vars_stk.unsqueeze(-1))
             eta = eta.squeeze(-1)
 
-            # update damping parameter. This is non-differentiable
+            # update linear system damping parameter (this is non-differentiable)
             with torch.no_grad():
                 err = (self.cf.error() ** 2).sum(dim=1)
                 if self.last_err is not None:
@@ -254,11 +261,7 @@ class Factor:
             self.steps_since_lin[do_lin] = 0
 
     # Compute all outgoing messages from the factor.
-    def comp_mess(
-        self,
-        msg_damping,
-        schedule,
-    ):
+    def comp_mess(self, msg_damping, schedule):
         num_optim_vars = self.cf.num_optim_vars()
         new_messages = []
 
@@ -270,6 +273,7 @@ class Factor:
 
             # Take product of factor with incoming messages.
             # Convert mesages to tangent space at linearisation point.
+            # eqns 34-38 - https://arxiv.org/pdf/2202.03314.pdf
             start = 0
             for i in range(num_optim_vars):
                 var_dofs = self.cf.optim_var_at(i).dof()
@@ -286,6 +290,7 @@ class Factor:
 
             dofs = self.cf.optim_var_at(v).dof()
 
+            # if no incoming messages then send out zero message
             if torch.allclose(lam_factor, lam_factor_copy) and num_optim_vars > 1:
                 # print(self.cf.name, "---> not updating, incoming precision is zero")
                 new_mess = Message([self.cf.optim_var_at(v).copy()])
@@ -293,7 +298,7 @@ class Factor:
 
             else:
                 # print(self.cf.name, "---> sending message")
-                # Divide up parameters of distribution
+                # Divide up parameters of distribution to compute schur complement
                 # *_out = parameters for receiver variable (outgoing message vars)
                 # *_notout = parameters for other variables (not outgoing message vars)
                 eta_out = eta_factor[:, sdim : sdim + dofs]
@@ -336,6 +341,7 @@ class Factor:
                     dim=1,
                 )
 
+                # Schur complement computation
                 new_mess_lam = (
                     lam_out_out
                     - lam_out_notout
@@ -384,17 +390,10 @@ class Factor:
                     new_mess_eta[no_update] = prev_mess_eta[no_update]
                     new_mess_lam[no_update] = prev_mess_lam[no_update]
 
-                # new_mess_lam = th.DenseSolver._apply_damping(
-                #     new_mess_lam,
-                #     self.lin_system_damping,
-                #     ellipsoidal=True,
-                #     eps=1e-8,
-                # )
-
+                # eqns 39-41 - https://arxiv.org/pdf/2202.03314.pdf
                 new_mess_mean = th.LUDenseSolver._solve_sytem(
                     new_mess_eta[..., None], new_mess_lam
                 )
-
                 new_mess = th.retract_gaussian(
                     self.lin_point[v], new_mess_mean, new_mess_lam
                 )
@@ -435,6 +434,7 @@ class GaussianBeliefPropagation(Optimizer, abc.ABC):
 
     """
     Copied and slightly modified from nonlinear optimizer class
+    GBP class should inherit these functions.
     """
 
     def set_params(self, **kwargs):
@@ -601,10 +601,11 @@ class GaussianBeliefPropagation(Optimizer, abc.ABC):
     GBP functions
     """
 
+    # eqns in sec 3.1 - https://arxiv.org/pdf/2202.03314.pdf
     def _pass_var_to_fac_messages_loop(self, update_belief=True):
         for i, var in enumerate(self.ordering):
-
             # Collect all incoming messages in the tangent space at the current belief
+            # eqns 4-7 - https://arxiv.org/pdf/2202.03314.pdf
             etas_tp = []  # message etas
             lams_tp = []  # message lams
             for factor in self.factors:
@@ -620,6 +621,7 @@ class GaussianBeliefPropagation(Optimizer, abc.ABC):
             lam_tau = lams_tp.sum(dim=0)
 
             # Compute outgoing messages
+            # eqns 8-10 - https://arxiv.org/pdf/2202.03314.pdf
             ix = 0  # index for msg in list of msgs to variables
             for factor in self.factors:
                 for j, msg in enumerate(factor.vtof_msgs):
@@ -650,6 +652,7 @@ class GaussianBeliefPropagation(Optimizer, abc.ABC):
                 new_belief = th.retract_gaussian(var, tau, lam_tau)
                 self.beliefs[i].update(new_belief.mean, new_belief.precision)
 
+    # Similar to above fn but vectorization require tracking extra indices
     def _pass_var_to_fac_messages_vectorized(self, update_belief=True):
         # Each (variable-type, dof) gets mapped to a tuple with:
         #   - the variable that will hold the vectorized data
@@ -660,10 +663,7 @@ class GaussianBeliefPropagation(Optimizer, abc.ABC):
             Tuple[Type[Manifold], int],
             Tuple[Manifold, List[Manifold], List[int], List[torch.Tensor]],
         ] = {}
-
         batch_size = -1
-        # Create var info by looping variables in the given order
-        # All variables of the same type get grouped together
         for ix, var in enumerate(self.ordering):
             if batch_size == -1:
                 batch_size = var.shape[0]
@@ -676,6 +676,7 @@ class GaussianBeliefPropagation(Optimizer, abc.ABC):
             var_info[var_type][1].append(var)
             var_info[var_type][2].append(ix)
 
+        # For each variable-type, create tensors to accumulate incoming messages
         for var_type, (vectorized_var, var_list, _, eta_lam) in var_info.items():
             n_vars, dof = len(var_list), vectorized_var.dof()
 
@@ -696,9 +697,9 @@ class GaussianBeliefPropagation(Optimizer, abc.ABC):
             eta_lam.extend([eta_tp_acc, lam_tp_acc])
 
         # add ftov messages to eta_tp and lam_tp accumulator tensors
+        # eqns 4-7 - https://arxiv.org/pdf/2202.03314.pdf
         for factor in self.factors:
             for i, msg in enumerate(factor.ftov_msgs):
-
                 # transform messages to tangent plane at the current variable value
                 eta_tp, lam_tp = th.local_gaussian(
                     factor.cf.optim_var_at(i), msg, return_mean=False
@@ -738,9 +739,9 @@ class GaussianBeliefPropagation(Optimizer, abc.ABC):
                 lam_tp_acc.index_add_(0, factor.vectorized_var_ixs[i], lam_tp)
 
         # compute variable to factor messages, now all incoming messages are accumulated
+        # eqns 8-10 - https://arxiv.org/pdf/2202.03314.pdf
         for factor in self.factors:
             for i, msg in enumerate(factor.vtof_msgs):
-
                 # transform messages to tangent plane at the current variable value
                 ftov_msg = factor.ftov_msgs[i]
                 eta_tp, lam_tp = th.local_gaussian(
@@ -769,7 +770,8 @@ class GaussianBeliefPropagation(Optimizer, abc.ABC):
                     msg.update(new_mess.mean, new_mess.precision)
 
         # compute the new belief for the vectorized variables
-        for (vectorized_var, _, var_ixs, eta_lam) in var_info.values():
+        # eqns 42-45 - https://arxiv.org/pdf/2202.03314.pdf
+        for vectorized_var, _, var_ixs, eta_lam in var_info.values():
             eta_tp_acc = eta_lam[0]
             lam_tau = eta_lam[1]
 
@@ -834,7 +836,6 @@ class GaussianBeliefPropagation(Optimizer, abc.ABC):
         # compute factor potentials for the first time
         unary_factor = False
         for i, cost_function in enumerate(cf_iterator):
-
             if self.objective.vectorized:
                 # create array for indexing the messages
                 base_cf_names = self.objective.vectorized_cf_names[i]
@@ -887,13 +888,11 @@ class GaussianBeliefPropagation(Optimizer, abc.ABC):
     Optimization loop functions
     """
 
-    # loop for the iterative optimizer
     def _optimize_loop(
         self,
         num_iter: int,
         info: NonlinearOptimizerInfo,
         verbose: bool,
-        truncated_grad_loop: bool,
         relin_threshold: float,
         ftov_msg_damping: float,
         dropout: float,
@@ -975,7 +974,7 @@ class GaussianBeliefPropagation(Optimizer, abc.ABC):
                     self._update_info(info, it_, err, converged_indices)
                     if verbose:
                         print(
-                            f"GBP. Iteration: {it_+1}. Error: {err.mean().item():.4f}. "
+                            f"GBP. Iteration: {it_+1}. Error: {err.mean().item()}. "
                             f"Relins: {relins} / {self.n_individual_factors}"
                         )
                     converged_indices = self._check_convergence(err, info.last_err)
@@ -1055,7 +1054,6 @@ class GaussianBeliefPropagation(Optimizer, abc.ABC):
                 num_iter=self.params.max_iterations,
                 info=info,
                 verbose=verbose,
-                truncated_grad_loop=False,
                 relin_threshold=relin_threshold,
                 ftov_msg_damping=ftov_msg_damping,
                 dropout=dropout,
@@ -1104,7 +1102,6 @@ class GaussianBeliefPropagation(Optimizer, abc.ABC):
                     num_iter=num_no_grad_iter,
                     info=info,
                     verbose=verbose,
-                    truncated_grad_loop=False,
                     relin_threshold=relin_threshold,
                     ftov_msg_damping=ftov_msg_damping,
                     dropout=dropout,
@@ -1122,7 +1119,6 @@ class GaussianBeliefPropagation(Optimizer, abc.ABC):
                     num_iter=backward_num_iterations,
                     info=grad_loop_info,
                     verbose=verbose,
-                    truncated_grad_loop=True,
                     relin_threshold=relin_threshold,
                     ftov_msg_damping=ftov_msg_damping,
                     dropout=dropout,
@@ -1159,7 +1155,6 @@ class GaussianBeliefPropagation(Optimizer, abc.ABC):
                     num_iter=max_lin_solve_iters,
                     info=grad_loop_info,
                     verbose=verbose,
-                    truncated_grad_loop=True,
                     relin_threshold=1e10,
                     ftov_msg_damping=ftov_msg_damping,
                     dropout=dropout,

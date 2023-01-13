@@ -7,14 +7,13 @@ import abc
 import math
 from dataclasses import dataclass
 from enum import Enum
-from typing import Any, Callable, Dict, NoReturn, Optional, Type, Union
+from typing import Callable, Dict, NoReturn, Optional, Union
 
 import numpy as np
 import torch
 
 from theseus.core import Objective
-from theseus.optimizer import Linearization, Optimizer, OptimizerInfo
-from theseus.optimizer.linear import LinearSolver
+from theseus.optimizer import Optimizer, OptimizerInfo
 
 
 @dataclass
@@ -111,12 +110,8 @@ class NonlinearOptimizer(Optimizer, abc.ABC):
     def __init__(
         self,
         objective: Objective,
-        linear_solver_cls: Type[LinearSolver],
         *args,
         vectorize: bool = False,
-        linearization_cls: Optional[Type[Linearization]] = None,
-        linearization_kwargs: Optional[Dict[str, Any]] = None,
-        linear_solver_kwargs: Optional[Dict[str, Any]] = None,
         abs_err_tolerance: float = 1e-8,
         rel_err_tolerance: float = 1e-5,
         max_iterations: int = 20,
@@ -124,18 +119,9 @@ class NonlinearOptimizer(Optimizer, abc.ABC):
         **kwargs,
     ):
         super().__init__(objective, vectorize=vectorize, **kwargs)
-        linear_solver_kwargs = linear_solver_kwargs or {}
-        self.linear_solver = linear_solver_cls(
-            objective,
-            linearization_cls=linearization_cls,
-            linearization_kwargs=linearization_kwargs,
-            **linear_solver_kwargs,
-        )
-        self.ordering = self.linear_solver.linearization.ordering
         self.params = NonlinearOptimizerParams(
             abs_err_tolerance, rel_err_tolerance, max_iterations, step_size
         )
-        self._tmp_optim_vars = tuple(v.copy(new_name=v.name) for v in self.ordering)
 
     def set_params(self, **kwargs):
         self.params.update(kwargs)
@@ -157,7 +143,7 @@ class NonlinearOptimizer(Optimizer, abc.ABC):
         if not do_init:
             return None
         solution_dict = {}
-        for var in self.ordering:
+        for var in self.objective.optim_vars.values():
             solution_dict[var.name] = var.tensor.detach().clone().cpu()
         return solution_dict
 
@@ -233,7 +219,7 @@ class NonlinearOptimizer(Optimizer, abc.ABC):
             assert info.best_err is not None
             good_indices = err < info.best_err
             info.best_iter[good_indices] = current_iter
-            for var in self.ordering:
+            for var in self.objective.optim_vars.values():
                 info.best_solution[var.name][good_indices] = (
                     var.tensor.detach().clone()[good_indices].cpu()
                 )

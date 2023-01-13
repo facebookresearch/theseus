@@ -61,6 +61,15 @@ class NonlinearLeastSquares(NonlinearOptimizer, abc.ABC):
             step_size=step_size,
             **kwargs,
         )
+        linear_solver_kwargs = linear_solver_kwargs or {}
+        self.linear_solver = linear_solver_cls(
+            objective,
+            linearization_cls=linearization_cls,
+            linearization_kwargs=linearization_kwargs,
+            **linear_solver_kwargs,
+        )
+        self.ordering = self.linear_solver.linearization.ordering
+        self._tmp_optim_vars = tuple(v.copy(new_name=v.name) for v in self.ordering)
 
     @abc.abstractmethod
     def compute_delta(self, **kwargs) -> torch.Tensor:

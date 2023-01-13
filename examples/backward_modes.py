@@ -12,6 +12,7 @@ import time
 from collections import defaultdict
 
 import numpy as np
+import numdifftools as nd
 import torch
 
 import theseus as th
@@ -113,6 +114,7 @@ da_dx = torch.autograd.grad(updated_inputs["a"], data_x, retain_graph=True)[0].s
 print("\n--- backward_mode=implicit")
 print(da_dx.numpy())
 
+
 # We can also use truncated unrolling to compute the derivative:
 updated_inputs, info = theseus_optim.forward(
     theseus_inputs,
@@ -147,21 +149,20 @@ print(da_dx.numpy())
 
 
 # Next we numerically check the derivative
-with torch.no_grad():
-
-    def fn(data_x_torch):
-        theseus_inputs["x"] = data_x_torch
-        updated_inputs, _ = theseus_optim.forward(
-            theseus_inputs,
-            optimizer_kwargs={"track_best_solution": True, "verbose": False},
-        )
-        return updated_inputs["a"]
-
-    g = (
-        torch.autograd.functional.jacobian(fn, data_x.detach())[0, 0, 0]
-        .double()
-        .numpy()
+def fit_x(data_x_np):
+    theseus_inputs["x"] = (
+        torch.from_numpy(data_x_np).float().clone().requires_grad_().unsqueeze(0)
     )
+    updated_inputs, _ = theseus_optim.forward(
+        theseus_inputs, optimizer_kwargs={"track_best_solution": True, "verbose": False}
+    )
+    return updated_inputs["a"].item()
+
+
+data_x_np = data_x.detach().clone().numpy()
+dfit_x = nd.Gradient(fit_x)
+g = dfit_x(data_x_np)
+
 print("\n--- Numeric derivative")
 print(g)
 

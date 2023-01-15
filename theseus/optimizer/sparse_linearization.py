@@ -143,7 +143,7 @@ class SparseLinearization(Linearization):
             dtype=np.float64 if self.objective.dtype == torch.double else np.float32,
         )
 
-    def _linearize_hessian_impl(self, detach_hessian: bool = False):
+    def _linearize_hessian_impl(self, _detach_hessian: bool = False):
         self._linearize_jacobian_impl()
 
     def _ata_impl(self) -> torch.Tensor:

@@ -12,7 +12,6 @@ import time
 from collections import defaultdict
 
 import numpy as np
-import numdifftools as nd
 import torch
 
 import theseus as th
@@ -69,7 +68,7 @@ optimizer = th.GaussNewton(
     objective,
     max_iterations=15,
     step_size=1.0,
-    abs_err_tolerance = 1e-15,
+    abs_err_tolerance=1e-15,
 )
 
 
@@ -159,8 +158,23 @@ def fit_x(data_x_np):
     return updated_inputs["a"].item()
 
 
-data_x_np = data_x.detach().clone().numpy()
-dfit_x = nd.Gradient(fit_x)
+def numeric_grad(f, h=1e-4):
+    # Approximate the gradient with a central difference.
+    def df(x):
+        assert x.ndim == 1
+        n = x.shape[0]
+        g = np.zeros_like(x)
+        for i in range(n):
+            h_i = np.zeros_like(x)
+            h_i[i] = h
+            g[i] = (f(x + h_i) - f(x - h_i)) / (2.0 * h)
+        return g
+
+    return df
+
+
+data_x_np = data_x.detach().clone().numpy().squeeze()
+dfit_x = numeric_grad(fit_x, h=1e-4)
 g = dfit_x(data_x_np)
 
 print("\n--- Numeric derivative")

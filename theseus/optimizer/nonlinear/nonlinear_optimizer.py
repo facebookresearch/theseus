@@ -317,7 +317,7 @@ class NonlinearOptimizer(Optimizer, abc.ABC):
         info: NonlinearOptimizerInfo,
         verbose: bool,
         truncated_grad_loop: bool,
-        detach_jacobians: bool = False,
+        detach_hessian: bool = False,
         end_iter_callback: Optional[EndIterCallbackType] = None,
         **kwargs,
     ) -> int:
@@ -330,7 +330,7 @@ class NonlinearOptimizer(Optimizer, abc.ABC):
             # do optimizer step
             # See comment inside `if truncated_grad_loop` case
             self.linear_solver.linearization.linearize(
-                _detach_jacobians=detach_jacobians,
+                _detach_hessian=detach_hessian,
             )
             try:
                 if truncated_grad_loop:
@@ -340,7 +340,7 @@ class NonlinearOptimizer(Optimizer, abc.ABC):
                     # full Newton, but it seems less stable numerically and
                     # GN is working well so far.
                     #
-                    # We also need to detach the jacobians when computing
+                    # We also need to detach the hessian when computing
                     # linearization above, as higher order terms introduce errors
                     # in the derivative if the fixed point is not accurate enough.
                     delta = self.linear_solver.solve()
@@ -510,13 +510,13 @@ class NonlinearOptimizer(Optimizer, abc.ABC):
             grad_loop_info = self._init_info(
                 track_best_solution, track_err_history, track_state_history
             )
-            detach_jacobians = backward_mode == BackwardMode.IMPLICIT
+            detach_hessian = backward_mode == BackwardMode.IMPLICIT
             grad_iters_done = self._optimize_loop(
                 num_iter=backward_num_iters,
                 info=grad_loop_info,
                 verbose=verbose,
                 truncated_grad_loop=True,
-                detach_jacobians=detach_jacobians,
+                detach_hessian=detach_hessian,
                 end_iter_callback=end_iter_callback,
                 **kwargs,
             )

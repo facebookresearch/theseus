@@ -95,7 +95,7 @@ class SparseLinearization(Linearization):
         # self._linearize_jacobian_impl()
         self._AtA_diag: torch.Tensor = None
 
-    def _linearize_jacobian_impl(self, _detach_jacobians: bool = False):
+    def _linearize_jacobian_impl(self):
         self._Atb = None
         self._AtA_diag = None
 
@@ -129,9 +129,7 @@ class SparseLinearization(Linearization):
                 # the proper block is written, using the precomputed index in `block_pointers`
                 num_cols = var_jacobian.shape[2]
                 pointer = block_pointers[var_idx_in_cost_function]
-                block[:, :, pointer : pointer + num_cols] = (
-                    var_jacobian.detach() if _detach_jacobians else var_jacobian
-                )
+                block[:, :, pointer : pointer + num_cols] = var_jacobian
 
             self.b[:, row_slice] = -error
             err_row_idx += cost_function.dim()
@@ -145,8 +143,8 @@ class SparseLinearization(Linearization):
             dtype=np.float64 if self.objective.dtype == torch.double else np.float32,
         )
 
-    def _linearize_hessian_impl(self, _detach_jacobians: bool = False):
-        self._linearize_jacobian_impl(_detach_jacobians=_detach_jacobians)
+    def _linearize_hessian_impl(self, detach_hessian: bool = False):
+        self._linearize_jacobian_impl()
 
     def _ata_impl(self) -> torch.Tensor:
         raise NotImplementedError("AtA is not yet implemented for SparseLinearization.")

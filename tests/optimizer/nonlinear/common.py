@@ -222,7 +222,7 @@ def _check_optimizer_returns_fail_status_on_singular(
         def _linearize_jacobian_impl(self):
             pass
 
-        def _linearize_hessian_impl(self, _detach_jacobians=False):
+        def _linearize_hessian_impl(self, _detach_hessian=False):
             self._AtA = torch.zeros(
                 self.objective.batch_size, self.num_rows, self.num_cols
             )

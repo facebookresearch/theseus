@@ -924,6 +924,8 @@ class GaussianBeliefPropagation(Optimizer, abc.ABC):
             self._create_factors_beliefs(lin_system_damping)
         else:
             self.objective.update_vectorization_if_needed()
+            if not implicit_gbp_loop:
+                self._linearize_factors()
 
         if implicit_gbp_loop:
             relin_threshold = 1e10  # no relinearisation
@@ -1029,6 +1031,10 @@ class GaussianBeliefPropagation(Optimizer, abc.ABC):
         **kwargs,
     ) -> NonlinearOptimizerInfo:
         backward_mode = BackwardMode.resolve(backward_mode)
+        if backward_mode == BackwardMode.DLM:
+            raise ValueError(
+                "DLM backward mode not supported for Gaussian Belief Propagation optimizer."
+            )
 
         with torch.no_grad():
             info = self._init_info(
@@ -1147,8 +1153,10 @@ class GaussianBeliefPropagation(Optimizer, abc.ABC):
                 self._merge_infos(
                     grad_loop_info, no_grad_iters_done, grad_iters_done, info
                 )
+
+            # Compute the approximate the implicit derivative using a gauss-newton step.
+            # It is first order approximate, as a full Newton step would be exact.
             elif implicit_method == "gauss_newton":
-                # use Gauss-Newton update to compute implicit gradient
                 self.implicit_step_size = implicit_step_size
                 gauss_newton_optimizer = th.GaussNewton(self.objective)
                 gauss_newton_optimizer.linear_solver.linearization.linearize()
@@ -1163,8 +1171,8 @@ class GaussianBeliefPropagation(Optimizer, abc.ABC):
                     print(
                         f"Nonlinear optimizer implcit step. Error: {err.mean().item()}"
                     )
+            # solve normal equation with GBP
             elif implicit_method == "gbp":
-                # solve normal equation in a distributed way
                 max_lin_solve_iters = 1000
                 grad_iters_done = self._optimize_loop(
                     num_iter=max_lin_solve_iters,

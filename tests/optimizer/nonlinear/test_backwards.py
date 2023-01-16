@@ -197,8 +197,6 @@ def test_backwards_quartic():
     da_dx = torch.autograd.grad(updated_inputs["a"], x_th, retain_graph=True)[
         0
     ].squeeze()
-    print("\n--- backward_mode=implicit")
-    print(da_dx.numpy())
 
     # Equality should hold exactly even in floating point
     # because of how the derivatives cancel

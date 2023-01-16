@@ -40,6 +40,8 @@ from theseus.optimizer.nonlinear.nonlinear_optimizer import (
 """
 TODO
 - replace generic nonlinear optimizer components.
+- Remove implicit backward mode with Gauss-Newton, or at least modify it
+to make sure it detaches the hessian.
 
 Summary.
 This file contains the factor class used to wrap cost functions for GBP.
@@ -198,7 +200,12 @@ class Factor:
 
     # Linearizes factors at current belief if beliefs have deviated
     # from the linearization point by more than the threshold.
-    def linearize(self, relin_threshold: float = None, lie=True):
+    def linearize(
+        self,
+        relin_threshold: float = None,
+        detach_hessian: bool = False,
+        lie=True,
+    ):
         self.steps_since_lin += 1
 
         if relin_threshold is None:
@@ -223,7 +230,11 @@ class Factor:
             J_stk = torch.cat(J, dim=-1)
 
             # eqn 30 - https://arxiv.org/pdf/2202.03314.pdf
-            lam = torch.bmm(J_stk.transpose(-2, -1), J_stk)
+            lam = (
+                torch.bmm(J_stk.transpose(-2, -1), J_stk).detach()
+                if detach_hessian
+                else torch.bmm(J_stk.transpose(-2, -1), J_stk)
+            )
             # eqn 31 - https://arxiv.org/pdf/2202.03314.pdf
             eta = -torch.matmul(J_stk.transpose(-2, -1), error.unsqueeze(-1))
             if lie is False:
@@ -797,10 +808,14 @@ class GaussianBeliefPropagation(Optimizer, abc.ABC):
                     self.beliefs[ix].update([belief_mean_slice], belief_precision_slice)
                     start_idx += batch_size
 
-    def _linearize_factors(self, relin_threshold: float = None):
+    def _linearize_factors(
+        self, relin_threshold: float = None, detach_hessian: bool = False
+    ):
         relins = 0
         for factor in self.factors:
-            factor.linearize(relin_threshold=relin_threshold)
+            factor.linearize(
+                relin_threshold=relin_threshold, detach_hessian=detach_hessian
+            )
             relins += int((factor.steps_since_lin == 0).sum().item())
         return relins
 
@@ -914,7 +929,7 @@ class GaussianBeliefPropagation(Optimizer, abc.ABC):
             relin_threshold = 1e10  # no relinearisation
             if self.objective.vectorized:
                 self.objective.update_vectorization_if_needed()
-            self._linearize_factors()
+            self._linearize_factors(detach_hessian=True)
 
         if schedule == GBPSchedule.SYNCHRONOUS:
             ftov_schedule = synchronous_schedule(num_iter, self.n_edges)

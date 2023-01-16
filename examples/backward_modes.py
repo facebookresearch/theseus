@@ -15,6 +15,7 @@ import numpy as np
 import torch
 
 import theseus as th
+from theseus.utils import numeric_grad
 
 torch.manual_seed(0)
 
@@ -156,21 +157,6 @@ def fit_x(data_x_np):
         theseus_inputs, optimizer_kwargs={"track_best_solution": True, "verbose": False}
     )
     return updated_inputs["a"].item()
-
-
-def numeric_grad(f, h=1e-4):
-    # Approximate the gradient with a central difference.
-    def df(x):
-        assert x.ndim == 1
-        n = x.shape[0]
-        g = np.zeros_like(x)
-        for i in range(n):
-            h_i = np.zeros_like(x)
-            h_i[i] = h
-            g[i] = (f(x + h_i) - f(x - h_i)) / (2.0 * h)
-        return g
-
-    return df
 
 
 data_x_np = data_x.detach().clone().numpy().squeeze()

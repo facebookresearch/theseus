@@ -3,11 +3,11 @@
 # This source code is licensed under the MIT license found in the
 # LICENSE file in the root directory of this source tree.
 
-import numpy as np
-import pytest  # noqa: F401
 import torch
 
 import theseus as th
+
+from theseus.utils import numeric_grad
 
 torch.manual_seed(0)
 
@@ -44,21 +44,6 @@ def quad_sq_error_fn(optim_vars, aux_vars):
     return err
 
 
-def numeric_grad(f, h=1e-4):
-    # Approximate the gradient with a central difference.
-    def df(x):
-        assert x.ndim == 1
-        n = x.shape[0]
-        g = np.zeros_like(x)
-        for i in range(n):
-            h_i = np.zeros_like(x)
-            h_i[i] = h
-            g[i] = (f(x + h_i) - f(x - h_i)) / (2.0 * h)
-        return g
-
-    return df
-
-
 def test_backwards():
     for error_fn in [quad_error_fn, quad_sq_error_fn]:
         optim_vars = [a, b]
@@ -87,7 +72,7 @@ def test_backwards():
         }
         theseus_optim = th.TheseusLayer(optimizer)
 
-        # First we use torch.autograd.functional to numerically compute the gradient
+        # First we numerically compute the gradient
         # the optimal a w.r.t. the x part of the data
         with torch.no_grad():
 

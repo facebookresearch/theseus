@@ -378,6 +378,7 @@ class NonlinearOptimizer(Optimizer, abc.ABC):
                 info.last_err,
                 converged_indices,
                 force_update,
+                truncated_grad_loop=truncated_grad_loop,
                 **kwargs,
             )  # err is shape (batch_size,)
             if all_rejected:
@@ -566,12 +567,19 @@ class NonlinearOptimizer(Optimizer, abc.ABC):
         previous_err: torch.Tensor,
         converged_indices: torch.Tensor,
         force_update: bool,
+        truncated_grad_loop: bool,
         **kwargs,
     ) -> Tuple[torch.Tensor, bool]:
         tensor_dict, err = self._compute_retracted_tensors_and_error(
             delta, converged_indices, force_update
         )
-        reject_indices = self._complete_step(delta, err, previous_err, **kwargs)
+        if truncated_grad_loop:
+            # For "implicit" or "truncated", the grad-attached steps are just GN steps
+            # So, we need to avoid calling `_complete_step`, as it's likely to reject
+            # the step computed
+            reject_indices = None
+        else:
+            reject_indices = self._complete_step(delta, err, previous_err, **kwargs)
 
         if reject_indices is not None and reject_indices.all():
             return previous_err, True

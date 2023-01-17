@@ -178,7 +178,7 @@ class Factor:
         self.lm_damping = lin_system_damping.repeat(self.batch_size).to(device)
         self.min_damping = torch.Tensor([1e-4]).to(dtype=dtype, device=device)
         self.max_damping = torch.Tensor([1e2]).to(dtype=dtype, device=device)
-        self.last_err: torch.Tensor = None
+        self.last_err: torch.Tensor = (self.cf.error() ** 2).sum(dim=1)
         self.a = 2
         self.b = 10
 
@@ -247,15 +247,15 @@ class Factor:
             # update linear system damping parameter (this is non-differentiable)
             with torch.no_grad():
                 err = (self.cf.error() ** 2).sum(dim=1)
-                if self.last_err is not None:
-                    decreased_ixs = err < self.last_err
-                    self.lm_damping[decreased_ixs] = torch.max(
-                        self.lm_damping[decreased_ixs] / self.a, self.min_damping
-                    )
-                    self.lm_damping[~decreased_ixs] = torch.min(
-                        self.lm_damping[~decreased_ixs] * self.b, self.max_damping
-                    )
-                self.last_err = err
+                damp_ixs = torch.logical_and(err > self.last_err, do_lin)
+                undamp_ixs = torch.logical_and(err < self.last_err, do_lin)
+                self.lm_damping[undamp_ixs] = torch.max(
+                    self.lm_damping[undamp_ixs] / self.a, self.min_damping
+                )
+                self.lm_damping[damp_ixs] = torch.min(
+                    self.lm_damping[damp_ixs] * self.b, self.max_damping
+                )
+                self.last_err[do_lin] = err[do_lin]
 
             # damp precision matrix
             damped_D = self.lm_damping[:, None, None] * torch.eye(

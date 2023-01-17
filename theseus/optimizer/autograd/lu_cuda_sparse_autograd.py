@@ -51,6 +51,10 @@ class LUCudaSolveFunction(torch.autograd.Function):
             batch_size, A_row_ptr, A_col_ind, A_val_double, AtA_row_ptr, AtA_col_ind
         )
         if damping_alpha_beta is not None:
+            damping_alpha_beta = (
+                damping_alpha_beta[0].double(),
+                damping_alpha_beta[1].double(),
+            )
             AtA_args = sparse_structure.num_cols, AtA_row_ptr, AtA_col_ind, AtA
             apply_damping(batch_size, *AtA_args, *damping_alpha_beta)
         solver_context.factor(AtA)

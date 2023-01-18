@@ -185,7 +185,7 @@ run_all_checks: &run_all_checks
       working_directory: ~/project
       command: |
         pip install pre-commit
-        BASPACHO_ROOT_DIR=~/baspacho pip install -e .
+        BASPACHO_ROOT_DIR=~/baspacho pip install -e ".[dev]"
         pre-commit install-hooks
         pre-commit run --all-files
         python -m pytest tests -m "not cudaext"
@@ -225,16 +225,6 @@ run_tests_from_wheel: &run_tests_from_wheel
 # Jobs
 # -------------------------------------------------------------------------------------
 jobs:
-  py37_linux:
-    docker:
-      - image: cimg/python:3.7
-    steps:
-      - checkout
-      - <<: *install_suitesparse
-      - <<: *install_functorch
-      - <<: *build_baspacho_cpu
-      - <<: *run_all_checks
-
   py38_linux:
     docker:
       - image: cimg/python:3.8
@@ -248,6 +238,16 @@ jobs:
   py39_linux:
     docker:
       - image: cimg/python:3.9
+    steps:
+      - checkout
+      - <<: *install_suitesparse
+      - <<: *install_functorch
+      - <<: *build_baspacho_cpu
+      - <<: *run_all_checks
+
+  py310_linux:
+    docker:
+      - image: cimg/python:3.10
     steps:
       - checkout
       - <<: *install_suitesparse
@@ -302,9 +302,9 @@ workflows:
   version: 2
   build:
     jobs:
-      - py37_linux
       - py38_linux
       - py39_linux
+      - py310_linux
       - unittests_gpu17_cuda10
       - unittests_gpu17_cuda11
       - test_cuda11_wheel

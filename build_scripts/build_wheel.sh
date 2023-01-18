@@ -5,7 +5,7 @@
 # to install theseus.
 #
 # To use this script, from root theesus folder run 
-#    ./build_scripts/build_wheel.sh ROOT_DIR COMMIT CUDA_VERSION THESEUS_VERSION(optional) 
+#    ./build_scripts/build_wheel.sh ROOT_DIR COMMIT CUDA_VERSION THESEUS_VERSION(optional) INCLUDE_LABS(optional)
 #
 # ROOT_DIR: is the directory where the Dockerfile, tar.gz and .whl files will be stored
 #   (under a new subdirectory named theseus_docker_3.9)
@@ -13,7 +13,7 @@
 # CUDA_VERSION: the version of CUDA to use. We have tested 10.2, 11.3, 11.6, and 11.7.
 #   You can also pass "cpu" to compile without CUDA extensions.
 # THESEUS_VERSION: defaults to COMMIT, otherwise it must match the version in the commit.
-#
+# INCLUDE_LABS: if !=0, the compiled wheel also includes Theseus Labs.
 #   For example
 #    ./build_scripts/build_wheel.sh . 0.1.0 10.2
 #   
@@ -76,7 +76,7 @@ else
     BASPACHO_CUDA_ARGS="-DCMAKE_CUDA_COMPILER=/usr/local/cuda-${CUDA_VERSION}/bin/nvcc -DBASPACHO_CUDA_ARCHS='${BASPACHO_CUDA_ARCHS}'"
 fi
 
-for PYTHON_VERSION in 3.10  ; do
+for PYTHON_VERSION in 3.10; do
     # Create dockerfile to build in manylinux container
     DOCKER_DIR=${ROOT_DIR}/theseus_docker_${PYTHON_VERSION}
     mkdir -p ${DOCKER_DIR}

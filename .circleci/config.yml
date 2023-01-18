@@ -179,16 +179,39 @@ setup_project: &setup_project
         pip install -r requirements/dev.txt
         BASPACHO_ROOT_DIR=~/baspacho pip install --progress-bar off -e .
 
-run_all_checks: &run_all_checks
+run_pre_commit: &run_pre_commit
   - run:
-      name: Running all checks (precommit + unit tests w/o cudaext)
+      name: Running precommit checks
       working_directory: ~/project
       command: |
         pip install pre-commit
         BASPACHO_ROOT_DIR=~/baspacho pip install -e ".[dev]"
         pre-commit install-hooks
         pre-commit run --all-files
-        python -m pytest tests -m "not cudaext"
+
+run_end_to_end_test: &run_end_to_end_test
+  - run:
+      name: Running end to end tests
+      working_directory: ~/project
+      command: |
+        BASPACHO_ROOT_DIR=~/baspacho pip install -e ".[dev]"
+        python -m pytest tests/test_theseus_layer.py -m "not cudaext"
+
+run_lie_group_tests: &run_lie_group_tests
+  - run:
+      name: Running end to end tests
+      working_directory: ~/project
+      command: |
+        BASPACHO_ROOT_DIR=~/baspacho pip install -e ".[dev]"
+        python -m pytest tests/geometry -m "not cudaext" 
+
+run_other_unit_tests: &run_other_unit_tests
+  - run:
+      name: Running end to end tests
+      working_directory: ~/project
+      command: |
+        BASPACHO_ROOT_DIR=~/baspacho pip install -e ".[dev]"
+        python -m pytest tests -m "not cudaext" --ignore=tests/geometry/ --ignore-glob=tests/test_theseus_layer.py
 
 run_gpu_tests: &run_gpu_tests
   - run:
@@ -224,8 +247,12 @@ run_tests_from_wheel: &run_tests_from_wheel
 # -------------------------------------------------------------------------------------
 # Jobs
 # -------------------------------------------------------------------------------------
+# ------- CPU only jobs -------
+# Yes, this is horribly redundant. Too lazy to make sense of CircleCI's parameterize 
+# stuff. Might fix when it gets too awful
 jobs:
-  py38_linux:
+  # Pre-commit tests
+  py38_precommit:
     docker:
       - image: cimg/python:3.8
     steps:
@@ -233,9 +260,9 @@ jobs:
       - <<: *install_suitesparse
       - <<: *install_functorch
       - <<: *build_baspacho_cpu
-      - <<: *run_all_checks
+      - <<: *run_pre_commit
 
-  py39_linux:
+  py39_precommit:
     docker:
       - image: cimg/python:3.9
     steps:
@@ -243,9 +270,9 @@ jobs:
       - <<: *install_suitesparse
       - <<: *install_functorch
       - <<: *build_baspacho_cpu
-      - <<: *run_all_checks
+      - <<: *run_pre_commit
 
-  py310_linux:
+  py310_precommit:
     docker:
       - image: cimg/python:3.10
     steps:
@@ -253,8 +280,102 @@ jobs:
       - <<: *install_suitesparse
       - <<: *install_functorch
       - <<: *build_baspacho_cpu
-      - <<: *run_all_checks
+      - <<: *run_pre_commit
 
+  # End-to-end tests
+  py38_e2e_tests:
+    docker:
+      - image: cimg/python:3.8
+    steps:
+      - checkout
+      - <<: *install_suitesparse
+      - <<: *install_functorch
+      - <<: *build_baspacho_cpu
+      - <<: *run_end_to_end_test
+
+  py39_e2e_tests:
+    docker:
+      - image: cimg/python:3.9
+    steps:
+      - checkout
+      - <<: *install_suitesparse
+      - <<: *install_functorch
+      - <<: *build_baspacho_cpu
+      - <<: *run_end_to_end_test
+
+  py310_e2e_tests:
+    docker:
+      - image: cimg/python:3.10
+    steps:
+      - checkout
+      - <<: *install_suitesparse
+      - <<: *install_functorch
+      - <<: *build_baspacho_cpu
+      - <<: *run_end_to_end_test
+
+  # Lie group tests
+  py38_lie_tests:
+    docker:
+      - image: cimg/python:3.8
+    steps:
+      - checkout
+      - <<: *install_suitesparse
+      - <<: *install_functorch
+      - <<: *build_baspacho_cpu
+      - <<: *run_lie_group_tests
+
+  py39_lie_tests:
+    docker:
+      - image: cimg/python:3.9
+    steps:
+      - checkout
+      - <<: *install_suitesparse
+      - <<: *install_functorch
+      - <<: *build_baspacho_cpu
+      - <<: *run_lie_group_tests
+
+  py310_lie_tests:
+    docker:
+      - image: cimg/python:3.10
+    steps:
+      - checkout
+      - <<: *install_suitesparse
+      - <<: *install_functorch
+      - <<: *build_baspacho_cpu
+      - <<: *run_lie_group_tests
+
+  # Other unit tests
+  py38_other_unit_tests:
+    docker:
+      - image: cimg/python:3.8
+    steps:
+      - checkout
+      - <<: *install_suitesparse
+      - <<: *install_functorch
+      - <<: *build_baspacho_cpu
+      - <<: *run_other_unit_tests
+
+  py39_other_unit_tests:
+    docker:
+      - image: cimg/python:3.9
+    steps:
+      - checkout
+      - <<: *install_suitesparse
+      - <<: *install_functorch
+      - <<: *build_baspacho_cpu
+      - <<: *run_other_unit_tests
+
+  py310_other_unit_tests:
+    docker:
+      - image: cimg/python:3.10
+    steps:
+      - checkout
+      - <<: *install_suitesparse
+      - <<: *install_functorch
+      - <<: *build_baspacho_cpu
+      - <<: *run_other_unit_tests
+
+# ------- GPU only jobs -------
   unittests_gpu17_cuda10:
     executor: gpu_cuda10
     steps:
@@ -285,6 +406,7 @@ jobs:
       - <<: *setup_project
       - <<: *run_gpu_tests
 
+# ------- Compiled wheel test -------
   test_cuda11_wheel:
     executor: gpu_cuda11
     steps:
@@ -302,9 +424,18 @@ workflows:
   version: 2
   build:
     jobs:
-      - py38_linux
-      - py39_linux
-      - py310_linux
+      - py38_precommit
+      - py39_precommit
+      - py310_precommit
+      - py38_e2e_tests
+      - py39_e2e_tests
+      - py310_e2e_tests
+      - py38_lie_tests
+      - py39_lie_tests
+      - py310_lie_tests
+      - py38_other_unit_tests
+      - py39_other_unit_tests
+      - py310_other_unit_tests
       - unittests_gpu17_cuda10
       - unittests_gpu17_cuda11
       - test_cuda11_wheel

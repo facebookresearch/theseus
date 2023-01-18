@@ -95,7 +95,12 @@ class SparseLinearization(Linearization):
         # self._linearize_jacobian_impl()
         self._AtA_diag: torch.Tensor = None
 
+        # If true, it signals to linear solvers that any computation resulting from
+        # matrix (At * A) must be detached from the compute graph
+        self.detached_hessian = False
+
     def _linearize_jacobian_impl(self):
+        self._detached_hessian = False
         self._Atb = None
         self._AtA_diag = None
 
@@ -144,7 +149,11 @@ class SparseLinearization(Linearization):
         )
 
     def _linearize_hessian_impl(self, _detach_hessian: bool = False):
+        # Some of our sparse solvers don't require explicitly computing the
+        # hessian approximation, so we only compute the jacobian here and let each
+        # solver handle this as needed
         self._linearize_jacobian_impl()
+        self.detached_hessian = _detach_hessian
 
     def _ata_impl(self) -> torch.Tensor:
         raise NotImplementedError("AtA is not yet implemented for SparseLinearization.")

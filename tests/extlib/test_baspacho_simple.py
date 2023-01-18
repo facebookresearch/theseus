@@ -8,7 +8,7 @@ import torch
 import numpy as np
 import pytest  # noqa: F401
 
-from tests.extlib.common import run_if_baspacho
+from tests.decorators import run_if_baspacho
 
 
 # fmt: off

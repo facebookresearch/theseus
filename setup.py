@@ -127,6 +127,10 @@ baspacho_extension = maybe_create_baspacho_extension(compile_cuda_support)
 if baspacho_extension is not None:
     ext_modules.append(baspacho_extension)
 
+excluded_packages = []
+if not os.environ.get("INCLUDE_THESEUS_LABS"):
+    excluded_packages.append("theseus.labs")
+    print("Excluding theseus.labs")
 setuptools.setup(
     name="theseus-ai",
     version=version,
@@ -136,7 +140,7 @@ setuptools.setup(
     long_description_content_type="text/markdown",
     url="https://github.com/facebookresearch/theseus",
     keywords="differentiable optimization, nonlinear least squares, factor graphs",
-    packages=setuptools.find_packages(),
+    packages=setuptools.find_packages(exclude=tuple(excluded_packages)),
     classifiers=[
         "Programming Language :: Python :: 3",
         "License :: OSI Approved :: MIT License",

@@ -8,7 +8,7 @@ import torch
 import numpy as np
 from theseus.optimizer.autograd import BaspachoSolveFunction
 
-from tests.extlib.common import run_if_baspacho
+from tests.decorators import run_if_baspacho
 from theseus.utils import random_sparse_binary_matrix, split_into_param_sizes
 
 import theseus as th

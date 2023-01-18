@@ -27,6 +27,9 @@ We currently provide wheels with our CUDA extensions compiled using CUDA 10.2 an
 For other CUDA versions, consider installing from source or using our 
 `build script <https://github.com/facebookresearch/theseus/blob/main/build_scripts/build_wheel.sh>`_.
 
+Note that ``pypi`` installation doesn't include our experimental `Theseus Labs <https://github.com/facebookresearch/theseus/theseus/labs>`_.
+For this, please install from source.
+
 From source
 """""""""""
 The simplest way to install Theseus from source is by running the following (see further below to also include BaSpaCho)

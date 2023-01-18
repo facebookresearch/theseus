@@ -179,13 +179,20 @@ setup_project: &setup_project
         pip install -r requirements/dev.txt
         BASPACHO_ROOT_DIR=~/baspacho pip install --progress-bar off -e .
 
+
+install_theseus: &install_theseus
+  - run:
+      name: Installing Theseus
+      command: |
+        BASPACHO_ROOT_DIR=~/baspacho pip install -e ".[dev]"
+
+
 run_all_checks: &run_all_checks
   - run:
       name: Running all checks (precommit + unit tests w/o cudaext)
       working_directory: ~/project
       command: |
         pip install pre-commit
-        BASPACHO_ROOT_DIR=~/baspacho pip install -e ".[dev]"
         pre-commit install-hooks
         pre-commit run --all-files
         python -m pytest tests -m "not cudaext"
@@ -225,34 +232,19 @@ run_tests_from_wheel: &run_tests_from_wheel
 # Jobs
 # -------------------------------------------------------------------------------------
 jobs:
-  py38_linux:
-    docker:
-      - image: cimg/python:3.8
-    steps:
-      - checkout
-      - <<: *install_suitesparse
-      - <<: *install_functorch
-      - <<: *build_baspacho_cpu
-      - <<: *run_all_checks
 
-  py39_linux:
+  linux_run_all_checks:
+    parameters:
+      image:
+        type: string
     docker:
-      - image: cimg/python:3.9
+      - image: << parameters.image >>
     steps:
       - checkout
       - <<: *install_suitesparse
       - <<: *install_functorch
       - <<: *build_baspacho_cpu
-      - <<: *run_all_checks
-
-  py310_linux:
-    docker:
-      - image: cimg/python:3.10
-    steps:
-      - checkout
-      - <<: *install_suitesparse
-      - <<: *install_functorch
-      - <<: *build_baspacho_cpu
+      - <<: *install_theseus
       - <<: *run_all_checks
 
   unittests_gpu17_cuda10:
@@ -302,9 +294,9 @@ workflows:
   version: 2
   build:
     jobs:
-      - py38_linux
-      - py39_linux
-      - py310_linux
+      - linux_run_all_checks:
+          matrix:
+            image: ["cimg/python:3.8", "cimg/python:3.9", "cimg/python:3.10"]
       - unittests_gpu17_cuda10
       - unittests_gpu17_cuda11
       - test_cuda11_wheel

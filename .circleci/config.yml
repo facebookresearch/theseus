@@ -235,10 +235,10 @@ jobs:
 
   linux_run_all_checks:
     parameters:
-      image:
+      python_version:
         type: string
     docker:
-      - image: << parameters.image >>
+      - image: cimg/python:<< parameters.python_version >>
     steps:
       - checkout
       - <<: *install_suitesparse
@@ -296,7 +296,7 @@ workflows:
     jobs:
       - linux_run_all_checks:
           matrix:
-            image: ["cimg/python:3.8", "cimg/python:3.9", "cimg/python:3.10"]
+            python_version: ["3.8", "3.9", "3.10"]
       - unittests_gpu17_cuda10
       - unittests_gpu17_cuda11
       - test_cuda11_wheel

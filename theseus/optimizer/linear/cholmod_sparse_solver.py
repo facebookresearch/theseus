@@ -26,7 +26,7 @@ class CholmodSparseSolver(LinearSolver):
         objective: Objective,
         linearization_cls: Optional[Type[Linearization]] = None,
         linearization_kwargs: Optional[Dict[str, Any]] = None,
-        damping: float = 1e-6,
+        damping: float = 0.0,
         **kwargs,
     ):
         linearization_cls = linearization_cls or SparseLinearization
@@ -64,4 +64,5 @@ class CholmodSparseSolver(LinearSolver):
             self.linearization.structure(),
             self._symbolic_cholesky_decomposition,
             damping,
+            self.linearization.detached_hessian,
         )

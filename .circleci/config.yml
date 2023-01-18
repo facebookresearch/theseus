@@ -41,13 +41,6 @@ update_and_install_conda: &update_and_install_conda
         wget --quiet https://repo.anaconda.com/miniconda/Miniconda3-latest-Linux-x86_64.sh -O ~/miniconda.sh
         /bin/bash ~/miniconda.sh -b -p ~/conda
 
-install_nox: &install_nox
-  - run:
-      name: "Preparing environment: nox"
-      command: |
-        sudo apt-get update && sudo apt-get install -y expect
-        pip install nox==2020.8.22
-
 install_suitesparse: &install_suitesparse
   - run:
       name: "Preparing environment: suitesparse"
@@ -186,7 +179,18 @@ setup_project: &setup_project
         pip install -r requirements/dev.txt
         BASPACHO_ROOT_DIR=~/baspacho pip install --progress-bar off -e .
 
-run_tests: &run_tests
+run_all_checks: &run_all_checks
+  - run:
+      name: Running all checks (precommit + unit tests w/o cudaext)
+      working_directory: ~/project
+      command: |
+        pip install pre-commit
+        BASPACHO_ROOT_DIR=~/baspacho pip install -e .
+        pre-commit install-hooks
+        pre-commit run --all-files
+        python -m pytest tests -m "not cudaext"
+
+run_gpu_tests: &run_gpu_tests
   - run:
       name: Running tests
       working_directory: ~/project
@@ -229,13 +233,7 @@ jobs:
       - <<: *install_suitesparse
       - <<: *install_functorch
       - <<: *build_baspacho_cpu
-      - <<: *install_nox
-      - run:
-          name: "Testing theseus"
-          command: |
-              export NOX_PYTHON_VERSIONS=3.7
-              pip install nox==2020.8.22
-              BASPACHO_ROOT_DIR=~/baspacho nox
+      - <<: *run_all_checks
 
   py38_linux:
     docker:
@@ -245,13 +243,7 @@ jobs:
       - <<: *install_suitesparse
       - <<: *install_functorch
       - <<: *build_baspacho_cpu
-      - <<: *install_nox
-      - run:
-          name: "Testing theseus"
-          command: |
-              export NOX_PYTHON_VERSIONS=3.8
-              pip install nox==2020.8.22
-              BASPACHO_ROOT_DIR=~/baspacho nox
+      - <<: *run_all_checks
 
   py39_linux:
     docker:
@@ -261,13 +253,7 @@ jobs:
       - <<: *install_suitesparse
       - <<: *install_functorch
       - <<: *build_baspacho_cpu
-      - <<: *install_nox
-      - run:
-          name: "Testing theseus"
-          command: |
-              export NOX_PYTHON_VERSIONS=3.9
-              pip install nox==2020.8.22
-              BASPACHO_ROOT_DIR=~/baspacho nox
+      - <<: *run_all_checks
 
   unittests_gpu17_cuda10:
     executor: gpu_cuda10
@@ -282,7 +268,7 @@ jobs:
       - <<: *install_recent_cmake_2004
       - <<: *build_baspacho_cuda
       - <<: *setup_project
-      - <<: *run_tests
+      - <<: *run_gpu_tests
 
   unittests_gpu17_cuda11:
     executor: gpu_cuda11
@@ -297,7 +283,7 @@ jobs:
       - <<: *install_recent_cmake_2004
       - <<: *build_baspacho_cuda
       - <<: *setup_project
-      - <<: *run_tests
+      - <<: *run_gpu_tests
 
   test_cuda11_wheel:
     executor: gpu_cuda11

@@ -1,7 +1,6 @@
 black>=20.8b1
 flake8>=3.8.4
-mypy>=0.910
-nox==2020.8.22
+mypy>=0.981
 pre-commit>=2.9.2
 isort>=5.6.4
 differentiable-robot-model>=0.2.3

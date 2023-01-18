@@ -2,17 +2,21 @@
 #
 # This source code is licensed under the MIT license found in the
 # LICENSE file in the root directory of this source tree.
-
+import pytest
 import torch
 
 import theseus as th
 
+from tests.extlib.common import run_if_baspacho
 from theseus.utils import numeric_grad
 
 torch.manual_seed(0)
 
 
-def test_backwards_quad_fit():
+@pytest.mark.parametrize(
+    "linear_solver_cls", [th.CholeskyDenseSolver, th.CholmodSparseSolver]
+)
+def test_backwards_quad_fit(linear_solver_cls):
     def generate_data(num_points=10, a=1.0, b=0.5, noise_factor=0.01):
         data_x = torch.rand((1, num_points))
         noise = torch.randn((1, num_points)) * noise_factor
@@ -49,6 +53,7 @@ def test_backwards_quad_fit():
         objective,
         max_iterations=15,
         step_size=1.0,
+        linear_solver_cls=linear_solver_cls,
     )
 
     theseus_inputs = {
@@ -128,16 +133,35 @@ def test_backwards_quad_fit():
             "track_best_solution": True,
             "verbose": False,
             "backward_mode": th.BackwardMode.DLM,
-            "dlm_epsilon": 0.0001,
+            "dlm_epsilon": 0.001,
         },
     )
-    da_dx_truncated = torch.autograd.grad(
-        updated_inputs["a"], data_x, retain_graph=True
-    )[0].squeeze()
-    torch.testing.assert_close(da_dx_numeric, da_dx_truncated, atol=1e-1, rtol=1e-1)
+    da_dx_dlm = torch.autograd.grad(updated_inputs["a"], data_x, retain_graph=True)[
+        0
+    ].squeeze()
+    torch.testing.assert_close(da_dx_numeric, da_dx_dlm, atol=1e-1, rtol=1e-1)
 
 
-def test_backwards_quartic():
+@run_if_baspacho()
+@pytest.mark.parametrize(
+    "linear_solver_cls",
+    [
+        th.CholeskyDenseSolver,
+        th.CholmodSparseSolver,
+        th.LUCudaSparseSolver,
+        th.BaspachoSparseSolver,
+    ],
+)
+def test_backwards_quartic(linear_solver_cls):
+    device = "cpu"
+    if linear_solver_cls in [
+        th.LUCudaSparseSolver,
+        th.BaspachoSparseSolver,
+    ]:
+        if not torch.cuda.is_available():
+            return
+        device = "cuda:0"
+
     def error_fn(optim_vars, aux_vars):
         (a,) = optim_vars
         (x,) = aux_vars
@@ -162,15 +186,17 @@ def test_backwards_quartic():
         objective,
         max_iterations=15,
         step_size=1.0,
+        linear_solver_cls=linear_solver_cls,
     )
 
     theseus_inputs = {
-        "a": torch.ones([1, 1]).requires_grad_(),
-        "x": x_th,
+        "a": torch.ones([1, 1]).requires_grad_().to(device),
+        "x": x_th.to(device),
     }
     theseus_optim = th.TheseusLayer(optimizer)
+    theseus_optim.to(device)
 
-    updated_inputs, info = theseus_optim.forward(
+    updated_inputs, _ = theseus_optim.forward(
         theseus_inputs,
         optimizer_kwargs={
             "track_best_solution": True,

@@ -424,6 +424,9 @@ workflows:
   version: 2
   build:
     jobs:
+      - unittests_gpu17_cuda10
+      - unittests_gpu17_cuda11
+      - test_cuda11_wheel
       - py38_precommit
       - py39_precommit
       - py310_precommit
@@ -436,6 +439,3 @@ workflows:
       - py38_other_unit_tests
       - py39_other_unit_tests
       - py310_other_unit_tests
-      - unittests_gpu17_cuda10
-      - unittests_gpu17_cuda11
-      - test_cuda11_wheel

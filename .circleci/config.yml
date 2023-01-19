@@ -41,13 +41,6 @@ update_and_install_conda: &update_and_install_conda
         wget --quiet https://repo.anaconda.com/miniconda/Miniconda3-latest-Linux-x86_64.sh -O ~/miniconda.sh
         /bin/bash ~/miniconda.sh -b -p ~/conda
 
-install_nox: &install_nox
-  - run:
-      name: "Preparing environment: nox"
-      command: |
-        sudo apt-get update && sudo apt-get install -y expect
-        pip install nox==2020.8.22
-
 install_suitesparse: &install_suitesparse
   - run:
       name: "Preparing environment: suitesparse"
@@ -133,12 +126,12 @@ install_functorch_021: &install_functorch_021
       command: |
         pip install functorch==0.2.1
 
-install_functorch: &install_functorch
+install_torch: &install_torch
   - run:
-      name: Install Functorch
+      name: Install Torch
       working_directory: ~/project
       command: |
-        pip install functorch
+        pip install torch
 
 install_recent_cmake_2004: &install_recent_cmake_2004
   - run:
@@ -186,7 +179,42 @@ setup_project: &setup_project
         pip install -r requirements/dev.txt
         BASPACHO_ROOT_DIR=~/baspacho pip install --progress-bar off -e .
 
-run_tests: &run_tests
+run_pre_commit: &run_pre_commit
+  - run:
+      name: Running precommit checks
+      working_directory: ~/project
+      command: |
+        pip install pre-commit
+        BASPACHO_ROOT_DIR=~/baspacho pip install -e ".[dev]"
+        pre-commit install-hooks
+        pre-commit run --all-files
+
+run_optimizer_tests: &run_optimizer_tests
+  - run:
+      name: Running end to end tests
+      working_directory: ~/project
+      command: |
+        BASPACHO_ROOT_DIR=~/baspacho pip install -e ".[dev]"
+        python -m pytest tests/optimizer -m "not cudaext"
+        python -m pytest tests/test_theseus_layer.py -m "not cudaext"
+
+run_lie_group_tests: &run_lie_group_tests
+  - run:
+      name: Running Lie Groups tests
+      working_directory: ~/project
+      command: |
+        pip install -e ".[dev]"
+        python -m pytest tests/geometry -m "not cudaext" 
+
+run_other_unit_tests: &run_other_unit_tests
+  - run:
+      name: Running other tests (all except optimizer-based and Lie groups)
+      working_directory: ~/project
+      command: |
+        pip install -e ".[dev]"
+        python -m pytest tests -m "not cudaext" --ignore=tests/geometry/ --ignore=tests/optimizer --ignore-glob=tests/test_theseus_layer.py
+
+run_gpu_tests: &run_gpu_tests
   - run:
       name: Running tests
       working_directory: ~/project
@@ -220,55 +248,129 @@ run_tests_from_wheel: &run_tests_from_wheel
 # -------------------------------------------------------------------------------------
 # Jobs
 # -------------------------------------------------------------------------------------
+# ------- CPU only jobs -------
+# Yes, this is horribly redundant. Too lazy to make sense of CircleCI's parameterize 
+# stuff. Might fix when it gets too awful
 jobs:
-  py37_linux:
-    docker:
-      - image: cimg/python:3.7
-    steps:
-      - checkout
-      - <<: *install_suitesparse
-      - <<: *install_functorch
-      - <<: *build_baspacho_cpu
-      - <<: *install_nox
-      - run:
-          name: "Testing theseus"
-          command: |
-              export NOX_PYTHON_VERSIONS=3.7
-              pip install nox==2020.8.22
-              BASPACHO_ROOT_DIR=~/baspacho nox
-
-  py38_linux:
+  # Pre-commit tests
+  py38_precommit:
     docker:
       - image: cimg/python:3.8
     steps:
       - checkout
       - <<: *install_suitesparse
-      - <<: *install_functorch
+      - <<: *install_torch
       - <<: *build_baspacho_cpu
-      - <<: *install_nox
-      - run:
-          name: "Testing theseus"
-          command: |
-              export NOX_PYTHON_VERSIONS=3.8
-              pip install nox==2020.8.22
-              BASPACHO_ROOT_DIR=~/baspacho nox
+      - <<: *run_pre_commit
 
-  py39_linux:
+  py39_precommit:
     docker:
       - image: cimg/python:3.9
     steps:
       - checkout
       - <<: *install_suitesparse
-      - <<: *install_functorch
+      - <<: *install_torch
       - <<: *build_baspacho_cpu
-      - <<: *install_nox
-      - run:
-          name: "Testing theseus"
-          command: |
-              export NOX_PYTHON_VERSIONS=3.9
-              pip install nox==2020.8.22
-              BASPACHO_ROOT_DIR=~/baspacho nox
+      - <<: *run_pre_commit
 
+  py310_precommit:
+    docker:
+      - image: cimg/python:3.10
+    steps:
+      - checkout
+      - <<: *install_suitesparse
+      - <<: *install_torch
+      - <<: *build_baspacho_cpu
+      - <<: *run_pre_commit
+
+  # End-to-end tests
+  py38_optimizer_tests:
+    docker:
+      - image: cimg/python:3.8
+    steps:
+      - checkout
+      - <<: *install_suitesparse
+      - <<: *install_torch
+      - <<: *build_baspacho_cpu
+      - <<: *run_optimizer_tests
+
+  py39_optimizer_tests:
+    docker:
+      - image: cimg/python:3.9
+    steps:
+      - checkout
+      - <<: *install_suitesparse
+      - <<: *install_torch
+      - <<: *build_baspacho_cpu
+      - <<: *run_optimizer_tests
+
+  py310_optimizer_tests:
+    docker:
+      - image: cimg/python:3.10
+    steps:
+      - checkout
+      - <<: *install_suitesparse
+      - <<: *install_torch
+      - <<: *build_baspacho_cpu
+      - <<: *run_optimizer_tests
+
+  # Lie group tests
+  py38_lie_tests:
+    docker:
+      - image: cimg/python:3.8
+    steps:
+      - checkout
+      - <<: *install_suitesparse
+      - <<: *install_torch
+      - <<: *run_lie_group_tests
+
+  py39_lie_tests:
+    docker:
+      - image: cimg/python:3.9
+    steps:
+      - checkout
+      - <<: *install_suitesparse
+      - <<: *install_torch
+      - <<: *run_lie_group_tests
+
+  py310_lie_tests:
+    docker:
+      - image: cimg/python:3.10
+    steps:
+      - checkout
+      - <<: *install_suitesparse
+      - <<: *install_torch
+      - <<: *run_lie_group_tests
+
+  # Other unit tests
+  py38_other_unit_tests:
+    docker:
+      - image: cimg/python:3.8
+    steps:
+      - checkout
+      - <<: *install_suitesparse
+      - <<: *install_torch
+      - <<: *run_other_unit_tests
+
+  py39_other_unit_tests:
+    docker:
+      - image: cimg/python:3.9
+    steps:
+      - checkout
+      - <<: *install_suitesparse
+      - <<: *install_torch
+      - <<: *run_other_unit_tests
+
+  py310_other_unit_tests:
+    docker:
+      - image: cimg/python:3.10
+    steps:
+      - checkout
+      - <<: *install_suitesparse
+      - <<: *install_torch
+      - <<: *run_other_unit_tests
+
+# ------- GPU only jobs -------
   unittests_gpu17_cuda10:
     executor: gpu_cuda10
     steps:
@@ -282,7 +384,7 @@ jobs:
       - <<: *install_recent_cmake_2004
       - <<: *build_baspacho_cuda
       - <<: *setup_project
-      - <<: *run_tests
+      - <<: *run_gpu_tests
 
   unittests_gpu17_cuda11:
     executor: gpu_cuda11
@@ -293,12 +395,12 @@ jobs:
       - <<: *setup_cuda11_libs
       - <<: *setup_environment
       - <<: *install_torch_cuda11
-      - <<: *install_functorch
       - <<: *install_recent_cmake_2004
       - <<: *build_baspacho_cuda
       - <<: *setup_project
-      - <<: *run_tests
+      - <<: *run_gpu_tests
 
+# ------- Compiled wheel test -------
   test_cuda11_wheel:
     executor: gpu_cuda11
     steps:
@@ -316,9 +418,18 @@ workflows:
   version: 2
   build:
     jobs:
-      - py37_linux
-      - py38_linux
-      - py39_linux
       - unittests_gpu17_cuda10
       - unittests_gpu17_cuda11
       - test_cuda11_wheel
+      - py38_precommit
+      - py39_precommit
+      - py310_precommit
+      - py38_optimizer_tests
+      - py39_optimizer_tests
+      - py310_optimizer_tests
+      - py38_lie_tests
+      - py39_lie_tests
+      - py310_lie_tests
+      - py38_other_unit_tests
+      - py39_other_unit_tests
+      - py310_other_unit_tests

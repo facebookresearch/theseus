@@ -327,7 +327,7 @@ class NonlinearOptimizer(Optimizer, abc.ABC):
         all_reject_attempts = 0
         while it_ < num_iter:
             # do optimizer step
-            # See comment inside `if force_gn_step` case
+            # See comment inside `if last_implicit_diff_step` case below
             self.linear_solver.linearization.linearize(
                 _detach_hessian=last_implicit_diff_step,
             )

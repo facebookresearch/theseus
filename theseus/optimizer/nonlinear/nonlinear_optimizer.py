@@ -316,8 +316,8 @@ class NonlinearOptimizer(Optimizer, abc.ABC):
         num_iter: int,
         info: NonlinearOptimizerInfo,
         verbose: bool,
-        last_implicit_diff_step: bool = False,
         end_iter_callback: Optional[EndIterCallbackType] = None,
+        _last_implicit_diff_step: bool = False,
         **kwargs,
     ) -> int:
         steps_tensor: torch.Tensor = None  # type: ignore
@@ -327,12 +327,12 @@ class NonlinearOptimizer(Optimizer, abc.ABC):
         all_reject_attempts = 0
         while it_ < num_iter:
             # do optimizer step
-            # See comment inside `if last_implicit_diff_step` case below
+            # See comment inside `if _last_implicit_diff_step` case below
             self.linear_solver.linearization.linearize(
-                _detach_hessian=last_implicit_diff_step,
+                _detach_hessian=_last_implicit_diff_step,
             )
             try:
-                if last_implicit_diff_step:
+                if _last_implicit_diff_step:
                     # The derivation for implicit differentiation states that
                     # the autograd-enabled loop must be done using Gauss-Newton steps.
                     # Well, technically full Newton, this is hard to implement and GN
@@ -360,7 +360,7 @@ class NonlinearOptimizer(Optimizer, abc.ABC):
                     info.status[:] = NonlinearOptimizerStatus.FAIL
                     return iters_done
 
-            if last_implicit_diff_step:
+            if _last_implicit_diff_step:
                 # This is a "secret" option that is currently being tested in the
                 # context of implicit differentiation. Might be added as a supported
                 # kwarg in the future with a different name, or removed altogether.
@@ -384,7 +384,7 @@ class NonlinearOptimizer(Optimizer, abc.ABC):
                 info.last_err,
                 converged_indices,
                 force_update,
-                delta_forced_to_gn=last_implicit_diff_step,
+                delta_forced_to_gn=_last_implicit_diff_step,
                 **kwargs,
             )  # err is shape (batch_size,)
             if all_rejected:
@@ -485,8 +485,8 @@ class NonlinearOptimizer(Optimizer, abc.ABC):
                 num_iter=backward_num_iters,
                 info=info,
                 verbose=verbose,
-                last_implicit_diff_step=False,
                 end_iter_callback=end_iter_callback,
+                _last_implicit_diff_step=False,
                 **kwargs,
             )
             # If didn't coverge, remove misleading converged_iter value
@@ -501,8 +501,8 @@ class NonlinearOptimizer(Optimizer, abc.ABC):
                     num_iter=no_grad_num_iters,
                     info=info,
                     verbose=verbose,
-                    last_implicit_diff_step=False,
                     end_iter_callback=end_iter_callback,
+                    _last_implicit_diff_step=False,
                     **kwargs,
                 )
 
@@ -513,8 +513,8 @@ class NonlinearOptimizer(Optimizer, abc.ABC):
                 num_iter=backward_num_iters,
                 info=grad_loop_info,
                 verbose=verbose,
-                last_implicit_diff_step=backward_mode == BackwardMode.IMPLICIT,
                 end_iter_callback=end_iter_callback,
+                _last_implicit_diff_step=backward_mode == BackwardMode.IMPLICIT,
                 **kwargs,
             )
 
@@ -581,8 +581,8 @@ class NonlinearOptimizer(Optimizer, abc.ABC):
         )
         if delta_forced_to_gn:
             # If delta has been forced to be a GN step (for implicit diff),
-            # the we need to make sure we ignore any reject indices computed by
-            # other methods (so the step is not rejected)
+            # then we need to make sure we ignore any reject indices computed by
+            # other methods like LM or Dogleg (so the step is not rejected)
             reject_indices = None
         else:
             reject_indices = self._complete_step(delta, err, previous_err, **kwargs)

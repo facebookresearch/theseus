@@ -200,7 +200,7 @@ run_optimizer_tests: &run_optimizer_tests
 
 run_lie_group_tests: &run_lie_group_tests
   - run:
-      name: Running end to end tests
+      name: Running Lie Groups tests
       working_directory: ~/project
       command: |
         pip install -e ".[dev]"
@@ -208,7 +208,7 @@ run_lie_group_tests: &run_lie_group_tests
 
 run_other_unit_tests: &run_other_unit_tests
   - run:
-      name: Running end to end tests
+      name: Running other tests (all except optimizer-based and Lie groups)
       working_directory: ~/project
       command: |
         pip install -e ".[dev]"
@@ -320,6 +320,7 @@ jobs:
       - image: cimg/python:3.8
     steps:
       - checkout
+      - <<: *install_suitesparse
       - <<: *install_torch
       - <<: *run_lie_group_tests
 
@@ -328,6 +329,7 @@ jobs:
       - image: cimg/python:3.9
     steps:
       - checkout
+      - <<: *install_suitesparse
       - <<: *install_torch
       - <<: *run_lie_group_tests
 
@@ -336,6 +338,7 @@ jobs:
       - image: cimg/python:3.10
     steps:
       - checkout
+      - <<: *install_suitesparse
       - <<: *install_torch
       - <<: *run_lie_group_tests
 
@@ -345,6 +348,7 @@ jobs:
       - image: cimg/python:3.8
     steps:
       - checkout
+      - <<: *install_suitesparse
       - <<: *install_torch
       - <<: *run_other_unit_tests
 
@@ -353,6 +357,7 @@ jobs:
       - image: cimg/python:3.9
     steps:
       - checkout
+      - <<: *install_suitesparse
       - <<: *install_torch
       - <<: *run_other_unit_tests
 
@@ -361,6 +366,7 @@ jobs:
       - image: cimg/python:3.10
     steps:
       - checkout
+      - <<: *install_suitesparse
       - <<: *install_torch
       - <<: *run_other_unit_tests
 

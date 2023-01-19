@@ -130,4 +130,5 @@ class BaspachoSparseSolver(LinearSolver):
             self.A_col_ind,
             self.symbolic_decomposition,
             damping_alpha_beta,
+            self.linearization.detached_hessian,
         )

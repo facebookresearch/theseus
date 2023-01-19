@@ -5,11 +5,12 @@
 from typing import Any, Tuple, Optional
 import torch
 
+from .common import compute_A_grad
 from ..linear_system import SparseStructure
 from theseus.utils.sparse_matrix_utils import mat_vec, tmat_vec
 
 _BaspachoSolveFunctionBwdReturnType = Tuple[
-    torch.Tensor, torch.Tensor, None, None, None, None, None, None
+    torch.Tensor, torch.Tensor, None, None, None, None, None, None, None
 ]
 
 
@@ -24,6 +25,7 @@ class BaspachoSolveFunction(torch.autograd.Function):
         A_col_ind: torch.Tensor,
         symbolic_decomposition: Any,  # actually SymbolicDecomposition
         damping_alpha_beta: Optional[Tuple[torch.Tensor, torch.Tensor]],
+        detach_hessian: bool = False,
     ) -> torch.Tensor:
         from theseus.extlib.baspacho_solver import SymbolicDecomposition
 
@@ -56,6 +58,7 @@ class BaspachoSolveFunction(torch.autograd.Function):
         ctx.sparse_structure = sparse_structure
         ctx.numeric_decomposition = numeric_decomposition
         ctx.damping_alpha_beta = damping_alpha_beta
+        ctx.detach_hessian = detach_hessian
 
         return x.to(A_val.dtype)
 
@@ -134,31 +137,26 @@ class BaspachoSolveFunction(torch.autograd.Function):
         A_col_ind = ctx.sparse_structure.col_ind
         A_row_ptr = ctx.sparse_structure.row_ptr
         batch_size = grad_output.shape[0]
-        A_grad = torch.empty(
-            size=(batch_size, len(A_col_ind)),
-            dtype=torch.double,
-            device=grad_output.device,
-        )  # return value, A's grad
-        for r in range(len(A_row_ptr) - 1):
-            start, end = A_row_ptr[r], A_row_ptr[r + 1]
-            columns = A_col_ind[start:end]  # col indices, for this row
-            A_grad[:, start:end] = (
-                b_Ax[:, r].unsqueeze(1) * H_double[:, columns]
-                - AH[:, r].unsqueeze(1) * ctx.x[:, columns]
-            )
 
-        # apply correction if there is a multiplicative damping
-        if (
-            ctx.damping_alpha_beta is not None
-            and (ctx.damping_alpha_beta[0] > 0.0).any()
-        ):
-            alpha = ctx.damping_alpha_beta[0].view(-1, 1)
-            alpha2Hx = (alpha * 2.0) * H_double * ctx.x  # componentwise product
-            A_grad -= ctx.A_val_double * alpha2Hx[:, ctx.A_col_ind.type(torch.long)]
+        A_grad = compute_A_grad(
+            batch_size,
+            A_row_ptr,
+            A_col_ind,
+            ctx.b,
+            ctx.x,
+            b_Ax,
+            H_double,
+            AH,
+            ctx.damping_alpha_beta,
+            ctx.A_val_double,
+            ctx.A_col_ind,
+            ctx.detach_hessian,
+        )
 
         return (
             A_grad.to(dtype=grad_output.dtype),
             AH.to(dtype=grad_output.dtype),
+            None,
             None,
             None,
             None,

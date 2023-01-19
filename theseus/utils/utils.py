@@ -116,7 +116,7 @@ def numeric_jacobian(
 # Returns a function that approximates a function's gradient with a central difference.
 def numeric_grad(
     f: Callable[[np.ndarray], np.ndarray], h: float = 1e-4
-) -> Callable[[np.ndarray], float]:
+) -> Callable[[np.ndarray], np.ndarray]:
     def df(x: np.ndarray):
         assert x.ndim == 1
         n = x.shape[0]

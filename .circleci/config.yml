@@ -126,12 +126,12 @@ install_functorch_021: &install_functorch_021
       command: |
         pip install functorch==0.2.1
 
-install_functorch: &install_functorch
+install_torch: &install_torch
   - run:
-      name: Install Functorch
+      name: Install Torch
       working_directory: ~/project
       command: |
-        pip install functorch
+        pip install torch
 
 install_recent_cmake_2004: &install_recent_cmake_2004
   - run:
@@ -259,7 +259,7 @@ jobs:
     steps:
       - checkout
       - <<: *install_suitesparse
-      - <<: *install_functorch
+      - <<: *install_torch
       - <<: *build_baspacho_cpu
       - <<: *run_pre_commit
 
@@ -269,7 +269,7 @@ jobs:
     steps:
       - checkout
       - <<: *install_suitesparse
-      - <<: *install_functorch
+      - <<: *install_torch
       - <<: *build_baspacho_cpu
       - <<: *run_pre_commit
 
@@ -279,7 +279,7 @@ jobs:
     steps:
       - checkout
       - <<: *install_suitesparse
-      - <<: *install_functorch
+      - <<: *install_torch
       - <<: *build_baspacho_cpu
       - <<: *run_pre_commit
 
@@ -290,7 +290,7 @@ jobs:
     steps:
       - checkout
       - <<: *install_suitesparse
-      - <<: *install_functorch
+      - <<: *install_torch
       - <<: *build_baspacho_cpu
       - <<: *run_optimizer_tests
 
@@ -300,7 +300,7 @@ jobs:
     steps:
       - checkout
       - <<: *install_suitesparse
-      - <<: *install_functorch
+      - <<: *install_torch
       - <<: *build_baspacho_cpu
       - <<: *run_optimizer_tests
 
@@ -310,7 +310,7 @@ jobs:
     steps:
       - checkout
       - <<: *install_suitesparse
-      - <<: *install_functorch
+      - <<: *install_torch
       - <<: *build_baspacho_cpu
       - <<: *run_optimizer_tests
 
@@ -320,8 +320,7 @@ jobs:
       - image: cimg/python:3.8
     steps:
       - checkout
-      - <<: *install_suitesparse
-      - <<: *install_functorch
+      - <<: *install_torch
       - <<: *build_baspacho_cpu
       - <<: *run_lie_group_tests
 
@@ -330,8 +329,7 @@ jobs:
       - image: cimg/python:3.9
     steps:
       - checkout
-      - <<: *install_suitesparse
-      - <<: *install_functorch
+      - <<: *install_torch
       - <<: *build_baspacho_cpu
       - <<: *run_lie_group_tests
 
@@ -340,8 +338,7 @@ jobs:
       - image: cimg/python:3.10
     steps:
       - checkout
-      - <<: *install_suitesparse
-      - <<: *install_functorch
+      - <<: *install_torch
       - <<: *build_baspacho_cpu
       - <<: *run_lie_group_tests
 
@@ -351,8 +348,7 @@ jobs:
       - image: cimg/python:3.8
     steps:
       - checkout
-      - <<: *install_suitesparse
-      - <<: *install_functorch
+      - <<: *install_torch
       - <<: *build_baspacho_cpu
       - <<: *run_other_unit_tests
 
@@ -361,8 +357,7 @@ jobs:
       - image: cimg/python:3.9
     steps:
       - checkout
-      - <<: *install_suitesparse
-      - <<: *install_functorch
+      - <<: *install_torch
       - <<: *build_baspacho_cpu
       - <<: *run_other_unit_tests
 
@@ -371,8 +366,7 @@ jobs:
       - image: cimg/python:3.10
     steps:
       - checkout
-      - <<: *install_suitesparse
-      - <<: *install_functorch
+      - <<: *install_torch
       - <<: *build_baspacho_cpu
       - <<: *run_other_unit_tests
 
@@ -401,7 +395,6 @@ jobs:
       - <<: *setup_cuda11_libs
       - <<: *setup_environment
       - <<: *install_torch_cuda11
-      - <<: *install_functorch
       - <<: *install_recent_cmake_2004
       - <<: *build_baspacho_cuda
       - <<: *setup_project

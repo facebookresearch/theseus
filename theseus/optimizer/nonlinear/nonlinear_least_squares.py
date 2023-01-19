@@ -97,20 +97,26 @@ class NonlinearLeastSquares(NonlinearOptimizer, abc.ABC):
         step_size: float = 1.0,
         **kwargs,
     ):
-        linear_solver_cls = linear_solver_cls or CholeskyDenseSolver
         super().__init__(
             objective,
             linear_solver_cls=linear_solver_cls,
             vectorize=vectorize,
-            linearization_cls=linearization_cls,
-            linearization_kwargs=linearization_kwargs,
-            linear_solver_kwargs=linear_solver_kwargs,
             abs_err_tolerance=abs_err_tolerance,
             rel_err_tolerance=rel_err_tolerance,
             max_iterations=max_iterations,
             step_size=step_size,
             **kwargs,
         )
+        linear_solver_cls = linear_solver_cls or CholeskyDenseSolver
+        linear_solver_kwargs = linear_solver_kwargs or {}
+        self.linear_solver = linear_solver_cls(
+            objective,
+            linearization_cls=linearization_cls,
+            linearization_kwargs=linearization_kwargs,
+            **linear_solver_kwargs,
+        )
+        self.ordering = self.linear_solver.linearization.ordering
+        self._tmp_optim_vars = tuple(v.copy(new_name=v.name) for v in self.ordering)
 
     # Modifies the (no grad) info in place to add data of grad loop info
     def _merge_infos(

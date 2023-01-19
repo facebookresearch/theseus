@@ -147,7 +147,7 @@ setuptools.setup(
         "Intended Audience :: Science/Research",
         "Topic :: Scientific/Engineering :: Artificial Intelligence",
     ],
-    python_requires=">=3.7",
+    python_requires=">=3.8",
     install_requires=reqs_main,
     extras_require={"dev": reqs_main + reqs_dev},
     cmdclass={"build_ext": torch_cpp_ext.BuildExtension},

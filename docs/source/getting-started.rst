@@ -6,7 +6,7 @@ Installation
 
 Prerequisites
 ^^^^^^^^^^^^^
-- We *strongly* recommend you install ``theseus`` in a venv or conda environment with Python 3.7-3.9.
+- We *strongly* recommend you install ``theseus`` in a venv or conda environment with Python 3.8-3.10.
 - Theseus requires ``torch`` installation. To install for your particular CPU/CUDA configuration, follow the instructions in the PyTorch `website <https://pytorch.org/get-started/locally/>`_.
 - For GPU support, Theseus requires `nvcc <https://docs.nvidia.com/cuda/cuda-compiler-driver-nvcc/index.html>`_ to compile custom CUDA operations. Make sure it matches the version used to compile pytorch with ``nvcc --version.`` If not, install it and ensure its location is on your system's ``$PATH`` variable.
 - Theseus also requires `suitesparse <https://people.engr.tamu.edu/davis/suitesparse.html>`_, which you can install via:
@@ -23,11 +23,11 @@ pypi
 
     pip install theseus-ai
 
-We currently provide wheels with our CUDA extensions compiled using CUDA 10.2 and Python 3.9.
+We currently provide wheels with our CUDA extensions compiled using CUDA 11.6 and Python 3.10.
 For other CUDA versions, consider installing from source or using our 
 `build script <https://github.com/facebookresearch/theseus/blob/main/build_scripts/build_wheel.sh>`_.
 
-Note that ``pypi`` installation doesn't include our experimental `Theseus Labs <https://github.com/facebookresearch/theseus/theseus/labs>`_.
+Note that ``pypi`` installation doesn't include our experimental `Theseus Labs <https://github.com/facebookresearch/theseus/tree/main/theseus/labs>`_.
 For this, please install from source.
 
 From source

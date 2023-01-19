@@ -6,7 +6,7 @@ Installation
 
 Prerequisites
 ^^^^^^^^^^^^^
-- We *strongly* recommend you install ``theseus`` in a venv or conda environment with Python 3.7-3.10.
+- We *strongly* recommend you install ``theseus`` in a venv or conda environment with Python 3.8-3.10.
 - Theseus requires ``torch`` installation. To install for your particular CPU/CUDA configuration, follow the instructions in the PyTorch `website <https://pytorch.org/get-started/locally/>`_.
 - For GPU support, Theseus requires `nvcc <https://docs.nvidia.com/cuda/cuda-compiler-driver-nvcc/index.html>`_ to compile custom CUDA operations. Make sure it matches the version used to compile pytorch with ``nvcc --version.`` If not, install it and ensure its location is on your system's ``$PATH`` variable.
 - Theseus also requires `suitesparse <https://people.engr.tamu.edu/davis/suitesparse.html>`_, which you can install via:

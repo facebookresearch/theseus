@@ -19,7 +19,7 @@
     </a>
     <!-- Python -->
     <a href="https://www.python.org/downloads/release/">
-        <img src="https://img.shields.io/badge/python-3.7%20%7C%203.8%20%7C%203.9-blue.svg" alt="Python" height="20">
+        <img src="https://img.shields.io/badge/python-3.8%20%7C%203.9%20%7C%203.10-blue.svg" alt="Python" height="20">
     </a>
     <!-- Pre-commit -->
     <a href="https://github.com/pre-commit/pre-commit">
@@ -79,7 +79,7 @@ We support several features that improve computation times and memory consumptio
 ## Getting Started
 
 ### Prerequisites
-- We *strongly* recommend you install Theseus in a venv or conda environment with Python 3.7-3.10.
+- We *strongly* recommend you install Theseus in a venv or conda environment with Python 3.8-3.10.
 - Theseus requires `torch` installation. To install for your particular CPU/CUDA configuration, follow the instructions in the PyTorch [website](https://pytorch.org/get-started/locally/).
 - For GPU support, Theseus requires [nvcc](https://docs.nvidia.com/cuda/cuda-compiler-driver-nvcc/index.html) to compile custom CUDA operations. Make sure it matches the version used to compile pytorch with `nvcc --version`. If not, install it and ensure its location is on your system's `$PATH` variable.
 - Theseus also requires [`suitesparse`](https://people.engr.tamu.edu/davis/suitesparse.html), which you can install via:

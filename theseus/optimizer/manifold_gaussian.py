@@ -74,6 +74,7 @@ class ManifoldGaussian:
         self,
         mean: Sequence[Manifold],
         precision: torch.Tensor,
+        batch_ignore_mask: Optional[torch.Tensor] = None,
     ):
         if len(mean) != len(self.mean):
             raise ValueError(
@@ -82,7 +83,7 @@ class ManifoldGaussian:
                 f"Expected: {len(self.mean)}"
             )
         for i in range(len(self.mean)):
-            self.mean[i].update(mean[i])
+            self.mean[i].update(mean[i], batch_ignore_mask=batch_ignore_mask)
 
         expected_shape = torch.Size([mean[0].shape[0], self.dof, self.dof])
         if precision.shape != expected_shape:
@@ -104,7 +105,13 @@ class ManifoldGaussian:
         if not torch.allclose(precision, precision.transpose(1, 2), atol=1e-5):
             raise ValueError("Tried to update precision with non-symmetric matrix.")
 
-        self.precision = precision
+        if batch_ignore_mask is not None and batch_ignore_mask.any():
+            mask_shape = (-1,) + (1,) * (precision.ndim - 1)
+            self.precision = torch.where(
+                batch_ignore_mask.view(mask_shape), self.precision, precision
+            )
+        else:
+            self.precision = precision
 
 
 # Projects the gaussian (ManifoldGaussian object) into the tangent plane at

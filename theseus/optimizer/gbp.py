@@ -115,7 +115,7 @@ class Message(ManifoldGaussian):
         super(Message, self).__init__(mean, precision=precision, name=name)
 
     # sets mean to the group identity and zero precision matrix
-    def zero_message(self):
+    def zero_message(self, batch_ignore_mask: Optional[torch.Tensor] = None):
         new_mean = []
         batch_size = self.mean[0].shape[0]
         for var in self.mean:
@@ -131,7 +131,9 @@ class Message(ManifoldGaussian):
         new_precision = torch.zeros(batch_size, self.dof, self.dof).to(
             dtype=self.dtype, device=self.device
         )
-        self.update(mean=new_mean, precision=new_precision)
+        self.update(
+            mean=new_mean, precision=new_precision, batch_ignore_mask=batch_ignore_mask
+        )
 
 
 # Factor class, one is created for each cost function
@@ -301,8 +303,11 @@ class Factor:
 
             dofs = self.cf.optim_var_at(v).dof()
 
+            inc_messages = (
+                ~torch.isclose(lam_factor, lam_factor_copy).all(dim=1).all(dim=1)
+            )
             # if no incoming messages then send out zero message
-            if torch.allclose(lam_factor, lam_factor_copy) and num_optim_vars > 1:
+            if not inc_messages.any() and num_optim_vars > 1:
                 # print(self.cf.name, "---> not updating, incoming precision is zero")
                 new_mess = Message([self.cf.optim_var_at(v).copy()])
                 new_mess.zero_message()
@@ -405,9 +410,17 @@ class Factor:
                 new_mess_mean = th.LUDenseSolver._solve_sytem(
                     new_mess_eta[..., None], new_mess_lam
                 )
-                new_mess = th.retract_gaussian(
+                new_mess_params = th.retract_gaussian(
                     self.lin_point[v], new_mess_mean, new_mess_lam
                 )
+                new_mess = Message(
+                    mean=new_mess_params.mean, precision=new_mess_params.precision
+                )
+
+                # set zero msg for factors with no incoming messages
+                if not inc_messages.all() and num_optim_vars > 1:
+                    # i.e. ignore (don't zero) if there are incoming messages
+                    new_mess.zero_message(batch_ignore_mask=inc_messages)
 
             new_messages.append(new_mess)
 

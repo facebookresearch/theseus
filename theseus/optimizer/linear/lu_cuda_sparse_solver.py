@@ -168,4 +168,5 @@ class LUCudaSparseSolver(LinearSolver):
             self._solver_contexts[self._last_solver_context],
             damping_alpha_beta,
             True,
+            self.linearization.detached_hessian,
         )

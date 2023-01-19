@@ -5,6 +5,7 @@
 import time
 from typing import Any, Callable, List, Optional, Type
 
+import numpy as np
 import torch
 import torch.nn as nn
 
@@ -110,6 +111,23 @@ def numeric_jacobian(
     for group_idx in range(len(group_args)):
         jacs.append(_compute(group_idx))
     return jacs
+
+
+# Returns a function that approximates a function's gradient with a central difference.
+def numeric_grad(
+    f: Callable[[np.ndarray], np.ndarray], h: float = 1e-4
+) -> Callable[[np.ndarray], np.ndarray]:
+    def df(x: np.ndarray):
+        assert x.ndim == 1
+        n = x.shape[0]
+        g = np.zeros_like(x)
+        for i in range(n):
+            h_i = np.zeros_like(x)
+            h_i[i] = h
+            g[i] = (f(x + h_i) - f(x - h_i)) / (2.0 * h)
+        return g
+
+    return df
 
 
 # A basic timer utility that adapts to the device. Useful for removing

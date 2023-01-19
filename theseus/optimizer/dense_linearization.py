@@ -55,10 +55,10 @@ class DenseLinearization(Linearization):
             self.b[:, row_slice] = -error
             err_row_idx += cost_function.dim()
 
-    def _linearize_hessian_impl(self):
+    def _linearize_hessian_impl(self, _detach_hessian: bool = False):
         self._linearize_jacobian_impl()
         At = self.A.transpose(1, 2)
-        self._AtA = At.bmm(self.A)
+        self._AtA = At.bmm(self.A).detach() if _detach_hessian else At.bmm(self.A)
         self._Atb = At.bmm(self.b.unsqueeze(2))
 
     def hessian_approx(self):

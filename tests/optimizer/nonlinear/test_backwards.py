@@ -7,7 +7,7 @@ import torch
 
 import theseus as th
 
-from tests.extlib.common import run_if_baspacho
+from tests.decorators import run_if_baspacho
 from theseus.utils import numeric_grad
 
 torch.manual_seed(0)

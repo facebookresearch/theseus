@@ -189,12 +189,13 @@ run_pre_commit: &run_pre_commit
         pre-commit install-hooks
         pre-commit run --all-files
 
-run_end_to_end_test: &run_end_to_end_test
+run_optimizer_tests: &run_optimizer_tests
   - run:
       name: Running end to end tests
       working_directory: ~/project
       command: |
         BASPACHO_ROOT_DIR=~/baspacho pip install -e ".[dev]"
+        python -m pytest tests/optimizer -m "not cudaext"
         python -m pytest tests/test_theseus_layer.py -m "not cudaext"
 
 run_lie_group_tests: &run_lie_group_tests
@@ -202,7 +203,7 @@ run_lie_group_tests: &run_lie_group_tests
       name: Running end to end tests
       working_directory: ~/project
       command: |
-        BASPACHO_ROOT_DIR=~/baspacho pip install -e ".[dev]"
+        pip install -e ".[dev]"
         python -m pytest tests/geometry -m "not cudaext" 
 
 run_other_unit_tests: &run_other_unit_tests
@@ -210,8 +211,8 @@ run_other_unit_tests: &run_other_unit_tests
       name: Running end to end tests
       working_directory: ~/project
       command: |
-        BASPACHO_ROOT_DIR=~/baspacho pip install -e ".[dev]"
-        python -m pytest tests -m "not cudaext" --ignore=tests/geometry/ --ignore-glob=tests/test_theseus_layer.py
+        pip install -e ".[dev]"
+        python -m pytest tests -m "not cudaext" --ignore=tests/geometry/ --ignore=tests/optimizer --ignore-glob=tests/test_theseus_layer.py
 
 run_gpu_tests: &run_gpu_tests
   - run:
@@ -283,7 +284,7 @@ jobs:
       - <<: *run_pre_commit
 
   # End-to-end tests
-  py38_e2e_tests:
+  py38_optimizer_tests:
     docker:
       - image: cimg/python:3.8
     steps:
@@ -291,9 +292,9 @@ jobs:
       - <<: *install_suitesparse
       - <<: *install_functorch
       - <<: *build_baspacho_cpu
-      - <<: *run_end_to_end_test
+      - <<: *run_optimizer_tests
 
-  py39_e2e_tests:
+  py39_optimizer_tests:
     docker:
       - image: cimg/python:3.9
     steps:
@@ -301,9 +302,9 @@ jobs:
       - <<: *install_suitesparse
       - <<: *install_functorch
       - <<: *build_baspacho_cpu
-      - <<: *run_end_to_end_test
+      - <<: *run_optimizer_tests
 
-  py310_e2e_tests:
+  py310_optimizer_tests:
     docker:
       - image: cimg/python:3.10
     steps:
@@ -311,7 +312,7 @@ jobs:
       - <<: *install_suitesparse
       - <<: *install_functorch
       - <<: *build_baspacho_cpu
-      - <<: *run_end_to_end_test
+      - <<: *run_optimizer_tests
 
   # Lie group tests
   py38_lie_tests:
@@ -430,9 +431,9 @@ workflows:
       - py38_precommit
       - py39_precommit
       - py310_precommit
-      - py38_e2e_tests
-      - py39_e2e_tests
-      - py310_e2e_tests
+      - py38_optimizer_tests
+      - py39_optimizer_tests
+      - py310_optimizer_tests
       - py38_lie_tests
       - py39_lie_tests
       - py310_lie_tests

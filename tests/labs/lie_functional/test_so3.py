@@ -8,13 +8,7 @@ import pytest
 import torch
 
 from tests.decorators import run_if_labs
-from .common import (
-    TEST_EPS,
-    check_lie_group_function,
-    get_test_cfg,
-    left_project_func,
-    sample_inputs,
-)
+from .common import TEST_EPS, check_lie_group_function, run_test_op
 
 
 @run_if_labs()
@@ -41,18 +35,7 @@ def test_op(op_name, batch_size, dtype):
 
     rng = torch.Generator()
     rng.manual_seed(0)
-
-    all_input_types, atol = get_test_cfg(op_name, dtype, 3, (3, 3), module=so3)
-    for input_types in all_input_types:
-        inputs = sample_inputs(input_types, batch_size, dtype, rng)
-        funcs = (
-            tuple(left_project_func(so3, x) for x in inputs)
-            if op_name == "log"
-            else None
-        )
-
-        # check analytic backward for the operator
-        check_lie_group_function(so3, op_name, atol, inputs, funcs=funcs)
+    run_test_op(op_name, batch_size, dtype, rng, 3, (3, 3), so3)
 
 
 @run_if_labs()

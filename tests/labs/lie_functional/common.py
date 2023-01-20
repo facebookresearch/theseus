@@ -70,6 +70,21 @@ def sample_inputs(input_types, batch_size, dtype, rng, module=None):
     return tuple(_sample(type_str) for type_str in input_types)
 
 
+# Run the test for a Lie group operator
+def run_test_op(op_name, batch_size, dtype, rng, dim, data_shape, module):
+    all_input_types, atol = get_test_cfg(op_name, dtype, dim, data_shape, module=module)
+    for input_types in all_input_types:
+        inputs = sample_inputs(input_types, batch_size, dtype, rng)
+        funcs = (
+            tuple(left_project_func(module, x) for x in inputs)
+            if op_name == "log"
+            else None
+        )
+
+        # check analytic backward for the operator
+        check_lie_group_function(module, op_name, atol, inputs, funcs=funcs)
+
+
 # Checks if the jacobian computed by default torch autograd is close to the one
 # provided with custom backward
 # funcs is a list of callable that modifiies the jacobian. If provided we also

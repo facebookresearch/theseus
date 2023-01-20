@@ -11,76 +11,106 @@ from tests.decorators import run_if_labs
 from .common import TEST_EPS, check_lie_group_function, left_project_func
 
 
+def _get_inputs(input_types, batch_size, dtype, rng, module=None):
+    def _sample(input_type):
+        type_str, param = input_type
+
+        def _quat_sample():
+            q = torch.rand(batch_size, param, dtype=dtype, generator=rng)
+            return q / torch.norm(q, dim=1, keepdim=True)
+
+        sample_fns = {
+            "tangent": lambda: torch.rand(
+                batch_size, param, dtype=dtype, generator=rng
+            ),
+            "group": lambda: param.rand(batch_size, generator=rng, dtype=dtype),
+            "quat": lambda: _quat_sample(),
+            "matrix": lambda: torch.rand(
+                (batch_size,) + param, generator=rng, dtype=dtype
+            ),
+        }
+        return sample_fns[type_str]()
+
+    return tuple(_sample(type_str) for type_str in input_types)
+
+
+def _get_test_cfg(op_name, dtype, module=None):
+    atol = TEST_EPS
+    # input_type --> tuple[str, param]
+    # input_types --> a tuple of type info for a given function
+    # all_input_types --> a list of input types, if more than one check isn needed
+    all_input_types = []
+    if op_name == "exp":
+        all_input_types.append((("tangent", 3),))
+        atol = 1e-6
+    if op_name == "log":
+        all_input_types.append((("group", module),))
+        atol = 5e-6 if dtype == torch.float32 else TEST_EPS
+    if op_name in ["adjoint", "inverse"]:
+        all_input_types.append((("group", module),))
+    if op_name in ["hat"]:
+        all_input_types.append((("tangent", 3),))
+    if op_name == "compose":
+        all_input_types.append((("group", module),) * 2)
+    if op_name == "quaternion_to_rotation":
+        all_input_types.append((("quat", 4),))
+    if op_name == "lift":
+        matrix_shape = (torch.randint(1, 20, ()).item(), 3)
+        all_input_types.append((("matrix", matrix_shape),))
+    if op_name == "project":
+        matrix_shape = (torch.randint(1, 20, ()).item(), 3, 3)
+        all_input_types.append((("matrix", matrix_shape),))
+    if op_name == "left_act":
+        for shape in [
+            (3, torch.randint(1, 5, ()).item()),
+            (2, 4, 3, torch.randint(1, 5, ()).item()),
+        ]:
+            all_input_types.append((("group", module), ("matrix", shape)))
+    if op_name == "left_project":
+        for shape in [
+            (3, 3),
+            (torch.randint(1, 5, ()).item(), 3, 3),
+        ]:
+            all_input_types.append((("group", module), ("matrix", shape)))
+    return all_input_types, atol
+
+
 @run_if_labs()
+@pytest.mark.parametrize(
+    "op_name",
+    [
+        "exp",
+        "log",
+        "adjoint",
+        "inverse",
+        "hat",
+        "compose",
+        "quaternion_to_rotation",
+        "lift",
+        "project",
+        "left_act",
+        "left_project",
+    ],
+)
 @pytest.mark.parametrize("batch_size", [1, 20, 100])
 @pytest.mark.parametrize("dtype", [torch.float32, torch.float64])
-def test_exp(batch_size: int, dtype: torch.dtype):
+def test_op(op_name, batch_size, dtype):
     import theseus.labs.lie_functional.so3 as so3
 
     rng = torch.Generator()
     rng.manual_seed(0)
-    tangent_vector = torch.rand(batch_size, 3, dtype=dtype, generator=rng)
 
-    # check analytic backward for the operator
-    check_lie_group_function(so3, "exp", 1e-6, (tangent_vector,))
+    all_input_types, atol = _get_test_cfg(op_name, dtype, module=so3)
+    for input_types in all_input_types:
+        inputs = _get_inputs(input_types, batch_size, dtype, rng)
+        funcs = (
+            tuple(left_project_func(so3, x) for x in inputs)
+            if op_name == "log"
+            else None
+        )
 
-
-@run_if_labs()
-@pytest.mark.parametrize("batch_size", [1, 20, 100])
-@pytest.mark.parametrize("dtype", [torch.float32, torch.float64])
-def test_log(batch_size: int, dtype: torch.dtype):
-    import theseus.labs.lie_functional.so3 as so3
-
-    rng = torch.Generator()
-    rng.manual_seed(0)
-    group = so3.rand(batch_size, generator=rng, dtype=dtype)
-    left_project = left_project_func(so3, group)
-
-    # check analytic backward for the operator
-    EPS = 5e-6 if dtype == torch.float32 else TEST_EPS
-    check_lie_group_function(so3, "log", EPS, (group,), (left_project,))
-
-
-@run_if_labs()
-@pytest.mark.parametrize("batch_size", [1, 20, 100])
-@pytest.mark.parametrize("dtype", [torch.float32, torch.float64])
-def test_adjoint(batch_size: int, dtype: torch.dtype):
-    import theseus.labs.lie_functional.so3 as so3
-
-    rng = torch.Generator()
-    rng.manual_seed(0)
-    group = so3.rand(batch_size, generator=rng, dtype=dtype)
-
-    # check analytic backward for the operator
-    check_lie_group_function(so3, "adjoint", TEST_EPS, (group,))
-
-
-@run_if_labs()
-@pytest.mark.parametrize("batch_size", [1, 20, 100])
-@pytest.mark.parametrize("dtype", [torch.float32, torch.float64])
-def test_inverse(batch_size: int, dtype: torch.dtype):
-    import theseus.labs.lie_functional.so3 as so3
-
-    rng = torch.Generator()
-    rng.manual_seed(0)
-    group = so3.rand(batch_size, generator=rng, dtype=dtype)
-
-    # check analytic backward for the operator
-    check_lie_group_function(so3, "inverse", TEST_EPS, (group,))
-
-
-@run_if_labs()
-@pytest.mark.parametrize("batch_size", [1, 20, 100])
-@pytest.mark.parametrize("dtype", [torch.float32, torch.float64])
-def test_hat(batch_size: int, dtype: torch.dtype):
-    import theseus.labs.lie_functional.so3 as so3
-
-    rng = torch.Generator()
-    rng.manual_seed(0)
-    tangent_vector = torch.rand(batch_size, 3, dtype=dtype, generator=rng)
-
-    # check analytic backward for the operator
-    check_lie_group_function(so3, "hat", TEST_EPS, (tangent_vector,))
+        # check analytic backward for the operator
+        check_lie_group_function(so3, op_name, atol, inputs, funcs=funcs)
 
 
 @run_if_labs()
@@ -100,137 +130,3 @@ def test_vee(batch_size: int, dtype: torch.dtype):
     # check the correctness of hat and vee
     actual_tangent_vector = so3.vee(matrix)
     assert torch.allclose(actual_tangent_vector, tangent_vector, atol=TEST_EPS)
-
-
-@run_if_labs()
-@pytest.mark.parametrize("batch_size", [1, 20, 100])
-@pytest.mark.parametrize("dtype", [torch.float32, torch.float64])
-def test_compose(batch_size: int, dtype: torch.dtype):
-    import theseus.labs.lie_functional.so3 as so3
-
-    rng = torch.Generator()
-    rng.manual_seed(0)
-    group0 = so3.rand(batch_size, generator=rng, dtype=dtype)
-    group1 = so3.rand(batch_size, generator=rng, dtype=dtype)
-
-    # check analytic backward for the operator
-    check_lie_group_function(so3, "compose", TEST_EPS, (group0, group1))
-
-
-@run_if_labs()
-@pytest.mark.parametrize("batch_size", [1, 20, 100])
-@pytest.mark.parametrize("dtype", [torch.float32, torch.float64])
-def test_quaternion_to_rotation(batch_size: int, dtype: torch.dtype):
-    import theseus.labs.lie_functional.so3 as so3
-
-    rng = torch.Generator()
-    rng.manual_seed(0)
-    quaternion = torch.rand(batch_size, 4, dtype=dtype, generator=rng)
-    quaternion = quaternion / torch.norm(quaternion, dim=1, keepdim=True)
-
-    # check analytic backward for the operator
-    check_lie_group_function(so3, "quaternion_to_rotation", TEST_EPS, (quaternion,))
-
-
-@run_if_labs()
-@pytest.mark.parametrize("batch_size", [1, 20, 100])
-@pytest.mark.parametrize("dtype", [torch.float32, torch.float64])
-def test_lift(batch_size: int, dtype: torch.dtype):
-    import theseus.labs.lie_functional.so3 as so3
-
-    rng = torch.Generator()
-    matrix = torch.rand(
-        batch_size,
-        int(torch.randint(1, 20, (1,), generator=rng)),
-        3,
-        dtype=dtype,
-        generator=rng,
-    )
-
-    # check analytic backward for the operator
-    check_lie_group_function(so3, "lift", TEST_EPS, (matrix,))
-
-
-@run_if_labs()
-@pytest.mark.parametrize("batch_size", [1, 20, 100])
-@pytest.mark.parametrize("dtype", [torch.float32, torch.float64])
-def test_project(batch_size: int, dtype: torch.dtype):
-    import theseus.labs.lie_functional.so3 as so3
-
-    rng = torch.Generator()
-    matrix = torch.rand(
-        batch_size,
-        int(torch.randint(1, 20, (1,), generator=rng)),
-        3,
-        3,
-        dtype=dtype,
-        generator=rng,
-    )
-
-    # check analytic backward for the operator
-    check_lie_group_function(so3, "project", TEST_EPS, (matrix,))
-
-
-@run_if_labs()
-@pytest.mark.parametrize("batch_size", [1, 20, 100])
-@pytest.mark.parametrize("dtype", [torch.float32, torch.float64])
-def test_left_act(batch_size: int, dtype: torch.dtype):
-    import theseus.labs.lie_functional.so3 as so3
-
-    rng = torch.Generator()
-    group = so3.rand(batch_size, dtype=dtype, generator=rng)
-    matrix = torch.rand(
-        batch_size,
-        3,
-        int(torch.randint(1, 5, (1,), generator=rng)),
-        dtype=dtype,
-        generator=rng,
-    )
-
-    # check analytic backward for the operator
-    check_lie_group_function(so3, "left_act", TEST_EPS, (group, matrix))
-
-    matrix = torch.rand(
-        batch_size,
-        2,
-        4,
-        3,
-        int(torch.randint(1, 5, (1,), generator=rng)),
-        dtype=dtype,
-        generator=rng,
-    )
-
-    # check analytic backward for the operator
-    check_lie_group_function(so3, "left_act", TEST_EPS, (group, matrix))
-
-
-@run_if_labs()
-@pytest.mark.parametrize("batch_size", [1, 20, 100])
-@pytest.mark.parametrize("dtype", [torch.float32, torch.float64])
-def test_left_project(batch_size: int, dtype: torch.dtype):
-    import theseus.labs.lie_functional.so3 as so3
-
-    rng = torch.Generator()
-    group = so3.rand(batch_size, dtype=dtype, generator=rng)
-    matrix = torch.rand(
-        batch_size,
-        3,
-        3,
-        dtype=dtype,
-        generator=rng,
-    )
-
-    # check analytic backward for the operator
-    check_lie_group_function(so3, "left_project", TEST_EPS, (group, matrix))
-
-    matrix = torch.rand(
-        batch_size,
-        int(torch.randint(1, 5, (1,), generator=rng)),
-        3,
-        3,
-        dtype=dtype,
-        generator=rng,
-    )
-
-    # check analytic backward for the operator
-    check_lie_group_function(so3, "left_project", TEST_EPS, (group, matrix))

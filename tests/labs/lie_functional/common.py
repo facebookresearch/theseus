@@ -9,12 +9,17 @@ import torch
 TEST_EPS = 5e-7
 
 
-def check_lie_group_function(module, op_name: str, atol: float, args, funcs=None):
+# Checks if the jacobian computed by default torch autograd is close to the one
+# provided with custom backward
+# funcs is a list of callable that modifiies the jacobian. If provided we also
+# check that func(jac_autograd) is close to func(jac_custom), for each func in
+# the list
+def check_lie_group_function(module, op_name: str, atol: float, inputs, funcs=None):
     op_impl = getattr(module, "_" + op_name + "_impl")
     op = getattr(module, op_name)
 
-    jacs_impl = torch.autograd.functional.jacobian(op_impl, args)
-    jacs = torch.autograd.functional.jacobian(op, args)
+    jacs_impl = torch.autograd.functional.jacobian(op_impl, inputs)
+    jacs = torch.autograd.functional.jacobian(op, inputs)
 
     if funcs is None:
         for jac_impl, jac in zip(jacs_impl, jacs):

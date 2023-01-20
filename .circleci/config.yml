@@ -205,6 +205,7 @@ run_lie_group_tests: &run_lie_group_tests
       command: |
         pip install -e ".[dev]"
         python -m pytest tests/geometry -m "not cudaext" 
+        python -m pytest tests/labs/lie_functional -m "not cudaext" 
 
 run_other_unit_tests: &run_other_unit_tests
   - run:
@@ -212,7 +213,7 @@ run_other_unit_tests: &run_other_unit_tests
       working_directory: ~/project
       command: |
         pip install -e ".[dev]"
-        python -m pytest tests -m "not cudaext" --ignore=tests/geometry/ --ignore=tests/optimizer --ignore-glob=tests/test_theseus_layer.py
+        python -m pytest tests -m "not cudaext" --ignore=tests/geometry/ --ignore=tests/optimizer --ignore-glob=tests/test_theseus_layer.py --ignore=tests/labs/lie_functional
 
 run_gpu_tests: &run_gpu_tests
   - run:

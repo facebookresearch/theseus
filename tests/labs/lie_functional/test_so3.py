@@ -4,14 +4,11 @@
 # LICENSE file in the root directory of this source tree.
 
 import pytest
-from .common import check_lie_group_function, left_project_func
-from theseus.geometry.functional.constants import TEST_EPS
-import theseus.geometry.functional.so3 as so3
 
 import torch
 
 from tests.decorators import run_if_labs
-from .common import TEST_EPS, check_lie_group_function
+from .common import TEST_EPS, check_lie_group_function, left_project_func
 
 
 @run_if_labs()
@@ -32,6 +29,8 @@ def test_exp(batch_size: int, dtype: torch.dtype):
 @pytest.mark.parametrize("batch_size", [1, 20, 100])
 @pytest.mark.parametrize("dtype", [torch.float32, torch.float64])
 def test_log(batch_size: int, dtype: torch.dtype):
+    import theseus.labs.lie_functional.so3 as so3
+
     rng = torch.Generator()
     rng.manual_seed(0)
     group = so3.rand(batch_size, generator=rng, dtype=dtype)
@@ -107,6 +106,8 @@ def test_vee(batch_size: int, dtype: torch.dtype):
 @pytest.mark.parametrize("batch_size", [1, 20, 100])
 @pytest.mark.parametrize("dtype", [torch.float32, torch.float64])
 def test_compose(batch_size: int, dtype: torch.dtype):
+    import theseus.labs.lie_functional.so3 as so3
+
     rng = torch.Generator()
     rng.manual_seed(0)
     group0 = so3.rand(batch_size, generator=rng, dtype=dtype)
@@ -120,6 +121,8 @@ def test_compose(batch_size: int, dtype: torch.dtype):
 @pytest.mark.parametrize("batch_size", [1, 20, 100])
 @pytest.mark.parametrize("dtype", [torch.float32, torch.float64])
 def test_quaternion_to_rotation(batch_size: int, dtype: torch.dtype):
+    import theseus.labs.lie_functional.so3 as so3
+
     rng = torch.Generator()
     rng.manual_seed(0)
     quaternion = torch.rand(batch_size, 4, dtype=dtype, generator=rng)
@@ -133,6 +136,8 @@ def test_quaternion_to_rotation(batch_size: int, dtype: torch.dtype):
 @pytest.mark.parametrize("batch_size", [1, 20, 100])
 @pytest.mark.parametrize("dtype", [torch.float32, torch.float64])
 def test_lift(batch_size: int, dtype: torch.dtype):
+    import theseus.labs.lie_functional.so3 as so3
+
     rng = torch.Generator()
     matrix = torch.rand(
         batch_size,
@@ -150,6 +155,8 @@ def test_lift(batch_size: int, dtype: torch.dtype):
 @pytest.mark.parametrize("batch_size", [1, 20, 100])
 @pytest.mark.parametrize("dtype", [torch.float32, torch.float64])
 def test_project(batch_size: int, dtype: torch.dtype):
+    import theseus.labs.lie_functional.so3 as so3
+
     rng = torch.Generator()
     matrix = torch.rand(
         batch_size,
@@ -168,6 +175,8 @@ def test_project(batch_size: int, dtype: torch.dtype):
 @pytest.mark.parametrize("batch_size", [1, 20, 100])
 @pytest.mark.parametrize("dtype", [torch.float32, torch.float64])
 def test_left_act(batch_size: int, dtype: torch.dtype):
+    import theseus.labs.lie_functional.so3 as so3
+
     rng = torch.Generator()
     group = so3.rand(batch_size, dtype=dtype, generator=rng)
     matrix = torch.rand(
@@ -199,6 +208,8 @@ def test_left_act(batch_size: int, dtype: torch.dtype):
 @pytest.mark.parametrize("batch_size", [1, 20, 100])
 @pytest.mark.parametrize("dtype", [torch.float32, torch.float64])
 def test_left_project(batch_size: int, dtype: torch.dtype):
+    import theseus.labs.lie_functional.so3 as so3
+
     rng = torch.Generator()
     group = so3.rand(batch_size, dtype=dtype, generator=rng)
     matrix = torch.rand(

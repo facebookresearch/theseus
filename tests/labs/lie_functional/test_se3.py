@@ -4,9 +4,7 @@
 # LICENSE file in the root directory of this source tree.
 
 import pytest
-from .common import check_lie_group_function, left_project_func
-from theseus.geometry.functional.constants import TEST_EPS
-import theseus.geometry.functional.se3 as se3
+from .common import check_lie_group_function, left_project_func, TEST_EPS
 
 import torch
 
@@ -17,6 +15,8 @@ from tests.decorators import run_if_labs
 @pytest.mark.parametrize("batch_size", [1, 20, 100])
 @pytest.mark.parametrize("dtype", [torch.float32, torch.float64])
 def test_exp(batch_size: int, dtype: torch.dtype):
+    import theseus.labs.lie_functional.se3 as se3
+
     rng = torch.Generator()
     rng.manual_seed(0)
     tangent_vector = torch.rand(batch_size, 6, dtype=dtype, generator=rng)
@@ -29,6 +29,8 @@ def test_exp(batch_size: int, dtype: torch.dtype):
 @pytest.mark.parametrize("batch_size", [1, 20, 100])
 @pytest.mark.parametrize("dtype", [torch.float32, torch.float64])
 def test_log(batch_size: int, dtype: torch.dtype):
+    import theseus.labs.lie_functional.se3 as se3
+
     rng = torch.Generator()
     rng.manual_seed(0)
     group = se3.rand(batch_size, generator=rng, dtype=dtype)
@@ -43,6 +45,8 @@ def test_log(batch_size: int, dtype: torch.dtype):
 @pytest.mark.parametrize("batch_size", [1, 20, 100])
 @pytest.mark.parametrize("dtype", [torch.float32, torch.float64])
 def test_adjoint(batch_size: int, dtype: torch.dtype):
+    import theseus.labs.lie_functional.se3 as se3
+
     rng = torch.Generator()
     rng.manual_seed(0)
     group = se3.rand(batch_size, generator=rng, dtype=dtype)
@@ -55,6 +59,8 @@ def test_adjoint(batch_size: int, dtype: torch.dtype):
 @pytest.mark.parametrize("batch_size", [1, 20, 100])
 @pytest.mark.parametrize("dtype", [torch.float32, torch.float64])
 def test_inverse(batch_size: int, dtype: torch.dtype):
+    import theseus.labs.lie_functional.se3 as se3
+
     rng = torch.Generator()
     rng.manual_seed(0)
     group = se3.rand(batch_size, generator=rng, dtype=dtype)
@@ -67,6 +73,8 @@ def test_inverse(batch_size: int, dtype: torch.dtype):
 @pytest.mark.parametrize("batch_size", [1, 20, 100])
 @pytest.mark.parametrize("dtype", [torch.float32, torch.float64])
 def test_hat(batch_size: int, dtype: torch.dtype):
+    import theseus.labs.lie_functional.se3 as se3
+
     rng = torch.Generator()
     rng.manual_seed(0)
     tangent_vector = torch.rand(batch_size, 6, dtype=dtype, generator=rng)
@@ -79,6 +87,8 @@ def test_hat(batch_size: int, dtype: torch.dtype):
 @pytest.mark.parametrize("batch_size", [1, 20, 100])
 @pytest.mark.parametrize("dtype", [torch.float32, torch.float64])
 def test_vee(batch_size: int, dtype: torch.dtype):
+    import theseus.labs.lie_functional.se3 as se3
+
     rng = torch.Generator()
     rng.manual_seed(0)
     tangent_vector = torch.rand(batch_size, 6, dtype=dtype, generator=rng)
@@ -96,6 +106,8 @@ def test_vee(batch_size: int, dtype: torch.dtype):
 @pytest.mark.parametrize("batch_size", [1, 20, 100])
 @pytest.mark.parametrize("dtype", [torch.float32, torch.float64])
 def test_compose(batch_size: int, dtype: torch.dtype):
+    import theseus.labs.lie_functional.se3 as se3
+
     rng = torch.Generator()
     rng.manual_seed(0)
     group0 = se3.rand(batch_size, generator=rng, dtype=dtype)
@@ -109,6 +121,8 @@ def test_compose(batch_size: int, dtype: torch.dtype):
 @pytest.mark.parametrize("batch_size", [1, 20, 100])
 @pytest.mark.parametrize("dtype", [torch.float32, torch.float64])
 def test_lift(batch_size: int, dtype: torch.dtype):
+    import theseus.labs.lie_functional.se3 as se3
+
     rng = torch.Generator()
     matrix = torch.rand(
         batch_size,
@@ -126,6 +140,8 @@ def test_lift(batch_size: int, dtype: torch.dtype):
 @pytest.mark.parametrize("batch_size", [1, 20, 100])
 @pytest.mark.parametrize("dtype", [torch.float32, torch.float64])
 def test_project(batch_size: int, dtype: torch.dtype):
+    import theseus.labs.lie_functional.se3 as se3
+
     rng = torch.Generator()
     matrix = torch.rand(
         batch_size,
@@ -144,6 +160,8 @@ def test_project(batch_size: int, dtype: torch.dtype):
 @pytest.mark.parametrize("batch_size", [1, 20, 100])
 @pytest.mark.parametrize("dtype", [torch.float32, torch.float64])
 def test_left_act(batch_size: int, dtype: torch.dtype):
+    import theseus.labs.lie_functional.se3 as se3
+
     rng = torch.Generator()
     group = se3.rand(batch_size, dtype=dtype, generator=rng)
     matrix = torch.rand(
@@ -175,6 +193,8 @@ def test_left_act(batch_size: int, dtype: torch.dtype):
 @pytest.mark.parametrize("batch_size", [1, 20, 100])
 @pytest.mark.parametrize("dtype", [torch.float32, torch.float64])
 def test_left_project(batch_size: int, dtype: torch.dtype):
+    import theseus.labs.lie_functional.se3 as se3
+
     rng = torch.Generator()
     group = se3.rand(batch_size, dtype=dtype, generator=rng)
     matrix = torch.rand(

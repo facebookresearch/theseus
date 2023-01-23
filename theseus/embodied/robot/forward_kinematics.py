@@ -7,7 +7,7 @@ import torch
 
 from typing import List, Optional
 
-from theseus.geometry.functional import se3
+from theseus.labs.lie_functional import se3
 from .robot import Robot
 from .link import Link
 from .joint import Joint

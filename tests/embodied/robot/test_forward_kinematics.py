@@ -6,8 +6,8 @@
 import pytest
 import os
 import torch
-from theseus.geometry.functional import se3
-from theseus.geometry.functional.constants import TEST_EPS
+from theseus.labs.lie_functional import se3
+from theseus.labs.lie_functional.constants import TEST_EPS
 from theseus.embodied.robot.forward_kinematics import Robot
 from theseus.embodied.robot.forward_kinematics import (
     get_forward_kinematics,

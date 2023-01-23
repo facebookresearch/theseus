@@ -8,7 +8,7 @@ from typing import List, Dict, Optional
 import urdf_parser_py.urdf as urdf
 import torch
 
-from theseus.geometry.functional import se3
+from theseus.labs.lie_functional import se3
 from .joint import Joint, FixedJoint, RevoluteJoint, PrismaticJoint
 from .link import Link
 

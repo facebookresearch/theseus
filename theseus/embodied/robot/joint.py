@@ -8,7 +8,7 @@ import warnings
 from typing import Optional
 import torch
 
-from theseus.geometry.functional import so3, se3
+from theseus.labs.lie_functional import so3, se3
 
 
 class Joint(abc.ABC):

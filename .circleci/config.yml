@@ -288,6 +288,7 @@ jobs:
   py38_optimizer_tests:
     docker:
       - image: cimg/python:3.8
+    resource_class: xlarge
     steps:
       - checkout
       - <<: *install_suitesparse
@@ -298,6 +299,7 @@ jobs:
   py39_optimizer_tests:
     docker:
       - image: cimg/python:3.9
+    resource_class: xlarge
     steps:
       - checkout
       - <<: *install_suitesparse
@@ -308,6 +310,7 @@ jobs:
   py310_optimizer_tests:
     docker:
       - image: cimg/python:3.10
+    resource_class: xlarge
     steps:
       - checkout
       - <<: *install_suitesparse
@@ -319,6 +322,7 @@ jobs:
   py38_lie_tests:
     docker:
       - image: cimg/python:3.8
+    resource_class: xlarge
     steps:
       - checkout
       - <<: *install_suitesparse
@@ -328,6 +332,7 @@ jobs:
   py39_lie_tests:
     docker:
       - image: cimg/python:3.9
+    resource_class: xlarge
     steps:
       - checkout
       - <<: *install_suitesparse
@@ -337,6 +342,7 @@ jobs:
   py310_lie_tests:
     docker:
       - image: cimg/python:3.10
+    resource_class: xlarge
     steps:
       - checkout
       - <<: *install_suitesparse

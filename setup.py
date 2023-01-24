@@ -35,7 +35,7 @@ def parse_requirements_file(path):
         reqs = []
         for line in f:
             line = line.strip()
-            reqs.append(line.split("==")[0])
+            reqs.append(line)
     return reqs
 
 

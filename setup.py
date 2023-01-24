@@ -25,6 +25,13 @@ try:
             torch_cpp_ext.MINIMUM_GCC_VERSION,
             (8, 4, 99),
         )
+
+    torch_version = torch.__version__.split(".")
+    torch_geq_113 = (
+        int(torch_version[0]) > 1
+        or int(torch_version[0]) == 1
+        and int(torch_version[1]) >= 13
+    )
 except ModuleNotFoundError:
     print("Theseus installation requires torch.")
     sys.exit(1)
@@ -34,6 +41,10 @@ def parse_requirements_file(path):
     with open(path) as f:
         reqs = []
         for line in f:
+            if "functorch" in line and torch_geq_113:
+                # Don't install functorch 0.2.1 if torch 1.13 already
+                # installed
+                continue
             line = line.strip()
             reqs.append(line)
     return reqs

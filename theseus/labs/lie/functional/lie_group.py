@@ -6,7 +6,8 @@
 import torch
 import abc
 
-from typing import Callable, List, Tuple, Optional, Protocol
+from .constants import DeviceType
+from typing import Callable, List, Sequence, Tuple, Optional, Protocol
 from .utils import check_jacobians_list
 
 # There are four functions associated with each Lie group operator xxx.
@@ -150,3 +151,45 @@ def BinaryOperatorFactory(
         return jop_autograd_fn(input0, input1)
 
     return op, jop
+
+
+_CheckFnType = Callable[[torch.Tensor], None]
+_RadnFnType = Callable[
+    [
+        Sequence[int],
+        Optional[torch.Generator],
+        Optional[torch.dtype],
+        DeviceType,
+        bool,
+    ],
+    torch.Tensor,
+]
+
+
+# Namespace to facilitate type-checking downstream
+class LieGroupFns:
+    def __init__(self, module):
+        self.exp, self.jexp = UnaryOperatorFactory(module, "exp")
+        self.log, self.jlog = UnaryOperatorFactory(module, "log")
+        self.adj = UnaryOperatorFactory(module, "adjoint")
+        self.inv, self.jinv = UnaryOperatorFactory(module, "inverse")
+        self.hat = UnaryOperatorFactory(module, "hat")
+        self.vee = UnaryOperatorFactory(module, "vee")
+        self.lift = UnaryOperatorFactory(module, "lift")
+        self.project = UnaryOperatorFactory(module, "project")
+        self.compose, self.jcompose = BinaryOperatorFactory(module, "compose")
+        self.left_act = BinaryOperatorFactory(module, "left_act")
+        self.left_project = BinaryOperatorFactory(module, "left_project")
+        self.check_group_tensor: _CheckFnType = module.check_group_tensor
+        self.check_tangent_vector: _CheckFnType = module.check_tangent_vector
+        self.check_hat_matrix: _CheckFnType = module.check_hat_matrix
+        if hasattr(module, "check_unit_quaternion"):
+            self.check_unit_quaternion: _CheckFnType = module.check_unit_quaternion
+        if hasattr(module, "check_lift_matrix"):
+            self.check_lift_matrix: _CheckFnType = module.check_lift_matrix
+        if hasattr(module, "check_project_matrix"):
+            self.check_project_matrix: _CheckFnType = module.check_project_matrix
+        self.check_left_act_matrix: _CheckFnType = module.check_left_act_matrix
+        self.check_left_project_matrix: _CheckFnType = module.check_left_project_matrix
+        self.rand: _RadnFnType = module.rand
+        self.randn: _RadnFnType = module.randn

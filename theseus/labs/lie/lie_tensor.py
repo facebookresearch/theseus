@@ -7,9 +7,9 @@ from typing import List, Tuple, Union
 
 import torch
 
-from theseus.labs.lie_functional.impl.lie_group import UnaryOperatorOpFnType
-from theseus.labs.lie_functional.impl import se3_fns as _se3_base
-from theseus.labs.lie_functional.impl import so3_fns as _so3_base
+from theseus.labs.lie.functional.lie_group import UnaryOperatorOpFnType
+from theseus.labs.lie.functional import se3 as _se3_base
+from theseus.labs.lie.functional import so3 as _so3_base
 
 
 TensorType = Union[torch.Tensor, "LieTensor"]

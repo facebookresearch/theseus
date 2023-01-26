@@ -63,6 +63,12 @@ class LieTensor:
     def vee(self, matrix: torch.Tensor) -> torch.Tensor:
         return self._fn_lib.vee(matrix)
 
+    def lift(self, matrix: torch.Tensor) -> torch.Tensor:
+        return self._fn_lib.lift(matrix)
+
+    def project(self, matrix: torch.Tensor) -> torch.Tensor:
+        return self._fn_lib.project(matrix)
+
     # Operator Jacobians
     def _unary_jop_base(
         self,

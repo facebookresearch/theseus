@@ -113,7 +113,7 @@ def rand(
         dim=1,
     )
     assert quaternion.shape == (size[0], 4)
-    ret = quaternion_to_rotation(quaternion)
+    ret = _quaternion_to_rotation_autograd_fn(quaternion)
     ret.requires_grad_(requires_grad)
     return ret
 
@@ -130,7 +130,7 @@ def randn(
 ) -> torch.Tensor:
     if len(size) != 1:
         raise ValueError("The size should be 1D.")
-    ret = exp(
+    ret = _exp_autograd_fn(
         constants.PI
         * torch.randn(
             size[0],
@@ -272,8 +272,6 @@ class Exp(lie_group.UnaryOperator):
 # TODO: Implement analytic backward for _jexp_impl
 _exp_autograd_fn = Exp.apply
 _jexp_autograd_fn = _jexp_impl
-
-exp, jexp = lie_group.UnaryOperatorFactory(_module, "exp")
 
 
 # -----------------------------------------------------------------------------
@@ -417,7 +415,7 @@ class Log(lie_group.UnaryOperator):
         if not hasattr(ctx, "jacobians"):
             ctx.jacobians: torch.Tensor = 0.5 * _jlog_impl(group)[0][0]
 
-        temp = lift(
+        temp = _lift_autograd_fn(
             (ctx.jacobians.transpose(1, 2) @ grad_output.unsqueeze(-1)).squeeze(-1)
         )
         return torch.einsum("nij,n...jk->n...ik", group, temp)
@@ -426,8 +424,6 @@ class Log(lie_group.UnaryOperator):
 # TODO: Implement analytic backward for _jlog_impl
 _log_autograd_fn = Log.apply
 _jlog_autograd_fn = _jlog_impl
-
-log, jlog = lie_group.UnaryOperatorFactory(_module, "log")
 
 
 # -----------------------------------------------------------------------------
@@ -456,8 +452,6 @@ class Adjoint(lie_group.UnaryOperator):
 _adjoint_autograd_fn = Adjoint.apply
 _jadjoint_autograd_fn = None
 
-adjoint, jadjoint = lie_group.UnaryOperatorFactory(_module, "adjoint")
-
 
 # -----------------------------------------------------------------------------
 # Inverse
@@ -483,8 +477,6 @@ class Inverse(lie_group.UnaryOperator):
 
 _inverse_autograd_fn = Inverse.apply
 _jinverse_autograd_fn = _jinverse_impl
-
-inverse, jinverse = lie_group.UnaryOperatorFactory(_module, "inverse")
 
 
 # -----------------------------------------------------------------------------
@@ -530,8 +522,6 @@ class Hat(lie_group.UnaryOperator):
 _hat_autograd_fn = Hat.apply
 _jhat_autograd_fn = None
 
-hat, jhat = lie_group.UnaryOperatorFactory(_module, "hat")
-
 
 # -----------------------------------------------------------------------------
 # Vee
@@ -562,13 +552,11 @@ class Vee(lie_group.UnaryOperator):
     @classmethod
     def backward(cls, ctx, grad_output):
         grad_output: torch.Tensor = cast(torch.Tensor, grad_output)
-        return 0.5 * hat(grad_output)
+        return 0.5 * _hat_autograd_fn(grad_output)
 
 
 _vee_autograd_fn = Vee.apply
 _jvee_autograd_fn = None
-
-vee, jvee = lie_group.UnaryOperatorFactory(_module, "vee")
 
 
 # -----------------------------------------------------------------------------
@@ -614,8 +602,6 @@ class Compose(lie_group.BinaryOperator):
 
 _compose_autograd_fn = Compose.apply
 _jcompose_autograd_fn = _jcompose_impl
-
-compose, jcompose = lie_group.BinaryOperatorFactory(_module, "compose")
 
 
 # -----------------------------------------------------------------------------
@@ -695,7 +681,7 @@ def _jquaternion_to_rotation_impl(
     temp = -2 * quaternion / quaternion_norm
     jac = quaternion.new_zeros(quaternion.shape[0], 3, 4)
     jac[:, :, :1] = temp[:, 1:].view(-1, 3, 1)
-    jac[:, :, 1:] = hat(temp[:, 1:])
+    jac[:, :, 1:] = _hat_autograd_fn(temp[:, 1:])
     jac[:, 0, 1] = -temp[:, 0]
     jac[:, 1, 2] = -temp[:, 0]
     jac[:, 2, 3] = -temp[:, 0]
@@ -735,10 +721,6 @@ class QuaternionToRotation(lie_group.UnaryOperator):
 _quaternion_to_rotation_autograd_fn = QuaternionToRotation.apply
 _jquaternion_to_rotation_autograd_fn = _jquaternion_to_rotation_impl
 
-quaternion_to_rotation, jquaternion_to_rotation = lie_group.UnaryOperatorFactory(
-    _module, "quaternion_to_rotation"
-)
-
 
 # -----------------------------------------------------------------------------
 # Lift
@@ -772,13 +754,11 @@ class Lift(lie_group.UnaryOperator):
     @classmethod
     def backward(cls, ctx, grad_output):
         grad_output: torch.Tensor = cast(torch.Tensor, grad_output)
-        return project(grad_output)
+        return _project_autograd_fn(grad_output)
 
 
 _lift_autograd_fn = Lift.apply
 _jlift_autograd_fn = None
-
-lift, jlift = lie_group.UnaryOperatorFactory(_module, "lift")
 
 
 # -----------------------------------------------------------------------------
@@ -812,13 +792,11 @@ class Project(lie_group.UnaryOperator):
     @classmethod
     def backward(cls, ctx, grad_output):
         grad_output: torch.Tensor = cast(torch.Tensor, grad_output)
-        return lift(grad_output)
+        return _lift_autograd_fn(grad_output)
 
 
 _project_autograd_fn = Project.apply
 _jproject_autograd_fn = None
-
-project, jproject = lie_group.UnaryOperatorFactory(_module, "project")
 
 
 # -----------------------------------------------------------------------------
@@ -854,8 +832,6 @@ class LeftAct(lie_group.BinaryOperator):
 _left_act_autograd_fn = LeftAct.apply
 _jleft_act_autograd_fn = None
 
-left_act, jleft_act = lie_group.BinaryOperatorFactory(_module, "left_act")
-
 
 # -----------------------------------------------------------------------------
 # Left Project
@@ -876,7 +852,7 @@ class LeftProject(lie_group.BinaryOperator):
     @classmethod
     def backward(cls, ctx, grad_output):
         group, matrix = ctx.saved_tensors
-        grad_output_lifted = lift(grad_output)
+        grad_output_lifted = _lift_autograd_fn(grad_output)
         jac_g = -torch.einsum("n...ij,n...jk->n...ik", matrix, grad_output_lifted)
         if matrix.ndim > 3:
             dims = list(range(1, matrix.ndim - 2))
@@ -887,8 +863,6 @@ class LeftProject(lie_group.BinaryOperator):
 
 _left_project_autograd_fn = LeftProject.apply
 _jleft_project_autograd_fn = _jleft_project_impl
-
-left_project, jleft_project = lie_group.BinaryOperatorFactory(_module, "left_project")
 
 
 _fns = lie_group.LieGroupFns(_module)

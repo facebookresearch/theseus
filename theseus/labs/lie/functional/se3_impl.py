@@ -312,7 +312,7 @@ def _jexp_impl(
         -one_minus_cosine_by_theta2.view(-1, 1) * v
         - theta_minus_sine_by_theta3_t.view(-1, 1) * wv
     )
-    jac_temp_t += so3.hat(jac_temp_v)
+    jac_temp_t += so3._hat_autograd_fn(jac_temp_v)
     diag_jac_t = torch.diagonal(jac_temp_t, dim1=1, dim2=2)
     diag_jac_t += (sw.view(-1, 1, 3) @ v.view(-1, 3, 1)).view(-1, 1)
 
@@ -354,8 +354,6 @@ class Exp(lie_group.UnaryOperator):
 # TODO: Implement analytic backward for _jexp_impl
 _exp_autograd_fn = Exp.apply
 _jexp_autograd_fn = _jexp_impl
-
-exp, jexp = lie_group.UnaryOperatorFactory(_module, "exp")
 
 
 # -----------------------------------------------------------------------------
@@ -579,8 +577,6 @@ class Log(lie_group.UnaryOperator):
 _log_autograd_fn = Log.apply
 _jlog_autograd_fn = _jlog_impl
 
-log, jlog = lie_group.UnaryOperatorFactory(_module, "log")
-
 
 # -----------------------------------------------------------------------------
 # Adjoint Transformation
@@ -623,8 +619,6 @@ class Adjoint(lie_group.UnaryOperator):
 _adjoint_autograd_fn = Adjoint.apply
 _jadjoint_autograd_fn = None
 
-adjoint, jadjoint = lie_group.UnaryOperatorFactory(_module, "adjoint")
-
 
 # -----------------------------------------------------------------------------
 # Inverse
@@ -657,8 +651,6 @@ class Inverse(lie_group.UnaryOperator):
 
 _inverse_autograd_fn = Inverse.apply
 _jinverse_autograd_fn = _jinverse_impl
-
-inverse, jinverse = lie_group.UnaryOperatorFactory(_module, "inverse")
 
 
 # -----------------------------------------------------------------------------
@@ -703,8 +695,6 @@ class Hat(lie_group.UnaryOperator):
 _hat_autograd_fn = Hat.apply
 _jhat_autograd_fn = None
 
-hat, jhat = lie_group.UnaryOperatorFactory(_module, "hat")
-
 
 # -----------------------------------------------------------------------------
 # Vee
@@ -747,8 +737,6 @@ class Vee(lie_group.UnaryOperator):
 _vee_autograd_fn = Vee.apply
 _jvee_autograd_fn = None
 
-vee, jvee = lie_group.UnaryOperatorFactory(_module, "vee")
-
 
 # -----------------------------------------------------------------------------
 # Compose
@@ -767,7 +755,7 @@ def _jcompose_impl(
     check_group_tensor(group0)
     check_group_tensor(group1)
     jacobians = []
-    jacobians.append(adjoint(inverse(group1)))
+    jacobians.append(_adjoint_autograd_fn(_inverse_autograd_fn(group1)))
     jacobians.append(group0.new_zeros(group0.shape[0], 6, 6))
     jacobians[1][:, 0, 0] = 1
     jacobians[1][:, 1, 1] = 1
@@ -800,8 +788,6 @@ class Compose(lie_group.BinaryOperator):
 
 _compose_autograd_fn = Compose.apply
 _jcompose_autograd_fn = _jcompose_impl
-
-compose, jcompose = lie_group.BinaryOperatorFactory(_module, "compose")
 
 
 # -----------------------------------------------------------------------------

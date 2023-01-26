@@ -47,11 +47,11 @@ def test_vee(batch_size: int, dtype: torch.dtype):
     rng = torch.Generator()
     rng.manual_seed(0)
     tangent_vector = torch.rand(batch_size, 3, dtype=dtype, generator=rng)
-    matrix = so3.hat(tangent_vector)
+    matrix = so3._hat_autograd_fn(tangent_vector)
 
     # check analytic backward for the operator
     check_lie_group_function(so3, "vee", TEST_EPS, (matrix,))
 
     # check the correctness of hat and vee
-    actual_tangent_vector = so3.vee(matrix)
+    actual_tangent_vector = so3._vee_autograd_fn(matrix)
     assert torch.allclose(actual_tangent_vector, tangent_vector, atol=TEST_EPS)

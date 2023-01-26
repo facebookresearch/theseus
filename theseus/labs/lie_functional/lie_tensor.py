@@ -7,8 +7,8 @@ from typing import Union
 
 import torch
 
-from theseus.labs.lie_functional._impl import se3_fns as _se3_base
-from theseus.labs.lie_functional._impl import so3_fns as _so3_base
+from theseus.labs.lie_functional.impl import se3_fns as _se3_base
+from theseus.labs.lie_functional.impl import so3_fns as _so3_base
 
 
 TensorType = Union[torch.Tensor, "LieTensor"]
@@ -31,3 +31,7 @@ class LieTensor:
             SO3: _so3_base,
         }[ltype]
         self._base_lib.check_group_tensor(data_tensor)
+        self.ltype = ltype
+
+    def __repr__(self) -> str:
+        return f"LieTensor({self._t}, ltype=lie.{self.ltype})"

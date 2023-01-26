@@ -35,3 +35,9 @@ class LieTensor:
 
     def __repr__(self) -> str:
         return f"LieTensor({self._t}, ltype=lie.{self.ltype})"
+
+    # Returns a new LieTensor with the given data and the same ltype as self
+    def new(self, t: TensorType) -> "LieTensor":
+        tensor = t if isinstance(t, torch.Tensor) else t._t
+        return LieTensor(tensor.clone(), ltype=self.ltype)
+

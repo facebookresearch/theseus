@@ -97,7 +97,6 @@ def rand(
         generator=generator,
         dtype=dtype,
         device=device,
-        requires_grad=requires_grad,
     )
     u1 = u[0]
     u2, u3 = u[1:3] * 2 * constants.PI
@@ -114,7 +113,9 @@ def rand(
         dim=1,
     )
     assert quaternion.shape == (size[0], 4)
-    return quaternion_to_rotation(quaternion)
+    ret = quaternion_to_rotation(quaternion)
+    ret.requires_grad_(requires_grad)
+    return ret
 
 
 # -----------------------------------------------------------------------------
@@ -129,7 +130,7 @@ def randn(
 ) -> torch.Tensor:
     if len(size) != 1:
         raise ValueError("The size should be 1D.")
-    return exp(
+    ret = exp(
         constants.PI
         * torch.randn(
             size[0],
@@ -137,9 +138,10 @@ def randn(
             generator=generator,
             dtype=dtype,
             device=device,
-            requires_grad=requires_grad,
         )
     )
+    ret.requires_grad_(requires_grad)
+    return ret
 
 
 # -----------------------------------------------------------------------------

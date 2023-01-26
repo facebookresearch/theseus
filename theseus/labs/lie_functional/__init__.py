@@ -2,7 +2,7 @@
 #
 # This source code is licensed under the MIT license found in the
 # LICENSE file in the root directory of this source tree.
-from typing import Callable, Optional, Sequence
+from typing import Callable, Optional, Protocol, Sequence
 
 import torch
 
@@ -12,16 +12,17 @@ from .constants import DeviceType
 from .lie_group import BinaryOperatorFactory, UnaryOperatorFactory
 
 _CheckFnType = Callable[[torch.Tensor], None]
-_RadnFnType = Callable[
-    [
-        Sequence[int],
-        Optional[torch.Generator],
-        Optional[torch.dtype],
-        DeviceType,
-        bool,
-    ],
-    torch.Tensor,
-]
+
+
+class _RandFnType(Protocol):
+    def __call__(
+        *size: int,
+        generator: Optional[torch.Generator] = None,
+        dtype: Optional[torch.dtype] = None,
+        device: DeviceType = None,
+        requires_grad: bool = False,
+    ) -> torch.Tensor:
+        pass
 
 
 # Namespace to facilitate type-checking downstream
@@ -49,8 +50,8 @@ class LieGroupFns:
             self.check_project_matrix: _CheckFnType = module.check_project_matrix
         self.check_left_act_matrix: _CheckFnType = module.check_left_act_matrix
         self.check_left_project_matrix: _CheckFnType = module.check_left_project_matrix
-        self.rand: _RadnFnType = module.rand
-        self.randn: _RadnFnType = module.randn
+        self.rand: _RandFnType = module.rand
+        self.randn: _RandFnType = module.randn
 
 
 se3_fns = LieGroupFns(_se3_impl)

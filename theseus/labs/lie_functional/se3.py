@@ -109,7 +109,6 @@ def randn(
         generator=generator,
         dtype=dtype,
         device=device,
-        requires_grad=requires_grad,
     )
     translation = torch.randn(
         size[0],
@@ -118,7 +117,6 @@ def randn(
         generator=generator,
         dtype=dtype,
         device=device,
-        requires_grad=requires_grad,
     )
     ret = torch.cat((rotation, translation), dim=2)
     ret.requires_grad_(requires_grad)

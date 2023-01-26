@@ -6,8 +6,8 @@ from typing import Callable, Optional, Sequence
 
 import torch
 
-import theseus.labs.lie_functional.impl.se3 as _se3_impl
-import theseus.labs.lie_functional.impl.so3 as _so3_impl
+import theseus.labs.lie.functional.se3 as _se3_impl
+import theseus.labs.lie.functional.so3 as _so3_impl
 from .constants import DeviceType
 from .lie_group import BinaryOperatorFactory, UnaryOperatorFactory
 

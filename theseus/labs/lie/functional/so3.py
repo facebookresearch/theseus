@@ -889,3 +889,6 @@ _left_project_autograd_fn = LeftProject.apply
 _jleft_project_autograd_fn = _jleft_project_impl
 
 left_project, jleft_project = lie_group.BinaryOperatorFactory(_module, "left_project")
+
+
+_fns = lie_group.LieGroupFns(_module)

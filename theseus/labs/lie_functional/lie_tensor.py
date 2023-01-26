@@ -44,6 +44,7 @@ class LieTensor:
         tensor = t if isinstance(t, torch.Tensor) else t._t
         return LieTensor(tensor.clone(), ltype=self.ltype)
 
+    # Operators
     def exp(self, tangent_vector: torch.Tensor) -> "LieTensor":
         return self.new(self._fn_lib.exp(tangent_vector))
 
@@ -53,11 +54,21 @@ class LieTensor:
     def adj(self, group: "LieTensor") -> "LieTensor":
         return self.new(group)
 
+    def inv(self, group: "LieTensor") -> "LieTensor":
+        return self.new(self._fn_lib.inv(group._t))
+
+    def hat(self, tangent_vector: torch.Tensor) -> torch.Tensor:
+        return self._fn_lib.hat(tangent_vector)
+
+    def vee(self, matrix: torch.Tensor) -> torch.Tensor:
+        return self._fn_lib.vee(matrix)
+
+    # Operator Jacobians
     def _unary_jop_base(
         self,
         input0: torch.Tensor,
         fn: UnaryOperatorOpFnType,
-        out_is_group: bool = False,
+        out_is_group: bool = True,
     ) -> _JFnReturnType:
         jacs: List[torch.Tensor] = []
         op_res: TensorType = fn(input0, jacobians=jacs)
@@ -66,7 +77,10 @@ class LieTensor:
         return jacs, op_res
 
     def jexp(self, tangent_vector: torch.Tensor) -> _JFnReturnType:
-        return self._unary_jop_base(tangent_vector, self._fn_lib.exp, out_is_group=True)
+        return self._unary_jop_base(tangent_vector, self._fn_lib.exp)
 
     def jlog(self, group: "LieTensor") -> _JFnReturnType:
+        return self._unary_jop_base(group._t, self._fn_lib.exp, out_is_group=False)
+
+    def jinv(self, group: "LieTensor") -> _JFnReturnType:
         return self._unary_jop_base(group._t, self._fn_lib.exp)

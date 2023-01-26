@@ -31,9 +31,11 @@ def LeftProjectImplFactory(module):
     def _left_project_impl(group: torch.Tensor, matrix: torch.Tensor) -> torch.Tensor:
         module.check_group_tensor(group)
         module.check_left_project_matrix(matrix)
-        group_inverse = module.inverse(group)
+        group_inverse = module._inverse_autograd_fn(group)
 
-        return module.project(module.left_act(group_inverse, matrix))
+        return module._project_autograd_fn(
+            module._left_act_autograd_fn(group_inverse, matrix)
+        )
 
     return _left_project_impl
 

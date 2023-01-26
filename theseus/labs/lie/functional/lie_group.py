@@ -7,7 +7,7 @@ import torch
 import abc
 
 from .constants import DeviceType
-from typing import Callable, List, Sequence, Tuple, Optional, Protocol
+from typing import Callable, List, Tuple, Optional, Protocol
 from .utils import check_jacobians_list
 
 # There are four functions associated with each Lie group operator xxx.
@@ -156,16 +156,17 @@ def BinaryOperatorFactory(
 
 
 _CheckFnType = Callable[[torch.Tensor], None]
-_RadnFnType = Callable[
-    [
-        Sequence[int],
-        Optional[torch.Generator],
-        Optional[torch.dtype],
-        DeviceType,
-        bool,
-    ],
-    torch.Tensor,
-]
+
+
+class _RandFnType(Protocol):
+    def __call__(
+        *size: int,
+        generator: Optional[torch.Generator] = None,
+        dtype: Optional[torch.dtype] = None,
+        device: DeviceType = None,
+        requires_grad: bool = False,
+    ) -> torch.Tensor:
+        pass
 
 
 # Namespace to facilitate type-checking downstream
@@ -193,5 +194,5 @@ class LieGroupFns:
             self.check_project_matrix: _CheckFnType = module.check_project_matrix
         self.check_left_act_matrix: _CheckFnType = module.check_left_act_matrix
         self.check_left_project_matrix: _CheckFnType = module.check_left_project_matrix
-        self.rand: _RadnFnType = module.rand
-        self.randn: _RadnFnType = module.randn
+        self.rand: _RandFnType = module.rand
+        self.randn: _RandFnType = module.randn

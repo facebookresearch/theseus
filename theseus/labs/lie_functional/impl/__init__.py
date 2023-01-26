@@ -33,9 +33,9 @@ class LieGroupFns:
         self.inv, self.jinv = UnaryOperatorFactory(module, "inverse")
         self.hat = UnaryOperatorFactory(module, "hat")
         self.vee = UnaryOperatorFactory(module, "vee")
-        self.compose, self.jcompose = BinaryOperatorFactory(module, "compose")
         self.lift = UnaryOperatorFactory(module, "lift")
         self.project = UnaryOperatorFactory(module, "project")
+        self.compose, self.jcompose = BinaryOperatorFactory(module, "compose")
         self.left_act = BinaryOperatorFactory(module, "left_act")
         self.left_project = BinaryOperatorFactory(module, "left_project")
         self.check_group_tensor: _CheckFnType = module.check_group_tensor

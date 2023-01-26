@@ -39,6 +39,10 @@ class LieTensor:
     def __repr__(self) -> str:
         return f"LieTensor({self._t}, ltype=lie.{self.ltype})"
 
+    def _check_ltype(self, other: "LieTensor", op_name: str):
+        if other.ltype != self.ltype:
+            raise ValueError("f{op_name} requires both tensors to have same ltype.")
+
     # Returns a new LieTensor with the given data and the same ltype as self
     def new(self, t: TensorType) -> "LieTensor":
         tensor = t if isinstance(t, torch.Tensor) else t._t
@@ -69,6 +73,16 @@ class LieTensor:
     def project(self, matrix: torch.Tensor) -> torch.Tensor:
         return self._fn_lib.project(matrix)
 
+    def compose(self, other: "LieTensor") -> "LieTensor":
+        self._check_ltype(other, "compose")
+        return self.new(self._fn_lib.compose(self._t, other._t))
+
+    def left_act(self, matrix: torch.Tensor) -> torch.Tensor:
+        return self._fn_lib.left_act(self._t, matrix)
+
+    def left_project(self, matrix: torch.Tensor) -> torch.Tensor:
+        return self._fn_lib.left_project(self._t, matrix)
+
     # Operator Jacobians
     def _unary_jop_base(
         self,
@@ -90,3 +104,9 @@ class LieTensor:
 
     def jinv(self, group: "LieTensor") -> _JFnReturnType:
         return self._unary_jop_base(group._t, self._fn_lib.exp)
+
+    def jcompose(self, other: "LieTensor") -> _JFnReturnType:
+        self._check_ltype(other, "jcompose")
+        jacs: List[torch.Tensor] = []
+        op_res = self.new(self._fn_lib.compose(self._t, other._t, jacobians=jacs))
+        return jacs, op_res

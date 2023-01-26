@@ -6,6 +6,7 @@
 import torch
 
 
+BATCH_SIZES_TO_TEST = [1, 20]
 TEST_EPS = 5e-7
 
 

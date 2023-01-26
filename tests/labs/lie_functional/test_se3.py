@@ -8,7 +8,7 @@ import pytest
 import torch
 
 from tests.decorators import run_if_labs
-from .common import check_lie_group_function, run_test_op, TEST_EPS
+from .common import BATCH_SIZES_TO_TEST, TEST_EPS, check_lie_group_function, run_test_op
 
 
 @run_if_labs()
@@ -27,7 +27,7 @@ from .common import check_lie_group_function, run_test_op, TEST_EPS
         "left_project",
     ],
 )
-@pytest.mark.parametrize("batch_size", [1, 20, 100])
+@pytest.mark.parametrize("batch_size", BATCH_SIZES_TO_TEST)
 @pytest.mark.parametrize("dtype", [torch.float32, torch.float64])
 def test_op(op_name, batch_size, dtype):
     import theseus.labs.lie_functional.se3 as se3
@@ -38,7 +38,7 @@ def test_op(op_name, batch_size, dtype):
 
 
 @run_if_labs()
-@pytest.mark.parametrize("batch_size", [1, 20, 100])
+@pytest.mark.parametrize("batch_size", BATCH_SIZES_TO_TEST)
 @pytest.mark.parametrize("dtype", [torch.float32, torch.float64])
 def test_vee(batch_size: int, dtype: torch.dtype):
     import theseus.labs.lie_functional.se3 as se3

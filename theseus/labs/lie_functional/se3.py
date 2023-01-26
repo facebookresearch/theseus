@@ -63,6 +63,7 @@ def check_left_project_matrix(matrix: torch.Tensor):
 # -----------------------------------------------------------------------------
 # Rand
 # -----------------------------------------------------------------------------
+# TODO: Remove duplicate code between rand and randn
 def rand(
     *size: int,
     generator: Optional[torch.Generator] = None,
@@ -77,7 +78,6 @@ def rand(
         generator=generator,
         dtype=dtype,
         device=device,
-        requires_grad=requires_grad,
     )
     translation = torch.rand(
         size[0],
@@ -86,9 +86,10 @@ def rand(
         generator=generator,
         dtype=dtype,
         device=device,
-        requires_grad=requires_grad,
     )
-    return torch.cat((rotation, translation), dim=2)
+    ret = torch.cat((rotation, translation), dim=2)
+    ret.requires_grad_(requires_grad)
+    return ret
 
 
 # -----------------------------------------------------------------------------
@@ -119,7 +120,9 @@ def randn(
         device=device,
         requires_grad=requires_grad,
     )
-    return torch.cat((rotation, translation), dim=2)
+    ret = torch.cat((rotation, translation), dim=2)
+    ret.requires_grad_(requires_grad)
+    return ret
 
 
 # -----------------------------------------------------------------------------
@@ -622,7 +625,7 @@ class Adjoint(lie_group.UnaryOperator):
 _adjoint_autograd_fn = Adjoint.apply
 _jadjoint_autograd_fn = None
 
-adjoint = lie_group.UnaryOperatorFactory(_module, "adjoint")
+adjoint, jadjoint = lie_group.UnaryOperatorFactory(_module, "adjoint")
 
 
 # -----------------------------------------------------------------------------
@@ -702,7 +705,7 @@ class Hat(lie_group.UnaryOperator):
 _hat_autograd_fn = Hat.apply
 _jhat_autograd_fn = None
 
-hat = lie_group.UnaryOperatorFactory(_module, "hat")
+hat, jhat = lie_group.UnaryOperatorFactory(_module, "hat")
 
 
 # -----------------------------------------------------------------------------
@@ -746,7 +749,7 @@ class Vee(lie_group.UnaryOperator):
 _vee_autograd_fn = Vee.apply
 _jvee_autograd_fn = None
 
-vee = lie_group.UnaryOperatorFactory(_module, "vee")
+vee, jvee = lie_group.UnaryOperatorFactory(_module, "vee")
 
 
 # -----------------------------------------------------------------------------
@@ -836,7 +839,7 @@ class Lift(lie_group.UnaryOperator):
 _lift_autograd_fn = Lift.apply
 _jlift_autograd_fn = None
 
-lift = lie_group.UnaryOperatorFactory(_module, "lift")
+lift, jlift = lie_group.UnaryOperatorFactory(_module, "lift")
 
 
 # -----------------------------------------------------------------------------
@@ -879,7 +882,7 @@ class Project(lie_group.UnaryOperator):
 _project_autograd_fn = Project.apply
 _jproject_autograd_fn = None
 
-project = lie_group.UnaryOperatorFactory(_module, "project")
+project, jproject = lie_group.UnaryOperatorFactory(_module, "project")
 
 
 # -----------------------------------------------------------------------------
@@ -920,7 +923,7 @@ class LeftAct(lie_group.BinaryOperator):
 _left_act_autograd_fn = LeftAct.apply
 _jleft_act_autograd_fn = None
 
-left_act = lie_group.BinaryOperatorFactory(_module, "left_act")
+left_act, jleft_act = lie_group.BinaryOperatorFactory(_module, "left_act")
 
 
 # -----------------------------------------------------------------------------
@@ -968,4 +971,4 @@ class LeftProject(lie_group.BinaryOperator):
 _left_project_autograd_fn = LeftProject.apply
 _jleft_project_autograd_fn = _jleft_project_impl
 
-left_project = lie_group.BinaryOperatorFactory(_module, "left_project")
+left_project, jleft_project = lie_group.BinaryOperatorFactory(_module, "left_project")

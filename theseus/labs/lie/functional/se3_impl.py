@@ -7,7 +7,7 @@ import torch
 from typing import cast, List, Tuple, Optional
 
 from . import constants
-from . import lie_group, so3
+from . import lie_group, so3_impl as so3
 from .utils import get_module
 
 

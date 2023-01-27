@@ -56,7 +56,7 @@ class LieTensor:
         return self._fn_lib.log(group._t)
 
     def adj(self, group: "LieTensor") -> "LieTensor":
-        return self.new(group)
+        return self.new(self._fn_lib.adj(group._t))
 
     def inv(self, group: "LieTensor") -> "LieTensor":
         return self.new(self._fn_lib.inv(group._t))

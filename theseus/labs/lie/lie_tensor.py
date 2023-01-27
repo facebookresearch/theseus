@@ -3,15 +3,14 @@
 # This source code is licensed under the MIT license found in the
 # LICENSE file in the root directory of this source tree.
 import warnings
-from typing import Any, List, Optional, Tuple, Union
+from typing import Any, List, Optional, Protocol, Tuple, Union
 
 import torch
 
+from theseus.labs.lie.functional.constants import DeviceType
 from theseus.labs.lie.functional.lie_group import UnaryOperatorOpFnType
-from theseus.labs.lie.functional import se3 as _se3_base
-from theseus.labs.lie.functional import so3 as _so3_base
-from .types import ltype as _ltype
-from .types import SE3, SO3
+from theseus.labs.lie.functional import se3 as _se3_base, so3 as _so3_base
+from .types import ltype as _ltype, SE3, SO3
 
 TensorType = Union[torch.Tensor, "LieTensor"]
 _JFnReturnType = Tuple[List[torch.Tensor], TensorType]
@@ -144,3 +143,50 @@ def new(
     if not isinstance(data, torch.Tensor):
         data = torch.as_tensor(data, dtype=dtype, device=device)
     return LieTensor(data, ltype=data.ltype)
+
+
+as_lietensor = new
+
+
+# Similar to the one in functional, except it returns a LieTensor
+# and receives a ltype
+class _RandFnType(Protocol):
+    def __call__(
+        *size: int,
+        ltype: _ltype,
+        generator: Optional[torch.Generator] = None,
+        dtype: Optional[torch.dtype] = None,
+        device: DeviceType = None,
+        requires_grad: bool = False,
+    ) -> LieTensor:
+        pass
+
+
+def _build_random_fn(op_name: str) -> _RandFnType:
+    assert op_name in ["rand", "randn"]
+
+    def fn(
+        *size: int,
+        ltype: _ltype,
+        generator: Optional[torch.Generator] = None,
+        dtype: Optional[torch.dtype] = None,
+        device: DeviceType = None,
+        requires_grad: bool = False,
+    ) -> LieTensor:
+        fn = {SE3: getattr(_se3_base, op_name), SO3: getattr(_so3_base, op_name)}[ltype]
+        return LieTensor(
+            fn(
+                *size,
+                generator=generator,
+                dtype=dtype,
+                device=device,
+                requires_grad=requires_grad,
+            ),
+            ltype=ltype,
+        )
+
+    return fn
+
+
+rand = _build_random_fn("rand")
+randn = _build_random_fn("randn")

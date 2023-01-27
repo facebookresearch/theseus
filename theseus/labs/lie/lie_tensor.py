@@ -2,7 +2,6 @@
 #
 # This source code is licensed under the MIT license found in the
 # LICENSE file in the root directory of this source tree.
-from enum import Enum
 from typing import List, Tuple, Union
 
 import torch
@@ -10,24 +9,15 @@ import torch
 from theseus.labs.lie.functional.lie_group import UnaryOperatorOpFnType
 from theseus.labs.lie.functional import se3 as _se3_base
 from theseus.labs.lie.functional import so3 as _so3_base
-
+from .types import ltype as _ltype
+from .types import SE3, SO3
 
 TensorType = Union[torch.Tensor, "LieTensor"]
-
-
-class LieType(Enum):
-    SE3 = 0
-    SO3 = 1
-
-
-SE3 = LieType.SE3
-SO3 = LieType.SO3
-
 _JFnReturnType = Tuple[List[torch.Tensor], TensorType]
 
 
 class LieTensor:
-    def __init__(self, data_tensor: torch.Tensor, ltype: LieType):
+    def __init__(self, data_tensor: torch.Tensor, ltype: _ltype):
         self._t = data_tensor
         self._fn_lib = {
             SE3: _se3_base,

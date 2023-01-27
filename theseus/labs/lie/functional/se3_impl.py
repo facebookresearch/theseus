@@ -21,7 +21,9 @@ _module = get_module(__name__)
 def check_group_tensor(tensor: torch.Tensor):
     with torch.no_grad():
         if tensor.ndim != 3 or tensor.shape[1:] != (3, 4):
-            raise ValueError("SE3 data tensors can only be 3x4 matrices.")
+            raise ValueError(
+                f"SE3 data tensors can only be 3x4 matrices, but got shape {tensor.shape}."
+            )
     so3.check_group_tensor(tensor[:, :, :3])
 
 
@@ -29,7 +31,9 @@ def check_tangent_vector(tangent_vector: torch.Tensor):
     _check = tangent_vector.ndim == 3 and tangent_vector.shape[1:] == (6, 1)
     _check |= tangent_vector.ndim == 2 and tangent_vector.shape[1] == 6
     if not _check:
-        raise ValueError("Tangent vectors of SE3 should be 6-D vectors.")
+        raise ValueError(
+            f"Tangent vectors of SE3 should be 6-D vectors, but got shape {tangent_vector.shape}."
+        )
 
 
 def check_hat_matrix(matrix: torch.Tensor):

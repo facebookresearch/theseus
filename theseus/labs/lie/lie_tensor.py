@@ -101,10 +101,10 @@ class LieTensor:
         return self._unary_jop_base(tangent_vector, self._fn_lib.exp)
 
     def jlog(self) -> _JFnReturnType:
-        return self._unary_jop_base(self._t, self._fn_lib.exp, out_is_group=False)
+        return self._unary_jop_base(self._t, self._fn_lib.log, out_is_group=False)
 
     def jinv(self) -> _JFnReturnType:
-        return self._unary_jop_base(self._t, self._fn_lib.exp)
+        return self._unary_jop_base(self._t, self._fn_lib.inv)
 
     def jcompose(self, other: "LieTensor") -> _JFnReturnType:
         self._check_ltype(other, "jcompose")
@@ -152,8 +152,9 @@ as_lietensor = new
 # and receives a ltype
 class _RandFnType(Protocol):
     def __call__(
-        *size: int,
+        self,
         ltype: _ltype,
+        *size: int,
         generator: Optional[torch.Generator] = None,
         dtype: Optional[torch.dtype] = None,
         device: DeviceType = None,
@@ -166,8 +167,8 @@ def _build_random_fn(op_name: str) -> _RandFnType:
     assert op_name in ["rand", "randn"]
 
     def fn(
-        *size: int,
         ltype: _ltype,
+        *size: int,
         generator: Optional[torch.Generator] = None,
         dtype: Optional[torch.dtype] = None,
         device: DeviceType = None,
@@ -188,5 +189,5 @@ def _build_random_fn(op_name: str) -> _RandFnType:
     return fn
 
 
-rand = _build_random_fn("rand")
-randn = _build_random_fn("randn")
+rand: _RandFnType = _build_random_fn("rand")
+randn: _RandFnType = _build_random_fn("randn")

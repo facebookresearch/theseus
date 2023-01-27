@@ -2,7 +2,8 @@
 #
 # This source code is licensed under the MIT license found in the
 # LICENSE file in the root directory of this source tree.
-from typing import List, Tuple, Union
+import warnings
+from typing import Any, List, Optional, Tuple, Union
 
 import torch
 
@@ -33,10 +34,21 @@ class LieTensor:
         if other.ltype != self.ltype:
             raise ValueError("f{op_name} requires both tensors to have same ltype.")
 
+    # Returns a new LieTensor that clones the given data and
+    # has the same ltype as self
+    def clone(self) -> "LieTensor":
+        return LieTensor(self._t.clone(), ltype=self.ltype)
+
     # Returns a new LieTensor with the given data and the same ltype as self
     def new(self, t: TensorType) -> "LieTensor":
-        tensor = t if isinstance(t, torch.Tensor) else t._t
-        return LieTensor(tensor.clone(), ltype=self.ltype)
+        if isinstance(t, LieTensor):
+            warnings.warn(
+                "Calling new() on a LieTensor results in shared data storage. "
+                "To copy construct from a LieTensor, it is recommended to use lie_tensor.clone().",
+                UserWarning,
+            )
+            return LieTensor(t._t, ltype=self.ltype)
+        return LieTensor(t, ltype=self.ltype)
 
     # Operators
     def exp(self, tangent_vector: torch.Tensor) -> "LieTensor":
@@ -114,3 +126,21 @@ class LieTensor:
     jproject = _no_unary_op
     jleft_act = _no_binary_op
     jleft_project = _no_binary_op
+
+
+# ----------------------------
+# Tensor creation functions
+# ----------------------------
+def new(
+    data: Any,
+    ltype: Optional[_ltype] = None,
+    dtype: torch.dtype = torch.float,
+    device: Union[torch.device, str] = None,
+) -> "LieTensor":
+    if isinstance(data, LieTensor):
+        return data.new(data)
+    if ltype is None:
+        raise ValueError("ltype must be provided.")
+    if not isinstance(data, torch.Tensor):
+        data = torch.as_tensor(data, dtype=dtype, device=device)
+    return LieTensor(data, ltype=data.ltype)

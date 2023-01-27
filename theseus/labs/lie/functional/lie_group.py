@@ -85,7 +85,7 @@ def UnaryOperatorFactory(
         jacobians: Optional[List[torch.Tensor]] = None,
     ) -> torch.Tensor:
         if jacobians is not None:
-            _check_jacobians_supported(jop_autograd_fn, module.name, op_name)
+            _check_jacobians_supported(jop_autograd_fn, module.NAME, op_name)
             check_jacobians_list(jacobians)
             jacobians_op = jop_autograd_fn(input)[0]
             jacobians.append(jacobians_op[0])
@@ -137,7 +137,7 @@ def BinaryOperatorFactory(
         jacobians: Optional[List[torch.Tensor]] = None,
     ) -> torch.Tensor:
         if jacobians is not None:
-            _check_jacobians_supported(jop_autograd_fn, module.name, op_name)
+            _check_jacobians_supported(jop_autograd_fn, module.NAME, op_name)
             check_jacobians_list(jacobians)
             jacobians_op = jop_autograd_fn(input0, input1)[0]
             for jacobian in jacobians_op:
@@ -148,7 +148,7 @@ def BinaryOperatorFactory(
         input0: torch.Tensor, input1: torch.Tensor
     ) -> Tuple[List[torch.Tensor], torch.Tensor]:
         _check_jacobians_supported(
-            jop_autograd_fn, module.name, op_name, is_kwarg=False
+            jop_autograd_fn, module.NAME, op_name, is_kwarg=False
         )
         return jop_autograd_fn(input0, input1)
 

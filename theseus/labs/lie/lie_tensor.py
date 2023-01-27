@@ -53,14 +53,14 @@ class LieTensor:
     def exp(self, tangent_vector: torch.Tensor) -> "LieTensor":
         return self.new(self._fn_lib.exp(tangent_vector))
 
-    def log(self, group: "LieTensor") -> torch.Tensor:
-        return self._fn_lib.log(group._t)
+    def log(self) -> torch.Tensor:
+        return self._fn_lib.log(self._t)
 
-    def adj(self, group: "LieTensor") -> "LieTensor":
-        return self.new(self._fn_lib.adj(group._t))
+    def adj(self) -> "LieTensor":
+        return self.new(self._fn_lib.adj(self._t))
 
-    def inv(self, group: "LieTensor") -> "LieTensor":
-        return self.new(self._fn_lib.inv(group._t))
+    def inv(self) -> "LieTensor":
+        return self.new(self._fn_lib.inv(self._t))
 
     def hat(self, tangent_vector: torch.Tensor) -> torch.Tensor:
         return self._fn_lib.hat(tangent_vector)
@@ -100,11 +100,11 @@ class LieTensor:
     def jexp(self, tangent_vector: torch.Tensor) -> _JFnReturnType:
         return self._unary_jop_base(tangent_vector, self._fn_lib.exp)
 
-    def jlog(self, group: "LieTensor") -> _JFnReturnType:
-        return self._unary_jop_base(group._t, self._fn_lib.exp, out_is_group=False)
+    def jlog(self) -> _JFnReturnType:
+        return self._unary_jop_base(self._t, self._fn_lib.exp, out_is_group=False)
 
-    def jinv(self, group: "LieTensor") -> _JFnReturnType:
-        return self._unary_jop_base(group._t, self._fn_lib.exp)
+    def jinv(self) -> _JFnReturnType:
+        return self._unary_jop_base(self._t, self._fn_lib.exp)
 
     def jcompose(self, other: "LieTensor") -> _JFnReturnType:
         self._check_ltype(other, "jcompose")

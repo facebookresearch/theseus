@@ -431,7 +431,7 @@ _jlog_autograd_fn = _jlog_impl
 # -----------------------------------------------------------------------------
 def _adjoint_impl(group: torch.Tensor) -> torch.Tensor:
     check_group_tensor(group)
-    return group
+    return group.clone()
 
 
 # NOTE: No jacobian is defined for the adjoint transformation

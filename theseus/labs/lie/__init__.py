@@ -5,9 +5,13 @@
 from .types import ltype, SE3, SO3
 from .lie_tensor import (  # usort: skip
     LieTensor,
+    compose,
     exp,
     hat,
+    jcompose,
     jexp,
+    left_act,
+    left_project,
     lift,
     new,
     project,

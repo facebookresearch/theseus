@@ -174,15 +174,15 @@ class LieGroupFns:
     def __init__(self, module):
         self.exp, self.jexp = UnaryOperatorFactory(module, "exp")
         self.log, self.jlog = UnaryOperatorFactory(module, "log")
-        self.adj = UnaryOperatorFactory(module, "adjoint")
+        self.adj = UnaryOperatorFactory(module, "adjoint")[0]
         self.inv, self.jinv = UnaryOperatorFactory(module, "inverse")
-        self.hat = UnaryOperatorFactory(module, "hat")
-        self.vee = UnaryOperatorFactory(module, "vee")
-        self.lift = UnaryOperatorFactory(module, "lift")
-        self.project = UnaryOperatorFactory(module, "project")
+        self.hat = UnaryOperatorFactory(module, "hat")[0]
+        self.vee = UnaryOperatorFactory(module, "vee")[0]
+        self.lift = UnaryOperatorFactory(module, "lift")[0]
+        self.project = UnaryOperatorFactory(module, "project")[0]
         self.compose, self.jcompose = BinaryOperatorFactory(module, "compose")
-        self.left_act = BinaryOperatorFactory(module, "left_act")
-        self.left_project = BinaryOperatorFactory(module, "left_project")
+        self.left_act = BinaryOperatorFactory(module, "left_act")[0]
+        self.left_project = BinaryOperatorFactory(module, "left_project")[0]
         self.check_group_tensor: _CheckFnType = module.check_group_tensor
         self.check_tangent_vector: _CheckFnType = module.check_tangent_vector
         self.check_hat_matrix: _CheckFnType = module.check_hat_matrix

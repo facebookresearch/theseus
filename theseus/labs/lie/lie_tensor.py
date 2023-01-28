@@ -56,8 +56,8 @@ class LieTensor:
     def log(self) -> torch.Tensor:
         return self._fn_lib.log(self._t)
 
-    def adj(self) -> "LieTensor":
-        return self.new(self._fn_lib.adj(self._t))
+    def adj(self) -> torch.Tensor:
+        return self._fn_lib.adj(self._t)
 
     def inv(self) -> "LieTensor":
         return self.new(self._fn_lib.inv(self._t))

@@ -210,14 +210,20 @@ rand: _RandFnType = _build_random_fn("rand")
 randn: _RandFnType = _build_random_fn("randn")
 
 
+def log(group: LieTensor) -> torch.Tensor:
+    return group.log()
+
+
+def adj(group: LieTensor) -> torch.Tensor:
+    return group.adj()
+
+
+def inv(group: LieTensor) -> LieTensor:
+    return group.inv()
+
+
 def exp(ltype: _ltype, tangent_vector: torch.Tensor) -> "LieTensor":
     return LieTensor(_eval_op(_get_fn_lib(ltype), "exp", tangent_vector), ltype)
-
-
-def jexp(ltype: _ltype, tangent_vector: torch.Tensor) -> _JFnReturnType:
-    jacs: List[torch.Tensor] = []
-    exp_tensor = _eval_op(_get_fn_lib(ltype), "exp", tangent_vector, jacobians=jacs)
-    return jacs, LieTensor(exp_tensor, ltype)
 
 
 def hat(ltype: _ltype, tangent_vector: torch.Tensor) -> torch.Tensor:
@@ -240,13 +246,27 @@ def compose(group1: LieTensor, group2: LieTensor) -> LieTensor:
     return group1.compose(group2)
 
 
-def jcompose(group1: LieTensor, group2: LieTensor) -> _JFnReturnType:
-    return group1.jcompose(group2)
-
-
 def left_act(group: LieTensor, matrix: torch.Tensor) -> torch.Tensor:
     return group.left_act(matrix)
 
 
 def left_project(group: LieTensor, matrix: torch.Tensor) -> torch.Tensor:
     return group.left_project(matrix)
+
+
+def jlog(group: LieTensor) -> _JFnReturnType:
+    return group.jlog()
+
+
+def jinv(group: LieTensor) -> _JFnReturnType:
+    return group.jinv()
+
+
+def jexp(ltype: _ltype, tangent_vector: torch.Tensor) -> _JFnReturnType:
+    jacs: List[torch.Tensor] = []
+    exp_tensor = _eval_op(_get_fn_lib(ltype), "exp", tangent_vector, jacobians=jacs)
+    return jacs, LieTensor(exp_tensor, ltype)
+
+
+def jcompose(group1: LieTensor, group2: LieTensor) -> _JFnReturnType:
+    return group1.jcompose(group2)

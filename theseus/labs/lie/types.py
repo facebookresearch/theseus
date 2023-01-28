@@ -8,7 +8,9 @@ from enum import Enum
 class ltype(Enum):
     SE3 = 0
     SO3 = 1
+    tgt = 2
 
 
 SE3 = ltype.SE3
 SO3 = ltype.SO3
+tgt = ltype.tgt

@@ -32,15 +32,38 @@ def _get_fn_lib(ltype: _ltype):
     }[ltype]
 
 
-class LieTensor:
-    def __init__(self, data_tensor: torch.Tensor, ltype: _ltype):
-        self._t = data_tensor
-        self._fn_lib = _get_fn_lib(ltype)
-        self._fn_lib.check_group_tensor(data_tensor)
+class _LieTensorBase:
+    def __init__(self, data: Any, ltype: _ltype):
+        self._t = torch.as_tensor(data)
         self.ltype = ltype
 
+    @staticmethod
+    def _build_repr(x: "_LieTensorBase") -> str:
+        return f"LieTensor({x._t}, ltype=lie.{x.ltype})"
+
+
+class TangentTensor(_LieTensorBase, torch.Tensor):
+    def __init__(self, data: Any):
+        super().__init__(data, _ltype.tgt)
+
+    def __repr__(self) -> str:  # type: ignore
+        return _LieTensorBase._build_repr(self)
+
+    @classmethod
+    def __torch_function__(cls, func, types, args=(), kwargs=None):
+        kwargs = kwargs or {}
+        args = [a._t if isinstance(a, TangentTensor) else a for a in args]
+        return TangentTensor(func(*args, **kwargs))
+
+
+class LieTensor(_LieTensorBase):
+    def __init__(self, data: Any, ltype: _ltype):
+        super().__init__(data, ltype)
+        self._fn_lib = _get_fn_lib(ltype)
+        self._fn_lib.check_group_tensor(data)
+
     def __repr__(self) -> str:
-        return f"LieTensor({self._t}, ltype=lie.{self.ltype})"
+        return _LieTensorBase._build_repr(self)
 
     def _check_ltype(self, other: "LieTensor", op_name: str):
         if other.ltype != self.ltype:
@@ -278,3 +301,18 @@ def jexp(ltype: _ltype, tangent_vector: torch.Tensor) -> _JFnReturnType:
 
 def jcompose(group1: LieTensor, group2: LieTensor) -> _JFnReturnType:
     return group1.jcompose(group2)
+
+
+# def between(group1: LieTensor, group2: LieTensor) -> LieTensor:
+#     def between(
+#         self, variable2: "LieGroup", jacobians: Optional[List[torch.Tensor]] = None
+#     ) -> "LieGroup":
+#         v1_inverse = self._inverse_impl()
+#         between = v1_inverse._compose_impl(variable2)
+#         if jacobians is not None:
+#             LieGroup._check_jacobians_list(jacobians)
+#             Jinv = LieGroup._inverse_jacobian(self)
+#             Jcmp0, Jcmp1 = v1_inverse._compose_jacobian(variable2)
+#             Jbetween0 = torch.matmul(Jcmp0, Jinv)
+#             jacobians.extend([Jbetween0, Jcmp1])
+#         return between

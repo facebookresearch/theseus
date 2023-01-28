@@ -234,3 +234,19 @@ def lift(ltype: _ltype, matrix: torch.Tensor) -> torch.Tensor:
 
 def project(ltype: _ltype, matrix: torch.Tensor) -> torch.Tensor:
     return _eval_op(_get_fn_lib(ltype), "project", matrix)
+
+
+def compose(group1: LieTensor, group2: LieTensor) -> LieTensor:
+    return group1.compose(group2)
+
+
+def jcompose(group1: LieTensor, group2: LieTensor) -> _JFnReturnType:
+    return group1.jcompose(group2)
+
+
+def left_act(group: LieTensor, matrix: torch.Tensor) -> torch.Tensor:
+    return group.left_act(matrix)
+
+
+def left_project(group: LieTensor, matrix: torch.Tensor) -> torch.Tensor:
+    return group.left_project(matrix)

@@ -12,7 +12,7 @@ from theseus.labs.lie.functional.lie_group import LieGroupFns, UnaryOperatorOpFn
 from theseus.labs.lie.functional import se3 as _se3_impl, so3 as _so3_impl
 from .types import ltype as _ltype, SE3, SO3
 
-TensorType = Union[torch.Tensor, "LieTensor"]
+TensorType = Union[torch.Tensor, "_LieTensorBase"]
 _JFnReturnType = Tuple[List[torch.Tensor], TensorType]
 
 
@@ -34,7 +34,7 @@ def _get_fn_lib(ltype: _ltype):
 
 class _LieTensorBase:
     def __init__(self, data: Any, ltype: _ltype):
-        self._t = torch.as_tensor(data)
+        self._t = torch.as_tensor(data) if not isinstance(data, torch.Tensor) else data
         self.ltype = ltype
 
     @staticmethod
@@ -166,6 +166,20 @@ class LieTensor(_LieTensorBase):
     jleft_act = _no_jop
     jleft_project = _no_jop
 
+    def retract(self, delta: TensorType) -> "LieTensor":
+        assert isinstance(delta, torch.Tensor)
+        return self.compose(self.exp(delta))
+
+    def __add__(self, other: TensorType) -> "LieTensor":
+        if not isinstance(other, TangentTensor):
+            raise RuntimeError(
+                "Operator + is only supported for tensors of ltype=tgt. "
+                "If you intend to add the raw tensor data, please use group._t. "
+                "If you intend to retract, then cast your tensor to ltype=tgt, or "
+                "use group.retract(tensor)."
+            )
+        return self.retract(other._t)
+
 
 # ----------------------------
 # Tensor creation functions
@@ -175,17 +189,21 @@ def new(
     ltype: Optional[_ltype] = None,
     dtype: torch.dtype = torch.float,
     device: Union[torch.device, str] = None,
-) -> "LieTensor":
+) -> _LieTensorBase:
     if isinstance(data, LieTensor):
         return data.new(data)
     if ltype is None:
         raise ValueError("ltype must be provided.")
-    if not isinstance(data, torch.Tensor):
-        data = torch.as_tensor(data, dtype=dtype, device=device)
-    return LieTensor(data, ltype=data.ltype)
+    if ltype == _ltype.tgt:
+        return TangentTensor(data)
+    return LieTensor(data, ltype=ltype)
 
 
 as_lietensor = new
+
+# With this new version of the code I like @fantaosha's proposal of using the name cast()
+# because it implies type conversion rather than a wrapper being created.
+cast = new
 
 
 # Similar to the one in functional, except it returns a LieTensor
@@ -303,16 +321,5 @@ def jcompose(group1: LieTensor, group2: LieTensor) -> _JFnReturnType:
     return group1.jcompose(group2)
 
 
-# def between(group1: LieTensor, group2: LieTensor) -> LieTensor:
-#     def between(
-#         self, variable2: "LieGroup", jacobians: Optional[List[torch.Tensor]] = None
-#     ) -> "LieGroup":
-#         v1_inverse = self._inverse_impl()
-#         between = v1_inverse._compose_impl(variable2)
-#         if jacobians is not None:
-#             LieGroup._check_jacobians_list(jacobians)
-#             Jinv = LieGroup._inverse_jacobian(self)
-#             Jcmp0, Jcmp1 = v1_inverse._compose_jacobian(variable2)
-#             Jbetween0 = torch.matmul(Jcmp0, Jinv)
-#             jacobians.extend([Jbetween0, Jcmp1])
-#         return between
+def retract(group: LieTensor, delta: TensorType) -> LieTensor:
+    return group.retract(delta)

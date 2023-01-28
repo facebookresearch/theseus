@@ -7,6 +7,8 @@ from .lie_tensor import (  # usort: skip
     LieTensor,
     TangentTensor,
     adj,
+    as_lietensor,
+    cast,
     compose,
     exp,
     hat,

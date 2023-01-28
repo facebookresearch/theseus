@@ -69,12 +69,19 @@ def _get_lie_tensor_inputs(input_types, sampled_inputs, ltype):
 @pytest.mark.parametrize("ltype", [lie.SE3, lie.SO3])
 @pytest.mark.parametrize("batch_size", [5])
 def test_op(op_name, ltype, batch_size, rng):
+    def _to_functional_fmt(x):
+        def _to_torch(t):
+            return t._t if isinstance(t, lie.LieTensor) else t
+
+        if isinstance(x, tuple):  # jacobians output
+            return x[0], _to_torch(x[1])
+        return _to_torch(x)
+
     aux_name = op_name if op_name in ["inv", "adj"] else "other"
     # This is needed because the backend implementation has a different name
     # (these are not publicly exposed).
     impl_name = {"other": op_name, "inv": "inverse", "adj": "adjoint"}[aux_name]
     dim = {lie.SE3: 6, lie.SO3: 3}[ltype]
-    out_is_group = op_name in ["exp", "compose", "inv"]
     data_shape = {lie.SE3: (3, 4), lie.SO3: (3, 3)}[ltype]
     impl_module = _get_impl(ltype)
     all_input_types, _ = get_test_cfg(
@@ -83,16 +90,26 @@ def test_op(op_name, ltype, batch_size, rng):
     for input_types in all_input_types:
         inputs = sample_inputs(input_types, batch_size, torch.float32, rng)
         lie_tensor_inputs = _get_lie_tensor_inputs(input_types, inputs, ltype)
-        out = getattr(lie, op_name)(*lie_tensor_inputs)
-        out = out._t if out_is_group else out
+        out = _to_functional_fmt(getattr(lie, op_name)(*lie_tensor_inputs))
         impl_out = getattr(impl_module, f"_{impl_name}_autograd_fn")(*inputs)
         torch.testing.assert_close(out, impl_out)
 
-    if op_name in ["exp", "compose", "log", "inv"]:
-        out1, out2 = getattr(lie, f"j{op_name}")(*lie_tensor_inputs)
-        out2 = out2._t if out_is_group else out2
-        impl_out1, impl_out2 = getattr(impl_module, f"_j{impl_name}_autograd_fn")(
-            *inputs
+        # Also check that class-version is correct
+        # Use a dummy group for static ops (e.g., exp, hat)
+        c = (
+            lie.rand(ltype, 1, generator=rng, dtype=torch.float32)
+            if isinstance(lie_tensor_inputs[0], lie.ltype)
+            else lie_tensor_inputs[0]
         )
-        torch.testing.assert_close(out1, impl_out1)
-        torch.testing.assert_close(out2, impl_out2)
+        c_inputs = () if len(lie_tensor_inputs) == 1 else (lie_tensor_inputs[1],)
+        out_c = _to_functional_fmt(getattr(c, op_name)(*c_inputs))
+        torch.testing.assert_close(out, out_c)
+
+    if op_name in ["exp", "compose", "log", "inv"]:
+        jac1, out = _to_functional_fmt(getattr(lie, f"j{op_name}")(*lie_tensor_inputs))
+        impl_jac, impl_out = getattr(impl_module, f"_j{impl_name}_autograd_fn")(*inputs)
+        torch.testing.assert_close([jac1, out], [impl_jac, impl_out])
+
+        # Check class-version
+        jac_c, out_c = _to_functional_fmt(getattr(c, f"j{op_name}")(*c_inputs))
+        torch.testing.assert_close([jac1, out], [jac_c, out_c])

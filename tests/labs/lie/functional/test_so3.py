@@ -54,4 +54,6 @@ def test_vee(batch_size: int, dtype: torch.dtype):
 
     # check the correctness of hat and vee
     actual_tangent_vector = so3._vee_autograd_fn(matrix)
-    assert torch.allclose(actual_tangent_vector, tangent_vector, atol=TEST_EPS)
+    torch.testing.assert_close(
+        actual_tangent_vector, tangent_vector, atol=TEST_EPS, rtol=TEST_EPS
+    )

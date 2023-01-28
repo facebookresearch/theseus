@@ -8,7 +8,7 @@ from typing import Any, List, Optional, Protocol, Tuple, Union
 import torch
 
 from theseus.labs.lie.functional.constants import DeviceType
-from theseus.labs.lie.functional.lie_group import UnaryOperatorOpFnType
+from theseus.labs.lie.functional.lie_group import LieGroupFns, UnaryOperatorOpFnType
 from theseus.labs.lie.functional import se3 as _se3_base, so3 as _so3_base
 from .types import ltype as _ltype, SE3, SO3
 
@@ -16,13 +16,26 @@ TensorType = Union[torch.Tensor, "LieTensor"]
 _JFnReturnType = Tuple[List[torch.Tensor], TensorType]
 
 
+def _eval_op(
+    fn_lib: LieGroupFns,
+    op_name: str,
+    input0: torch.Tensor,
+    jacobians: Optional[List[torch.Tensor]] = None,
+) -> torch.Tensor:
+    return getattr(fn_lib, op_name)(input0, jacobians=jacobians)
+
+
+def _get_fn_lib(ltype: _ltype):
+    return {
+        SE3: _se3_base,
+        SO3: _so3_base,
+    }[ltype]
+
+
 class LieTensor:
     def __init__(self, data_tensor: torch.Tensor, ltype: _ltype):
         self._t = data_tensor
-        self._fn_lib = {
-            SE3: _se3_base,
-            SO3: _so3_base,
-        }[ltype]
+        self._fn_lib = _get_fn_lib(ltype)
         self._fn_lib.check_group_tensor(data_tensor)
         self.ltype = ltype
 
@@ -49,10 +62,29 @@ class LieTensor:
             return LieTensor(t._t, ltype=self.ltype)
         return LieTensor(t, ltype=self.ltype)
 
-    # Operators
+    # ------ Operators
+    # The following could be static methods, because self is used
+    # only to infer the type. For each of this, there are
+    # versions such as:
+    #   - `lie.exp(ltype, tangent_vector)`
+    #   - `lie.lift(ltype, matrix)`
+    # that we expect to be more commonly used.
     def exp(self, tangent_vector: torch.Tensor) -> "LieTensor":
-        return self.new(self._fn_lib.exp(tangent_vector))
+        return self.new(_eval_op(self._fn_lib, "exp", tangent_vector))
 
+    def hat(self, tangent_vector: torch.Tensor) -> torch.Tensor:
+        return _eval_op(self._fn_lib, "hat", tangent_vector)
+
+    def vee(self, matrix: torch.Tensor) -> torch.Tensor:
+        return _eval_op(self._fn_lib, "vee", matrix)
+
+    def lift(self, matrix: torch.Tensor) -> torch.Tensor:
+        return _eval_op(self._fn_lib, "lift", matrix)
+
+    def project(self, matrix: torch.Tensor) -> torch.Tensor:
+        return _eval_op(self._fn_lib, "project", matrix)
+
+    # For the next ones the output also depends on self's data
     def log(self) -> torch.Tensor:
         return self._fn_lib.log(self._t)
 
@@ -61,18 +93,6 @@ class LieTensor:
 
     def inv(self) -> "LieTensor":
         return self.new(self._fn_lib.inv(self._t))
-
-    def hat(self, tangent_vector: torch.Tensor) -> torch.Tensor:
-        return self._fn_lib.hat(tangent_vector)
-
-    def vee(self, matrix: torch.Tensor) -> torch.Tensor:
-        return self._fn_lib.vee(matrix)
-
-    def lift(self, matrix: torch.Tensor) -> torch.Tensor:
-        return self._fn_lib.lift(matrix)
-
-    def project(self, matrix: torch.Tensor) -> torch.Tensor:
-        return self._fn_lib.project(matrix)
 
     def compose(self, other: "LieTensor") -> "LieTensor":
         self._check_ltype(other, "compose")
@@ -112,19 +132,16 @@ class LieTensor:
         op_res = self.new(self._fn_lib.compose(self._t, other._t, jacobians=jacs))
         return jacs, op_res
 
-    def _no_unary_op(self, input0: TensorType) -> _JFnReturnType:
+    def _no_jop(self, input0: TensorType) -> _JFnReturnType:
         raise NotImplementedError
 
-    def _no_binary_op(self, input0: TensorType, input1: TensorType) -> _JFnReturnType:
-        raise NotImplementedError
-
-    jadjoint = _no_unary_op
-    jhat = _no_unary_op
-    jvee = _no_unary_op
-    jlift = _no_unary_op
-    jproject = _no_unary_op
-    jleft_act = _no_binary_op
-    jleft_project = _no_binary_op
+    jadjoint = _no_jop
+    jhat = _no_jop
+    jvee = _no_jop
+    jlift = _no_jop
+    jproject = _no_jop
+    jleft_act = _no_jop
+    jleft_project = _no_jop
 
 
 # ----------------------------
@@ -191,3 +208,29 @@ def _build_random_fn(op_name: str) -> _RandFnType:
 
 rand: _RandFnType = _build_random_fn("rand")
 randn: _RandFnType = _build_random_fn("randn")
+
+
+def exp(ltype: _ltype, tangent_vector: torch.Tensor) -> "LieTensor":
+    return LieTensor(_eval_op(_get_fn_lib(ltype), "exp", tangent_vector), ltype)
+
+
+def jexp(ltype: _ltype, tangent_vector: torch.Tensor) -> _JFnReturnType:
+    jacs: List[torch.Tensor] = []
+    exp_tensor = _eval_op(_get_fn_lib(ltype), "exp", tangent_vector, jacobians=jacs)
+    return jacs, LieTensor(exp_tensor, ltype)
+
+
+def hat(ltype: _ltype, tangent_vector: torch.Tensor) -> torch.Tensor:
+    return _eval_op(_get_fn_lib(ltype), "hat", tangent_vector)
+
+
+def vee(ltype: _ltype, matrix: torch.Tensor) -> torch.Tensor:
+    return _eval_op(_get_fn_lib(ltype), "vee", matrix)
+
+
+def lift(ltype: _ltype, matrix: torch.Tensor) -> torch.Tensor:
+    return _eval_op(_get_fn_lib(ltype), "lift", matrix)
+
+
+def project(ltype: _ltype, matrix: torch.Tensor) -> torch.Tensor:
+    return _eval_op(_get_fn_lib(ltype), "project", matrix)

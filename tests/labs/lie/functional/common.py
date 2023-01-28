@@ -48,6 +48,11 @@ def get_test_cfg(op_name, dtype, dim, data_shape, module=None):
 
 
 # Sample inputs with the desired types.
+# Input type is one of:
+#   ("tangent", dim)
+#   ("group", module)
+#   ("quat", dim)  # like tangent but normalized
+#   ("matrix", shape)
 def sample_inputs(input_types, batch_size, dtype, rng, module=None):
     def _sample(input_type):
         type_str, param = input_type
@@ -100,13 +105,15 @@ def check_lie_group_function(module, op_name: str, atol: float, inputs, funcs=No
 
     if funcs is None:
         for jac_impl, jac in zip(jacs_impl, jacs):
-            assert torch.allclose(jac_impl, jac, atol=atol)
+            torch.testing.assert_close(jac_impl, jac, atol=atol, rtol=atol)
     else:
         for jac_impl, jac, func in zip(jacs_impl, jacs, funcs):
             if func is None:
-                assert torch.allclose(jac_impl, jac, atol=atol)
+                torch.testing.assert_close(jac_impl, jac, atol=atol, rtol=atol)
             else:
-                assert torch.allclose(func(jac_impl), func(jac), atol=atol)
+                torch.testing.assert_close(
+                    func(jac_impl), func(jac), atol=atol, rtol=atol
+                )
 
 
 def left_project_func(module, group):

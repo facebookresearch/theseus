@@ -49,10 +49,10 @@ def get_test_cfg(op_name, dtype, dim, data_shape, module=None):
 
 # Sample inputs with the desired types.
 # Input type is one of:
-#   ("tangent", dim)
-#   ("group", module)
-#   ("quat", dim)  # like tangent but normalized
-#   ("matrix", shape)
+#   ("tangent", dim)  # torch.rand(batch_size, dim)
+#   ("group", module) # e.g., module.rand(batch_size)
+#   ("quat", dim)     # sampled like tangent but normalized
+#   ("matrix", shape) # torch.rand((batch_size,) + shape)
 def sample_inputs(input_types, batch_size, dtype, rng, module=None):
     def _sample(input_type):
         type_str, param = input_type

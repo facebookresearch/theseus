@@ -9,7 +9,7 @@ import torch
 
 from theseus.labs.lie.functional.constants import DeviceType
 from theseus.labs.lie.functional.lie_group import LieGroupFns, UnaryOperatorOpFnType
-from theseus.labs.lie.functional import se3 as _se3_base, so3 as _so3_base
+from theseus.labs.lie.functional import se3 as _se3_impl, so3 as _so3_impl
 from .types import ltype as _ltype, SE3, SO3
 
 TensorType = Union[torch.Tensor, "LieTensor"]
@@ -27,8 +27,8 @@ def _eval_op(
 
 def _get_fn_lib(ltype: _ltype):
     return {
-        SE3: _se3_base,
-        SO3: _so3_base,
+        SE3: _se3_impl,
+        SO3: _so3_impl,
     }[ltype]
 
 
@@ -191,7 +191,7 @@ def _build_random_fn(op_name: str) -> _RandFnType:
         device: DeviceType = None,
         requires_grad: bool = False,
     ) -> LieTensor:
-        fn = {SE3: getattr(_se3_base, op_name), SO3: getattr(_so3_base, op_name)}[ltype]
+        fn = {SE3: getattr(_se3_impl, op_name), SO3: getattr(_so3_impl, op_name)}[ltype]
         return LieTensor(
             fn(
                 *size,

@@ -97,7 +97,7 @@ def test_op(op_name, ltype, batch_size, rng):
         # Also check that class-version is correct
         # Use a dummy group for static ops (e.g., exp, hat)
         c = (
-            lie.rand(ltype, 1, generator=rng, dtype=torch.float32)
+            lie.rand(1, ltype, generator=rng, dtype=torch.float32)
             if isinstance(lie_tensor_inputs[0], lie.ltype)
             else lie_tensor_inputs[0]
         )

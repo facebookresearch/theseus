@@ -53,10 +53,16 @@ class TangentTensor(_LieTensorBase, torch.Tensor):
     def __torch_function__(cls, func, types, args=(), kwargs=None):
         kwargs = kwargs or {}
         args = [a._t if isinstance(a, TangentTensor) else a for a in args]
-        return TangentTensor(func(*args, **kwargs))
+        ret = func(*args, **kwargs)
+        return TangentTensor(ret) if isinstance(ret, torch.Tensor) else ret
 
 
 class LieTensor(_LieTensorBase):
+    _SAFE_SUPER_OPS = [
+        torch.cat,
+        # torch.stack  # requires arbitrary batch support
+    ]
+
     def __init__(self, data: Any, ltype: _ltype):
         super().__init__(data, ltype)
         self._fn_lib = _get_fn_lib(ltype)
@@ -64,6 +70,50 @@ class LieTensor(_LieTensorBase):
 
     def __repr__(self) -> str:
         return _LieTensorBase._build_repr(self)
+
+    @staticmethod
+    def _to_torch(
+        x: Any,
+    ) -> Union[List[torch.Tensor], Tuple[torch.Tensor, ...], torch.Tensor]:
+        if isinstance(x, (list, tuple)):
+            return type(x)(LieTensor._to_torch(e) for e in x)
+        if isinstance(x, LieTensor):
+            return x._t
+        raise TypeError
+
+    @staticmethod
+    def _maybe_get_unique_ltype(l_: List[_ltype]):
+        ltypes = set(l_)
+        if len(ltypes) > 1:
+            raise ValueError("All LieTensors must be of the same ltype.")
+        return next(iter(ltypes))
+
+    @staticmethod
+    def _get_ltype(x: Union[List["LieTensor"], Tuple["LieTensor", ...], "LieTensor"]):
+        if isinstance(x, (list, tuple)):
+            return LieTensor._maybe_get_unique_ltype(
+                [LieTensor._get_ltype(e) for e in x]
+            )
+        if isinstance(x, LieTensor):
+            return x.ltype
+        raise TypeError
+
+    @classmethod
+    def __torch_function__(cls, func, types, args=(), kwargs=None):
+        if func not in LieTensor._SAFE_SUPER_OPS:
+            raise NotImplementedError
+        kwargs = kwargs or {}
+        try:
+            torch_args = [LieTensor._to_torch(a) for a in args]
+            ltype = LieTensor._maybe_get_unique_ltype(
+                [LieTensor._get_ltype(a) for a in args]
+            )
+        except Exception:
+            raise TypeError(
+                "Invalid combination of arguments. All arguments must be LieTensors "
+                "or seequences of ListTensors."
+            )
+        return LieTensor(func(*torch_args, **kwargs), ltype)
 
     def _check_ltype(self, other: "LieTensor", op_name: str):
         if other.ltype != self.ltype:

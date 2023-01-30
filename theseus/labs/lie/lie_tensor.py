@@ -170,8 +170,7 @@ as_lietensor = new
 class _RandFnType(Protocol):
     def __call__(
         self,
-        ltype: _ltype,
-        *size: int,
+        *args: Any,
         generator: Optional[torch.Generator] = None,
         dtype: Optional[torch.dtype] = None,
         device: DeviceType = None,
@@ -184,13 +183,22 @@ def _build_random_fn(op_name: str) -> _RandFnType:
     assert op_name in ["rand", "randn"]
 
     def fn(
-        ltype: _ltype,
-        *size: int,
+        *args: Any,
         generator: Optional[torch.Generator] = None,
         dtype: Optional[torch.dtype] = None,
         device: DeviceType = None,
         requires_grad: bool = False,
     ) -> LieTensor:
+        good = all([isinstance(a, int) for a in args[:-1]]) and isinstance(
+            args[-1], _ltype
+        )
+        if not good:
+            arg_types = " ".join(type(a).__name__ for a in args)
+            raise TypeError(
+                f"{op_name}() received invalid combination of arguments - "
+                f"got ({arg_types}), but expected (tuple of ints size, ltype)."
+            )
+        size, ltype = args[:-1], args[-1]
         fn = {SE3: getattr(_se3_impl, op_name), SO3: getattr(_so3_impl, op_name)}[ltype]
         return LieTensor(
             fn(

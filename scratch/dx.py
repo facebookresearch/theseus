@@ -8,7 +8,7 @@ import matplotlib.patches as patches
 
 x = torch.Tensor([0., 0. ,0.])
 N = 10
-u = torch.ones(N,2)
+us = torch.ones(N,2)
 
 L = 0.1
 
@@ -22,31 +22,44 @@ def f(x, u):
 
 xs = [x.clone()]
 for i in range(N):
-    x = f(x, u[i])
+    x = f(x, us[i])
     xs.append(x.clone())
     print(x)
 
 
 
 fig, ax = plt.subplots(figsize=(6,6))
-for x in xs:
+for x, u in zip(xs, us):
     p = x[:2]
     theta = x[2]
-    ax.scatter(p[0], p[1], color='k')
+    # print(p, theta)
+
+    # ax.scatter(p[0], p[1], color='k')
+
     width = 0.05
     rect = patches.Rectangle(
-         p, L, .5*width, linewidth=1,
-        facecolor='grey', alpha=0.5)
-    t2 = mpl.transforms.Affine2D().rotate_around(p[0], p[1], theta) + ax.transData
-    rect.set_transform(t2)
+         (0, -0.5*width), L, width, linewidth=1,
+        edgecolor='black', facecolor='grey', alpha=0.5)
+    t = mpl.transforms.Affine2D().rotate(theta).translate(*p) + ax.transData
+    rect.set_transform(t)
     ax.add_patch(rect)
 
-    rect = patches.Rectangle(
-         p, L, -.5*width, linewidth=1,
-        facecolor='grey', alpha=0.5)
-    t2 = mpl.transforms.Affine2D().rotate_around(p[0], p[1], theta) + ax.transData
-    rect.set_transform(t2)
-    ax.add_patch(rect)
+    wheel_length = width/2.
+    wheel = patches.Rectangle(
+         (L-0.5*wheel_length, -0.5*width), wheel_length, 0, linewidth=1,
+        edgecolor='black', alpha=1)
+    t = mpl.transforms.Affine2D().rotate_around(
+        L, -0.5*width, u[1]).rotate(theta).translate(*p) + ax.transData
+    wheel.set_transform(t)
+    ax.add_patch(wheel)
+
+    wheel = patches.Rectangle(
+         (L-0.5*wheel_length, +0.5*width), wheel_length, 0, linewidth=1,
+        edgecolor='black', alpha=1)
+    t = mpl.transforms.Affine2D().rotate_around(
+        L, +0.5*width, u[1]).rotate(theta).translate(*p) + ax.transData
+    wheel.set_transform(t)
+    ax.add_patch(wheel)
 
 # ax.set_xlim(-.5, .5)
 # ax.set_ylim(0, 1)

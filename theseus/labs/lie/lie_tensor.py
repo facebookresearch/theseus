@@ -50,15 +50,6 @@ def euclidean_enabled() -> bool:
     return _LieAsEuclideanContext.get_context()
 
 
-def _eval_op(
-    fn_lib: LieGroupFns,
-    op_name: str,
-    input0: torch.Tensor,
-    jacobians: Optional[List[torch.Tensor]] = None,
-) -> torch.Tensor:
-    return getattr(fn_lib, op_name)(input0, jacobians=jacobians)
-
-
 def _get_fn_lib(ltype: _ltype):
     return {
         SE3: _se3_impl,
@@ -66,12 +57,21 @@ def _get_fn_lib(ltype: _ltype):
     }[ltype]
 
 
-class _LieTensorBase:
-    def __init__(self, data: Any, ltype: _ltype):
-        self._t = torch.as_tensor(data)
+class _LieTensorBase(torch.Tensor):
+    def __new__(cls, data: Any, ltype: _ltype, requires_grad=None):
+        if requires_grad is None:
+            return super().__new__(cls, data)  # type: ignore
+        else:
+            return cls._make_subclass(cls, data, requires_grad)  # type: ignore
+
+    @property
+    def _t(self) -> torch.Tensor:
+        return self.as_subclass(torch.Tensor)
+
+    def __init__(self, data: Any, ltype: _ltype, requires_grad=None):
         self.ltype = ltype
 
-    def __repr__(self) -> str:
+    def __repr__(self) -> str:  # type: ignore
         return f"LieTensor({self._t}, ltype=lie.{self.ltype})"
 
     @classmethod
@@ -104,12 +104,21 @@ class _LieTensorBase:
 
 
 class TangentTensor(_LieTensorBase):
-    def __init__(self, data: Any, _):
-        super().__init__(data, _ltype.tgt)
+    def __init__(self, data: Any, ltype: _ltype, requires_grad=None):
+        super().__init__(data, _ltype.tgt, requires_grad=requires_grad)
 
     @classmethod
     def __torch_function__(cls, func, types, args=(), kwargs=None):
         return cls._torch_func_impl_eucl(func, types, args, kwargs)
+
+
+def _eval_op(
+    fn_lib: LieGroupFns,
+    op_name: str,
+    input0: torch.Tensor,
+    jacobians: Optional[List[torch.Tensor]] = None,
+) -> torch.Tensor:
+    return getattr(fn_lib, op_name)(input0, jacobians=jacobians)
 
 
 class LieTensor(_LieTensorBase):
@@ -119,12 +128,10 @@ class LieTensor(_LieTensorBase):
         # torch.stack  # requires arbitrary batch support
     ]
 
-    _fn_lib: LieGroupFns
-
-    def __init__(self, data: Any, ltype: _ltype):
-        super().__init__(data, ltype)
+    def __init__(self, data: Any, ltype: _ltype, requires_grad=None):
+        super().__init__(data, ltype, requires_grad=requires_grad)
         self._fn_lib = _get_fn_lib(self.ltype)
-        self._fn_lib.check_group_tensor(self._t)
+        self._fn_lib.check_group_tensor(self.as_subclass(torch.Tensor))
 
     @classmethod
     def _torch_function_impl_lie(cls, func, types, args=(), kwargs=None):
@@ -150,7 +157,7 @@ class LieTensor(_LieTensorBase):
             raise ValueError("f{op_name} requires both tensors to have same ltype.")
 
     # Returns a new LieTensor with the given data and the same ltype as self
-    def new(self, args: Any, device: Device = None) -> "LieTensor":
+    def new(self, args: Any, device: Device = None) -> "LieTensor":  # type: ignore
         if isinstance(args, LieTensor):
             warnings.warn(
                 "Calling new() on a LieTensor results in shared data storage. "
@@ -167,7 +174,7 @@ class LieTensor(_LieTensorBase):
     #   - `lie.exp(ltype, tangent_vector)`
     #   - `lie.lift(ltype, matrix)`
     # that we expect to be more commonly used.
-    def exp(self, tangent_vector: torch.Tensor) -> "LieTensor":
+    def exp(self, tangent_vector: torch.Tensor) -> "LieTensor":  # type: ignore
         return self.new(_eval_op(self._fn_lib, "exp", tangent_vector))
 
     def hat(self, tangent_vector: torch.Tensor) -> torch.Tensor:
@@ -346,7 +353,7 @@ def inv(group: LieTensor) -> LieTensor:
     return group.inv()
 
 
-def exp(ltype: _ltype, tangent_vector: torch.Tensor) -> "LieTensor":
+def exp(ltype: _ltype, tangent_vector: torch.Tensor) -> "LieTensor":  # type: ignore
     return LieTensor(_eval_op(_get_fn_lib(ltype), "exp", tangent_vector), ltype)
 
 

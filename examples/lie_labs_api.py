@@ -21,7 +21,9 @@ w = g + lie.cast(x, ltype=lie.tgt)
 torch.testing.assert_close(w._t, z._t)
 
 # One could also do like this, but maybe this is too verbose, we could just hide this class
-y = g + lie.TangentTensor(x)
+# Passing None because it's not needed
+# (ignore this, I think we can either remove this class or hide it)
+y = g + lie.TangentTensor(x, None)
 torch.testing.assert_close(z._t, y._t)
 
 # instances of TangentTensor support arbitrary tensor functions. For example
@@ -36,32 +38,45 @@ print(
 )
 # Or combinations of TangentTensor and standard tensors, for example
 a = lie.cast(x, ltype=lie.tgt)
-torch.testing.assert_close(a, x)
+assert torch.allclose(a, x)
 
 # Some torch functions are supported for LieTensor
 wz = torch.cat([w, z])
-torch.testing.assert_close(wz._t, torch.cat([w._t, z._t]))
+assert torch.allclose(wz._t, torch.cat([w._t, z._t]))
 
 # If so all elements must be LieTensors...
 try:
     wz = torch.cat([w, z._t])
 except TypeError as e:
-    print(e)
+    print("\n", e)
 
 # ... of the same ltype
 try:
     u = lie.rand(1, lie.SO3)
     wz = torch.cat([w, u])
 except ValueError as e:
-    print(e)
+    print("\n", e)
 
 
 # Unsupported operations throw a NotImplementedError
 try:
-    torch.testing.assert_close(w, z)
+    assert torch.allclose(w, z)
 except NotImplementedError as e:
     print(e)
 
-# But you can add lie.as_eucledian() and then everything is valid
+# But you can add lie.as_euclidean() and then everything is valid
 with lie.as_euclidean():
-    torch.testing.assert_close(w, z)
+    assert torch.allclose(w, z)
+    mm = torch.matmul(g, torch.randn(4, 7))
+    print(
+        "\nWhen calling with lie.as_euclidean(), "
+        "the result is not a LieTensor anymore",
+        type(mm),
+        mm.shape,
+    )
+    # For now something like g.matmul() doesn't work
+    # We can get around this by subclassing directly, but this has
+    # some tradeoffs, and complicates having flexible storage
+    # for the class.
+    # But there are some workarounds to make this work, even
+    # if we don't subclass directly

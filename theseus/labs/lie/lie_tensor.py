@@ -8,6 +8,7 @@ import warnings
 from typing import Any, List, Optional, Protocol, Tuple, Union
 
 import torch
+from torch.utils._pytree import tree_flatten, tree_map
 
 from theseus.labs.lie.functional.constants import DeviceType
 from theseus.labs.lie.functional.lie_group import LieGroupFns, UnaryOperatorOpFnType
@@ -65,50 +66,47 @@ def _get_fn_lib(ltype: _ltype):
     }[ltype]
 
 
-class _LieTensorBase(torch.Tensor):
-    _t: torch.Tensor
-    ltype: _ltype
-
-    def __new__(
-        cls, data: Any, ltype: _ltype = _ltype.tgt, requires_grad: bool = False
-    ):
-        t: torch.Tensor = super().__new__(torch.Tensor, data)
-        r: _LieTensorBase = torch.Tensor._make_subclass(cls, t, requires_grad)  # type: ignore
-        r._t = t
-        r.ltype = ltype
-        return r
+class _LieTensorBase:
+    def __init__(self, data: Any, ltype: _ltype):
+        self._t = torch.as_tensor(data)
+        self.ltype = ltype
 
     def __repr__(self) -> str:
         return f"LieTensor({self._t}, ltype=lie.{self.ltype})"
 
-    @staticmethod
-    def _get_ltype(x: Any) -> Optional[_ltype]:
-        if isinstance(x, (list, tuple)):
-            return _LieTensorBase._resolve_ltype(x)
-        if isinstance(x, _LieTensorBase):
-            return x.ltype
-        return None
+    @classmethod
+    def to_torch(cls, args: Any):
+        def _resolve(x):
+            return x._t if isinstance(x, cls) else x
 
-    @staticmethod
-    def _resolve_ltype(args: Any) -> Optional[_ltype]:
-        args_ltypes = [_LieTensorBase._get_ltype(a) for a in args]
-        ltypes = set([t for t in args_ltypes if t is not None])
-        print("al", args_ltypes)
-        if len(ltypes) > 1:
-            raise ValueError("All LieTensors must be of the same ltype.")
-        return next(iter(ltypes)) if len(ltypes) > 0 else None
+        return tree_map(_resolve, args)
 
     @classmethod
-    def _torch_func_impl_eucl(cls, func, types, args=(), kwargs=None):
-        print("---------")
+    def resolve_ltype(cls, t: Any):
+        return t.ltype if isinstance(t, cls) else None
+
+    @classmethod
+    def _torch_func_impl_eucl(cls, func, types, args=(), kwargs=None, raw_tensor=False):
         kwargs = kwargs or {}
-        torch_args = [a._t if isinstance(a, cls) else a for a in args]
-        ltype = cls._resolve_ltype(args)
-        ret = super().__torch_function__(func, types, torch_args, kwargs)
-        return cls(ret, ltype) if isinstance(ret, torch.Tensor) else ret
+        torch_args = cls.to_torch(args)
+        torch_kwargs = cls.to_torch(kwargs)
+        ltypes = [cls.resolve_ltype(a) for a in tree_flatten(args)[0]]
+        ltypes = set(x for x in ltypes if x is not None)
+        if len(ltypes) > 1:
+            raise ValueError(
+                f"All LieTensors must be of the same ltype. " f"But found {ltypes}"
+            )
+        ltype = next(iter(ltypes)) if len(ltypes) > 0 else None
+        ret = func(*torch_args, **torch_kwargs)
+        return (
+            cls(ret, ltype) if isinstance(ret, torch.Tensor) and not raw_tensor else ret
+        )
 
 
 class TangentTensor(_LieTensorBase):
+    def __init__(self, data: Any, _):
+        super().__init__(data, _ltype.tgt)
+
     @classmethod
     def __torch_function__(cls, func, types, args=(), kwargs=None):
         return cls._torch_func_impl_eucl(func, types, args, kwargs)
@@ -123,7 +121,8 @@ class LieTensor(_LieTensorBase):
 
     _fn_lib: LieGroupFns
 
-    def __init__(self, data: Any, ltype: _ltype, requires_grad: bool = False):
+    def __init__(self, data: Any, ltype: _ltype):
+        super().__init__(data, ltype)
         self._fn_lib = _get_fn_lib(self.ltype)
         self._fn_lib.check_group_tensor(self._t)
 
@@ -133,14 +132,16 @@ class LieTensor(_LieTensorBase):
             raise NotImplementedError(
                 "Tried to call a torch function not supported by LieTensor. "
                 "If trying to operate on the raw tensor data, please use group._t, "
-                "or run inside the context lie.as_eucledian()."
+                "or run inside the context lie.as_euclidean()."
             )
         return super()._torch_func_impl_eucl(func, types, args, kwargs)
 
     @classmethod
     def __torch_function__(cls, func, types, args=(), kwargs=None):
         if euclidean_enabled():
-            return super()._torch_func_impl_eucl(func, types, args, kwargs)
+            return super()._torch_func_impl_eucl(
+                func, types, args, kwargs, raw_tensor=True
+            )
         else:
             return cls._torch_function_impl_lie(func, types, args, kwargs)
 
@@ -149,15 +150,15 @@ class LieTensor(_LieTensorBase):
             raise ValueError("f{op_name} requires both tensors to have same ltype.")
 
     # Returns a new LieTensor with the given data and the same ltype as self
-    def new(self, *args: Any, device: Device = None) -> "LieTensor":
-        if isinstance(args[0], LieTensor):
+    def new(self, args: Any, device: Device = None) -> "LieTensor":
+        if isinstance(args, LieTensor):
             warnings.warn(
                 "Calling new() on a LieTensor results in shared data storage. "
                 "To copy construct from a LieTensor, it is recommended to use lie_tensor.clone().",
                 UserWarning,
             )
-            return LieTensor(args[0]._t, ltype=self.ltype)
-        return LieTensor(torch.as_tensor(*args, device=device), ltype=self.ltype)
+            return LieTensor(args._t, ltype=self.ltype)
+        return LieTensor(torch.as_tensor(args, device=device), ltype=self.ltype)
 
     # ------ Operators
     # The following could be static methods, because self is used
@@ -269,7 +270,7 @@ def new(
     if ltype is None:
         raise ValueError("ltype must be provided.")
     if ltype == _ltype.tgt:
-        return TangentTensor(data)
+        return TangentTensor(data, None)
     return LieTensor(data, ltype=ltype)
 
 

@@ -5,23 +5,8 @@
 import pytest
 import torch
 
-try:
-    import theseus.labs.lie as lie
-    import theseus.labs.lie.functional.se3_impl as se3_impl
-    import theseus.labs.lie.functional.so3_impl as so3_impl
-except ModuleNotFoundError:
-    # Can't use the decorator because pytest parameters are
-    # imported from labs
-    import sys
-
-    print("Labs not installed. Not running this test suite.")
-    sys.exit(0)
-
+from tests.decorators import run_if_labs
 from .functional.common import get_test_cfg, sample_inputs
-
-
-def _get_impl(ltype):
-    return {lie.SE3: se3_impl, lie.SO3: so3_impl}[ltype]
 
 
 @pytest.fixture
@@ -33,6 +18,8 @@ def rng():
 
 # Converts the functional sampled inputs to the class-based inputs
 def _get_lie_tensor_inputs(input_types, sampled_inputs, ltype):
+    import theseus.labs.lie as lie
+
     def _get_typed_tensor(idx):
         is_group = input_types[idx][0] == "group"
         return (
@@ -50,6 +37,7 @@ def _get_lie_tensor_inputs(input_types, sampled_inputs, ltype):
     return (x, y)
 
 
+@run_if_labs()
 @pytest.mark.parametrize(
     "op_name",
     [
@@ -66,9 +54,18 @@ def _get_lie_tensor_inputs(input_types, sampled_inputs, ltype):
         "adj",
     ],
 )
-@pytest.mark.parametrize("ltype", [lie.SE3, lie.SO3])
+@pytest.mark.parametrize("ltype_str", ["se3", "so3"])
 @pytest.mark.parametrize("batch_size", [5])
-def test_op(op_name, ltype, batch_size, rng):
+def test_op(op_name, ltype_str, batch_size, rng):
+    import theseus.labs.lie as lie
+    import theseus.labs.lie.functional.se3_impl as se3_impl
+    import theseus.labs.lie.functional.so3_impl as so3_impl
+
+    ltype = {"se3": lie.SE3, "so3": lie.SO3}[ltype_str]
+
+    def _get_impl(ltype):
+        return {lie.SE3: se3_impl, lie.SO3: so3_impl}[ltype]
+
     def _to_functional_fmt(x):
         def _to_torch(t):
             return t._t if isinstance(t, lie.LieTensor) else t

@@ -470,7 +470,8 @@ class Objective:
         warnings.warn(
             "Objective.error_squared_norm() is deprecated "
             "and will be removed in future versions. "
-            "Please use Objective.error_metric() instead."
+            "Please use Objective.error_metric() instead.",
+            DeprecationWarning,
         )
         return self.error_metric(input_tensors=input_tensors, also_update=also_update)
 

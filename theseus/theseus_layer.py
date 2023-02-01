@@ -300,16 +300,14 @@ class _DLMPerturbation(CostFunction):
 
     def jacobians(self) -> Tuple[List[torch.Tensor], torch.Tensor]:
         d = self.dim()
-        aux = (
+        aux = np.sqrt(2) * (
             torch.eye(d, dtype=self.epsilon.dtype, device=self.epsilon.device)
             .unsqueeze(0)
             .expand(self.var.shape[0], d, d)
         )
         euclidean_grad_flat = self.epsilon.tensor.view(-1, 1, 1) * aux
         euclidean_grad = euclidean_grad_flat.unflatten(2, self.var.shape[1:])
-        return [
-            np.sqrt(2) * self.var.project(euclidean_grad, is_sparse=True)
-        ], self.error()
+        return [self.var.project(euclidean_grad, is_sparse=True)], self.error()
 
     def dim(self) -> int:
         return int(np.prod(self.var.tensor.shape[1:]))

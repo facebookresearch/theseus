@@ -10,6 +10,7 @@ from typing import Any, Callable, Dict, NoReturn, Optional, Tuple, Type, Union
 import torch
 
 from theseus.core import Objective
+from theseus.core.objective import error_squared_norm_fn
 from theseus.optimizer import Linearization, OptimizerInfo
 from theseus.optimizer.linear import (
     LinearSolver,
@@ -72,6 +73,11 @@ class NonlinearLeastSquares(NonlinearOptimizer, abc.ABC):
         step_size: float = 1.0,
         **kwargs,
     ):
+        if objective._error_metric_fn is not error_squared_norm_fn:
+            raise ValueError(
+                "Objective's error_metric is inconsistent with the use of "
+                "Nonlinear Least Squares optimizer."
+            )
         super().__init__(
             objective,
             linear_solver_cls=linear_solver_cls,
@@ -92,15 +98,6 @@ class NonlinearLeastSquares(NonlinearOptimizer, abc.ABC):
         )
         self.ordering = self.linear_solver.linearization.ordering
         self._tmp_optim_vars = tuple(v.copy(new_name=v.name) for v in self.ordering)
-
-    def _error_metric(
-        self,
-        input_tensors: Optional[Dict[str, torch.Tensor]] = None,
-        also_update: bool = False,
-    ) -> torch.Tensor:
-        return self.objective.error_metric(
-            input_tensors=input_tensors, also_update=also_update
-        )
 
     # loop for the iterative optimizer
     def _optimize_loop(
@@ -322,7 +319,7 @@ class NonlinearLeastSquares(NonlinearOptimizer, abc.ABC):
             force_update=force_update,
         )
         tensor_dict = {v.name: v.tensor for v in self._tmp_optim_vars}
-        err = self._error_metric(tensor_dict, also_update=False)
+        err = self.objective.error_metric(tensor_dict, also_update=False)
         return tensor_dict, err
 
     # Given descent directions and step sizes, updates the optimization
@@ -333,7 +330,7 @@ class NonlinearLeastSquares(NonlinearOptimizer, abc.ABC):
     # if all steps were rejected.
     #
     # `previous_err` refes to the squared norm of the
-    # error vector, as returned by self._error_metric()
+    # error vector, as returned by self.objective.error_metric()
     # The returned error must also refer to this quantity, but after the
     # update.
     def _step(
@@ -362,7 +359,7 @@ class NonlinearLeastSquares(NonlinearOptimizer, abc.ABC):
         self.objective.update(tensor_dict, batch_ignore_mask=reject_indices)
         if reject_indices is not None and reject_indices.any():
             # Some steps were rejected so the error computed above is not accurate
-            err = self._error_metric()
+            err = self.objective.error_metric()
         return err, False
 
     # Resets any internal state needed by the optimizer for a new optimization

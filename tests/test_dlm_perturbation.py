@@ -16,7 +16,7 @@ def _original_dlm_perturbation(optim_vars, aux_vars):
     v = optim_vars[0]
     g = aux_vars[0]
     epsilon = aux_vars[1]
-    return epsilon.tensor * v.tensor - 0.5 * g.tensor
+    return (epsilon.tensor * v.tensor - 0.5 * g.tensor) * np.sqrt(2)
 
 
 def test_dlm_perturbation_jacobian():
@@ -68,8 +68,10 @@ def test_dlm_perturbation_jacobian():
                     aux_vars=[grad, epsilon],
                 )
                 original_jac, original_err = original_cf.jacobians()
-                assert error.allclose(original_err)
-                assert jacobians[0].allclose(original_jac[0], atol=1e-5)
+                torch.testing.assert_close(error, original_err)
+                torch.testing.assert_close(
+                    jacobians[0], original_jac[0], atol=1e-5, rtol=1e-5
+                )
 
 
 def test_backward_pass_se3_runs():

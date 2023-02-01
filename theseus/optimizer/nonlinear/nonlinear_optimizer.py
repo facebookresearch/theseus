@@ -101,14 +101,6 @@ class NonlinearOptimizer(Optimizer, abc.ABC):
     def set_params(self, **kwargs):
         self.params.update(kwargs)
 
-    @abc.abstractmethod
-    def _error_metric(
-        self,
-        input_tensors: Optional[Dict[str, torch.Tensor]] = None,
-        also_update: bool = False,
-    ) -> torch.Tensor:
-        pass
-
     @torch.no_grad()
     def _check_convergence(self, err: torch.Tensor, last_err: torch.Tensor):
         if err.abs().mean() < self.params.abs_err_tolerance:
@@ -137,7 +129,7 @@ class NonlinearOptimizer(Optimizer, abc.ABC):
         track_state_history: bool,
     ) -> NonlinearOptimizerInfo:
         with torch.no_grad():
-            last_err = self._error_metric()
+            last_err = self.objective.error_metric()
         best_err = last_err.clone() if track_best_solution else None
         if track_err_history:
             err_history = (

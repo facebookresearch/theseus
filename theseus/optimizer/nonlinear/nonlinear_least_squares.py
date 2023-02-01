@@ -45,7 +45,7 @@ EndIterCallbackType = Callable[
 #
 # The high level logic of a call to optimize is as follows:
 #
-# prev_err = objective.error_squared_norm() / 2
+# prev_err = objective.error_metric()
 # do optimization loop:
 #    1. compute delta
 #    2. step(delta, prev_err)
@@ -98,11 +98,8 @@ class NonlinearLeastSquares(NonlinearOptimizer, abc.ABC):
         input_tensors: Optional[Dict[str, torch.Tensor]] = None,
         also_update: bool = False,
     ) -> torch.Tensor:
-        return (
-            self.objective.error_squared_norm(
-                input_tensors=input_tensors, also_update=also_update
-            )
-            / 2
+        return self.objective.error_metric(
+            input_tensors=input_tensors, also_update=also_update
         )
 
     # loop for the iterative optimizer

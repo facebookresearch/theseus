@@ -201,7 +201,7 @@ class TheseusLayerDLMForward(torch.autograd.Function):
             # Precompute and cache this.
             with torch.enable_grad():
                 grad_sol = torch.autograd.grad(
-                    objective.error_squared_norm().sum(),
+                    objective.error_metric().sum(),
                     differentiable_tensors,
                     allow_unused=True,
                 )
@@ -253,7 +253,7 @@ class TheseusLayerDLMForward(torch.autograd.Function):
         # Compute gradients.
         with torch.enable_grad():
             grad_perturbed = torch.autograd.grad(
-                bwd_objective.error_squared_norm().sum(),
+                bwd_objective.error_metric().sum(),
                 differentiable_tensors,
                 allow_unused=True,
             )
@@ -289,7 +289,9 @@ class _DLMPerturbation(CostFunction):
         self.register_aux_vars(["epsilon", "grad"])
 
     def error(self) -> torch.Tensor:
-        err = (
+        # Theseus optimizes SUM(err ** 2) / 2. We add sqrt(2) so
+        # that when expanding the objective is SUM(err_orig) /2 + ||dlm_error||**2
+        err = np.sqrt(2) * (
             self.epsilon.tensor.view((-1,) + (1,) * (self.var.ndim - 1))
             * self.var.tensor
             - 0.5 * self.grad.tensor
@@ -305,7 +307,9 @@ class _DLMPerturbation(CostFunction):
         )
         euclidean_grad_flat = self.epsilon.tensor.view(-1, 1, 1) * aux
         euclidean_grad = euclidean_grad_flat.unflatten(2, self.var.shape[1:])
-        return [self.var.project(euclidean_grad, is_sparse=True)], self.error()
+        return [
+            np.sqrt(2) * self.var.project(euclidean_grad, is_sparse=True)
+        ], self.error()
 
     def dim(self) -> int:
         return int(np.prod(self.var.tensor.shape[1:]))

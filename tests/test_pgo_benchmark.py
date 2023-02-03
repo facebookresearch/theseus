@@ -1,5 +1,5 @@
 import pytest
-
+import torch
 from omegaconf import OmegaConf
 
 import examples.pose_graph.pose_graph_synthetic as pgo
@@ -18,12 +18,12 @@ def default_cfg():
     return cfg
 
 
-def test_pgo_cpu_losses(default_cfg):
-    default_cfg.inner_optim.linear_solver_cls = "CholeskyDenseSolver"
-    default_cfg.device = "cpu"
-    losses = pgo.run(default_cfg)
-    print(losses)
-
+@pytest.mark.parametrize(
+    "linear_solver_cls",
+    ["CholeskyDenseSolver", "LUCudaSparseSolver", "CholmodSparseSolver"],
+)
+def test_pgo_losses(default_cfg, linear_solver_cls):
+    # for everything except cholmod (need to turn off adaptive damping for that one)
     expected_losses = [
         -0.052539525581227584,
         -0.06922697773257504,
@@ -31,5 +31,23 @@ def test_pgo_cpu_losses(default_cfg):
         -0.0611037310727137,
     ]
 
+    default_cfg.inner_optim.linear_solver_cls = linear_solver_cls
+    if linear_solver_cls == "LUCudaSparseSolver":
+        if not torch.cuda.is_available():
+            return
+        default_cfg.device = "cuda"
+    else:
+        if linear_solver_cls == "CholmodSparseSolver":
+            default_cfg.inner_optim.optimizer_kwargs.adaptive_damping = False
+            expected_losses = [
+                -0.052539527012601166,
+                -0.06922697775065781,
+                -0.03645472565461781,
+                -0.06110373151314644,
+            ]
+        default_cfg.device = "cpu"
+    losses = pgo.run(default_cfg)
+    print(losses)
+
     for loss, expected_loss in zip(losses[0], expected_losses):
-        assert loss == pytest.approx(expected_loss)
+        assert loss == pytest.approx(expected_loss, rel=1e-10, abs=1e-10)

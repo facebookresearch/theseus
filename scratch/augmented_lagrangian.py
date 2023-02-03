@@ -1,5 +1,5 @@
 # Implements the augmented Lagrangian method for constrained
-# nonlinear least squares as described on page 11.21 ofQ
+# nonlinear least squares as described on page 11.21 of
 # http://www.seas.ucla.edu/~vandenbe/133B/lectures/nllseq.pdf
 
 import copy

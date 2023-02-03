@@ -3,6 +3,9 @@
 #
 # This source code is licensed under the MIT license found in the
 # LICENSE file in the root directory of this source tree.
+#
+# This is the car example starting on page 23 of:
+# http://www.seas.ucla.edu/~vandenbe/133B/lectures/nllseq.pdf
 
 import numpy as np
 import torch

@@ -124,7 +124,7 @@ def plot_action_sequence(us):
     ax.plot(us[:, 0], label="speed")
     ax.plot(us[:, 1], label="steering angle")
     fig.legend(ncol=2, loc="upper center")
-    fig.savefig("actions.png", transparent=True)
+    fig.savefig("actions.png")
     plt.close(fig)
 
 

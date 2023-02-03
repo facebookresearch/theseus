@@ -119,7 +119,7 @@ def run(cfg: omegaconf.OmegaConf):
         dtype=dtype,
     )
 
-    device = torch.device("cuda")
+    device = torch.device(cfg.solver_device)
     dtype = torch.float64
     profiler = Profiler(cProfile.Profile(), cfg.profile)
 

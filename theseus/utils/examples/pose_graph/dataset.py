@@ -135,7 +135,7 @@ def read_2D_g2o_file(
 
                 sel = [0, 3, 5]
                 weight = th.Variable(
-                    torch.from_numpy(np.array(tokens[6:], dtype=np.float64)[sel])
+                    torch.from_numpy(np.array(1, tokens[6:], dtype=np.float64)[sel])
                     .to(dtype)
                     .sqrt()
                     .view(1, -1)
@@ -267,7 +267,7 @@ class PoseGraphDataset:
 
         info = torch.tensor(
             [1 / translation_noise] * 3 + [1 / rotation_noise] * 3, dtype=dtype
-        )
+        ).view(1, -1)
 
         for n in range(1, num_poses):
             gt_relative_pose = th.SE3.exp_map(

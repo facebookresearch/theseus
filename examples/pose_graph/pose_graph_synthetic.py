@@ -335,7 +335,11 @@ def run(cfg: omegaconf.OmegaConf):
     return losses
 
 
-@hydra.main(config_path="../configs/pose_graph", config_name="pose_graph_synthetic")
+@hydra.main(
+    config_path="../configs/pose_graph",
+    config_name="pose_graph_synthetic",
+    version_base="1.1",
+)
 def main(cfg):
     run(cfg)
 

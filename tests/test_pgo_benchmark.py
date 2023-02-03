@@ -19,8 +19,8 @@ def default_cfg():
 
 
 def test_pgo_cpu_losses(default_cfg):
-    default_cfg.inner_optim.solver = "dense"
-    default_cfg.solver_device = "cpu"
+    default_cfg.inner_optim.linear_solver_cls = "CholeskyDenseSolver"
+    default_cfg.device = "cpu"
     losses = pgo.run(default_cfg)
     print(losses)
 

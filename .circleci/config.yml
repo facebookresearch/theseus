@@ -222,6 +222,7 @@ run_gpu_tests: &run_gpu_tests
       command: |
         pytest -s tests/test_theseus_layer.py
         pytest -s tests -m "cudaext"
+        pytest -s tests/test_pgo_benchmark.py -s
 
 build_cuda11_wheel: &build_cuda11_wheel
   - run:

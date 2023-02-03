@@ -19,8 +19,6 @@ from scipy.io import savemat
 
 import theseus as th
 import theseus.utils.examples as theg
-from theseus.optimizer.linear import LinearSolver
-from theseus.optimizer.linearization import Linearization
 
 # Logger
 log = logging.getLogger(__name__)
@@ -119,29 +117,9 @@ def run(cfg: omegaconf.OmegaConf):
         dtype=dtype,
     )
 
-    device = torch.device(cfg.solver_device)
+    device = torch.device(cfg.device)
     dtype = torch.float64
     profiler = Profiler(cProfile.Profile(), cfg.profile)
-
-    LINEARIZATION_MODE: Dict[str, Type[Linearization]] = {
-        "sparse": th.SparseLinearization,
-        "dense": th.DenseLinearization,
-    }
-
-    LINEAR_SOLVER_MODE: Dict[str, Type[LinearSolver]] = {
-        "sparse": cast(
-            Type[LinearSolver],
-            (
-                th.BaspachoSparseSolver
-                if cast(str, cfg.solver_type) == "baspacho"
-                else th.LUCudaSparseSolver
-            )
-            if cast(str, cfg.solver_device) == "cuda"
-            else th.CholmodSparseSolver,
-        ),
-        "dense": th.CholeskyDenseSolver,
-    }
-
     pg.to(device=device)
 
     with torch.no_grad():
@@ -212,8 +190,7 @@ def run(cfg: omegaconf.OmegaConf):
         objective,
         max_iterations=cfg.inner_optim.max_iters,
         step_size=cfg.inner_optim.step_size,
-        linearization_cls=LINEARIZATION_MODE[cast(str, cfg.inner_optim.solver)],
-        linear_solver_cls=LINEAR_SOLVER_MODE[cast(str, cfg.inner_optim.solver)],
+        linear_solver_cls=getattr(th, cfg.inner_optim.linear_solver_cls),
     )
 
     # Set up Theseus layer
@@ -324,12 +301,13 @@ def run(cfg: omegaconf.OmegaConf):
         results["backward_time"] = backward_times
         results["forward_mem"] = forward_mems
         results["backward_mem"] = backward_mems
-        file = (
-            f"pgo_{cfg.solver_device}_{cfg.inner_optim.solver}_{cfg.num_poses}_"
+        fname = (
+            f"pgo_{cfg.device}_{cfg.inner_optim.linear_solver_cls.lower()}_{cfg.num_poses}_"
             f"{cfg.dataset_size}_{cfg.batch_size}.mat"
         )
+        print(fname)
         if cfg.savemat:
-            savemat(file, results)
+            savemat(fname, results)
 
     profiler.print()
     return losses

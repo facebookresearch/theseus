@@ -1,6 +1,5 @@
 seed: 1
-solver_device: "cuda"
-solver_type: "lucuda"
+device: "cuda"
 profile: True
 savemat: True
 
@@ -14,13 +13,13 @@ batch_size: 128
 
 inner_optim:
   optimizer_cls: LevenbergMarquardt
+  linear_solver_cls: LUCudaSparseSolver
   optimizer_kwargs:
     backward_mode: implicit
     verbose: true
     track_err_history: true
     __keep_final_step_size__: true
     adaptive_damping: true
-  solver: sparse
   max_iters: 10 
   step_size: 0.75
   regularize: true

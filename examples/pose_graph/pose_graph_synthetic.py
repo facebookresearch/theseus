@@ -6,8 +6,6 @@
 import cProfile
 import io
 import logging
-import os
-import pathlib
 import pstats
 import random
 import subprocess
@@ -26,6 +24,29 @@ from theseus.optimizer.linearization import Linearization
 
 # Logger
 log = logging.getLogger(__name__)
+
+
+# Simple wrapper to make cProfile profiler optional
+class Profiler:
+    def __init__(self, c_profiler: cProfile.Profile, active: bool):
+        self.c_profiler = c_profiler
+        self.active = active
+
+    def enable(self):
+        if self.active:
+            self.c_profiler.enable()
+
+    def disable(self):
+        if self.active:
+            self.c_profiler.disable()
+
+    def print(self):
+        if self.active:
+            s = io.StringIO()
+            sortby = pstats.SortKey.CUMULATIVE
+            ps = pstats.Stats(self.c_profiler, stream=s).sort_stats(sortby)
+            ps.print_stats()
+            print(s.getvalue())
 
 
 def print_histogram(
@@ -75,12 +96,32 @@ def pose_loss(
     return loss
 
 
-def run(
-    cfg: omegaconf.OmegaConf, pg: theg.PoseGraphDataset, results_path: pathlib.Path
-):
+def run(cfg: omegaconf.OmegaConf):
+    log.info((subprocess.check_output("lscpu", shell=True).strip()).decode())
+
+    torch.manual_seed(cfg.seed)
+    np.random.seed(cfg.seed)
+    random.seed(cfg.seed)
+
+    # create (or load) dataset
+    rng = torch.Generator()
+    rng.manual_seed(0)
+    dtype = torch.float64
+    pg, _ = theg.PoseGraphDataset.generate_synthetic_3D(
+        num_poses=cfg.num_poses,
+        rotation_noise=cfg.rotation_noise,
+        translation_noise=cfg.translation_noise,
+        loop_closure_ratio=cfg.loop_closure_ratio,
+        loop_closure_outlier_ratio=cfg.loop_closure_outlier_ratio,
+        batch_size=cfg.batch_size,
+        dataset_size=cfg.dataset_size,
+        generator=rng,
+        dtype=dtype,
+    )
+
     device = torch.device("cuda")
     dtype = torch.float64
-    pr = cProfile.Profile()
+    profiler = Profiler(cProfile.Profile(), cfg.profile)
 
     LINEARIZATION_MODE: Dict[str, Type[Linearization]] = {
         "sparse": th.SparseLinearization,
@@ -210,12 +251,12 @@ def run(
 
         start_event.record()
         torch.cuda.reset_peak_memory_stats()
-        pr.enable()
+        profiler.enable()
         theseus_outputs, _ = theseus_optim.forward(
             input_tensors=theseus_inputs,
             optimizer_kwargs={**cfg.inner_optim.optimizer_kwargs},
         )
-        pr.disable()
+        profiler.disable()
         end_event.record()
 
         torch.cuda.synchronize()
@@ -226,13 +267,13 @@ def run(
 
         start_event.record()
         torch.cuda.reset_peak_memory_stats()
-        pr.enable()
+        profiler.enable()
         model_optimizer.zero_grad()
         loss = (pose_loss(pose_vars, pg_batch.gt_poses) - pose_loss_ref) / pose_loss_ref
         loss.backward()
         model_optimizer.step()
         backward_mem = torch.cuda.max_memory_allocated() / 1048576
-        pr.disable()
+        profiler.disable()
         end_event.record()
 
         torch.cuda.synchronize()
@@ -287,39 +328,12 @@ def run(
         )
         savemat(file, results)
 
-    s = io.StringIO()
-    sortby = pstats.SortKey.CUMULATIVE
-    ps = pstats.Stats(pr, stream=s).sort_stats(sortby)
-    ps.print_stats()
-    print(s.getvalue())
+    profiler.print()
 
 
 @hydra.main(config_path="../configs/pose_graph", config_name="pose_graph_synthetic")
 def main(cfg):
-    log.info((subprocess.check_output("lscpu", shell=True).strip()).decode())
-
-    torch.manual_seed(cfg.seed)
-    np.random.seed(cfg.seed)
-    random.seed(cfg.seed)
-
-    # create (or load) dataset
-    rng = torch.Generator()
-    rng.manual_seed(0)
-    dtype = torch.float64
-    pg, _ = theg.PoseGraphDataset.generate_synthetic_3D(
-        num_poses=cfg.num_poses,
-        rotation_noise=cfg.rotation_noise,
-        translation_noise=cfg.translation_noise,
-        loop_closure_ratio=cfg.loop_closure_ratio,
-        loop_closure_outlier_ratio=cfg.loop_closure_outlier_ratio,
-        batch_size=cfg.batch_size,
-        dataset_size=cfg.dataset_size,
-        generator=rng,
-        dtype=dtype,
-    )
-
-    results_path = pathlib.Path(os.getcwd())
-    run(cfg, pg, results_path)
+    run(cfg)
 
 
 if __name__ == "__main__":

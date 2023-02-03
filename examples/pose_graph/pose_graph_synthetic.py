@@ -159,11 +159,6 @@ def run(cfg: omegaconf.OmegaConf):
     pose_indices: List[int] = [index for index, _ in enumerate(pg_batch.poses)]
     gt_pose_indices: List[int] = []
 
-    forward_times = []
-    backward_times = []
-    forward_mems = []
-    backward_mems = []
-
     for edge in pg_batch.edges:
         relative_pose_cost = th.Between(
             pg_batch.poses[edge.i],
@@ -290,8 +285,13 @@ def run(cfg: omegaconf.OmegaConf):
 
         print_histogram(pg_batch, theseus_outputs, "Output histogram:")
 
-        return [forward_time, backward_time, forward_mem, backward_mem]
+        return [forward_time, backward_time, forward_mem, backward_mem, loss.item()]
 
+    forward_times = []
+    backward_times = []
+    forward_mems = []
+    backward_mems = []
+    losses = []
     for epoch in range(num_epochs):
         log.info(f" ******************* EPOCH {epoch} ******************* ")
 
@@ -299,11 +299,11 @@ def run(cfg: omegaconf.OmegaConf):
         backward_time_epoch = []
         forward_mem_epoch = []
         backward_mem_epoch = []
-
+        losses_epoch = []
         for batch_idx in range(pg.num_batches):
             if batch_idx == cfg.outer_optim.max_num_batches:
                 break
-            forward_time, backward_time, forward_mem, backward_mem = run_batch(
+            forward_time, backward_time, forward_mem, backward_mem, loss = run_batch(
                 batch_idx
             )
 
@@ -311,11 +311,13 @@ def run(cfg: omegaconf.OmegaConf):
             backward_time_epoch.append(backward_time)
             forward_mem_epoch.append(forward_mem)
             backward_mem_epoch.append(backward_mem)
+            losses_epoch.append(loss)
 
         forward_times.append(forward_time_epoch)
         backward_times.append(backward_time_epoch)
         forward_mems.append(forward_mem_epoch)
         backward_mems.append(backward_mem_epoch)
+        losses.append(losses_epoch)
 
         results = omegaconf.OmegaConf.to_container(cfg)
         results["forward_time"] = forward_times
@@ -326,9 +328,11 @@ def run(cfg: omegaconf.OmegaConf):
             f"pgo_{cfg.solver_device}_{cfg.inner_optim.solver}_{cfg.num_poses}_"
             f"{cfg.dataset_size}_{cfg.batch_size}.mat"
         )
-        savemat(file, results)
+        if cfg.savemat:
+            savemat(file, results)
 
     profiler.print()
+    return losses
 
 
 @hydra.main(config_path="../configs/pose_graph", config_name="pose_graph_synthetic")

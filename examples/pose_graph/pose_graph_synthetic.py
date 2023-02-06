@@ -19,6 +19,7 @@ from scipy.io import savemat
 
 import theseus as th
 import theseus.utils.examples as theg
+from theseus.utils import Timer
 
 # Logger
 log = logging.getLogger(__name__)
@@ -92,6 +93,19 @@ def pose_loss(
     pose_loss = th.local(poses_batch, gt_poses_batch).norm(dim=1)
     loss += pose_loss.sum()
     return loss
+
+
+def _maybe_reset_cuda_peak_mem():
+    if torch.cuda.is_available():
+        torch.cuda.reset_peak_memory_stats()
+
+
+def _maybe_get_cuda_max_mem_alloc():
+    return (
+        torch.cuda.max_memory_allocated() / 1048576
+        if torch.cuda.is_available()
+        else torch.nan
+    )
 
 
 def run(cfg: omegaconf.OmegaConf):
@@ -211,8 +225,6 @@ def run(cfg: omegaconf.OmegaConf):
 
     def run_batch(batch_idx: int):
         log.info(f" ------------------- Batch {batch_idx} ------------------- ")
-        start_event = torch.cuda.Event(enable_timing=True)
-        end_event = torch.cuda.Event(enable_timing=True)
 
         pg_batch = pg.get_batch_dataset(batch_idx=batch_idx)
         theseus_inputs = get_batch_data(pg_batch, pose_indices, gt_pose_indices)
@@ -221,37 +233,34 @@ def run(cfg: omegaconf.OmegaConf):
         with torch.no_grad():
             pose_loss_ref = pose_loss(pg_batch.poses, pg_batch.gt_poses)
 
-        start_event.record()
-        torch.cuda.reset_peak_memory_stats()
-        profiler.enable()
-        theseus_outputs, _ = theseus_optim.forward(
-            input_tensors=theseus_inputs,
-            optimizer_kwargs={**cfg.inner_optim.optimizer_kwargs},
-        )
-        profiler.disable()
-        end_event.record()
-
-        torch.cuda.synchronize()
-        forward_time = start_event.elapsed_time(end_event)
-        forward_mem = torch.cuda.max_memory_allocated() / 1048576
+        timer = Timer(device)
+        with timer:
+            _maybe_reset_cuda_peak_mem()
+            profiler.enable()
+            theseus_outputs, _ = theseus_optim.forward(
+                input_tensors=theseus_inputs,
+                optimizer_kwargs={**cfg.inner_optim.optimizer_kwargs},
+            )
+            profiler.disable()
+        forward_time = 1000 * timer.elapsed_time
+        forward_mem = _maybe_get_cuda_max_mem_alloc()
         log.info(f"Forward pass took {forward_time} ms.")
-        log.info(f"Forward pass used {forward_mem} MBs.")
+        log.info(f"Forward pass used {forward_mem} GPU MBs.")
 
-        start_event.record()
-        torch.cuda.reset_peak_memory_stats()
-        profiler.enable()
-        model_optimizer.zero_grad()
-        loss = (pose_loss(pose_vars, pg_batch.gt_poses) - pose_loss_ref) / pose_loss_ref
-        loss.backward()
-        model_optimizer.step()
-        backward_mem = torch.cuda.max_memory_allocated() / 1048576
-        profiler.disable()
-        end_event.record()
-
-        torch.cuda.synchronize()
-        backward_time = start_event.elapsed_time(end_event)
+        with timer:
+            _maybe_reset_cuda_peak_mem()
+            profiler.enable()
+            model_optimizer.zero_grad()
+            loss = (
+                pose_loss(pose_vars, pg_batch.gt_poses) - pose_loss_ref
+            ) / pose_loss_ref
+            loss.backward()
+            model_optimizer.step()
+            backward_mem = _maybe_get_cuda_max_mem_alloc()
+            profiler.disable()
+        backward_time = 1000 * timer.elapsed_time
         log.info(f"Backward pass took {backward_time} ms.")
-        log.info(f"Backward pass used {backward_mem} MBs.")
+        log.info(f"Backward pass used {backward_mem} GPU MBs.")
 
         loss_value = torch.sum(loss.detach()).item()
         log.info(

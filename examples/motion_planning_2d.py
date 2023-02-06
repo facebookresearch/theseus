@@ -142,7 +142,7 @@ def run_learning_loop(cfg):
             motion_planner.objective.update(planner_inputs)
             initial_trajectory = motion_planner.get_trajectory()
             with torch.no_grad():
-                batch_error = motion_planner.objective.error_squared_norm().mean() / 2
+                batch_error = motion_planner.objective.error_metric().mean()
                 print(f"Planner MSE optim first: {batch_error.item() : 10.2f}")
 
             _, info = motion_planner.layer.forward(
@@ -163,14 +163,14 @@ def run_learning_loop(cfg):
                 )
 
             with torch.no_grad():
-                batch_error = motion_planner.objective.error_squared_norm().mean() / 2
+                batch_error = motion_planner.objective.error_metric().mean()
                 print(f"Planner MSE optim final: {batch_error.item() : 10.2f}")
 
             if cfg.do_learning:
                 gp_error, collision_error = motion_planner.get_total_squared_errors()
                 loss = 0
                 if cfg.use_mean_objective_as_loss:
-                    loss = motion_planner.objective.error_squared_norm().mean()
+                    loss = motion_planner.objective.error_metric().mean()
                     loss /= motion_planner.objective.dim()
                     loss *= cfg.obj_loss_weight
                     epoch_mean_objective_loss += loss.item()

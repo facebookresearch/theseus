@@ -244,9 +244,9 @@ def test_objective_error():
         expected_error = torch.cat([v1_data_, v2_data_], dim=1) * w
 
         if error_type == "error":
-            assert error_.allclose(expected_error)
+            torch.testing.assert_close(error_, expected_error)
         else:
-            assert error_.allclose(expected_error.norm(dim=1) ** 2)
+            torch.testing.assert_close(error_, 0.5 * (expected_error.norm(dim=1) ** 2))
 
     def _check_variables(objective, input_tensors, v1_data, v2_data, also_update):
         if also_update:
@@ -289,7 +289,7 @@ def test_objective_error():
         objective.update({"v1": v1_data, "v2": v2_data})
         error = objective.error()
         _check_error_for_data(v1_data, v2_data, error, "error")
-        error_norm_2 = objective.error_squared_norm()
+        error_norm_2 = objective.error_metric()
 
         assert error.shape == (batch_size, 2 * dof)
         _check_error_for_data(v1_data, v2_data, error_norm_2, "error_norm_2")
@@ -316,7 +316,7 @@ def test_objective_error():
 
         input_tensors = {"v1": v1_data_new, "v2": v2_data_new}
 
-        error_norm_2 = objective.error_squared_norm(
+        error_norm_2 = objective.error_metric(
             input_tensors=input_tensors, also_update=False
         )
 
@@ -352,7 +352,7 @@ def test_objective_error():
 
         input_tensors = {"v1": v1_data_new, "v2": v2_data_new}
 
-        error_norm_2 = objective.error_squared_norm(
+        error_norm_2 = objective.error_metric(
             input_tensors=input_tensors, also_update=True
         )
 

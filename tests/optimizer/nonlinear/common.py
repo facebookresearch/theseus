@@ -98,7 +98,7 @@ def _check_info(info, batch_size, max_iterations, initial_error, objective):
     assert info.err_history.shape == (batch_size, max_iterations + 1)
     assert info.err_history[:, 0].allclose(initial_error)
     assert info.err_history.argmin(dim=1).allclose(info.best_iter + 1)
-    last_error = objective.error_squared_norm() / 2
+    last_error = objective.error_metric()
     last_convergence_idx = info.converged_iter.max().item()
     assert info.err_history[:, last_convergence_idx].allclose(last_error)
 
@@ -141,7 +141,7 @@ def _check_nonlinear_least_squares_fit(
     # Initial value is B = [0, 1, ..., nvars - 1]
     values = {"coefficients": torch.arange(nvars).repeat(batch_size, 1).float()}
     objective.update(values)
-    initial_error = objective.error_squared_norm() / 2
+    initial_error = objective.error_metric()
     max_iterations = 20
     optimizer = nonlinear_optim_cls(objective)
     assert isinstance(optimizer.linear_solver, th.CholeskyDenseSolver)
@@ -195,7 +195,7 @@ def _check_nonlinear_least_squares_fit_multivar(
     # Initial value is B = [0, 1, ..., nvars - 1]
     values = dict((f"coeff{i}", i * torch.ones(batch_size, 1)) for i in range(nvars))
     objective.update(values)
-    initial_error = objective.error_squared_norm() / 2
+    initial_error = objective.error_metric()
 
     max_iterations = 20
     optimizer = nonlinear_optim_cls(objective)

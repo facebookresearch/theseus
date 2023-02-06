@@ -15,6 +15,7 @@ import numpy as np
 import torch
 
 import theseus as th
+from theseus.utils import numeric_grad
 
 torch.manual_seed(0)
 
@@ -70,6 +71,7 @@ optimizer = th.GaussNewton(
     step_size=1.0,
 )
 
+
 theseus_inputs = {
     "a": 2 * torch.ones((1, 1)).requires_grad_(),
     "b": torch.ones((1, 1)).requires_grad_(),
@@ -111,6 +113,7 @@ da_dx = torch.autograd.grad(updated_inputs["a"], data_x, retain_graph=True)[0].s
 print("\n--- backward_mode=implicit")
 print(da_dx.numpy())
 
+
 # We can also use truncated unrolling to compute the derivative:
 updated_inputs, info = theseus_optim.forward(
     theseus_inputs,
@@ -145,21 +148,20 @@ print(da_dx.numpy())
 
 
 # Next we numerically check the derivative
-with torch.no_grad():
-
-    def fn(data_x_torch):
-        theseus_inputs["x"] = data_x_torch
-        updated_inputs, _ = theseus_optim.forward(
-            theseus_inputs,
-            optimizer_kwargs={"track_best_solution": True, "verbose": False},
-        )
-        return updated_inputs["a"]
-
-    g = (
-        torch.autograd.functional.jacobian(fn, data_x.detach())[0, 0, 0]
-        .double()
-        .numpy()
+def fit_x(data_x_np):
+    theseus_inputs["x"] = (
+        torch.from_numpy(data_x_np).float().clone().requires_grad_().unsqueeze(0)
     )
+    updated_inputs, _ = theseus_optim.forward(
+        theseus_inputs, optimizer_kwargs={"track_best_solution": True, "verbose": False}
+    )
+    return updated_inputs["a"].item()
+
+
+data_x_np = data_x.detach().clone().numpy().squeeze()
+dfit_x = numeric_grad(fit_x, h=1e-4)
+g = dfit_x(data_x_np)
+
 print("\n--- Numeric derivative")
 print(g)
 

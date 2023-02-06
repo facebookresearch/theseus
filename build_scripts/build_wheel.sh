@@ -5,7 +5,7 @@
 # to install theseus.
 #
 # To use this script, from root theesus folder run 
-#    ./build_scripts/build_wheel.sh ROOT_DIR COMMIT CUDA_VERSION THESEUS_VERSION(optional) 
+#    ./build_scripts/build_wheel.sh ROOT_DIR COMMIT CUDA_VERSION THESEUS_VERSION(optional) INCLUDE_LABS(optional)
 #
 # ROOT_DIR: is the directory where the Dockerfile, tar.gz and .whl files will be stored
 #   (under a new subdirectory named theseus_docker_3.9)
@@ -13,7 +13,7 @@
 # CUDA_VERSION: the version of CUDA to use. We have tested 10.2, 11.3, 11.6, and 11.7.
 #   You can also pass "cpu" to compile without CUDA extensions.
 # THESEUS_VERSION: defaults to COMMIT, otherwise it must match the version in the commit.
-#
+# INCLUDE_LABS: if !=0, the compiled wheel also includes Theseus Labs.
 #   For example
 #    ./build_scripts/build_wheel.sh . 0.1.0 10.2
 #   
@@ -26,12 +26,19 @@ die () {
     echo >&2 "$@"
     exit 1
 }
-[ "$#" -eq 3 ] || [ "$#" -eq 4 ] || die "3 or 4 arguments required, $# provided"
+[ "$#" -eq 3 ] || [ "$#" -eq 4 ] || [ "$#" -eq 5 ] || die "3-5 arguments required, $# provided"
 ROOT_DIR=$1
 COMMIT=$2
 CUDA_VERSION=$3
 TH_VERSION=${4:-${COMMIT}}
+INCLUDE_LABS=${5:-0}
 
+if [[ ${INCLUDE_LABS} != 0 ]]
+then
+    INCLUDE_LABS_STR="1"
+else
+    INCLUDE_LABS_STR=""
+fi
 
 SUPPORTED_CUDA_VERSIONS="10.2 11.3 11.6 11.7"
 CUDA_VERSION_IS_SUPPORTED=$(echo "cpu ${SUPPORTED_CUDA_VERSIONS}" | grep -w ${CUDA_VERSION})
@@ -115,7 +122,11 @@ for PYTHON_VERSION in 3.10; do
     WORKDIR theseus
     RUN git fetch --all --tags
     RUN git checkout ${COMMIT} -b tmp_build
-    CMD BASPACHO_ROOT_DIR=/baspacho THESEUS_FORCE_CUDA=${ENABLE_CUDA} TORCH_CUDA_ARCH_LIST='${TORCH_CUDA_ARCH_LIST}' python3 -m build --no-isolation
+    CMD BASPACHO_ROOT_DIR=/baspacho \
+        THESEUS_FORCE_CUDA=${ENABLE_CUDA} \
+        TORCH_CUDA_ARCH_LIST='${TORCH_CUDA_ARCH_LIST}' \
+        INCLUDE_THESEUS_LABS='${INCLUDE_LABS_STR}' \
+        python3 -m build --no-isolation
     """ > ${DOCKER_DIR}/Dockerfile
 
     # Run the container

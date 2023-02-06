@@ -25,6 +25,13 @@ try:
             torch_cpp_ext.MINIMUM_GCC_VERSION,
             (8, 4, 99),
         )
+
+    torch_version = torch.__version__.split(".")
+    torch_geq_113 = (
+        int(torch_version[0]) > 1
+        or int(torch_version[0]) == 1
+        and int(torch_version[1]) >= 13
+    )
 except ModuleNotFoundError:
     print("Theseus installation requires torch.")
     sys.exit(1)
@@ -34,8 +41,12 @@ def parse_requirements_file(path):
     with open(path) as f:
         reqs = []
         for line in f:
+            if "functorch" in line and torch_geq_113:
+                # Don't install functorch 0.2.1 if torch 1.13 already
+                # installed
+                continue
             line = line.strip()
-            reqs.append(line.split("==")[0])
+            reqs.append(line)
     return reqs
 
 
@@ -127,6 +138,10 @@ baspacho_extension = maybe_create_baspacho_extension(compile_cuda_support)
 if baspacho_extension is not None:
     ext_modules.append(baspacho_extension)
 
+excluded_packages = []
+if not os.environ.get("INCLUDE_THESEUS_LABS"):
+    excluded_packages.append("theseus.labs")
+    print("Excluding theseus.labs")
 setuptools.setup(
     name="theseus-ai",
     version=version,
@@ -136,14 +151,14 @@ setuptools.setup(
     long_description_content_type="text/markdown",
     url="https://github.com/facebookresearch/theseus",
     keywords="differentiable optimization, nonlinear least squares, factor graphs",
-    packages=setuptools.find_packages(),
+    packages=setuptools.find_packages(exclude=tuple(excluded_packages)),
     classifiers=[
         "Programming Language :: Python :: 3",
         "License :: OSI Approved :: MIT License",
         "Intended Audience :: Science/Research",
         "Topic :: Scientific/Engineering :: Artificial Intelligence",
     ],
-    python_requires=">=3.7",
+    python_requires=">=3.8",
     install_requires=reqs_main,
     extras_require={"dev": reqs_main + reqs_dev},
     cmdclass={"build_ext": torch_cpp_ext.BuildExtension},

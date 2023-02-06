@@ -2,7 +2,7 @@
 #
 # This source code is licensed under the MIT license found in the
 # LICENSE file in the root directory of this source tree.
-__version__ = "0.1.3"
+__version__ = "0.1.4"
 
 from .constants import DeviceType as DeviceType
 
@@ -21,6 +21,8 @@ from .core import (  # usort: skip
     Vectorize,
     WelschLoss,
     as_variable,
+    masked_jacobians,
+    masked_variables,
 )
 from .geometry import (  # usort: skip
     LieGroup,

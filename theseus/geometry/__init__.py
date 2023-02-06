@@ -29,4 +29,3 @@ from .utils import (
     set_lie_tangent_enabled,
 )
 from .vector import Vector, rand_vector, randn_vector
-import theseus.geometry.functional

@@ -151,6 +151,56 @@ def test_correct_schemas_and_shared_vars():
     assert seen_cnt == [1] * 7
 
 
+def test_correct_schemas_for_autodiffcosts():
+    v1_1 = th.Vector(1)
+    v1_2 = th.Vector(1)
+    v1_3 = th.Vector(1)
+    v2_1 = th.Vector(2)
+    v2_2 = th.Vector(2)
+
+    objective = th.Objective()
+
+    def err_fn_1(optim_vars, aux_vars):
+        return
+
+    def err_fn_2(optim_vars, aux_vars):
+        return
+
+    # these two can be grouped
+    cf1 = th.AutoDiffCostFunction([v1_1, v1_2], err_fn_1, 1, aux_vars=[v2_1])
+    cf2 = th.AutoDiffCostFunction([v1_1, v1_3], err_fn_1, 1, aux_vars=[v2_2])
+    objective.add(cf1)
+    objective.add(cf2)
+
+    # these two can be grouped, but the group is different because of the err fn
+    cf3 = th.AutoDiffCostFunction([v1_2, v1_3], err_fn_2, 1, aux_vars=[v2_1])
+    cf4 = th.AutoDiffCostFunction([v1_1, v1_3], err_fn_2, 1, aux_vars=[v2_2])
+    objective.add(cf3)
+    objective.add(cf4)
+
+    vectorization = th.Vectorize(objective)
+
+    assert len(vectorization._schema_dict) == 2
+    seen_cnt = [0] * 4
+    for schema, cost_fn_wrappers in vectorization._schema_dict.items():
+        cost_fns = [w.cost_fn for w in cost_fn_wrappers]
+        vectorized_cost = vectorization._vectorized_cost_fns[schema]
+        assert isinstance(vectorized_cost, th.AutoDiffCostFunction)
+        if cf1 in cost_fns:
+            assert len(cost_fns) == 2
+            assert cf2 in cost_fns
+            assert vectorized_cost._err_fn is err_fn_1
+            seen_cnt[0] += 1
+            seen_cnt[1] += 1
+        if cf3 in cost_fns:
+            assert len(cost_fns) == 2
+            assert cf4 in cost_fns
+            assert vectorized_cost._err_fn is err_fn_2
+            seen_cnt[2] += 1
+            seen_cnt[3] += 1
+    assert seen_cnt == [1] * 4
+
+
 def _check_vectorized_wrappers(vectorization, objective):
     for w in vectorization._cost_fn_wrappers:
         for cost_fn in objective.cost_functions.values():
@@ -267,3 +317,89 @@ def test_vectorized_retract():
 
         for v1, v2 in zip(variables, variables_vectorized):
             assert v1.tensor.allclose(v2.tensor)
+
+
+# This solves a very simple objective of the form sum (wi * (xi - ti)) **2, where
+# some wi can be zero with some probability. When vectorize=True, our vectorization
+# class will compute masked batched jacobians. So, this function can be used to test
+# that the solution is the same when this feature is on/off. We also check if we
+# can do a backward pass when this masking is used.
+def _solve_fn_for_masked_jacobians(
+    batch_size, dof, num_costs, weight_cls, vectorize, device
+):
+    rng = torch.Generator()
+    rng.manual_seed(batch_size)
+    obj = th.Objective()
+    variables = [th.Vector(dof=dof, name=f"x{i}") for i in range(num_costs)]
+    targets = [
+        th.Vector(tensor=torch.randn(batch_size, dof, generator=rng), name=f"t{i}")
+        for i in range(num_costs)
+    ]
+    base_tensor = torch.ones(
+        batch_size, dof if weight_cls == th.DiagonalCostWeight else 1, device=device
+    )
+    # Wrapped into a param to pass to torch optimizer if necessary
+    params = [
+        torch.nn.Parameter(
+            base_tensor.clone() * (torch.rand(1, generator=rng).item() > 0.9)
+        )
+        for _ in range(num_costs)
+    ]
+    weights = [weight_cls(params[i]) for i in range(num_costs)]
+    for i in range(num_costs):
+        obj.add(th.Difference(variables[i], targets[i], weights[i], name=f"cf{i}"))
+
+    input_tensors = {
+        f"x{i}": torch.ones(batch_size, dof, device=device) for i in range(num_costs)
+    }
+    layer = th.TheseusLayer(
+        th.LevenbergMarquardt(obj, step_size=0.1, max_iterations=5),
+        vectorize=vectorize,
+    )
+    layer.to(device=device)
+    sol, _ = layer.forward(input_tensors)
+
+    # Check that we can backprop through this without errors
+    if vectorize:
+        optim = torch.optim.Adam(params, lr=1e-4)
+        for _ in range(5):  # do a few steps
+            optim.zero_grad()
+            layer.forward(input_tensors)
+            loss = obj.error_metric().sum()
+            loss.backward()
+            optim.step()
+
+    return sol
+
+
+@pytest.mark.parametrize("batch_size", [16])
+@pytest.mark.parametrize("dof", [1, 4])
+@pytest.mark.parametrize("num_costs", [1, 64])
+@pytest.mark.parametrize("weight_cls", [th.ScaleCostWeight, th.DiagonalCostWeight])
+def test_masked_jacobians(batch_size, dof, num_costs, weight_cls):
+    device = "cuda:0" if torch.cuda.is_available() else "cpu"
+
+    sol1 = _solve_fn_for_masked_jacobians(
+        batch_size, dof, num_costs, weight_cls, True, device
+    )
+    sol2 = _solve_fn_for_masked_jacobians(
+        batch_size, dof, num_costs, weight_cls, False, device
+    )
+
+    for i in range(num_costs):
+        torch.testing.assert_close(sol1[f"x{i}"], sol2[f"x{i}"])
+
+
+def test_masked_jacobians_called(monkeypatch):
+    called = [False]
+
+    def masked_jacobians_mock(cost_fn, mask):
+        called[0] = True
+        return cost_fn.jacobians()
+
+    monkeypatch.setattr(
+        th.core.cost_function, "masked_jacobians", masked_jacobians_mock
+    )
+
+    _solve_fn_for_masked_jacobians(128, 2, 16, th.ScaleCostWeight, True, "cpu")
+    assert called[0]

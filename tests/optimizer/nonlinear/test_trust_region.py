@@ -49,7 +49,7 @@ def test_rho(dof, linear_solver_cls):
         opt = th.Dogleg(o, linear_solver_cls=linear_solver_cls)
         o._resolve_batch_size()
         opt.linear_solver.linearization.linearize()
-        previous_err = opt._error_metric()
+        previous_err = opt.objective.error_metric()
 
         # Check rho = 1. Predicted error by TrustRegion method should
         # match actual error after step for a linear problem

@@ -2,6 +2,7 @@
 #
 # This source code is licensed under the MIT license found in the
 # LICENSE file in the root directory of this source tree.
+import warnings
 
 import pytest  # noqa: F401
 import torch
@@ -62,6 +63,18 @@ def test_operations_mypy_cast():
     try:
         import mypy.api
     except ModuleNotFoundError:
+        return
+    import sys
+
+    python_version = sys.version_info
+    if python_version[0] == 3 and (
+        python_version[1] > 10 or python_version[1] == 10 and python_version[2] > 6
+    ):
+        warnings.warn(
+            "There is a bug in mypy and Python >= 3.10.7, see "
+            "https://github.com/python/mypy/pull/13500. "
+            "Updating mypy is not working for me. Will fix this eventually."
+        )
         return
     result = mypy.api.run(["tests/geometry/point_types_mypy_check.py"])
     assert result[2] == 0

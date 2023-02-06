@@ -321,7 +321,16 @@ def _run_optimizer_test(
             cost_weight_param_name: cost_weight_fn(),
         }
         pred_vars, info = layer_to_learn.forward(
-            input_values, optimizer_kwargs={**optimizer_kwargs, **{"verbose": verbose}}
+            input_values,
+            optimizer_kwargs={
+                **optimizer_kwargs,
+                **{
+                    "verbose": verbose,
+                    "backward_mode": "implicit"
+                    if learning_method == "direct"
+                    else "unroll",
+                },
+            },
         )
         assert not (
             (info.status == th.NonlinearOptimizerStatus.START)

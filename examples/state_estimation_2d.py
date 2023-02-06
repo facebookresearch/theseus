@@ -288,7 +288,7 @@ def run_learning(mode_, path_data_, gps_targets_, measurements_):
         objective.update(theseus_inputs)
         with torch.no_grad():
             if epoch % 10 == 0:
-                print("Initial error:", objective.error_squared_norm().mean().item())
+                print("Initial error:", objective.error_metric().mean().item())
 
         for i in range(inner_loop_iters):
             theseus_inputs, _ = state_estimator.forward(

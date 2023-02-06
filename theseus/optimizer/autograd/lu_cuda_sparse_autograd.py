@@ -6,9 +6,10 @@ from typing import Any, Optional, Tuple
 import torch
 
 from ..linear_system import SparseStructure
+from .common import compute_A_grad
 
 _LUCudaSolveFunctionBwdReturnType = Tuple[
-    torch.Tensor, torch.Tensor, None, None, None, None, None, None
+    torch.Tensor, torch.Tensor, None, None, None, None, None, None, None
 ]
 
 
@@ -24,6 +25,7 @@ class LUCudaSolveFunction(torch.autograd.Function):
         solver_context: Any,  # actually CusolverLUSolver,
         damping_alpha_beta: Optional[Tuple[torch.Tensor, torch.Tensor]],
         check_factor_id,
+        detach_hessian: bool = False,
     ) -> torch.Tensor:
         if not torch.cuda.is_available():
             raise RuntimeError("Cuda not available, LUCudaSolveFunction cannot be used")
@@ -51,6 +53,10 @@ class LUCudaSolveFunction(torch.autograd.Function):
             batch_size, A_row_ptr, A_col_ind, A_val_double, AtA_row_ptr, AtA_col_ind
         )
         if damping_alpha_beta is not None:
+            damping_alpha_beta = (
+                damping_alpha_beta[0].double(),
+                damping_alpha_beta[1].double(),
+            )
             AtA_args = sparse_structure.num_cols, AtA_row_ptr, AtA_col_ind, AtA
             apply_damping(batch_size, *AtA_args, *damping_alpha_beta)
         solver_context.factor(AtA)
@@ -68,6 +74,7 @@ class LUCudaSolveFunction(torch.autograd.Function):
         ctx.sparse_structure = sparse_structure
         ctx.solver_context = solver_context
         ctx.damping_alpha_beta = damping_alpha_beta
+        ctx.detach_hessian = detach_hessian
 
         # HACK: allows to check if the context has been reused (and overwritten)
         ctx.factor_id = solver_context.factor_id if check_factor_id else None
@@ -168,32 +175,26 @@ class LUCudaSolveFunction(torch.autograd.Function):
         A_col_ind = ctx.sparse_structure.col_ind
         A_row_ptr = ctx.sparse_structure.row_ptr
         batch_size = grad_output.shape[0]
-        A_grad = torch.empty(
-            size=(batch_size, len(A_col_ind)), dtype=torch.double, device="cuda"
-        )  # return value, A's grad
-        for r in range(len(A_row_ptr) - 1):
-            start, end = A_row_ptr[r], A_row_ptr[r + 1]
-            columns = A_col_ind[start:end]  # col indices, for this row
-            A_grad[:, start:end] = (
-                b_Ax[:, r].unsqueeze(1) * H_double[:, columns]
-                - AH[:, r].unsqueeze(1) * ctx.x[:, columns]
-            )
 
-        # apply correction if there is a multiplicative damping
-        if (
-            ctx.damping_alpha_beta is not None
-            and (ctx.damping_alpha_beta[0] > 0.0).any()
-        ):
-            alpha = ctx.damping_alpha_beta[0].view(-1, 1)
-            alpha2Hx = (alpha * 2.0) * H_double * ctx.x  # componentwise product
-            A_grad -= (
-                ctx.A_val_double.to(grad_output.dtype)
-                * alpha2Hx[:, ctx.A_col_ind.type(torch.long)]
-            )
+        A_grad = compute_A_grad(
+            batch_size,
+            A_row_ptr,
+            A_col_ind,
+            ctx.b,
+            ctx.x,
+            b_Ax,
+            H_double,
+            AH,
+            ctx.damping_alpha_beta,
+            ctx.A_val_double,
+            ctx.A_col_ind,
+            ctx.detach_hessian,
+        )
 
         return (
             A_grad.to(dtype=grad_output.dtype),
             AH.to(dtype=grad_output.dtype),
+            None,
             None,
             None,
             None,

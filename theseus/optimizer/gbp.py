@@ -4,11 +4,8 @@
 # LICENSE file in the root directory of this source tree.
 
 import abc
-import math
 
 # import time
-import warnings
-from dataclasses import dataclass
 from enum import Enum
 from itertools import count
 from typing import (
@@ -23,23 +20,22 @@ from typing import (
     Union,
 )
 
-import numpy as np
 import torch
 
 import theseus as th
 import theseus.constants
 from theseus.core import CostFunction, Objective
 from theseus.geometry import Manifold
-from theseus.optimizer import Optimizer, VariableOrdering, ManifoldGaussian
+from theseus.optimizer import VariableOrdering, ManifoldGaussian
 from theseus.optimizer.nonlinear.nonlinear_optimizer import (
     BackwardMode,
+    NonlinearOptimizer,
     NonlinearOptimizerInfo,
     NonlinearOptimizerStatus,
 )
 
 """
 TODO
-- replace generic nonlinear optimizer components.
 - Remove implicit backward mode with Gauss-Newton, or at least modify it
 to make sure it detaches the hessian.
 
@@ -64,21 +60,6 @@ Utitily functions
 EndIterCallbackType = Callable[
     ["GaussianBeliefPropagation", NonlinearOptimizerInfo, None, int], NoReturn
 ]
-
-
-# Same of NonlinearOptimizerParams but without step size
-@dataclass
-class GBPOptimizerParams:
-    abs_err_tolerance: float
-    rel_err_tolerance: float
-    max_iterations: int
-
-    def update(self, params_dict):
-        for param, value in params_dict.items():
-            if hasattr(self, param):
-                setattr(self, param, value)
-            else:
-                raise ValueError(f"Invalid nonlinear optimizer parameter {param}.")
 
 
 class GBPSchedule(Enum):
@@ -123,10 +104,12 @@ class Message(ManifoldGaussian):
                 new_mean_i = var.__class__(var.dof())
             else:
                 new_mean_i = var.__class__()
-            repeats = torch.ones(var.ndim, dtype=int)
+            repeats = torch.ones(var.ndim).int()
             repeats[0] = batch_size
-            new_mean_i = new_mean_i.tensor.repeat(repeats.tolist())
-            new_mean_i = new_mean_i.to(dtype=self.dtype, device=self.device)
+            new_mean_i.tensor = new_mean_i.tensor.repeat(repeats.tolist())
+            new_mean_i.tensor = new_mean_i.tensor.to(
+                dtype=self.dtype, device=self.device
+            )
             new_mean.append(new_mean_i)
         new_precision = torch.zeros(batch_size, self.dof, self.dof).to(
             dtype=self.dtype, device=self.device
@@ -438,7 +421,7 @@ class Factor:
 
 
 # Follows notation from https://arxiv.org/pdf/2202.03314.pdf
-class GaussianBeliefPropagation(Optimizer, abc.ABC):
+class GaussianBeliefPropagation(NonlinearOptimizer, abc.ABC):
     def __init__(
         self,
         objective: Objective,
@@ -451,175 +434,6 @@ class GaussianBeliefPropagation(Optimizer, abc.ABC):
 
         # ordering is required to identify which messages to send where
         self.ordering = VariableOrdering(objective, default_order=True)
-
-        self.params = GBPOptimizerParams(
-            abs_err_tolerance, rel_err_tolerance, max_iterations
-        )
-
-    """
-    Copied and slightly modified from nonlinear optimizer class
-    GBP class should inherit these functions.
-    """
-
-    def set_params(self, **kwargs):
-        self.params.update(kwargs)
-
-    def _check_convergence(self, err: torch.Tensor, last_err: torch.Tensor):
-        assert not torch.is_grad_enabled()
-        if err.abs().mean() < theseus.constants.EPS:
-            return torch.ones_like(err).bool()
-
-        abs_error = (last_err - err).abs()
-        rel_error = abs_error / last_err
-        return (abs_error < self.params.abs_err_tolerance).logical_or(
-            rel_error < self.params.rel_err_tolerance
-        )
-
-    def _maybe_init_best_solution(
-        self, do_init: bool = False
-    ) -> Optional[Dict[str, torch.Tensor]]:
-        if not do_init:
-            return None
-        solution_dict = {}
-        for var in self.ordering:
-            solution_dict[var.name] = var.tensor.detach().clone().cpu()
-        return solution_dict
-
-    def _init_info(
-        self,
-        track_best_solution: bool,
-        track_err_history: bool,
-        track_state_history: bool,
-    ) -> NonlinearOptimizerInfo:
-        with torch.no_grad():
-            last_err = self.objective.error_squared_norm() / 2
-        best_err = last_err.clone() if track_best_solution else None
-        if track_err_history:
-            err_history = (
-                torch.ones(self.objective.batch_size, self.params.max_iterations + 1)
-                * math.inf
-            )
-            assert last_err.grad_fn is None
-            err_history[:, 0] = last_err.clone().cpu()
-        else:
-            err_history = None
-
-        if track_state_history:
-            state_history = {}
-            for var in self.objective.optim_vars.values():
-                state_history[var.name] = (
-                    torch.ones(
-                        self.objective.batch_size,
-                        *var.shape[1:],
-                        self.params.max_iterations + 1,
-                    )
-                    * math.inf
-                )
-                state_history[var.name][..., 0] = var.tensor.detach().clone().cpu()
-        else:
-            state_history = None
-
-        return NonlinearOptimizerInfo(
-            best_solution=self._maybe_init_best_solution(do_init=track_best_solution),
-            last_err=last_err,
-            best_err=best_err,
-            status=np.array(
-                [NonlinearOptimizerStatus.START] * self.objective.batch_size
-            ),
-            converged_iter=torch.zeros_like(last_err, dtype=torch.long),
-            best_iter=torch.zeros_like(last_err, dtype=torch.long),
-            err_history=err_history,
-            state_history=state_history,
-        )
-
-    def _update_state_history(self, iter_idx: int, info: NonlinearOptimizerInfo):
-        for var in self.objective.optim_vars.values():
-            info.state_history[var.name][..., iter_idx + 1] = (
-                var.tensor.detach().clone().cpu()
-            )
-
-    def _update_info(
-        self,
-        info: NonlinearOptimizerInfo,
-        current_iter: int,
-        err: torch.Tensor,
-        converged_indices: torch.Tensor,
-    ):
-        info.converged_iter += 1 - converged_indices.long()
-        if info.err_history is not None:
-            assert err.grad_fn is None
-            info.err_history[:, current_iter + 1] = err.clone().cpu()
-        if info.state_history is not None:
-            self._update_state_history(current_iter, info)
-
-        if info.best_solution is not None:
-            # Only copy best solution if needed (None means track_best_solution=False)
-            assert info.best_err is not None
-            good_indices = err < info.best_err
-            info.best_iter[good_indices] = current_iter
-            for var in self.ordering:
-                info.best_solution[var.name][good_indices] = (
-                    var.tensor.detach().clone()[good_indices].cpu()
-                )
-
-            info.best_err = torch.minimum(info.best_err, err)
-
-        converged_indices = self._check_convergence(err, info.last_err)
-        info.status[
-            np.array(converged_indices.detach().cpu())
-        ] = NonlinearOptimizerStatus.CONVERGED
-
-    # Modifies the (no grad) info in place to add data of grad loop info
-    def _merge_infos(
-        self,
-        grad_loop_info: NonlinearOptimizerInfo,
-        num_no_grad_iters: int,
-        num_grad_iters: int,
-        info: NonlinearOptimizerInfo,
-    ):
-        total_iters = num_no_grad_iters + num_grad_iters
-        # we add + 1 to all indices to account for the initial values
-        info_idx = slice(num_no_grad_iters + 1, total_iters + 1)
-        grad_info_idx = slice(1, num_grad_iters + 1)
-        # Concatenate error histories
-        if info.err_history is not None:
-            info.err_history[:, info_idx] = grad_loop_info.err_history[:, grad_info_idx]
-        if info.state_history is not None:
-            for var in self.objective.optim_vars.values():
-                info.state_history[var.name][
-                    ..., info_idx
-                ] = grad_loop_info.state_history[var.name][..., grad_info_idx]
-
-        # Merge best solution and best error
-        if info.best_solution is not None:
-            best_solution = {}
-            best_err_no_grad = info.best_err
-            best_err_grad = grad_loop_info.best_err
-            idx_no_grad = (best_err_no_grad < best_err_grad).cpu().view(-1, 1)
-            best_err = torch.minimum(best_err_no_grad, best_err_grad)
-            for var_name in info.best_solution:
-                sol_no_grad = info.best_solution[var_name]
-                sol_grad = grad_loop_info.best_solution[var_name]
-                best_solution[var_name] = torch.where(
-                    idx_no_grad, sol_no_grad, sol_grad
-                )
-            info.best_solution = best_solution
-            info.best_err = best_err
-
-        # Merge the converged status into the info from the detached loop,
-        M = info.status == NonlinearOptimizerStatus.MAX_ITERATIONS
-        assert np.all(
-            (grad_loop_info.status[M] == NonlinearOptimizerStatus.MAX_ITERATIONS)
-            | (grad_loop_info.status[M] == NonlinearOptimizerStatus.CONVERGED)
-        )
-        info.status[M] = grad_loop_info.status[M]
-        info.converged_iter[M] = (
-            info.converged_iter[M] + grad_loop_info.converged_iter[M]
-        )
-        # If didn't coverge in either loop, remove misleading converged_iter value
-        info.converged_iter[
-            M & (grad_loop_info.status == NonlinearOptimizerStatus.MAX_ITERATIONS)
-        ] = -1
 
     """
     GBP functions
@@ -1000,7 +814,7 @@ class GaussianBeliefPropagation(Optimizer, abc.ABC):
             # check for convergence
             if it_ >= 0:
                 with torch.no_grad():
-                    err = self.objective.error_squared_norm() / 2
+                    err = self.objective.error_metric() / 2
                     self._update_info(info, it_, err, converged_indices)
                     if verbose:
                         print(
@@ -1044,11 +858,11 @@ class GaussianBeliefPropagation(Optimizer, abc.ABC):
         **kwargs,
     ) -> NonlinearOptimizerInfo:
         backward_mode = BackwardMode.resolve(backward_mode)
+        kwargs_plus_bwd_mode = {**kwargs, **{"backward_mode": backward_mode}}
         if backward_mode == BackwardMode.DLM:
             raise ValueError(
                 "DLM backward mode not supported for Gaussian Belief Propagation optimizer."
             )
-
         with torch.no_grad():
             info = self._init_info(
                 track_best_solution, track_err_history, track_state_history
@@ -1083,9 +897,12 @@ class GaussianBeliefPropagation(Optimizer, abc.ABC):
                 f"GBP optimizer. Iteration: 0. " f"Error: {info.last_err.mean().item()}"
             )
 
+        backward_num_iters, no_grad_num_iters = self._split_backward_iters(
+            **kwargs_plus_bwd_mode
+        )
         if backward_mode == BackwardMode.UNROLL:
             self._optimize_loop(
-                num_iter=self.params.max_iterations,
+                num_iter=backward_num_iters,
                 info=info,
                 verbose=verbose,
                 relin_threshold=relin_threshold,
@@ -1096,7 +913,6 @@ class GaussianBeliefPropagation(Optimizer, abc.ABC):
                 end_iter_callback=end_iter_callback,
                 **kwargs,
             )
-
             # If didn't coverge, remove misleading converged_iter value
             info.converged_iter[
                 info.status == NonlinearOptimizerStatus.MAX_ITERATIONS
@@ -1112,28 +928,13 @@ class GaussianBeliefPropagation(Optimizer, abc.ABC):
                         f"implicit_method must be one of {implicit_methods}, "
                         f"but got {implicit_method}"
                     )
-                backward_num_iterations = 0
-            else:
-                if "backward_num_iterations" not in kwargs:
-                    raise ValueError(
-                        "backward_num_iterations expected but not received"
-                    )
-                if kwargs["backward_num_iterations"] > self.params.max_iterations:
-                    warnings.warn(
-                        f"Input backward_num_iterations "
-                        f"(={kwargs['backward_num_iterations']}) > "
-                        f"max_iterations (={self.params.max_iterations}). "
-                        f"Using backward_num_iterations=max_iterations."
-                    )
-                backward_num_iterations = min(
-                    kwargs["backward_num_iterations"], self.params.max_iterations
-                )
+                backward_num_iters = 0
+                no_grad_num_iters = self.params.max_iterations
 
-            num_no_grad_iter = self.params.max_iterations - backward_num_iterations
             with torch.no_grad():
                 # actual_num_iters could be < num_iter due to early convergence
                 no_grad_iters_done = self._optimize_loop(
-                    num_iter=num_no_grad_iter,
+                    num_iter=no_grad_num_iters,
                     info=info,
                     verbose=verbose,
                     relin_threshold=relin_threshold,
@@ -1150,7 +951,7 @@ class GaussianBeliefPropagation(Optimizer, abc.ABC):
             )
             if backward_mode == BackwardMode.TRUNCATED:
                 grad_iters_done = self._optimize_loop(
-                    num_iter=backward_num_iterations,
+                    num_iter=no_grad_num_iters,
                     info=grad_loop_info,
                     verbose=verbose,
                     relin_threshold=relin_threshold,
@@ -1180,7 +981,7 @@ class GaussianBeliefPropagation(Optimizer, abc.ABC):
                     force_update=True,
                 )
                 if verbose:
-                    err = self.objective.error_squared_norm() / 2
+                    err = self.objective.error_metric() / 2
                     print(
                         f"Nonlinear optimizer implcit step. Error: {err.mean().item()}"
                     )

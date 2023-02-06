@@ -5,6 +5,7 @@
 import time
 from typing import Any, Callable, List, Optional, Type
 
+import numpy as np
 import torch
 import torch.nn as nn
 
@@ -112,6 +113,35 @@ def numeric_jacobian(
     return jacs
 
 
+# Returns a function that approximates a function's gradient with a central difference.
+def numeric_grad(
+    f: Callable[[np.ndarray], np.ndarray], h: float = 1e-4
+) -> Callable[[np.ndarray], np.ndarray]:
+    def df(x: np.ndarray):
+        assert x.ndim == 1
+        n = x.shape[0]
+        g = np.zeros_like(x)
+        for i in range(n):
+            h_i = np.zeros_like(x)
+            h_i[i] = h
+            g[i] = (f(x + h_i) - f(x - h_i)) / (2.0 * h)
+        return g
+
+    return df
+
+
+# A basic timer utility that adapts to the device. Useful for removing
+# boilerplate code when benchmarking tasks.
+# For CPU it uses time.perf_counter_ns()
+# For GPU it uses torch.cuda.Event()
+#
+# Usage:
+#
+# from thesus.utils import Timer
+#
+# with Timer("cuda:0") as timer:
+#    do_some_stuff()
+# print(timer.elapsed_time)
 class Timer:
     def __init__(self, device: th.DeviceType) -> None:
         self.device = torch.device(device)

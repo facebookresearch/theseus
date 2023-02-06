@@ -365,7 +365,7 @@ def _solve_fn_for_masked_jacobians(
         for _ in range(5):  # do a few steps
             optim.zero_grad()
             layer.forward(input_tensors)
-            loss = obj.error_squared_norm().sum()
+            loss = obj.error_metric().sum()
             loss.backward()
             optim.step()
 

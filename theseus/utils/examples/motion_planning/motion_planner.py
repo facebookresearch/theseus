@@ -395,7 +395,7 @@ class MotionPlanner:
     def error(self) -> float:
         # Returns the current MSE of the optimization problem
         with torch.no_grad():
-            return self.objective.error_squared_norm().mean().item()
+            return self.objective.error_metric().mean().item()
 
     def get_trajectory(
         self,

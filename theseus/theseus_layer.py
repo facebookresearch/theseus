@@ -201,7 +201,7 @@ class TheseusLayerDLMForward(torch.autograd.Function):
             # Precompute and cache this.
             with torch.enable_grad():
                 grad_sol = torch.autograd.grad(
-                    objective.error_squared_norm().sum(),
+                    objective.error_metric().sum(),
                     differentiable_tensors,
                     allow_unused=True,
                 )
@@ -253,7 +253,7 @@ class TheseusLayerDLMForward(torch.autograd.Function):
         # Compute gradients.
         with torch.enable_grad():
             grad_perturbed = torch.autograd.grad(
-                bwd_objective.error_squared_norm().sum(),
+                bwd_objective.error_metric().sum(),
                 differentiable_tensors,
                 allow_unused=True,
             )
@@ -289,7 +289,9 @@ class _DLMPerturbation(CostFunction):
         self.register_aux_vars(["epsilon", "grad"])
 
     def error(self) -> torch.Tensor:
-        err = (
+        # Theseus optimizes SUM(err ** 2) / 2. We add sqrt(2) so
+        # that when expanding the objective is SUM(err_orig) /2 + ||dlm_error||**2
+        err = np.sqrt(2) * (
             self.epsilon.tensor.view((-1,) + (1,) * (self.var.ndim - 1))
             * self.var.tensor
             - 0.5 * self.grad.tensor
@@ -298,7 +300,7 @@ class _DLMPerturbation(CostFunction):
 
     def jacobians(self) -> Tuple[List[torch.Tensor], torch.Tensor]:
         d = self.dim()
-        aux = (
+        aux = np.sqrt(2) * (
             torch.eye(d, dtype=self.epsilon.dtype, device=self.epsilon.device)
             .unsqueeze(0)
             .expand(self.var.shape[0], d, d)

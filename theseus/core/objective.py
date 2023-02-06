@@ -2,11 +2,20 @@
 #
 # This source code is licensed under the MIT license found in the
 # LICENSE file in the root directory of this source tree.
-
 import itertools
 import warnings
 from collections import OrderedDict
-from typing import Any, Callable, Dict, Iterable, List, Optional, Sequence, Union
+from typing import (
+    Any,
+    Callable,
+    Dict,
+    Iterable,
+    List,
+    Optional,
+    Protocol,
+    Sequence,
+    Union,
+)
 
 import torch
 
@@ -19,11 +28,24 @@ from .cost_weight import CostWeight
 from .variable import Variable
 
 
+class ErrorMetric(Protocol):
+    def __call__(self, error_vector: torch.Tensor) -> torch.Tensor:
+        pass
+
+
+def error_squared_norm_fn(error_vector: torch.Tensor) -> torch.Tensor:
+    return (error_vector**2).sum(dim=1) / 2
+
+
 # If dtype is None, uses torch.get_default_dtype()
 class Objective:
     """An objective function to optimize."""
 
-    def __init__(self, dtype: Optional[torch.dtype] = None):
+    def __init__(
+        self,
+        dtype: Optional[torch.dtype] = None,
+        error_metric_fn: Optional[ErrorMetric] = None,
+    ):
         # maps variable names to the variable objects
         self.optim_vars: OrderedDict[str, Manifold] = OrderedDict()
 
@@ -99,6 +121,12 @@ class Objective:
         self._last_vectorization_has_grad = False
 
         self._vectorized = False
+
+        # Computes an aggregation function for the error vector derived from costs
+        # By default, this computes the squared norm of the error vector, divided by 2
+        self._error_metric_fn = (
+            error_metric_fn if error_metric_fn is not None else error_squared_norm_fn
+        )
 
     def _add_function_variables(
         self,
@@ -425,14 +453,27 @@ class Objective:
             self.update(old_tensors, _update_vectorization=False)
         return error_vector
 
+    def error_metric(
+        self,
+        input_tensors: Optional[Dict[str, torch.Tensor]] = None,
+        also_update: bool = False,
+    ) -> torch.Tensor:
+        return self._error_metric_fn(
+            self.error(input_tensors=input_tensors, also_update=also_update)
+        )
+
     def error_squared_norm(
         self,
         input_tensors: Optional[Dict[str, torch.Tensor]] = None,
         also_update: bool = False,
     ) -> torch.Tensor:
-        return (
-            self.error(input_tensors=input_tensors, also_update=also_update) ** 2
-        ).sum(dim=1)
+        warnings.warn(
+            "Objective.error_squared_norm() is deprecated "
+            "and will be removed in future versions. "
+            "Please use Objective.error_metric() instead.",
+            DeprecationWarning,
+        )
+        return self.error_metric(input_tensors=input_tensors, also_update=also_update)
 
     def copy(self) -> "Objective":
         new_objective = Objective(dtype=self.dtype)

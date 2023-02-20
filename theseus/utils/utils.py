@@ -130,6 +130,55 @@ def numeric_grad(
     return df
 
 
+# Updates the given variable with a random tensor of the same shape as the original.
+def _rand_fill_(v: th.Variable):
+    if isinstance(v, (th.SE2, th.SO3, th.SE3, th.SO3)):
+        v.update(v.rand(v.shape[0], dtype=v.dtype, device=v.device).tensor)
+    else:
+        v.update(torch.rand_like(v.tensor))
+
+
+# Automatically checks the jacobians of the given cost function a number of times.
+#
+# Computes the manifold jacobians of the given cost function with respect to all
+# optimization variables, evaluated at randomly sampled values
+# of the optimization and auxiliary variable, and compares them with the corresponding
+# ones computed by torch autograd. By default, only checks once, but more checks can
+# be specified, with one set of sampled variables per each. The jacobians are
+# compared using the infinity norm of the jacobian matrix, at the specified tolerance.
+@torch.no_grad()
+def check_jacobians(cf: th.CostFunction, num_checks: int = 1, tol: float = 1.0e-3):
+    from theseus.core.cost_function import _tmp_tensors
+
+    optim_vars: List[th.Manifold] = list(cf.optim_vars)
+    aux_vars = list(cf.optim_vars)
+
+    def autograd_fn(*optim_var_tensors):
+        for v, t in zip(optim_vars, optim_var_tensors):
+            v.update(t)
+        return cf.error()
+
+    with _tmp_tensors(optim_vars), _tmp_tensors(aux_vars):
+        for _ in range(num_checks):
+            for v in optim_vars + aux_vars:
+                _rand_fill_(v)
+
+            autograd_jac = torch.autograd.functional.jacobian(
+                autograd_fn, tuple(v.tensor for v in optim_vars)
+            )
+            jac, _ = cf.jacobians()
+            for idx, v in enumerate(optim_vars):
+                j1 = jac[idx]
+                j2 = autograd_jac[idx]
+                aux = torch.arange(j1.shape[0])
+                sparse_j2 = v.project(j2[aux, :, aux, :], is_sparse=True)
+                if (j1 - sparse_j2).abs().max() > tol:
+                    raise RuntimeError(
+                        f"Jacobian for variable {v.name} appears incorrect to the "
+                        "given tolerance."
+                    )
+
+
 # A basic timer utility that adapts to the device. Useful for removing
 # boilerplate code when benchmarking tasks.
 # For CPU it uses time.perf_counter_ns()

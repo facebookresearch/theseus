@@ -18,7 +18,7 @@ DIM: int = 3
 _module = get_module(__name__)
 
 
-def check_group_tensor(tensor: torch.Tensor) -> bool:
+def check_group_tensor(tensor: torch.Tensor):
     with torch.no_grad():
         if tensor.ndim != 3 or tensor.shape[1:] != (3, 3):
             raise ValueError("SO3 data tensors can only be 3x3 matrices.")
@@ -33,13 +33,15 @@ def check_group_tensor(tensor: torch.Tensor) -> bool:
         ).abs().max().item() < MATRIX_EPS
         _check &= (torch.linalg.det(tensor) - 1).abs().max().item() < MATRIX_EPS
 
-    return _check
+    if not _check:
+        raise ValueError("Invalid data tensor for SO3.")
 
 
-def check_tangent_vector(tangent_vector: torch.Tensor) -> bool:
+def check_tangent_vector(tangent_vector: torch.Tensor):
     _check = tangent_vector.ndim == 3 and tangent_vector.shape[1:] == (3, 1)
     _check |= tangent_vector.ndim == 2 and tangent_vector.shape[1] == 3
-    return _check
+    if not _check:
+        raise ValueError("Tangent vectors of SO3 should be 3-D vectors.")
 
 
 def check_hat_matrix(matrix: torch.Tensor):
@@ -95,7 +97,6 @@ def rand(
         generator=generator,
         dtype=dtype,
         device=device,
-        requires_grad=requires_grad,
     )
     u1 = u[0]
     u2, u3 = u[1:3] * 2 * constants.PI
@@ -112,7 +113,9 @@ def rand(
         dim=1,
     )
     assert quaternion.shape == (size[0], 4)
-    return quaternion_to_rotation(quaternion)
+    ret = quaternion_to_rotation(quaternion)
+    ret.requires_grad_(requires_grad)
+    return ret
 
 
 # -----------------------------------------------------------------------------
@@ -127,7 +130,7 @@ def randn(
 ) -> torch.Tensor:
     if len(size) != 1:
         raise ValueError("The size should be 1D.")
-    return exp(
+    ret = exp(
         constants.PI
         * torch.randn(
             size[0],
@@ -135,17 +138,17 @@ def randn(
             generator=generator,
             dtype=dtype,
             device=device,
-            requires_grad=requires_grad,
         )
     )
+    ret.requires_grad_(requires_grad)
+    return ret
 
 
 # -----------------------------------------------------------------------------
 # Exponential Map
 # -----------------------------------------------------------------------------
 def _exp_impl(tangent_vector: torch.Tensor) -> torch.Tensor:
-    if not check_tangent_vector(tangent_vector):
-        raise ValueError("Tangent vectors of SO3 should be 3-D vectors.")
+    check_tangent_vector(tangent_vector)
     tangent_vector = tangent_vector.view(-1, 3)
     theta = torch.linalg.norm(tangent_vector, dim=1, keepdim=True).unsqueeze(1)
     theta2 = theta**2
@@ -184,8 +187,7 @@ def _exp_impl(tangent_vector: torch.Tensor) -> torch.Tensor:
 def _jexp_impl(
     tangent_vector: torch.Tensor,
 ) -> Tuple[List[torch.Tensor], torch.Tensor]:
-    if not check_tangent_vector(tangent_vector):
-        raise ValueError("Tangent vectors of SO3 should be 3-D vectors.")
+    check_tangent_vector(tangent_vector)
     tangent_vector = tangent_vector.view(-1, 3)
     theta = torch.linalg.norm(tangent_vector, dim=1, keepdim=True).unsqueeze(1)
     theta2 = theta**2
@@ -278,9 +280,7 @@ exp, jexp = lie_group.UnaryOperatorFactory(_module, "exp")
 # Logarithm Map
 # -----------------------------------------------------------------------------
 def _log_impl(group: torch.Tensor) -> torch.Tensor:
-    if not check_group_tensor(group):
-        raise ValueError("Invalid data tensor for SO3.")
-
+    check_group_tensor(group)
     sine_axis = group.new_zeros(group.shape[0], 3)
     sine_axis[:, 0] = 0.5 * (group[:, 2, 1] - group[:, 1, 2])
     sine_axis[:, 1] = 0.5 * (group[:, 0, 2] - group[:, 2, 0])
@@ -328,9 +328,7 @@ def _log_impl(group: torch.Tensor) -> torch.Tensor:
 
 
 def _jlog_impl(group: torch.Tensor) -> Tuple[List[torch.Tensor], torch.Tensor]:
-    if not check_group_tensor(group):
-        raise ValueError("Invalid data tensor for SO3.")
-
+    check_group_tensor(group)
     sine_axis = group.new_zeros(group.shape[0], 3)
     sine_axis[:, 0] = 0.5 * (group[:, 2, 1] - group[:, 1, 2])
     sine_axis[:, 1] = 0.5 * (group[:, 0, 2] - group[:, 2, 0])
@@ -436,8 +434,7 @@ log, jlog = lie_group.UnaryOperatorFactory(_module, "log")
 # Adjoint Transformation
 # -----------------------------------------------------------------------------
 def _adjoint_impl(group: torch.Tensor) -> torch.Tensor:
-    if not check_group_tensor(group):
-        raise ValueError("Invalid data tensor for SO3.")
+    check_group_tensor(group)
     return group
 
 
@@ -459,15 +456,14 @@ class Adjoint(lie_group.UnaryOperator):
 _adjoint_autograd_fn = Adjoint.apply
 _jadjoint_autograd_fn = None
 
-adjoint = lie_group.UnaryOperatorFactory(_module, "adjoint")
+adjoint, jadjoint = lie_group.UnaryOperatorFactory(_module, "adjoint")
 
 
 # -----------------------------------------------------------------------------
 # Inverse
 # -----------------------------------------------------------------------------
 def _inverse_impl(group: torch.Tensor) -> torch.Tensor:
-    if not check_group_tensor(group):
-        raise ValueError("Invalid data tensor for SO3.")
+    check_group_tensor(group)
     return group.transpose(1, 2)
 
 
@@ -495,9 +491,7 @@ inverse, jinverse = lie_group.UnaryOperatorFactory(_module, "inverse")
 # Hat
 # -----------------------------------------------------------------------------
 def _hat_impl(tangent_vector: torch.Tensor) -> torch.Tensor:
-    if not check_tangent_vector(tangent_vector):
-        raise ValueError("Tangent vectors of SO3 should be 3-D vectors.")
-
+    check_tangent_vector(tangent_vector)
     matrix = tangent_vector.new_zeros(tangent_vector.shape[0], 3, 3)
     matrix[:, 0, 1] = -tangent_vector[:, 2].view(-1)
     matrix[:, 0, 2] = tangent_vector[:, 1].view(-1)
@@ -536,7 +530,7 @@ class Hat(lie_group.UnaryOperator):
 _hat_autograd_fn = Hat.apply
 _jhat_autograd_fn = None
 
-hat = lie_group.UnaryOperatorFactory(_module, "hat")
+hat, jhat = lie_group.UnaryOperatorFactory(_module, "hat")
 
 
 # -----------------------------------------------------------------------------
@@ -574,23 +568,23 @@ class Vee(lie_group.UnaryOperator):
 _vee_autograd_fn = Vee.apply
 _jvee_autograd_fn = None
 
-vee = lie_group.UnaryOperatorFactory(_module, "vee")
+vee, jvee = lie_group.UnaryOperatorFactory(_module, "vee")
 
 
 # -----------------------------------------------------------------------------
 # Compose
 # -----------------------------------------------------------------------------
 def _compose_impl(group0: torch.Tensor, group1: torch.Tensor) -> torch.Tensor:
-    if not check_group_tensor(group0) or not check_group_tensor(group1):
-        raise ValueError("Invalid data tensor for SO3.")
+    check_group_tensor(group0)
+    check_group_tensor(group1)
     return group0 @ group1
 
 
 def _jcompose_impl(
     group0: torch.Tensor, group1: torch.Tensor
 ) -> Tuple[List[torch.Tensor], torch.Tensor]:
-    if not check_group_tensor(group0) or not check_group_tensor(group1):
-        raise ValueError("Invalid data tensor for SO3.")
+    check_group_tensor(group0)
+    check_group_tensor(group1)
     jacobians = []
     jacobians.append(group1.transpose(1, 2))
     jacobians.append(group0.new_zeros(group0.shape[0], 3, 3))
@@ -784,7 +778,7 @@ class Lift(lie_group.UnaryOperator):
 _lift_autograd_fn = Lift.apply
 _jlift_autograd_fn = None
 
-lift = lie_group.UnaryOperatorFactory(_module, "lift")
+lift, jlift = lie_group.UnaryOperatorFactory(_module, "lift")
 
 
 # -----------------------------------------------------------------------------
@@ -824,15 +818,14 @@ class Project(lie_group.UnaryOperator):
 _project_autograd_fn = Project.apply
 _jproject_autograd_fn = None
 
-project = lie_group.UnaryOperatorFactory(_module, "project")
+project, jproject = lie_group.UnaryOperatorFactory(_module, "project")
 
 
 # -----------------------------------------------------------------------------
 # Left Act
 # -----------------------------------------------------------------------------
 def _left_act_impl(group: torch.Tensor, matrix: torch.Tensor) -> torch.Tensor:
-    if not check_group_tensor(group):
-        raise ValueError("Invalid data tensor for SO3.")
+    check_group_tensor(group)
     check_left_act_matrix(matrix)
 
     return torch.einsum("nij,n...jk->n...ik", group, matrix)
@@ -861,7 +854,7 @@ class LeftAct(lie_group.BinaryOperator):
 _left_act_autograd_fn = LeftAct.apply
 _jleft_act_autograd_fn = None
 
-left_act = lie_group.BinaryOperatorFactory(_module, "left_act")
+left_act, jleft_act = lie_group.BinaryOperatorFactory(_module, "left_act")
 
 
 # -----------------------------------------------------------------------------
@@ -895,4 +888,4 @@ class LeftProject(lie_group.BinaryOperator):
 _left_project_autograd_fn = LeftProject.apply
 _jleft_project_autograd_fn = _jleft_project_impl
 
-left_project = lie_group.BinaryOperatorFactory(_module, "left_project")
+left_project, jleft_project = lie_group.BinaryOperatorFactory(_module, "left_project")

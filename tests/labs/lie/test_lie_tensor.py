@@ -31,8 +31,8 @@ def _get_lie_tensor_inputs(input_types, sampled_inputs, ltype):
     x = _get_typed_tensor(0)
     if len(sampled_inputs) == 1:
         # For static method (exp, hat, vee, lift, project), we need to
-        # specify the ltype as the first input
-        return (x,) if input_types[0][0] == "group" else (ltype, x)
+        # specify the ltype as the second input
+        return (x,) if input_types[0][0] == "group" else (x, ltype)
     y = _get_typed_tensor(1)
     return (x, y)
 
@@ -95,10 +95,18 @@ def test_op(op_name, ltype_str, batch_size, rng):
         # Use a dummy group for static ops (e.g., exp, hat)
         c = (
             lie.rand(1, ltype, generator=rng, dtype=torch.float32)
-            if isinstance(lie_tensor_inputs[0], lie.ltype)
+            if isinstance(lie_tensor_inputs[-1], lie.ltype)
             else lie_tensor_inputs[0]
         )
-        c_inputs = () if len(lie_tensor_inputs) == 1 else (lie_tensor_inputs[1],)
+        c_inputs = (
+            ()
+            if len(lie_tensor_inputs) == 1
+            else (
+                lie_tensor_inputs[0]
+                if isinstance(lie_tensor_inputs[1], lie.ltype)
+                else lie_tensor_inputs[1],
+            )
+        )
         out_c = _to_functional_fmt(getattr(c, op_name)(*c_inputs))
         torch.testing.assert_close(out, out_c)
 

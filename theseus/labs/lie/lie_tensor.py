@@ -353,23 +353,23 @@ def inv(group: LieTensor) -> LieTensor:
     return group.inv()
 
 
-def exp(ltype: _ltype, tangent_vector: torch.Tensor) -> "LieTensor":  # type: ignore
+def exp(tangent_vector: torch.Tensor, ltype: _ltype) -> "LieTensor":
     return LieTensor(_eval_op(_get_fn_lib(ltype), "exp", tangent_vector), ltype)
 
 
-def hat(ltype: _ltype, tangent_vector: torch.Tensor) -> torch.Tensor:
+def hat(tangent_vector: torch.Tensor, ltype: _ltype) -> torch.Tensor:
     return _eval_op(_get_fn_lib(ltype), "hat", tangent_vector)
 
 
-def vee(ltype: _ltype, matrix: torch.Tensor) -> torch.Tensor:
+def vee(matrix: torch.Tensor, ltype: _ltype) -> torch.Tensor:
     return _eval_op(_get_fn_lib(ltype), "vee", matrix)
 
 
-def lift(ltype: _ltype, matrix: torch.Tensor) -> torch.Tensor:
+def lift(matrix: torch.Tensor, ltype: _ltype) -> torch.Tensor:
     return _eval_op(_get_fn_lib(ltype), "lift", matrix)
 
 
-def project(ltype: _ltype, matrix: torch.Tensor) -> torch.Tensor:
+def project(matrix: torch.Tensor, ltype: _ltype) -> torch.Tensor:
     return _eval_op(_get_fn_lib(ltype), "project", matrix)
 
 
@@ -393,7 +393,7 @@ def jinv(group: LieTensor) -> _JFnReturnType:
     return group.jinv()
 
 
-def jexp(ltype: _ltype, tangent_vector: torch.Tensor) -> _JFnReturnType:
+def jexp(tangent_vector: torch.Tensor, ltype: _ltype) -> _JFnReturnType:
     jacs: List[torch.Tensor] = []
     exp_tensor = _eval_op(_get_fn_lib(ltype), "exp", tangent_vector, jacobians=jacs)
     return jacs, LieTensor(exp_tensor, ltype)

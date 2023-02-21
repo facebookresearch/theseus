@@ -6,6 +6,7 @@
 import torch
 import abc
 
+from .constants import DeviceType
 from typing import Callable, List, Tuple, Optional, Protocol
 from .utils import check_jacobians_list
 
@@ -30,9 +31,11 @@ def LeftProjectImplFactory(module):
     def _left_project_impl(group: torch.Tensor, matrix: torch.Tensor) -> torch.Tensor:
         module.check_group_tensor(group)
         module.check_left_project_matrix(matrix)
-        group_inverse = module.inverse(group)
+        group_inverse = module._inverse_autograd_fn(group)
 
-        return module.project(module.left_act(group_inverse, matrix))
+        return module._project_autograd_fn(
+            module._left_act_autograd_fn(group_inverse, matrix)
+        )
 
     return _left_project_impl
 
@@ -82,7 +85,7 @@ def UnaryOperatorFactory(
         jacobians: Optional[List[torch.Tensor]] = None,
     ) -> torch.Tensor:
         if jacobians is not None:
-            _check_jacobians_supported(jop_autograd_fn, module.name, op_name)
+            _check_jacobians_supported(jop_autograd_fn, module.NAME, op_name)
             check_jacobians_list(jacobians)
             jacobians_op = jop_autograd_fn(input)[0]
             jacobians.append(jacobians_op[0])
@@ -134,7 +137,7 @@ def BinaryOperatorFactory(
         jacobians: Optional[List[torch.Tensor]] = None,
     ) -> torch.Tensor:
         if jacobians is not None:
-            _check_jacobians_supported(jop_autograd_fn, module.name, op_name)
+            _check_jacobians_supported(jop_autograd_fn, module.NAME, op_name)
             check_jacobians_list(jacobians)
             jacobians_op = jop_autograd_fn(input0, input1)[0]
             for jacobian in jacobians_op:
@@ -145,8 +148,51 @@ def BinaryOperatorFactory(
         input0: torch.Tensor, input1: torch.Tensor
     ) -> Tuple[List[torch.Tensor], torch.Tensor]:
         _check_jacobians_supported(
-            jop_autograd_fn, module.name, op_name, is_kwarg=False
+            jop_autograd_fn, module.NAME, op_name, is_kwarg=False
         )
         return jop_autograd_fn(input0, input1)
 
     return op, jop
+
+
+_CheckFnType = Callable[[torch.Tensor], None]
+
+
+class _RandFnType(Protocol):
+    def __call__(
+        *size: int,
+        generator: Optional[torch.Generator] = None,
+        dtype: Optional[torch.dtype] = None,
+        device: DeviceType = None,
+        requires_grad: bool = False,
+    ) -> torch.Tensor:
+        pass
+
+
+# Namespace to facilitate type-checking downstream
+class LieGroupFns:
+    def __init__(self, module):
+        self.exp, self.jexp = UnaryOperatorFactory(module, "exp")
+        self.log, self.jlog = UnaryOperatorFactory(module, "log")
+        self.adj = UnaryOperatorFactory(module, "adjoint")[0]
+        self.inv, self.jinv = UnaryOperatorFactory(module, "inverse")
+        self.hat = UnaryOperatorFactory(module, "hat")[0]
+        self.vee = UnaryOperatorFactory(module, "vee")[0]
+        self.lift = UnaryOperatorFactory(module, "lift")[0]
+        self.project = UnaryOperatorFactory(module, "project")[0]
+        self.compose, self.jcompose = BinaryOperatorFactory(module, "compose")
+        self.left_act = BinaryOperatorFactory(module, "left_act")[0]
+        self.left_project = BinaryOperatorFactory(module, "left_project")[0]
+        self.check_group_tensor: _CheckFnType = module.check_group_tensor
+        self.check_tangent_vector: _CheckFnType = module.check_tangent_vector
+        self.check_hat_matrix: _CheckFnType = module.check_hat_matrix
+        if hasattr(module, "check_unit_quaternion"):
+            self.check_unit_quaternion: _CheckFnType = module.check_unit_quaternion
+        if hasattr(module, "check_lift_matrix"):
+            self.check_lift_matrix: _CheckFnType = module.check_lift_matrix
+        if hasattr(module, "check_project_matrix"):
+            self.check_project_matrix: _CheckFnType = module.check_project_matrix
+        self.check_left_act_matrix: _CheckFnType = module.check_left_act_matrix
+        self.check_left_project_matrix: _CheckFnType = module.check_left_project_matrix
+        self.rand: _RandFnType = module.rand
+        self.randn: _RandFnType = module.randn

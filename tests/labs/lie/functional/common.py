@@ -48,6 +48,11 @@ def get_test_cfg(op_name, dtype, dim, data_shape, module=None):
 
 
 # Sample inputs with the desired types.
+# Input type is one of:
+#   ("tangent", dim)  # torch.rand(batch_size, dim)
+#   ("group", module) # e.g., module.rand(batch_size)
+#   ("quat", dim)     # sampled like tangent but normalized
+#   ("matrix", shape) # torch.rand((batch_size,) + shape)
 def sample_inputs(input_types, batch_size, dtype, rng, module=None):
     def _sample(input_type):
         type_str, param = input_type
@@ -92,27 +97,29 @@ def run_test_op(op_name, batch_size, dtype, rng, dim, data_shape, module):
 # check that func(jac_autograd) is close to func(jac_custom), for each func in
 # the list
 def check_lie_group_function(module, op_name: str, atol: float, inputs, funcs=None):
-    op_impl = getattr(module, "_" + op_name + "_impl")
-    op = getattr(module, op_name)
+    op_impl = getattr(module, f"_{op_name}_impl")
+    op = getattr(module, f"_{op_name}_autograd_fn")
 
     jacs_impl = torch.autograd.functional.jacobian(op_impl, inputs)
     jacs = torch.autograd.functional.jacobian(op, inputs)
 
     if funcs is None:
         for jac_impl, jac in zip(jacs_impl, jacs):
-            assert torch.allclose(jac_impl, jac, atol=atol)
+            torch.testing.assert_close(jac_impl, jac, atol=atol, rtol=atol)
     else:
         for jac_impl, jac, func in zip(jacs_impl, jacs, funcs):
             if func is None:
-                assert torch.allclose(jac_impl, jac, atol=atol)
+                torch.testing.assert_close(jac_impl, jac, atol=atol, rtol=atol)
             else:
-                assert torch.allclose(func(jac_impl), func(jac), atol=atol)
+                torch.testing.assert_close(
+                    func(jac_impl), func(jac), atol=atol, rtol=atol
+                )
 
 
 def left_project_func(module, group):
     sels = range(group.shape[0])
 
     def func(matrix: torch.Tensor):
-        return module.left_project(group, matrix[sels, ..., sels, :, :])
+        return module._left_project_autograd_fn(group, matrix[sels, ..., sels, :, :])
 
     return func

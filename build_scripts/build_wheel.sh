@@ -16,28 +16,42 @@
 # INCLUDE_LABS: if !=0, the compiled wheel also includes Theseus Labs.
 #   For example
 #    ./build_scripts/build_wheel.sh . 0.1.0 10.2
+# NIGHTLY: if !=0, compiles a wheel for the nightly package (forces INCLUDE_LABS=1).
+#   THESEUS_VERSION is also ignored, since version is set to YYYY.MM.DD.
 #   
 #   will run and store results under ./theseus_docker_3.9
 # -----------------
 
-# Ensure that 3 or 4 arguments 
+# Ensure that 3-6 arguments 
 # (ROOT_DIR, COMMIT, CUDA_VERSION, THESEUS_VERSION - optional) are provided.
 die () {
     echo >&2 "$@"
     exit 1
 }
-[ "$#" -eq 3 ] || [ "$#" -eq 4 ] || [ "$#" -eq 5 ] || die "3-5 arguments required, $# provided"
+[ "$#" -ge 3 ] && [ "$#" -le 6 ] || die "3-6 arguments required, $# provided"
 ROOT_DIR=$1
 COMMIT=$2
 CUDA_VERSION=$3
 TH_VERSION=${4:-${COMMIT}}
 INCLUDE_LABS=${5:-0}
+NIGHTLY=${6:-0}
 
 if [[ ${INCLUDE_LABS} != 0 ]]
 then
     INCLUDE_LABS_STR="1"
 else
     INCLUDE_LABS_STR=""
+fi
+if [[ ${NIGHTLY} != 0 ]]
+then
+    NIGHTLY_STR=$(date +"%Y.%m.%d")
+    WHL_NAME="theseus-ai-nightly"
+    TAR_NAME="theseus_ai_nightly"
+    TH_VERSION=${NIGHTLY_STR}
+else
+    NIGHTLY_STR=""
+    WHL_NAME="theseus-ai"
+    TAR_NAME="theseus_ai"
 fi
 
 SUPPORTED_CUDA_VERSIONS="10.2 11.3 11.6 11.7"
@@ -126,6 +140,7 @@ for PYTHON_VERSION in 3.10; do
         THESEUS_FORCE_CUDA=${ENABLE_CUDA} \
         TORCH_CUDA_ARCH_LIST='${TORCH_CUDA_ARCH_LIST}' \
         INCLUDE_THESEUS_LABS='${INCLUDE_LABS_STR}' \
+        THESEUS_NIGHTLY='${NIGHTLY_STR}' \
         python3 -m build --no-isolation
     """ > ${DOCKER_DIR}/Dockerfile
 
@@ -138,16 +153,17 @@ for PYTHON_VERSION in 3.10; do
 
     # Copy the wheel to host
     CP_STR="cp"$(echo ${PYTHON_VERSION} | sed 's/[.]//g')
-    DOCKER_WHL="theseus/dist/theseus_ai-${TH_VERSION}-${CP_STR}-${CP_STR}-linux_x86_64.whl"
+    DOCKER_WHL="theseus/dist/${WHL_NAME}-${TH_VERSION}-${CP_STR}-${CP_STR}-linux_x86_64.whl"
     if [[ ${CUDA_VERSION} == "11.6" ]]
     then
         PLUS_CU_TAG=""  # 11.6 will be the pypi version, so don't add +cu116
     else
         PLUS_CU_TAG="+${DEVICE_TAG}"
     fi
-    HOST_WHL="theseus_ai-${TH_VERSION}${PLUS_CU_TAG}-${CP_STR}-${CP_STR}-manylinux_2_17_x86_64.whl"
+    # The host wheel adds the cuda information, and the manylinux name tag
+    HOST_WHL="${WHL_NAME}-${TH_VERSION}${PLUS_CU_TAG}-${CP_STR}-${CP_STR}-manylinux_2_17_x86_64.whl"
 
-    sudo docker cp "${DOCKER_NAME}:theseus/dist/theseus-ai-${TH_VERSION}.tar.gz" "theseus-ai-${TH_VERSION}.tar.gz"
+    sudo docker cp "${DOCKER_NAME}:theseus/dist/${TAR_NAME}-${TH_VERSION}.tar.gz" "${TAR_NAME}-${TH_VERSION}.tar.gz"
     sudo docker cp "${DOCKER_NAME}:${DOCKER_WHL}" ${HOST_WHL}
     sudo docker rm ${DOCKER_NAME}
     sudo docker image rm "${DOCKER_NAME}_img"

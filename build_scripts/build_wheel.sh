@@ -44,14 +44,14 @@ else
 fi
 if [[ ${NIGHTLY} != 0 ]]
 then
-    NIGHTLY_STR=$(date +"%Y.%m.%d")
-    WHL_NAME="theseus-ai-nightly"
-    TAR_NAME="theseus_ai_nightly"
-    TH_VERSION=${NIGHTLY_STR}
+    TH_VERSION=$(date +"%Y.%m.%d")
+    NIGHTLY_STR="THESEUS_NIGHTLY='${TH_VERSION}'"
+    WHL_NAME="theseus_ai_nightly"
+    TAR_NAME="theseus-ai-nightly"
 else
     NIGHTLY_STR=""
-    WHL_NAME="theseus-ai"
-    TAR_NAME="theseus_ai"
+    WHL_NAME="theseus_ai"
+    TAR_NAME="theseus-ai"
 fi
 
 SUPPORTED_CUDA_VERSIONS="10.2 11.3 11.6 11.7"
@@ -140,7 +140,7 @@ for PYTHON_VERSION in 3.10; do
         THESEUS_FORCE_CUDA=${ENABLE_CUDA} \
         TORCH_CUDA_ARCH_LIST='${TORCH_CUDA_ARCH_LIST}' \
         INCLUDE_THESEUS_LABS='${INCLUDE_LABS_STR}' \
-        THESEUS_NIGHTLY='${NIGHTLY_STR}' \
+        ${NIGHTLY_STR} \
         python3 -m build --no-isolation
     """ > ${DOCKER_DIR}/Dockerfile
 

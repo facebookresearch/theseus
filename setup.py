@@ -99,9 +99,11 @@ nightly_date = os.environ.get("THESEUS_NIGHTLY", None)
 if nightly_date is not None:
     from datetime import date
 
-    assert (
-        str(date.today()).replace("-", ".") == nightly_date
-    ), "THESEUS_NIGHTLY must be set to today's date"
+    expected_str = str(date.today()).replace("-", ".")
+    assert expected_str == nightly_date, (
+        f"THESEUS_NIGHTLY must be set to today's date. Expected {expected_str} "
+        f"but got {nightly_date}."
+    )
     is_nightly = True
     print(f"Building nightly with date {nightly_date}")
     is_nightly = True

@@ -95,21 +95,20 @@ reqs_dev = parse_requirements_file("requirements/dev.txt")
 root_dir = Path(__file__).parent
 
 is_nightly = False
-nightly_date = os.environ.get("THESEUS_NIGHTLY", None)
-if nightly_date is not None:
-    from datetime import date
+nightly_date_str = os.environ.get("THESEUS_NIGHTLY", None)
+if nightly_date_str is not None:
+    from datetime import date, datetime
 
-    expected_str = str(date.today()).replace("-", ".")
-    assert expected_str == nightly_date, (
-        f"THESEUS_NIGHTLY must be set to today's date. Expected {expected_str} "
-        f"but got {nightly_date}."
+    nightly_date = datetime.strptime(nightly_date_str, "%Y.%m.%d").date()
+    assert nightly_date == date.today(), (
+        f"THESEUS_NIGHTLY must be set to today's date in format %Y.%-m.%-d (stripped) "
+        f"but got {nightly_date_str}."
     )
-    is_nightly = True
-    print(f"Building nightly with date {nightly_date}")
+    print(f"Building nightly with date {nightly_date_str}")
     is_nightly = True
 
 if is_nightly:
-    version = nightly_date
+    version = nightly_date_str
 else:
     with open(Path("theseus") / "__init__.py", "r") as f:
         for line in f:

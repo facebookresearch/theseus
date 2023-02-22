@@ -44,14 +44,16 @@ else
 fi
 if [[ ${NIGHTLY} != 0 ]]
 then
-    TH_VERSION=$(date +"%Y.%m.%d")
+    TH_VERSION=$(date +"%Y.%-m.%-d")
     NIGHTLY_STR="THESEUS_NIGHTLY='${TH_VERSION}'"
     WHL_NAME="theseus_ai_nightly"
     TAR_NAME="theseus-ai-nightly"
+    GIT_CMD="git pull origin main"
 else
     NIGHTLY_STR=""
     WHL_NAME="theseus_ai"
     TAR_NAME="theseus-ai"
+    GIT_CMD="git checkout ${COMMIT} -b tmp_build"
 fi
 
 SUPPORTED_CUDA_VERSIONS="10.2 11.3 11.6 11.7"
@@ -135,7 +137,8 @@ for PYTHON_VERSION in 3.10; do
     RUN git clone https://github.com/facebookresearch/theseus.git
     WORKDIR theseus
     RUN git fetch --all --tags
-    RUN git checkout ${COMMIT} -b tmp_build
+    RUN ${GIT_CMD}
+    RUN git log -n 1
     CMD BASPACHO_ROOT_DIR=/baspacho \
         THESEUS_FORCE_CUDA=${ENABLE_CUDA} \
         TORCH_CUDA_ARCH_LIST='${TORCH_CUDA_ARCH_LIST}' \

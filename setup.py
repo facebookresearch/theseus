@@ -94,10 +94,27 @@ reqs_main = parse_requirements_file("requirements/main.txt")
 reqs_dev = parse_requirements_file("requirements/dev.txt")
 root_dir = Path(__file__).parent
 
-with open(Path("theseus") / "__init__.py", "r") as f:
-    for line in f:
-        if "__version__" in line:
-            version = line.split("__version__ = ")[1].rstrip().strip('"')
+is_nightly = False
+nightly_date = os.environ.get("THESEUS_NIGHTLY", None)
+if nightly_date is not None:
+    from datetime import date
+
+    expected_str = str(date.today()).replace("-", ".")
+    assert expected_str == nightly_date, (
+        f"THESEUS_NIGHTLY must be set to today's date. Expected {expected_str} "
+        f"but got {nightly_date}."
+    )
+    is_nightly = True
+    print(f"Building nightly with date {nightly_date}")
+    is_nightly = True
+
+if is_nightly:
+    version = nightly_date
+else:
+    with open(Path("theseus") / "__init__.py", "r") as f:
+        for line in f:
+            if "__version__" in line:
+                version = line.split("__version__ = ")[1].rstrip().strip('"')
 
 with open("README.md", "r") as fh:
     long_description = fh.read()
@@ -139,11 +156,12 @@ if baspacho_extension is not None:
     ext_modules.append(baspacho_extension)
 
 excluded_packages = []
-if not os.environ.get("INCLUDE_THESEUS_LABS"):
+package_name = "theseus-ai-nightly" if is_nightly else "theseus-ai"
+if not os.environ.get("INCLUDE_THESEUS_LABS") and not is_nightly:
     excluded_packages.append("theseus.labs")
     print("Excluding theseus.labs")
 setuptools.setup(
-    name="theseus-ai",
+    name=package_name,
     version=version,
     author="Meta Research",
     description="A library for differentiable nonlinear optimization.",

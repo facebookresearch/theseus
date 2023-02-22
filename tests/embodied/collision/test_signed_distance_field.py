@@ -109,3 +109,15 @@ def test_signed_distance_2d_jacobian():
                 # This makes failures more explicit than torch.allclose()
                 diff = (expected_jacobian - jacobian[:, p_index]).norm(p=float("inf"))
                 assert diff < 1e-5
+
+
+def test_to():
+    if not torch.cuda.is_available():
+        return
+    sdf = random_sdf(1, 10, 10)
+    points = torch.randn(1, 2, 100).to("cuda:0")
+    with pytest.raises(RuntimeError):
+        sdf.signed_distance(points)
+    sdf.to("cuda:0")
+    result, _ = sdf.signed_distance(points)
+    assert result.is_cuda

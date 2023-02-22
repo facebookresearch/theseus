@@ -17,7 +17,8 @@
 #   For example
 #    ./build_scripts/build_wheel.sh . 0.1.0 10.2
 # NIGHTLY: if !=0, compiles a wheel for the nightly package (forces INCLUDE_LABS=1).
-#   THESEUS_VERSION is also ignored, since version is set to YYYY.MM.DD.
+#   THESEUS_VERSION and COMMIT are also ignored, since version is set to YYYY.MM.DD.
+#   and commit is set to `main`.
 #   
 #   will run and store results under ./theseus_docker_3.9
 # -----------------

@@ -1,4 +1,4 @@
-#bin/bash
+#!/bin/bash
 
 # -----------------
 # This script creates and runs a docker image for compiling a wheel

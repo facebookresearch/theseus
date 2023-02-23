@@ -8,7 +8,7 @@ import warnings
 from typing import Any, List, Optional, Protocol, Tuple, Union
 
 import torch
-from torch.utils._pytree import tree_flatten, tree_map
+from torch.utils._pytree import tree_flatten, tree_map_only
 
 from theseus.labs.lie.functional.constants import DeviceType
 from theseus.labs.lie.functional.lie_group import LieGroupFns, UnaryOperatorOpFnType
@@ -58,11 +58,8 @@ def _get_fn_lib(ltype: _ltype):
 
 
 class _LieTensorBase(torch.Tensor):
-    def __new__(cls, data: Any, ltype: _ltype, requires_grad=None):
-        if requires_grad is None:
-            return super().__new__(cls, data)  # type: ignore
-        else:
-            return cls._make_subclass(cls, data, requires_grad)  # type: ignore
+    def __new__(cls, data: torch.Tensor, ltype: _ltype, requires_grad=False):
+        return cls._make_subclass(cls, data, requires_grad)  # type: ignore
 
     @property
     def _t(self) -> torch.Tensor:
@@ -76,10 +73,7 @@ class _LieTensorBase(torch.Tensor):
 
     @classmethod
     def to_torch(cls, args: Any):
-        def _resolve(x):
-            return x._t if isinstance(x, cls) else x
-
-        return tree_map(_resolve, args)
+        return tree_map_only(cls, lambda x: x._t, args)
 
     @classmethod
     def resolve_ltype(cls, t: Any):
@@ -98,9 +92,9 @@ class _LieTensorBase(torch.Tensor):
             )
         ltype = next(iter(ltypes)) if len(ltypes) > 0 else None
         ret = func(*torch_args, **torch_kwargs)
-        return (
-            cls(ret, ltype) if isinstance(ret, torch.Tensor) and not raw_tensor else ret
-        )
+        if raw_tensor:
+            return ret
+        return tree_map_only(torch.Tensor, lambda x: cls(ret, ltype), ret)
 
 
 class TangentTensor(_LieTensorBase):
@@ -128,10 +122,14 @@ class LieTensor(_LieTensorBase):
         # torch.stack  # requires arbitrary batch support
     ]
 
-    def __init__(self, data: Any, ltype: _ltype, requires_grad=None):
-        super().__init__(data, ltype, requires_grad=requires_grad)
+    def __init__(self, tensor: torch.Tensor, ltype: _ltype, requires_grad=None):
+        super().__init__(tensor, ltype, requires_grad=requires_grad)
         self._fn_lib = _get_fn_lib(self.ltype)
         self._fn_lib.check_group_tensor(self.as_subclass(torch.Tensor))
+
+    @staticmethod
+    def from_tensor(tensor: torch.Tensor, ltype: _ltype) -> "LieTensor":
+        return _FromTensor.apply(tensor, ltype)
 
     @classmethod
     def _torch_function_impl_lie(cls, func, types, args=(), kwargs=None):
@@ -161,10 +159,13 @@ class LieTensor(_LieTensorBase):
         if isinstance(args, LieTensor):
             warnings.warn(
                 "Calling new() on a LieTensor results in shared data storage. "
-                "To copy construct from a LieTensor, it is recommended to use lie_tensor.clone().",
+                "To copy construct from a LieTensor, it is recommended to use "
+                "lie_tensor.clone().",
                 UserWarning,
             )
             return LieTensor(args._t, ltype=self.ltype)
+        if isinstance(args, torch.Tensor):
+            return LieTensor.from_tensor(args, self.ltype)
         return LieTensor(torch.as_tensor(args, device=device), ltype=self.ltype)
 
     # ------ Operators
@@ -288,6 +289,16 @@ as_lietensor = new
 cast = new
 
 
+class _FromTensor(torch.autograd.Function):
+    @staticmethod
+    def forward(ctx: Any, tensor: torch.Tensor, ltype: _ltype) -> LieTensor:  # type: ignore
+        return LieTensor(tensor, ltype, requires_grad=tensor.requires_grad)
+
+    @staticmethod
+    def backward(ctx: Any, grad_output: torch.Tensor) -> Tuple[torch.Tensor, None]:  # type: ignore
+        return grad_output, None
+
+
 # Similar to the one in functional, except it returns a LieTensor
 # and receives a ltype
 class _RandFnType(Protocol):
@@ -332,6 +343,7 @@ def _build_random_fn(op_name: str) -> _RandFnType:
                 requires_grad=requires_grad,
             ),
             ltype,
+            requires_grad=requires_grad,
         )
 
     return fn

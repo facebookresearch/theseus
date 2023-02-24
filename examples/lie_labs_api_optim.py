@@ -1,14 +1,11 @@
 import torch
 
 import theseus.labs.lie as lie
-import theseus.labs.lie.functional as lieF
 
-# Leaf tensor needs to be a regular tensor, so we need to explicitly pass
-# the tensor data
-g1_data = lieF.se3.rand(1, requires_grad=True)
-g1 = lie.LieTensor.from_tensor(g1_data, lie.SE3)
+g1 = lie.rand(1, lie.SE3, requires_grad=True)
 g2 = lie.rand(1, lie.SE3)
-opt = torch.optim.Adam([g1_data])
+
+opt = torch.optim.Adam([g1], lr=0.1)
 
 for i in range(10):
     opt.zero_grad()

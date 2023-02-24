@@ -9,6 +9,7 @@ from typing import Any, List, Optional, Protocol, Tuple, Union
 
 import torch
 from torch.utils._pytree import tree_flatten, tree_map_only
+from torch.types import Number
 
 from theseus.labs.lie.functional.constants import DeviceType
 from theseus.labs.lie.functional.lie_group import LieGroupFns, UnaryOperatorOpFnType
@@ -80,17 +81,21 @@ class _LieTensorBase(torch.Tensor):
         return t.ltype if isinstance(t, cls) else None
 
     @classmethod
-    def _torch_func_impl_eucl(cls, func, types, args=(), kwargs=None, raw_tensor=False):
-        kwargs = kwargs or {}
-        torch_args = cls.to_torch(args)
-        torch_kwargs = cls.to_torch(kwargs)
+    def get_ltype(cls, args):
         ltypes = [cls.resolve_ltype(a) for a in tree_flatten(args)[0]]
         ltypes = set(x for x in ltypes if x is not None)
         if len(ltypes) > 1:
             raise ValueError(
                 f"All LieTensors must be of the same ltype. " f"But found {ltypes}"
             )
-        ltype = next(iter(ltypes)) if len(ltypes) > 0 else None
+        return next(iter(ltypes)) if len(ltypes) > 0 else None
+
+    @classmethod
+    def _torch_func_impl_eucl(cls, func, types, args=(), kwargs=None, raw_tensor=False):
+        kwargs = kwargs or {}
+        torch_args = cls.to_torch(args)
+        torch_kwargs = cls.to_torch(kwargs)
+        ltype = cls.get_ltype(args)
         ret = func(*torch_args, **torch_kwargs)
         if raw_tensor:
             return ret
@@ -106,6 +111,30 @@ class TangentTensor(_LieTensorBase):
         return cls._torch_func_impl_eucl(func, types, args, kwargs)
 
 
+_EUCLID_GRAD_MARKER = "_lie_euclidean_grad"
+
+
+# Lightweight wrapper so that LieTensor.add_ knows that this is a gradient
+# that should be left projected and retracted
+class _EuclideanGrad(torch.Tensor):
+    _lie_euclidean_grad = True
+
+    @classmethod
+    def __torch_function__(cls, func, types, args=(), kwargs=None):
+        # Need to do this marking thing because torch optimizers use
+        # in-place operations, so in many cases the descent direction won't be
+        # an object of type _EuclideanGrad. With this, anything that touches
+        # an _EuclideanGrad becomes marked and can be used to update LieTensors.
+        def _mark(x):
+            if isinstance(x, torch.Tensor):
+                setattr(x, _EUCLID_GRAD_MARKER, True)
+
+        for a in tree_flatten(args)[0]:
+            _mark(a)
+
+        return super().__torch_function__(func, types, args, kwargs or {})
+
+
 def _eval_op(
     fn_lib: LieGroupFns,
     op_name: str,
@@ -115,10 +144,32 @@ def _eval_op(
     return getattr(fn_lib, op_name)(input0, jacobians=jacobians)
 
 
+def _LIE_TENSOR_ERROR_MSG(func):
+    return (
+        f"LieTensor.{func.__name__} is only supported for "
+        "tensors resulting from euclidean gradient computations."
+    )
+
+
 class LieTensor(_LieTensorBase):
-    SAFE_TORCH_OPS_FOR_NONEUCL = [
+    # These are operations where calling super().__torch_function__() on the
+    # LieTensor itself is safe
+    _SAFE_SUPER_OPS = [
+        torch.Tensor.shape.__get__,  # type: ignore
+        torch.Tensor.is_leaf.__get__,  # type: ignore
+        torch.Tensor.requires_grad.__get__,  # type: ignore
+        torch.Tensor.retains_grad.__get__,  # type: ignore
+        torch.Tensor.grad.__get__,  # type: ignore
+    ]
+
+    # These are operations where calling super().__torch_function__() on the
+    # lie_tensor._t view is safe. For some of them (e.g., zeros_like), we return
+    # a raw torch.Tensor, because their values don't make sense for LieTensors.
+    _SAFE_AS_EUCL_OPS = [
         torch.cat,
         torch.clone,
+        torch.is_complex,
+        torch.zeros_like,
         # torch.stack  # requires arbitrary batch support
     ]
 
@@ -133,13 +184,23 @@ class LieTensor(_LieTensorBase):
 
     @classmethod
     def _torch_function_impl_lie(cls, func, types, args=(), kwargs=None):
-        if func not in LieTensor.SAFE_TORCH_OPS_FOR_NONEUCL:
-            raise NotImplementedError(
-                "Tried to call a torch function not supported by LieTensor. "
-                "If trying to operate on the raw tensor data, please use group._t, "
-                "or run inside the context lie.as_euclidean()."
+        if func in LieTensor._SAFE_AS_EUCL_OPS:
+            return super()._torch_func_impl_eucl(
+                func, types, args, kwargs, raw_tensor=func == torch.zeros_like
             )
-        return super()._torch_func_impl_eucl(func, types, args, kwargs)
+        if func in LieTensor._SAFE_SUPER_OPS:
+            ltype = cls.get_ltype(args)
+            ret = super().__torch_function__(func, types, args, kwargs or {})
+            if func == torch.Tensor.grad.__get__:
+                return _EuclideanGrad(ret) if ret is not None else ret
+            else:
+                assert not isinstance(ret, torch.Tensor)
+            return tree_map_only(torch.Tensor, lambda x: LieTensor(ret, ltype), ret)
+        raise NotImplementedError(
+            "Tried to call a torch function not supported by LieTensor. "
+            "If trying to operate on the raw tensor data, please use group._t, "
+            "or run inside the context lie.as_euclidean()."
+        )
 
     @classmethod
     def __torch_function__(cls, func, types, args=(), kwargs=None):
@@ -168,9 +229,11 @@ class LieTensor(_LieTensorBase):
             return LieTensor.from_tensor(args, self.ltype)
         return LieTensor(torch.as_tensor(args, device=device), ltype=self.ltype)
 
+    # ------------------------------------------------------
     # ------ Operators
+    # ------------------------------------------------------
     # The following could be static methods, because self is used
-    # only to infer the type. For each of this, there are
+    # only to infer the type. But for each of this, there are also
     # versions such as:
     #   - `lie.exp(ltype, tangent_vector)`
     #   - `lie.lift(ltype, matrix)`
@@ -210,7 +273,9 @@ class LieTensor(_LieTensorBase):
     def left_project(self, matrix: torch.Tensor) -> torch.Tensor:
         return self._fn_lib.left_project(self._t, matrix)
 
+    # ------------------------------------------------------
     # Operator Jacobians
+    # ------------------------------------------------------
     def _unary_jop_base(
         self,
         input0: torch.Tensor,
@@ -253,6 +318,9 @@ class LieTensor(_LieTensorBase):
         assert isinstance(delta, torch.Tensor)
         return self.compose(self.exp(delta))
 
+    # ------------------------------------------------------
+    # Overloaded python and torch operators
+    # ------------------------------------------------------
     def __add__(self, other: TensorType) -> "LieTensor":
         if not isinstance(other, TangentTensor):
             raise RuntimeError(
@@ -262,6 +330,50 @@ class LieTensor(_LieTensorBase):
                 "use group.retract(tensor)."
             )
         return self.retract(other._t)
+
+    def set_(self, tensor: "LieTensor"):  # type: ignore
+        if not isinstance(tensor, LieTensor):
+            raise RuntimeError(
+                "LieTensor.set_ is only supported for LieTensor arguments."
+            )
+        if not tensor.ltype == self.ltype:
+            raise RuntimeError(
+                f"Tried to set a tensor of type {self.ltype} with a "
+                f"tensor of type {tensor.ltype}"
+            )
+        super().set_(tensor)  # type: ignore
+
+    def add_(self, tensor: torch.Tensor, *, alpha: Number = 1.0):  # type: ignore
+        if hasattr(tensor, _EUCLID_GRAD_MARKER):
+            grad = self._fn_lib.left_project(self._t, tensor)
+            res = self.retract(grad * alpha)
+            self.set_(res)
+        else:
+            raise RuntimeError(_LIE_TENSOR_ERROR_MSG(self.add_))
+
+    def addcdiv_(
+        self, tensor1: torch.Tensor, tensor2: torch.Tensor, value: Number = 1.0
+    ):
+        can_do = False
+        for t in [tensor1, tensor2]:
+            if hasattr(t, _EUCLID_GRAD_MARKER):
+                can_do = True
+        if can_do:
+            self.add_(_EuclideanGrad(value * tensor1 / tensor2))
+        else:
+            raise RuntimeError(_LIE_TENSOR_ERROR_MSG(self.addcdiv_))
+
+    def addcmul_(
+        self, tensor1: torch.Tensor, tensor2: torch.Tensor, value: Number = 1.0
+    ):
+        can_do = False
+        for t in [tensor1, tensor2]:
+            if hasattr(t, _EUCLID_GRAD_MARKER):
+                can_do = True
+        if can_do:
+            self.add_(_EuclideanGrad(value * tensor1 * tensor2))
+        else:
+            raise RuntimeError(_LIE_TENSOR_ERROR_MSG(self.addcmul_))
 
 
 # ----------------------------

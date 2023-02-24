@@ -36,6 +36,9 @@ class SignedDistanceField2D:
                 raise ValueError(
                     "Either sdf_data or argument occupancy_map should be provided."
                 )
+        self.origin: Point2
+        self.cell_size: Variable
+        self.sdf_data: Variable
         self.update_data(origin, sdf_data, cell_size)
         self._num_rows = sdf_data.shape[1]
         self._num_cols = sdf_data.shape[2]
@@ -230,3 +233,8 @@ class SignedDistanceField2D:
         jac1[out_of_bounds_idx] = 0
         jac2[out_of_bounds_idx] = 0
         return dist, torch.stack([jac1, jac2], dim=2)
+
+    def to(self, *args, **kwargs):
+        self.cell_size.to(*args, **kwargs)
+        self.origin.to(*args, **kwargs)
+        self.sdf_data.to(*args, **kwargs)

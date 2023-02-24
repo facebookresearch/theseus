@@ -60,7 +60,7 @@ class MotionPlannerObjective(th.Objective):
         epsilon_dist: float,
         total_time: float,
         collision_weight: float,
-        Qc_inv: List[List[int]],
+        Qc_inv: Union[List[List[float]], torch.Tensor],
         num_time_steps: int,
         use_single_collision_weight: bool = True,
         pose_type: Union[Type[th.Point2], Type[th.SE2]] = th.Point2,
@@ -115,7 +115,8 @@ class MotionPlannerObjective(th.Objective):
         # ------------------------------- Cost weights ------------------------------ #
         # --------------------------------------------------------------------------- #
         # For the GP cost functions, we create a single GPCost weight
-        gp_cost_weight = th.eb.GPCostWeight(torch.tensor(Qc_inv, dtype=dtype), dt)
+        qc_inv_tensor = torch.as_tensor(Qc_inv, dtype=dtype)
+        gp_cost_weight = th.eb.GPCostWeight(qc_inv_tensor.to(dtype=dtype), dt)
 
         # Now we create cost weights for the collision-avoidance cost functions
         # Each of this is a scalar cost weight with a named auxiliary variable.
@@ -135,7 +136,8 @@ class MotionPlannerObjective(th.Objective):
                 collision_cost_weights.append(
                     th.ScaleCostWeight(
                         th.Variable(
-                            torch.tensor(collision_weight), name=f"collision_w_{i}"
+                            torch.tensor(collision_weight, dtype=dtype),
+                            name=f"collision_w_{i}",
                         )
                     )
                 )
@@ -238,7 +240,7 @@ class MotionPlanner:
         epsilon_dist: Optional[float] = None,
         total_time: Optional[float] = None,
         collision_weight: Optional[float] = None,
-        Qc_inv: Optional[List[List[int]]] = None,
+        Qc_inv: Optional[Union[List[List[float]], torch.Tensor]] = None,
         num_time_steps: Optional[int] = None,
         use_single_collision_weight: bool = True,
         pose_type: Union[Type[th.Point2], Type[th.SE2]] = th.Point2,
@@ -407,19 +409,19 @@ class MotionPlanner:
         # values stored in the objective's variables.
         pose_numel = 2 if self.objective.pose_type == th.Point2 else 4
         vel_numel = 2 if self.objective.pose_type == th.Point2 else 3
-        trajectory = torch.empty(
+        trajectory = torch.zeros(
             self.objective.batch_size,
             pose_numel + vel_numel,
             self.objective.trajectory_len,
             device=self.objective.device,
         )
-        variables = self.objective.optim_vars
+        if values_dict is None:
+            values_dict = {
+                k: t.tensor.clone() for (k, t) in self.objective.optim_vars.items()
+            }
         for i in range(self.objective.trajectory_len):
-            if values_dict is None:
-                trajectory[:, :pose_numel, i] = variables[f"pose_{i}"].tensor.clone()
-                trajectory[:, pose_numel:, i] = variables[f"vel_{i}"].tensor.clone()
-            else:
-                trajectory[:, :pose_numel, i] = values_dict[f"pose_{i}"]
+            trajectory[:, :pose_numel, i] = values_dict[f"pose_{i}"]
+            if f"vel_{i}" in values_dict:
                 trajectory[:, pose_numel:, i] = values_dict[f"vel_{i}"]
         return trajectory.detach() if detach else trajectory
 

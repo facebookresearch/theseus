@@ -15,6 +15,7 @@ from .sparse_matrix_utils import (
 from .utils import (
     Timer,
     build_mlp,
+    check_jacobians,
     gather_from_rows_cols,
     numeric_grad,
     numeric_jacobian,

@@ -151,7 +151,7 @@ def check_jacobians(cf: th.CostFunction, num_checks: int = 1, tol: float = 1.0e-
     from theseus.core.cost_function import _tmp_tensors
 
     optim_vars: List[th.Manifold] = list(cf.optim_vars)
-    aux_vars = list(cf.optim_vars)
+    aux_vars = list(cf.aux_vars)
 
     def autograd_fn(*optim_var_tensors):
         for v, t in zip(optim_vars, optim_var_tensors):

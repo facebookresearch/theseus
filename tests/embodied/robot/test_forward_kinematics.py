@@ -35,7 +35,9 @@ def test_backward(batch_size: int, dtype: torch.dtype):
     jacs = torch.autograd.functional.jacobian(fkin, angles, vectorize=True)
 
     for jac, jac_impl in zip(jacs, jacs_impl):
-        assert torch.allclose(jac_impl, jac, atol=TEST_EPS)
+        torch.testing.assert_close(
+            actual=jac_impl, expected=jac, atol=TEST_EPS, rtol=1e-5
+        )
 
     grads = []
     for func in [fkin, fkin_impl]:
@@ -46,7 +48,7 @@ def test_backward(batch_size: int, dtype: torch.dtype):
             loss = loss + (pose**2).sum()
         loss.backward()
         grads.append(temp.grad)
-    assert torch.allclose(grads[0], grads[1], atol=1e-6)
+    torch.testing.assert_close(actual=grads[0], expected=grads[1], atol=1e-6, rtol=1e-5)
 
 
 @pytest.mark.parametrize("batch_size", [1, 20, 40])
@@ -72,4 +74,6 @@ def test_jacobian(batch_size: int, dtype: torch.dtype):
         jacs_expected.append(jac_expected)
 
     for jac_actual, jac_expected in zip(jacs_actual, jacs_expected):
-        assert torch.allclose(jac_actual, jac_expected, atol=1e-6)
+        torch.testing.assert_close(
+            actual=jac_actual, expected=jac_expected, atol=1e-6, rtol=1e-5
+        )

@@ -162,6 +162,13 @@ class Robot(abc.ABC):
 
         return robot
 
+    def get_links(self, link_names: Optional[List[str]] = None) -> List[Link]:
+        return (
+            self.links
+            if link_names is None
+            else [self.link_map[name] for name in link_names]
+        )
+
     @property
     def name(self) -> str:
         return self._name

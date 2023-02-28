@@ -17,12 +17,7 @@ from .joint import Joint
 
 
 def ForwardKinematicsFactory(robot: Robot, link_names: Optional[List[str]] = None):
-    links: List[Link] = (
-        robot.links
-        if link_names is None
-        else [robot.link_map[name] for name in link_names]
-    )
-
+    links: List[Link] = robot.get_links(link_names)
     link_ids: List[int] = [link.id for link in links]
 
     ancestor_links: List[Link] = []

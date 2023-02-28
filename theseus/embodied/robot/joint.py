@@ -9,7 +9,7 @@ from typing import Optional
 import torch
 
 from .link import Link
-from theseus.labs.lie_functional import so3, se3
+from theseus.labs.lie_functional import so3
 from theseus.constants import DeviceType
 
 
@@ -30,7 +30,7 @@ class Joint(abc.ABC):
         if origin is None and device is None:
             device = torch.device("cpu")
         if origin is not None:
-            self.set_origin(origin)
+            self._origin = origin
 
             if dtype is not None and origin.dtype != dtype:
                 warnings.warn(
@@ -97,20 +97,6 @@ class Joint(abc.ABC):
     @property
     def axis(self) -> torch.Tensor:
         return self._axis
-
-    def set_id(self, id: int):
-        self._id = id
-
-    def set_parent_link(self, parent_link: Optional[Link]):
-        self._parent_link = parent_link
-
-    def set_child_link(self, child_link: Optional[Link]):
-        self._child_link = child_link
-
-    def set_origin(self, origin: torch.Tensor):
-        if origin.shape[0] != 1 or not se3.check_group_tensor(origin):
-            raise ValueError("Origin must be an element of SE(3).")
-        self._origin = origin
 
     @abc.abstractmethod
     def relative_pose(self, angle: Optional[torch.Tensor] = None) -> torch.Tensor:

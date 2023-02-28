@@ -99,7 +99,7 @@ class Robot(abc.ABC):
                     child_link=child,
                     origin=origin,
                 )
-            child.set_parent_joint(joint)
+            child._parent_joint = joint
             parent.add_child_joint(joint)
             robot._joint_map[urdf_joint.name] = joint
 
@@ -107,16 +107,16 @@ class Robot(abc.ABC):
             for joint in link._child_joints:
                 if isinstance(joint, FixedJoint):
                     subjoints: List[Joint] = joint.child_link.child_joints
-                    joint.child_link.set_child_joints([])
+                    joint.child_link._child_joints = []
                     for subjoint in subjoints:
-                        subjoint.set_parent_link(link)
-                        subjoint.set_origin(se3.compose(joint.origin, subjoint.origin))
+                        subjoint._parent_link = link
+                        subjoint._origin = se3.compose(joint.origin, subjoint.origin)
                         link.child_joints.append(subjoint)
 
         joints_to_visit: List[Joint] = []
         root = robot.link_map[urdf_model.get_root()]
         num_joints = 0
-        root.set_id(0)
+        root._id = 0
         robot._links.append(root)
         robot._dof = 0
         joints_to_visit = joints_to_visit + root.child_joints
@@ -124,11 +124,11 @@ class Robot(abc.ABC):
         while joints_to_visit:
             joint = joints_to_visit.pop(0)
             if not isinstance(joint, FixedJoint):
-                joint.set_id(num_joints)
+                joint._id = num_joints
                 robot._dof += joint.dof
                 robot._joints.append(joint)
                 num_joints = num_joints + 1
-                joint.child_link.set_id(num_joints)
+                joint.child_link._id = num_joints
                 robot._links.append(joint.child_link)
 
                 joints_to_visit = joints_to_visit + joint.child_link.child_joints
@@ -138,10 +138,10 @@ class Robot(abc.ABC):
                 continue
             if not isinstance(joint, FixedJoint):
                 raise ValueError(f"{joint.name} is expected to a fixed joint.")
-            joint.set_id(num_joints)
+            joint._id = num_joints
             robot._joints.append(joint)
             num_joints = num_joints + 1
-            joint.child_link.set_id(num_joints)
+            joint.child_link._id = num_joints
             robot._links.append(joint.child_link)
 
         robot._num_links = len(robot.links)
@@ -149,16 +149,16 @@ class Robot(abc.ABC):
 
         for link in robot.links:
             if link.parent_joint is not None:
-                link.set_ancestor_links(
-                    link.parent_link.ancestor_links + [link.parent_link]
-                )
+                link._ancestor_links = link.parent_link.ancestor_links + [
+                    link.parent_link
+                ]
                 ancestor_active_joint_ids = (
                     link.parent_link.ancestor_active_joint_ids
                     if isinstance(link.parent_joint, FixedJoint)
                     else link.parent_link.ancestor_active_joint_ids
                     + [link.parent_joint.id]
                 )
-                link.set_ancestor_active_joint_ids(ancestor_active_joint_ids)
+                link._ancestor_active_joint_ids = ancestor_active_joint_ids
 
         return robot
 

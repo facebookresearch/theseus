@@ -59,21 +59,6 @@ class Link(abc.ABC):
     def dtype(self) -> torch.dtype:
         return self._dtype
 
-    def set_id(self, id: int):
-        self._id = id
-
-    def set_parent_joint(self, parent_joint: Any):
-        self._parent_joint = parent_joint
-
-    def set_child_joints(self, child_joints: List[Any]):
-        self._child_joints = child_joints
-
-    def set_ancestor_links(self, ancestor_links: List["Link"]):
-        self._ancestor_links = ancestor_links
-
-    def set_ancestor_active_joint_ids(self, ancestor_active_joint_ids: List[int]):
-        self._ancestor_active_joint_ids = ancestor_active_joint_ids
-
     def update_ancestor_links(self):
         curr = self.parent_link
         self._ancestor_links = []

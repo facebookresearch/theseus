@@ -9,16 +9,20 @@ import urdf_parser_py.urdf as urdf
 import torch
 
 from theseus.labs.lie_functional import se3
+from theseus.constants import DeviceType
 from .joint import Joint, FixedJoint, RevoluteJoint, PrismaticJoint
 from .link import Link
 
 
 class Robot(abc.ABC):
-    def __init__(self, name: str, dtype: torch.dtype = None):
+    def __init__(self, name: str, dtype: torch.dtype = None, device: DeviceType = None):
         if dtype is None:
             dtype = torch.get_default_dtype()
+        if device is None:
+            device = torch.device("cpu")
         self._name: str = name
         self._dtype: torch.dtype = dtype
+        self._device: torch.device = torch.device(device)
         self._dof: int = 0
         self._num_joints: int = 0
         self._num_links: int = 0
@@ -28,9 +32,13 @@ class Robot(abc.ABC):
         self._link_map: Dict[str, Link] = {}
 
     @classmethod
-    def from_urdf_file(cls, urdf_file: str, dtype: torch.dtype = None) -> "Robot":
+    def from_urdf_file(
+        cls, urdf_file: str, dtype: torch.dtype = None, device: DeviceType = None
+    ) -> "Robot":
         if dtype is None:
             dtype = torch.get_default_dtype()
+        if device is None:
+            device = torch.device("cpu")
 
         def get_joint_type(joint: urdf.Joint):
             if joint.type == "revolute" or joint.type == "continuous":
@@ -43,15 +51,15 @@ class Robot(abc.ABC):
                 raise ValueError(f"{joint.type} is currently not supported.")
 
         def get_origin(urdf_origin: Optional[urdf.Pose] = None) -> torch.Tensor:
-            origin = torch.eye(3, 4, dtype=dtype).unsqueeze(0)
+            origin = torch.eye(3, 4, dtype=dtype, device=device).unsqueeze(0)
             if urdf_origin is None:
                 return origin
 
             if urdf_origin.xyz is not None:
-                origin[:, :, 3] = torch.tensor(urdf_origin.xyz, dtype=dtype)
+                origin[:, :, 3] = origin.new_tensor(urdf_origin.xyz)
 
             if urdf_origin.rpy is not None:
-                rpy = torch.tensor(urdf_origin.rpy, dtype=dtype)
+                rpy = origin.new_tensor(urdf_origin.rpy)
                 c3, c2, c1 = rpy.cos()
                 s3, s2, s1 = rpy.sin()
                 origin[:, 0, 0] = c1 * c2
@@ -67,7 +75,7 @@ class Robot(abc.ABC):
             return origin
 
         urdf_model = urdf.URDF.from_xml_file(urdf_file)
-        robot = Robot(urdf_model.name, dtype)
+        robot = Robot(urdf_model.name, dtype, device)
 
         for urdf_link in urdf_model.links:
             link = Link(urdf_link.name)
@@ -79,7 +87,7 @@ class Robot(abc.ABC):
             parent = robot.link_map[urdf_joint.parent]
             child = robot.link_map[urdf_joint.child]
             if joint_type == RevoluteJoint or joint_type == PrismaticJoint:
-                axis = torch.tensor(urdf_joint.axis, dtype=dtype)
+                axis = origin.new_tensor(urdf_joint.axis)
                 joint = joint_type(
                     urdf_joint.name,
                     axis,
@@ -117,7 +125,7 @@ class Robot(abc.ABC):
             joint = joints_to_visit.pop(0)
             if not isinstance(joint, FixedJoint):
                 joint.set_id(num_joints)
-                robot._dof += joint.dof()
+                robot._dof += joint.dof
                 robot._joints.append(joint)
                 num_joints = num_joints + 1
                 joint.child.set_id(num_joints)
@@ -158,6 +166,10 @@ class Robot(abc.ABC):
     @property
     def dtype(self) -> torch.dtype:
         return self._dtype
+
+    @property
+    def device(self) -> torch.device:
+        return self._device
 
     @property
     def dof(self) -> int:

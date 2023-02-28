@@ -17,12 +17,11 @@ from .joint import Joint
 
 
 def ForwardKinematicsFactory(robot: Robot, link_names: Optional[List[str]] = None):
-    links: List[Link] = []
-
-    if link_names is None:
-        links = robot.links
-    else:
-        links = [robot.link_map[name] for name in link_names]
+    links: List[Link] = (
+        robot.links
+        if link_names is None
+        else [robot.link_map[name] for name in link_names]
+    )
 
     link_ids: List[int] = [link.id for link in links]
 

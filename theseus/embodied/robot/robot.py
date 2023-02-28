@@ -125,7 +125,7 @@ class Robot(abc.ABC):
             joint = joints_to_visit.pop(0)
             if not isinstance(joint, FixedJoint):
                 joint.set_id(num_joints)
-                robot._dof += joint.dof()
+                robot._dof += joint.dof
                 robot._joints.append(joint)
                 num_joints = num_joints + 1
                 joint.child.set_id(num_joints)

@@ -17,6 +17,7 @@ class Joint(abc.ABC):
     def __init__(
         self,
         name: str,
+        dof: int,
         id: int = -1,
         parent: Optional[Link] = None,
         child: Optional[Link] = None,
@@ -52,19 +53,22 @@ class Joint(abc.ABC):
             origin[:, 2, 2] = 1
 
         self._name = name
+        self._dof = dof
         self._id = id
         self._parent = parent
         self._child = child
         self._origin = origin
         self._dtype = dtype
         self._device = torch.device(device)
-        self._axis: torch.Tensor = torch.zeros(
-            6, self.dof(), dtype=dtype, device=device
-        )
+        self._axis: torch.Tensor = torch.zeros(6, self.dof, dtype=dtype, device=device)
 
     @property
     def name(self) -> str:
         return self._name
+
+    @property
+    def dof(self) -> int:
+        return self._dof
 
     @property
     def id(self) -> int:
@@ -109,10 +113,6 @@ class Joint(abc.ABC):
         self._origin = origin
 
     @abc.abstractmethod
-    def dof(self) -> int:
-        pass
-
-    @abc.abstractmethod
     def relative_pose(self, angle: Optional[torch.Tensor] = None) -> torch.Tensor:
         pass
 
@@ -128,10 +128,7 @@ class FixedJoint(Joint):
         dtype: Optional[torch.dtype] = None,
         device: DeviceType = None,
     ):
-        super().__init__(name, id, parent, child, origin, dtype, device)
-
-    def dof(self) -> int:
-        return 0
+        super().__init__(name, 0, id, parent, child, origin, dtype, device)
 
     def relative_pose(self, *args) -> torch.Tensor:
         if len(args) != 0:
@@ -150,10 +147,7 @@ class _RevoluteJointImpl(Joint):
         dtype: Optional[torch.dtype] = None,
         device: DeviceType = None,
     ):
-        super().__init__(name, id, parent, child, origin, dtype, device)
-
-    def dof(self) -> int:
-        return 1
+        super().__init__(name, 1, id, parent, child, origin, dtype, device)
 
     @abc.abstractmethod
     def _rotation_impl(self, angle: torch.Tensor) -> torch.Tensor:
@@ -301,10 +295,7 @@ class _PrismaticJointImpl(Joint):
         dtype: Optional[torch.dtype] = None,
         device: DeviceType = None,
     ):
-        super().__init__(name, id, parent, child, origin, dtype, device)
-
-    def dof(self) -> int:
-        return 1
+        super().__init__(name, 1, id, parent, child, origin, dtype, device)
 
     @abc.abstractmethod
     def _translation_impl(self, angle: torch.Tensor) -> torch.Tensor:

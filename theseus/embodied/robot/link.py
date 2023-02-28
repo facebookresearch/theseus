@@ -22,7 +22,7 @@ class Link(abc.ABC):
         self._parent_joint = parent_joint
         self._child_joints = child_joints if child_joints else []
         self._ancestor_links: List[Link] = []
-        self._angle_ids: List[int] = []
+        self._ancestor_active_joint_ids: List[int] = []
         self._dtype = dtype
 
     @property
@@ -35,7 +35,9 @@ class Link(abc.ABC):
 
     @property
     def parent_link(self) -> "Link":
-        return self._parent_joint.parent_link
+        return (
+            self._parent_joint.parent_link if self._parent_joint is not None else None
+        )
 
     @property
     def parent_joint(self) -> Any:
@@ -50,8 +52,8 @@ class Link(abc.ABC):
         return self._ancestor_links
 
     @property
-    def angle_ids(self):
-        return self._angle_ids
+    def ancestor_active_joint_ids(self):
+        return self._ancestor_active_joint_ids
 
     @property
     def dtype(self) -> torch.dtype:
@@ -69,16 +71,15 @@ class Link(abc.ABC):
     def set_ancestor_links(self, ancestor_links: List["Link"]):
         self._ancestor_links = ancestor_links
 
-    def set_angle_ids(self, angle_ids: List[int]):
-        self._angle_ids = angle_ids
+    def set_ancestor_active_joint_ids(self, ancestor_active_joint_ids: List[int]):
+        self._ancestor_active_joint_ids = ancestor_active_joint_ids
 
     def update_ancestor_links(self):
-        joint = self.parent_joint
-        self._ancestors = []
-        while joint is not None:
-            link = joint.parent
-            self._ancestor_links.insert(0, link)
-            joint = link.parent_joint
+        curr = self.parent_link
+        self._ancestor_links = []
+        while curr is not None:
+            self._ancestor_links.insert(0, curr)
+            curr = curr.parent_link
 
     def add_child_joint(self, child_joint: Any):
         self._child_joints.append(child_joint)

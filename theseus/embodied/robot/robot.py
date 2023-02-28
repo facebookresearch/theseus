@@ -152,12 +152,13 @@ class Robot(abc.ABC):
                 link.set_ancestor_links(
                     link.parent_link.ancestor_links + [link.parent_link]
                 )
-                angle_ids = (
-                    link.parent_link.angle_ids
+                ancestor_active_joint_ids = (
+                    link.parent_link.ancestor_active_joint_ids
                     if isinstance(link.parent_joint, FixedJoint)
-                    else link.parent_link.angle_ids + [link.parent_joint.id]
+                    else link.parent_link.ancestor_active_joint_ids
+                    + [link.parent_joint.id]
                 )
-                link.set_angle_ids(angle_ids)
+                link.set_ancestor_active_joint_ids(ancestor_active_joint_ids)
 
         return robot
 

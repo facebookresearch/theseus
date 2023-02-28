@@ -30,7 +30,7 @@ def ForwardKinematicsFactory(robot: Robot, link_names: Optional[List[str]] = Non
     joint_ids: List[int] = []
     for link in links:
         ancestor_links += [anc for anc in link.ancestor_links]
-        joint_ids += link.angle_ids
+        joint_ids += link.ancestor_active_joint_ids
     pose_ids = sorted(list(set([anc.id for anc in ancestor_links] + link_ids)))
     joint_ids = sorted(list(set(joint_ids)))
 
@@ -89,7 +89,7 @@ def ForwardKinematicsFactory(robot: Robot, link_names: Optional[List[str]] = Non
         for link_id in link_ids:
             pose = poses[link_id]
             jac = jposes.new_zeros(angles.shape[0], 6, robot.dof)
-            sel = robot.links[link_id].angle_ids
+            sel = robot.links[link_id].ancestor_active_joint_ids
             jac[:, :, sel] = se3.adjoint(se3.inverse(pose)) @ jposes[:, :, sel]
             jacs.append(jac)
 
@@ -115,14 +115,16 @@ def ForwardKinematicsFactory(robot: Robot, link_names: Optional[List[str]] = Non
             grad_input = grad_outputs[0].new_zeros(grad_outputs[0].shape[0], robot.dof)
 
             for link_id, ret, grad_output in zip(link_ids, rets, grad_outputs):
-                angle_ids = robot.links[link_id].angle_ids
+                ancestor_active_joint_ids = robot.links[
+                    link_id
+                ].ancestor_active_joint_ids
                 temp = se3.project(
                     torch.cat(
                         (grad_output @ ret.transpose(1, 2), grad_output[:, :, 3:]),
                         dim=-1,
                     )
                 ).unsqueeze(-1)
-                grad_pose[:, :, angle_ids] += temp
+                grad_pose[:, :, ancestor_active_joint_ids] += temp
             grad_input[:, joint_ids] = (
                 ctx.jposes[:, :, joint_ids] * grad_pose[:, :, joint_ids]
             ).sum(-2)

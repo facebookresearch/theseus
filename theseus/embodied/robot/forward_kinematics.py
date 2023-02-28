@@ -26,12 +26,12 @@ def ForwardKinematicsFactory(robot: Robot, link_names: Optional[List[str]] = Non
 
     link_ids: List[int] = [link.id for link in links]
 
-    ancestors: List[Link] = []
+    ancestor_links: List[Link] = []
     joint_ids: List[int] = []
     for link in links:
-        ancestors += [anc for anc in link.ancestors]
+        ancestor_links += [anc for anc in link.ancestor_links]
         joint_ids += link.angle_ids
-    pose_ids = sorted(list(set([anc.id for anc in ancestors] + link_ids)))
+    pose_ids = sorted(list(set([anc.id for anc in ancestor_links] + link_ids)))
     joint_ids = sorted(list(set(joint_ids)))
 
     def _forward_kinematics_helper(angles: torch.Tensor):
@@ -48,8 +48,8 @@ def ForwardKinematicsFactory(robot: Robot, link_names: Optional[List[str]] = Non
 
         for id in pose_ids[1:]:
             curr: Link = robot.links[id]
-            joint: Joint = robot.links[id].parent
-            prev: Link = joint.parent
+            joint: Joint = robot.links[id].parent_joint
+            prev: Link = joint.parent_link
             relative_pose = (
                 joint.relative_pose(angles[:, joint.id])
                 if joint.id < robot.dof
@@ -70,7 +70,7 @@ def ForwardKinematicsFactory(robot: Robot, link_names: Optional[List[str]] = Non
 
         for id in pose_ids[1:]:
             link: Link = robot.links[id]
-            joint: Joint = link.parent
+            joint: Joint = link.parent_joint
             if joint.id >= robot.dof:
                 break
             jposes[:, :, joint.id : joint.id + 1] = (

@@ -99,19 +99,19 @@ class Robot(abc.ABC):
                 joint = joint_type(
                     urdf_joint.name, parent=parent, child=child, origin=origin
                 )
-            child.set_parent(joint)
-            parent.add_child(joint)
+            child.set_parent_joint(joint)
+            parent.add_child_joint(joint)
             robot._joint_map[urdf_joint.name] = joint
 
         for _, link in robot.link_map.items():
-            for joint in link._children:
+            for joint in link._child_joints:
                 if isinstance(joint, FixedJoint):
-                    subjoints: List[Joint] = joint.child.children
-                    joint.child.set_children([])
+                    subjoints: List[Joint] = joint.child_link.child_joints
+                    joint.child_link.set_child_joints([])
                     for subjoint in subjoints:
-                        subjoint.set_parent(link)
+                        subjoint.set_parent_link(link)
                         subjoint.set_origin(se3.compose(joint.origin, subjoint.origin))
-                        link.children.append(subjoint)
+                        link.child_joints.append(subjoint)
 
         joints_to_visit: List[Joint] = []
         root = robot.link_map[urdf_model.get_root()]
@@ -119,7 +119,7 @@ class Robot(abc.ABC):
         root.set_id(0)
         robot._links.append(root)
         robot._dof = 0
-        joints_to_visit = joints_to_visit + root.children
+        joints_to_visit = joints_to_visit + root.child_joints
 
         while joints_to_visit:
             joint = joints_to_visit.pop(0)
@@ -128,10 +128,10 @@ class Robot(abc.ABC):
                 robot._dof += joint.dof
                 robot._joints.append(joint)
                 num_joints = num_joints + 1
-                joint.child.set_id(num_joints)
-                robot._links.append(joint.child)
+                joint.child_link.set_id(num_joints)
+                robot._links.append(joint.child_link)
 
-                joints_to_visit = joints_to_visit + joint.child.children
+                joints_to_visit = joints_to_visit + joint.child_link.child_joints
 
         for _, joint in robot.joint_map.items():
             if joint.id >= 0:
@@ -141,19 +141,21 @@ class Robot(abc.ABC):
             joint.set_id(num_joints)
             robot._joints.append(joint)
             num_joints = num_joints + 1
-            joint.child.set_id(num_joints)
-            robot._links.append(joint.child)
+            joint.child_link.set_id(num_joints)
+            robot._links.append(joint.child_link)
 
         robot._num_links = len(robot.links)
         robot._num_joints = len(robot.joints)
 
         for link in robot.links:
-            if link.parent is not None:
-                link.set_ancestors(link.parent.parent.ancestors + [link.parent.parent])
+            if link.parent_joint is not None:
+                link.set_ancestor_links(
+                    link.parent_link.ancestor_links + [link.parent_link]
+                )
                 angle_ids = (
-                    link.parent.parent.angle_ids
-                    if isinstance(link.parent, FixedJoint)
-                    else link.parent.parent.angle_ids + [link.parent.id]
+                    link.parent_link.angle_ids
+                    if isinstance(link.parent_joint, FixedJoint)
+                    else link.parent_link.angle_ids + [link.parent_joint.id]
                 )
                 link.set_angle_ids(angle_ids)
 

@@ -13,15 +13,15 @@ class Link(abc.ABC):
         self,
         name: str,
         id: int = -1,
-        parent: Any = None,
-        children: Optional[List[Any]] = None,
+        parent_joint: Any = None,
+        child_joints: Optional[List[Any]] = None,
         dtype: Optional[torch.dtype] = None,
     ):
         self._name = name
         self._id = id
-        self._parent = parent
-        self._children = children if children else []
-        self._ancestors: List[Link] = []
+        self._parent_joint = parent_joint
+        self._child_joints = child_joints if child_joints else []
+        self._ancestor_links: List[Link] = []
         self._angle_ids: List[int] = []
         self._dtype = dtype
 
@@ -34,16 +34,20 @@ class Link(abc.ABC):
         return self._id
 
     @property
-    def parent(self) -> Any:
-        return self._parent
+    def parent_link(self) -> "Link":
+        return self._parent_joint.parent_link
 
     @property
-    def children(self) -> List[Any]:
-        return self._children
+    def parent_joint(self) -> Any:
+        return self._parent_joint
 
     @property
-    def ancestors(self) -> List["Link"]:
-        return self._ancestors
+    def child_joints(self) -> List[Any]:
+        return self._child_joints
+
+    @property
+    def ancestor_links(self) -> List["Link"]:
+        return self._ancestor_links
 
     @property
     def angle_ids(self):
@@ -56,28 +60,28 @@ class Link(abc.ABC):
     def set_id(self, id: int):
         self._id = id
 
-    def set_parent(self, parent: Any):
-        self._parent = parent
+    def set_parent_joint(self, parent_joint: Any):
+        self._parent_joint = parent_joint
 
-    def set_children(self, children: List[Any]):
-        self._children = children
+    def set_child_joints(self, child_joints: List[Any]):
+        self._child_joints = child_joints
 
-    def set_ancestors(self, ancesotrs: List["Link"]):
-        self._ancestors = ancesotrs
+    def set_ancestor_links(self, ancestor_links: List["Link"]):
+        self._ancestor_links = ancestor_links
 
     def set_angle_ids(self, angle_ids: List[int]):
         self._angle_ids = angle_ids
 
-    def update_ancestors(self):
-        joint = self.parent
+    def update_ancestor_links(self):
+        joint = self.parent_joint
         self._ancestors = []
         while joint is not None:
             link = joint.parent
-            self._ancestors.insert(0, link)
-            joint = link.parent
+            self._ancestor_links.insert(0, link)
+            joint = link.parent_joint
 
-    def add_child(self, child: Any):
-        self._children.append(child)
+    def add_child_joint(self, child_joint: Any):
+        self._child_joints.append(child_joint)
 
-    def remove_child(self, child: Any):
-        self._children.remove(child)
+    def remove_child_joint(self, child_joint: Any):
+        self._child_joints.remove(child_joint)

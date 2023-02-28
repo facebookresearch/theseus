@@ -19,8 +19,8 @@ class Joint(abc.ABC):
         name: str,
         dof: int,
         id: int = -1,
-        parent: Optional[Link] = None,
-        child: Optional[Link] = None,
+        parent_link: Optional[Link] = None,
+        child_link: Optional[Link] = None,
         origin: Optional[torch.Tensor] = None,
         dtype: Optional[torch.dtype] = None,
         device: DeviceType = None,
@@ -55,8 +55,8 @@ class Joint(abc.ABC):
         self._name = name
         self._dof = dof
         self._id = id
-        self._parent = parent
-        self._child = child
+        self._parent_link = parent_link
+        self._child_link = child_link
         self._origin = origin
         self._dtype = dtype
         self._device = torch.device(device)
@@ -75,12 +75,12 @@ class Joint(abc.ABC):
         return self._id
 
     @property
-    def parent(self) -> Optional[Link]:
-        return self._parent
+    def parent_link(self) -> Optional[Link]:
+        return self._parent_link
 
     @property
-    def child(self) -> Optional[Link]:
-        return self._child
+    def child_link(self) -> Optional[Link]:
+        return self._child_link
 
     @property
     def origin(self) -> torch.Tensor:
@@ -101,11 +101,11 @@ class Joint(abc.ABC):
     def set_id(self, id: int):
         self._id = id
 
-    def set_parent(self, parent: Optional[Link]):
-        self._parent = parent
+    def set_parent_link(self, parent_link: Optional[Link]):
+        self._parent_link = parent_link
 
-    def set_child(self, child: Optional[Link]):
-        self._child = child
+    def set_child_link(self, child_link: Optional[Link]):
+        self._child_link = child_link
 
     def set_origin(self, origin: torch.Tensor):
         if origin.shape[0] != 1 or not se3.check_group_tensor(origin):

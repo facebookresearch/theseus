@@ -122,13 +122,13 @@ class FixedJoint(Joint):
         self,
         name: str,
         id: int = -1,
-        parent: Optional[Link] = None,
-        child: Optional[Link] = None,
+        parent_link: Optional[Link] = None,
+        child_link: Optional[Link] = None,
         origin: Optional[torch.Tensor] = None,
         dtype: Optional[torch.dtype] = None,
         device: DeviceType = None,
     ):
-        super().__init__(name, 0, id, parent, child, origin, dtype, device)
+        super().__init__(name, 0, id, parent_link, child_link, origin, dtype, device)
 
     def relative_pose(self, *args) -> torch.Tensor:
         if len(args) != 0:
@@ -141,13 +141,13 @@ class _RevoluteJointImpl(Joint):
         self,
         name: str,
         id: int = -1,
-        parent: Optional[Link] = None,
-        child: Optional[Link] = None,
+        parent_link: Optional[Link] = None,
+        child_link: Optional[Link] = None,
         origin: Optional[torch.Tensor] = None,
         dtype: Optional[torch.dtype] = None,
         device: DeviceType = None,
     ):
-        super().__init__(name, 1, id, parent, child, origin, dtype, device)
+        super().__init__(name, 1, id, parent_link, child_link, origin, dtype, device)
 
     @abc.abstractmethod
     def _rotation_impl(self, angle: torch.Tensor) -> torch.Tensor:
@@ -170,8 +170,8 @@ class RevoluteJoint(_RevoluteJointImpl):
         name: str,
         revolute_axis: torch.Tensor,
         id: int = -1,
-        parent: Optional[Link] = None,
-        child: Optional[Link] = None,
+        parent_link: Optional[Link] = None,
+        child_link: Optional[Link] = None,
         origin: Optional[torch.Tensor] = None,
         dtype: Optional[torch.dtype] = None,
         device: DeviceType = None,
@@ -182,7 +182,7 @@ class RevoluteJoint(_RevoluteJointImpl):
         if revolute_axis.ndim != 2 or revolute_axis.shape != (3, 1):
             raise ValueError("The revolute axis must be a 3-D vector.")
 
-        super().__init__(name, id, parent, child, origin, dtype, device)
+        super().__init__(name, id, parent_link, child_link, origin, dtype, device)
 
         if revolute_axis.dtype != self.dtype:
             raise ValueError(f"The dtype of revolute_axis should be {self.dtype}.")
@@ -205,13 +205,13 @@ class RevoluteJointX(_RevoluteJointImpl):
         self,
         name: str,
         id: int = -1,
-        parent: Optional[Link] = None,
-        child: Optional[Link] = None,
+        parent_link: Optional[Link] = None,
+        child_link: Optional[Link] = None,
         origin: Optional[torch.Tensor] = None,
         dtype: Optional[torch.dtype] = None,
         device: DeviceType = None,
     ):
-        super().__init__(name, id, parent, child, origin, dtype, device)
+        super().__init__(name, id, parent_link, child_link, origin, dtype, device)
         self._axis[3] = 1
 
     def _rotation_impl(self, angle: torch.Tensor) -> torch.Tensor:
@@ -233,13 +233,13 @@ class RevoluteJointY(_RevoluteJointImpl):
         self,
         name: str,
         id: int = -1,
-        parent: Optional[Link] = None,
-        child: Optional[Link] = None,
+        parent_link: Optional[Link] = None,
+        child_link: Optional[Link] = None,
         origin: Optional[torch.Tensor] = None,
         dtype: Optional[torch.dtype] = None,
         device: DeviceType = None,
     ):
-        super().__init__(name, id, parent, child, origin, dtype, device)
+        super().__init__(name, id, parent_link, child_link, origin, dtype, device)
         self._axis[4] = 1
 
     def _rotation_impl(self, angle: torch.Tensor) -> torch.Tensor:
@@ -261,13 +261,13 @@ class RevoluteJointZ(_RevoluteJointImpl):
         self,
         name: str,
         id: int = -1,
-        parent: Optional[Link] = None,
-        child: Optional[Link] = None,
+        parent_link: Optional[Link] = None,
+        child_link: Optional[Link] = None,
         origin: Optional[torch.Tensor] = None,
         dtype: Optional[torch.dtype] = None,
         device: DeviceType = None,
     ):
-        super().__init__(name, id, parent, child, origin, dtype, device)
+        super().__init__(name, id, parent_link, child_link, origin, dtype, device)
         self._axis[5] = 1
 
     def _rotation_impl(self, angle: torch.Tensor) -> torch.Tensor:
@@ -289,13 +289,13 @@ class _PrismaticJointImpl(Joint):
         self,
         name: str,
         id: int = -1,
-        parent: Optional[Link] = None,
-        child: Optional[Link] = None,
+        parent_link: Optional[Link] = None,
+        child_link: Optional[Link] = None,
         origin: Optional[torch.Tensor] = None,
         dtype: Optional[torch.dtype] = None,
         device: DeviceType = None,
     ):
-        super().__init__(name, 1, id, parent, child, origin, dtype, device)
+        super().__init__(name, 1, id, parent_link, child_link, origin, dtype, device)
 
     @abc.abstractmethod
     def _translation_impl(self, angle: torch.Tensor) -> torch.Tensor:
@@ -320,8 +320,8 @@ class PrismaticJoint(_PrismaticJointImpl):
         name: str,
         prismatic_axis: torch.Tensor,
         id: int = -1,
-        parent: Optional[Link] = None,
-        child: Optional[Link] = None,
+        parent_link: Optional[Link] = None,
+        child_link: Optional[Link] = None,
         origin: Optional[torch.Tensor] = None,
         dtype: Optional[torch.dtype] = None,
         device: DeviceType = None,
@@ -332,7 +332,7 @@ class PrismaticJoint(_PrismaticJointImpl):
         if prismatic_axis.ndim != 2 or prismatic_axis.shape != (3, 1):
             raise ValueError("The prismatic axis must be a 3-D vector.")
 
-        super().__init__(name, id, parent, child, origin, dtype, device)
+        super().__init__(name, id, parent_link, child_link, origin, dtype, device)
 
         if prismatic_axis.dtype != self.dtype:
             raise ValueError(f"The dtype of prismatic_axis should be {self.dtype}.")
@@ -355,13 +355,13 @@ class PrismaticJointX(_PrismaticJointImpl):
         self,
         name: str,
         id: int = -1,
-        parent: Optional[Link] = None,
-        child: Optional[Link] = None,
+        parent_link: Optional[Link] = None,
+        child_link: Optional[Link] = None,
         origin: Optional[torch.Tensor] = None,
         dtype: Optional[torch.dtype] = None,
         device: DeviceType = None,
     ):
-        super().__init__(name, id, parent, child, origin, dtype, device)
+        super().__init__(name, id, parent_link, child_link, origin, dtype, device)
         self._axis[3] = 1
 
     def _translation_impl(self, angle: torch.Tensor) -> torch.Tensor:
@@ -392,13 +392,13 @@ class PrismaticJointY(_PrismaticJointImpl):
         self,
         name: str,
         id: int = -1,
-        parent: Optional[Link] = None,
-        child: Optional[Link] = None,
+        parent_link: Optional[Link] = None,
+        child_link: Optional[Link] = None,
         origin: Optional[torch.Tensor] = None,
         dtype: Optional[torch.dtype] = None,
         device: DeviceType = None,
     ):
-        super().__init__(name, id, parent, child, origin, dtype, device)
+        super().__init__(name, id, parent_link, child_link, origin, dtype, device)
         self._axis[4] = 1
 
     def _translation_impl(self, angle: torch.Tensor) -> torch.Tensor:
@@ -429,13 +429,13 @@ class PrismaticJointZ(_PrismaticJointImpl):
         self,
         name: str,
         id: int = -1,
-        parent: Optional[Link] = None,
-        child: Optional[Link] = None,
+        parent_link: Optional[Link] = None,
+        child_link: Optional[Link] = None,
         origin: Optional[torch.Tensor] = None,
         dtype: Optional[torch.dtype] = None,
         device: DeviceType = None,
     ):
-        super().__init__(name, id, parent, child, origin, dtype, device)
+        super().__init__(name, id, parent_link, child_link, origin, dtype, device)
         self._axis[5] = 1
 
     def _translation_impl(self, angle: torch.Tensor) -> torch.Tensor:

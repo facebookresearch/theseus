@@ -86,18 +86,18 @@ class Robot(abc.ABC):
             joint_type = get_joint_type(urdf_joint)
             parent = robot.link_map[urdf_joint.parent]
             child = robot.link_map[urdf_joint.child]
-            if joint_type == RevoluteJoint or joint_type == PrismaticJoint:
+            if joint_type == FixedJoint:
+                joint = joint_type(
+                    urdf_joint.name, parent_link=parent, child_link=child, origin=origin
+                )
+            else:
                 axis = origin.new_tensor(urdf_joint.axis)
                 joint = joint_type(
                     urdf_joint.name,
                     axis,
-                    parent=parent,
-                    child=child,
+                    parent_link=parent,
+                    child_link=child,
                     origin=origin,
-                )
-            else:
-                joint = joint_type(
-                    urdf_joint.name, parent=parent, child=child, origin=origin
                 )
             child.set_parent_joint(joint)
             parent.add_child_joint(joint)

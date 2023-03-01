@@ -38,7 +38,7 @@ a = lie.cast(x, ltype=lie.tgt)
 assert torch.allclose(a, x)
 
 # Some torch functions are supported for LieTensor
-wz: _TangentTensor = torch.cat([w, z])  # type: ignore
+wz = cast(lie.LieTensor, torch.cat([w, z]))
 assert torch.allclose(wz._t, torch.cat([w._t, z._t]))
 
 # If so all elements must be LieTensors...

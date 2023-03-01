@@ -5,7 +5,7 @@
 import builtins
 import threading
 import warnings
-from typing import Any, List, Optional, Protocol, Tuple, Union
+from typing import Any, Callable, List, Optional, Protocol, Tuple, Union
 
 import torch
 from torch.utils._pytree import tree_flatten, tree_map_only
@@ -154,23 +154,27 @@ def _LIE_TENSOR_ERROR_MSG(func):
 class LieTensor(_LieTensorBase):
     # These are operations where calling super().__torch_function__() on the
     # LieTensor itself is safe
-    _SAFE_SUPER_OPS = [
+    _SAFE_SUPER_OPS: List[Callable] = [
         torch.Tensor.shape.__get__,  # type: ignore
         torch.Tensor.is_leaf.__get__,  # type: ignore
         torch.Tensor.requires_grad.__get__,  # type: ignore
         torch.Tensor.retains_grad.__get__,  # type: ignore
         torch.Tensor.grad.__get__,  # type: ignore
+        torch.Tensor.clone,
+        torch.Tensor.new_tensor,
+        torch.cat,
+        torch.is_complex,
+        # torch.stack  # requires arbitrary batch support
     ]
 
     # These are operations where calling super().__torch_function__() on the
-    # lie_tensor._t view is safe. For some of them (e.g., zeros_like), we return
-    # a raw torch.Tensor, because their values don't make sense for LieTensors.
-    _SAFE_AS_EUCL_OPS = [
-        torch.cat,
-        torch.clone,
-        torch.is_complex,
+    # lie_tensor._t view is safe, and that require a return value of
+    # raw torch.Tensor, because their return values don't make sense for LieTensors.
+    _SAFE_AS_EUCL_OPS: List[Callable] = [
         torch.zeros_like,
-        # torch.stack  # requires arbitrary batch support
+        torch.ones_like,
+        torch.Tensor.new_zeros,
+        torch.Tensor.new_ones,
     ]
 
     def __init__(self, tensor: torch.Tensor, ltype: _ltype, requires_grad=None):
@@ -186,16 +190,15 @@ class LieTensor(_LieTensorBase):
     def _torch_function_impl_lie(cls, func, types, args=(), kwargs=None):
         if func in LieTensor._SAFE_AS_EUCL_OPS:
             return super()._torch_func_impl_eucl(
-                func, types, args, kwargs, raw_tensor=func == torch.zeros_like
+                func, types, args, kwargs, raw_tensor=True
             )
         if func in LieTensor._SAFE_SUPER_OPS:
             ltype = cls.get_ltype(args)
             ret = super().__torch_function__(func, types, args, kwargs or {})
             if func == torch.Tensor.grad.__get__:
                 return _EuclideanGrad(ret) if ret is not None else ret
-            else:
-                assert not isinstance(ret, torch.Tensor)
-            return tree_map_only(torch.Tensor, lambda x: LieTensor(ret, ltype), ret)
+            # tree-map to set the ltypes correctly
+            return tree_map_only(LieTensor, lambda x: LieTensor(ret, ltype), ret)
         raise NotImplementedError(
             "Tried to call a torch function not supported by LieTensor. "
             "If trying to operate on the raw tensor data, please use group._t, "

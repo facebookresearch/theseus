@@ -18,7 +18,7 @@ class Joint(abc.ABC):
         self,
         name: str,
         dof: int,
-        id: int = -1,
+        id: Optional[int] = None,
         parent_link: Optional[Link] = None,
         child_link: Optional[Link] = None,
         origin: Optional[torch.Tensor] = None,
@@ -107,7 +107,7 @@ class FixedJoint(Joint):
     def __init__(
         self,
         name: str,
-        id: int = -1,
+        id: Optional[int] = None,
         parent_link: Optional[Link] = None,
         child_link: Optional[Link] = None,
         origin: Optional[torch.Tensor] = None,
@@ -126,7 +126,7 @@ class _RevoluteJointImpl(Joint):
     def __init__(
         self,
         name: str,
-        id: int = -1,
+        id: Optional[int] = None,
         parent_link: Optional[Link] = None,
         child_link: Optional[Link] = None,
         origin: Optional[torch.Tensor] = None,
@@ -155,7 +155,7 @@ class RevoluteJoint(_RevoluteJointImpl):
         self,
         name: str,
         revolute_axis: torch.Tensor,
-        id: int = -1,
+        id: Optional[int] = None,
         parent_link: Optional[Link] = None,
         child_link: Optional[Link] = None,
         origin: Optional[torch.Tensor] = None,
@@ -190,7 +190,7 @@ class RevoluteJointX(_RevoluteJointImpl):
     def __init__(
         self,
         name: str,
-        id: int = -1,
+        id: Optional[int] = None,
         parent_link: Optional[Link] = None,
         child_link: Optional[Link] = None,
         origin: Optional[torch.Tensor] = None,
@@ -218,7 +218,7 @@ class RevoluteJointY(_RevoluteJointImpl):
     def __init__(
         self,
         name: str,
-        id: int = -1,
+        id: Optional[int] = None,
         parent_link: Optional[Link] = None,
         child_link: Optional[Link] = None,
         origin: Optional[torch.Tensor] = None,
@@ -246,7 +246,7 @@ class RevoluteJointZ(_RevoluteJointImpl):
     def __init__(
         self,
         name: str,
-        id: int = -1,
+        id: Optional[int] = None,
         parent_link: Optional[Link] = None,
         child_link: Optional[Link] = None,
         origin: Optional[torch.Tensor] = None,
@@ -274,7 +274,7 @@ class _PrismaticJointImpl(Joint):
     def __init__(
         self,
         name: str,
-        id: int = -1,
+        id: Optional[int] = None,
         parent_link: Optional[Link] = None,
         child_link: Optional[Link] = None,
         origin: Optional[torch.Tensor] = None,
@@ -305,7 +305,7 @@ class PrismaticJoint(_PrismaticJointImpl):
         self,
         name: str,
         prismatic_axis: torch.Tensor,
-        id: int = -1,
+        id: Optional[int] = None,
         parent_link: Optional[Link] = None,
         child_link: Optional[Link] = None,
         origin: Optional[torch.Tensor] = None,
@@ -340,7 +340,7 @@ class PrismaticJointX(_PrismaticJointImpl):
     def __init__(
         self,
         name: str,
-        id: int = -1,
+        id: Optional[int] = None,
         parent_link: Optional[Link] = None,
         child_link: Optional[Link] = None,
         origin: Optional[torch.Tensor] = None,
@@ -377,7 +377,7 @@ class PrismaticJointY(_PrismaticJointImpl):
     def __init__(
         self,
         name: str,
-        id: int = -1,
+        id: Optional[int] = None,
         parent_link: Optional[Link] = None,
         child_link: Optional[Link] = None,
         origin: Optional[torch.Tensor] = None,
@@ -414,7 +414,7 @@ class PrismaticJointZ(_PrismaticJointImpl):
     def __init__(
         self,
         name: str,
-        id: int = -1,
+        id: Optional[int] = None,
         parent_link: Optional[Link] = None,
         child_link: Optional[Link] = None,
         origin: Optional[torch.Tensor] = None,

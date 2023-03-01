@@ -12,7 +12,7 @@ class Link(abc.ABC):
     def __init__(
         self,
         name: str,
-        id: int = -1,
+        id: Optional[int] = None,
         parent_joint: Any = None,
         child_joints: Optional[List[Any]] = None,
         dtype: Optional[torch.dtype] = None,

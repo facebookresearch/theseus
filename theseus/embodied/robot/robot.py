@@ -148,7 +148,7 @@ class Robot(abc.ABC):
                     joints_to_visit = joints_to_visit + joint.child_link.child_joints
 
             for _, joint in robot.joint_map.items():
-                if joint.id >= 0:
+                if joint.id is not None:
                     continue
                 # non-fixed joints should have already been processed
                 if not isinstance(joint, FixedJoint):

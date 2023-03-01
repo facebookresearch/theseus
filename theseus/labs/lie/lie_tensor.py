@@ -100,7 +100,7 @@ class _LieTensorBase(torch.Tensor):
         ret = func(*torch_args, **torch_kwargs)
         if raw_tensor:
             return ret
-        return tree_map_only(torch.Tensor, lambda x: cls(ret, ltype), ret)
+        return tree_map_only(torch.Tensor, lambda x: cls(x, ltype), ret)
 
 
 class _TangentTensor(_LieTensorBase):
@@ -145,7 +145,7 @@ def _eval_op(
     return getattr(fn_lib, op_name)(input0, jacobians=jacobians)
 
 
-def _LIE_TENSOR_ERROR_MSG(func):
+def _LIE_TENSOR_GRAD_ERROR_MSG(func):
     return (
         f"LieTensor.{func.__name__} is only supported for "
         "tensors resulting from euclidean gradient computations."
@@ -156,12 +156,19 @@ class LieTensor(_LieTensorBase):
     # These are operations where calling super().__torch_function__() on the
     # LieTensor itself is safe
     _SAFE_SUPER_OPS: List[Callable] = [
-        torch.Tensor.shape.__get__,  # type: ignore
+        torch.Tensor.device.__get__,  # type: ignore
+        torch.Tensor.dtype.__get__,  # type: ignore
         torch.Tensor.is_leaf.__get__,  # type: ignore
+        torch.Tensor.is_mps.__get__,  # type: ignore
+        torch.Tensor.is_sparse.__get__,  # type: ignore
+        torch.Tensor.is_quantized.__get__,  # type: ignore
+        torch.Tensor.grad.__get__,  # type: ignore
+        torch.Tensor.layout.__get__,  # type: ignore
         torch.Tensor.requires_grad.__get__,  # type: ignore
         torch.Tensor.retains_grad.__get__,  # type: ignore
-        torch.Tensor.grad.__get__,  # type: ignore
+        torch.Tensor.shape.__get__,  # type: ignore
         torch.Tensor.clone,
+        torch.Tensor.__format__,
         torch.Tensor.new_tensor,
         torch.Tensor.to,
         torch.cat,
@@ -177,15 +184,26 @@ class LieTensor(_LieTensorBase):
         torch.ones_like,
         torch.Tensor.new_zeros,
         torch.Tensor.new_ones,
+        torch.allclose,
+        torch.isclose,
     ]
 
     def __init__(self, tensor: torch.Tensor, ltype: _ltype, requires_grad=None):
+        LieTensor._check_is_not_tgt_ltype(ltype)
         super().__init__(tensor, ltype, requires_grad=requires_grad)
         self._fn_lib = _get_fn_lib(self.ltype)
         self._fn_lib.check_group_tensor(self.as_subclass(torch.Tensor))
 
     @staticmethod
+    def _check_is_not_tgt_ltype(ltype: _ltype):
+        if ltype == _ltype.tgt:
+            raise ValueError(
+                "For tangent tensors, please use lie.cast or lie.as_lietensor."
+            )
+
+    @staticmethod
     def from_tensor(tensor: torch.Tensor, ltype: _ltype) -> "LieTensor":
+        LieTensor._check_is_not_tgt_ltype(ltype)
         return _FromTensor.apply(tensor, ltype)
 
     @classmethod
@@ -328,7 +346,10 @@ class LieTensor(_LieTensorBase):
 
     def local(self, other: "LieTensor") -> torch.Tensor:
         if not isinstance(other, LieTensor):
-            raise TypeError("LieTensor.local() expects a single LieTensor argument.")
+            raise TypeError(
+                f"Incorrect argument for LieTensor.local(). "
+                f"Expected LieTensor, but got {type(other)}."
+            )
         if not other.ltype == self.ltype:
             raise ValueError(
                 f"Incorrect ltype for local. Expected {self.ltype}, "
@@ -341,7 +362,7 @@ class LieTensor(_LieTensorBase):
     # ------------------------------------------------------
     def __add__(self, other: TensorType) -> "LieTensor":
         if not isinstance(other, _TangentTensor):
-            raise RuntimeError(
+            raise TypeError(
                 "Operator + is only supported for tensors of ltype=tgt. "
                 "If you intend to add the raw tensor data, please use group._t. "
                 "If you intend to retract, then cast your tensor to ltype=tgt, or "
@@ -350,6 +371,11 @@ class LieTensor(_LieTensorBase):
         return self.retract(other._t)
 
     def __sub__(self, other: TensorType) -> torch.Tensor:
+        if not isinstance(other, LieTensor):
+            raise TypeError(
+                f"Incorrect argument for __sub__. "
+                f"Expected LieTensor, but got {type(other)}"
+            )
         return type_cast(LieTensor, other).local(self)
 
     def __neg__(self) -> "LieTensor":  # type: ignore
@@ -373,7 +399,7 @@ class LieTensor(_LieTensorBase):
             res = self.retract(grad * alpha)
             self.set_(res)
         else:
-            raise RuntimeError(_LIE_TENSOR_ERROR_MSG(self.add_))
+            raise RuntimeError(_LIE_TENSOR_GRAD_ERROR_MSG(self.add_))
 
     def addcdiv_(
         self, tensor1: torch.Tensor, tensor2: torch.Tensor, value: Number = 1.0
@@ -385,7 +411,7 @@ class LieTensor(_LieTensorBase):
         if can_do:
             self.add_(_EuclideanGrad(value * tensor1 / tensor2))
         else:
-            raise RuntimeError(_LIE_TENSOR_ERROR_MSG(self.addcdiv_))
+            raise RuntimeError(_LIE_TENSOR_GRAD_ERROR_MSG(self.addcdiv_))
 
     def addcmul_(
         self, tensor1: torch.Tensor, tensor2: torch.Tensor, value: Number = 1.0
@@ -397,7 +423,7 @@ class LieTensor(_LieTensorBase):
         if can_do:
             self.add_(_EuclideanGrad(value * tensor1 * tensor2))
         else:
-            raise RuntimeError(_LIE_TENSOR_ERROR_MSG(self.addcmul_))
+            raise RuntimeError(_LIE_TENSOR_GRAD_ERROR_MSG(self.addcmul_))
 
 
 # ----------------------------

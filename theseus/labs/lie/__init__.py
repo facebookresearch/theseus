@@ -5,7 +5,6 @@
 from .types import ltype, SE3, SO3, tgt
 from .lie_tensor import (  # usort: skip
     LieTensor,
-    TangentTensor,
     adj,
     as_euclidean,
     as_lietensor,

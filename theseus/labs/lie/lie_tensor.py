@@ -102,7 +102,7 @@ class _LieTensorBase(torch.Tensor):
         return tree_map_only(torch.Tensor, lambda x: cls(ret, ltype), ret)
 
 
-class TangentTensor(_LieTensorBase):
+class _TangentTensor(_LieTensorBase):
     def __init__(self, data: Any, ltype: _ltype, requires_grad=None):
         super().__init__(data, _ltype.tgt, requires_grad=requires_grad)
 
@@ -322,7 +322,7 @@ class LieTensor(_LieTensorBase):
     # Overloaded python and torch operators
     # ------------------------------------------------------
     def __add__(self, other: TensorType) -> "LieTensor":
-        if not isinstance(other, TangentTensor):
+        if not isinstance(other, _TangentTensor):
             raise RuntimeError(
                 "Operator + is only supported for tensors of ltype=tgt. "
                 "If you intend to add the raw tensor data, please use group._t. "
@@ -390,7 +390,7 @@ def new(
     if ltype is None:
         raise ValueError("ltype must be provided.")
     if ltype == _ltype.tgt:
-        return TangentTensor(data, None)
+        return _TangentTensor(data, None)
     return LieTensor(data, ltype=ltype)
 
 

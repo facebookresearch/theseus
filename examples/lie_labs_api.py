@@ -3,6 +3,7 @@ from typing import cast
 import torch
 
 import theseus.labs.lie as lie
+from theseus.labs.lie.lie_tensor import _TangentTensor
 
 g = lie.rand(5, lie.SE3)
 print("LieTensor is tensor", isinstance(g, torch.Tensor), "\n")
@@ -22,26 +23,22 @@ except RuntimeError as e:
 w = g + lie.cast(x, ltype=lie.tgt)
 torch.testing.assert_close(w._t, z._t)
 
-# One could also do like this, but maybe this is too verbose
-y = g + lie.TangentTensor(x, None)
-torch.testing.assert_close(z._t, y._t)
-
-# instances of TangentTensor support arbitrary tensor functions. For example
+# tensors with ltype=lie.tgt support arbitrary tensor functions. For example
 tt = lie.cast(torch.randn(10, 6), ltype=lie.tgt)
 out = torch.nn.functional.linear(tt, torch.randn(2, 6), torch.zeros(2))
-out = cast(lie.TangentTensor, torch.sigmoid(out))  # cast just for typechecking
+out = cast(_TangentTensor, torch.sigmoid(out))  # cast just for typechecking
 print(
     "Any sequence of ops on a tangent tensors results in a",
     type(out).__name__,
     out.ltype,
     "\n",
 )
-# Or combinations of TangentTensor and standard tensors, for example
+# Or combinations of tangent tensors and standard tensors, for example
 a = lie.cast(x, ltype=lie.tgt)
 assert torch.allclose(a, x)
 
 # Some torch functions are supported for LieTensor
-wz: lie.TangentTensor = torch.cat([w, z])  # type: ignore
+wz: _TangentTensor = torch.cat([w, z])  # type: ignore
 assert torch.allclose(wz._t, torch.cat([w._t, z._t]))
 
 # If so all elements must be LieTensors...

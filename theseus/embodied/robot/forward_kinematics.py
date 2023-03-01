@@ -8,10 +8,7 @@ import torch
 from typing import List, Optional
 
 from theseus.labs.lie_functional import se3
-from .robot import Robot
-from .link import Link
-from .joint import Joint
-
+from .robot import Robot, Joint, Link
 
 # TODO: Add support for joints with DOF>1
 

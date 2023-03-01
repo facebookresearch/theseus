@@ -10,8 +10,7 @@ import torch
 
 from theseus.labs.lie_functional import se3
 from theseus.constants import DeviceType
-from .joint import Joint, FixedJoint, RevoluteJoint, PrismaticJoint
-from .link import Link
+from .joint import Joint, FixedJoint, RevoluteJoint, PrismaticJoint, Link
 
 
 class Robot(abc.ABC):

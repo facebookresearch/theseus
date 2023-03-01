@@ -5,12 +5,76 @@
 
 import abc
 import warnings
-from typing import Optional
+from typing import List, Optional
 import torch
 
-from .link import Link
 from theseus.labs.lie_functional import so3
 from theseus.constants import DeviceType
+
+
+class Link(abc.ABC):
+    def __init__(
+        self,
+        name: str,
+        id: Optional[int] = None,
+        parent_joint: "Joint" = None,
+        child_joints: Optional[List["Joint"]] = None,
+        dtype: Optional[torch.dtype] = None,
+    ):
+        self._name = name
+        self._id = id
+        self._parent_joint = parent_joint
+        self._child_joints = child_joints if child_joints else []
+        self._ancestor_links: List[Link] = []
+        self._ancestor_non_fixed_joint_ids: List[int] = []
+        self._dtype = dtype
+
+    @property
+    def name(self) -> str:
+        return self._name
+
+    @property
+    def id(self) -> int:
+        return self._id
+
+    @property
+    def parent_link(self) -> "Link":
+        return (
+            self._parent_joint.parent_link if self._parent_joint is not None else None
+        )
+
+    @property
+    def parent_joint(self) -> "Joint":
+        return self._parent_joint
+
+    @property
+    def child_joints(self) -> List["Joint"]:
+        return self._child_joints
+
+    @property
+    def ancestor_links(self) -> List["Link"]:
+        return self._ancestor_links
+
+    @property
+    def ancestor_non_fixed_joint_ids(self):
+        return self._ancestor_non_fixed_joint_ids
+
+    @property
+    def dtype(self) -> torch.dtype:
+        return self._dtype
+
+    def _update_ancestor_links(self):
+        curr = self.parent_link
+        self._ancestor_links = []
+        while curr is not None:
+            self._ancestor_links.insert(0, curr)
+            curr = curr.parent_link
+
+    def _add_child_joint(self, child_joint: "Joint"):
+        self._child_joints.append(child_joint)
+
+    def _remove_child_joint(self, child_joint: "Joint"):
+        self._child_joints.remove(child_joint)
 
 
 class Joint(abc.ABC):

@@ -16,13 +16,13 @@ from .link import Link
 
 class Robot(abc.ABC):
     def __init__(self, name: str, dtype: torch.dtype = None, device: DeviceType = None):
-        if dtype is None:
-            dtype = torch.get_default_dtype()
-        if device is None:
-            device = torch.device("cpu")
         self._name: str = name
-        self._dtype: torch.dtype = dtype
-        self._device: torch.device = torch.device(device)
+        self._dtype: torch.dtype = (
+            dtype if dtype is not None else torch.get_default_dtype()
+        )
+        self._device: torch.device = (
+            torch.device(device) if device is not None else torch.device("cpu")
+        )
         self._dof: int = 0
         self._num_joints: int = 0
         self._num_links: int = 0
@@ -31,9 +31,9 @@ class Robot(abc.ABC):
         self._joint_map: Dict[str, Joint] = {}
         self._link_map: Dict[str, Link] = {}
 
-    @classmethod
+    @staticmethod
     def from_urdf_file(
-        cls, urdf_file: str, dtype: torch.dtype = None, device: DeviceType = None
+        urdf_file: str, dtype: torch.dtype = None, device: DeviceType = None
     ) -> "Robot":
         if dtype is None:
             dtype = torch.get_default_dtype()

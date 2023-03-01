@@ -215,15 +215,18 @@ class _RevoluteJointImpl(Joint):
         _RevoluteJointImpl._check_input(angle)
         return self._rotation_impl(angle.view(-1, 1))
 
-    def relative_pose(self, *args) -> torch.Tensor:
-        if len(args) != 1:
-            raise ValueError("Revolute joint requires one input.")
-        angle: torch.Tensor = args[0]
+    def _relative_pose_impl(self, angle: torch.Tensor) -> torch.Tensor:
         rot = self.rotation(angle)
         ret = angle.new_empty(angle.shape[0], 3, 4)
         ret[:, :, :3] = self.origin[:, :, :3] @ rot
         ret[:, :, 3] = self.origin[:, :, 3]
         return ret
+
+    def relative_pose(self, *args) -> torch.Tensor:
+        if len(args) != 1:
+            raise ValueError("Revolute joint requires one input.")
+        angle: torch.Tensor = args[0]
+        return self._relative_pose_impl(angle)
 
 
 class RevoluteJoint(_RevoluteJointImpl):
@@ -361,10 +364,7 @@ class _PrismaticJointImpl(Joint):
         _PrismaticJointImpl._check_input(angle)
         return self.translation(angle.view(-1, 1))
 
-    def relative_pose(self, *args) -> torch.Tensor:
-        if len(args) != 1:
-            raise ValueError("Prismatic joint requires one input.")
-        angle: torch.Tensor = args[0]
+    def _relative_pose_impl(self, angle: torch.Tensor) -> torch.Tensor:
         trans = self.translation(angle)
         ret = angle.new_empty(angle.shape[0], 3, 4)
         ret[:, :, :3] = self.origin[:, :, :3]
@@ -372,6 +372,12 @@ class _PrismaticJointImpl(Joint):
             self.origin[:, :, :3] @ trans.view(-1, 3, 1) + self.origin[:, :, 3:]
         )
         return ret
+
+    def relative_pose(self, *args) -> torch.Tensor:
+        if len(args) != 1:
+            raise ValueError("Prismatic joint requires one input.")
+        angle: torch.Tensor = args[0]
+        return self._relative_pose_impl(angle)
 
 
 class PrismaticJoint(_PrismaticJointImpl):
@@ -430,10 +436,7 @@ class _PrismaticJointXYZImpl(_PrismaticJointImpl):
         trans[:, self.axis_id] = angle
         return trans
 
-    def relative_pose(self, *args) -> torch.Tensor:
-        if len(args) != 1:
-            raise ValueError("Prismatic joint requires one input.")
-        angle: torch.Tensor = args[0]
+    def _relative_pose_impl(self, angle: torch.Tensor) -> torch.Tensor:
         _PrismaticJointXYZImpl._check_input(angle)
         angle = angle.view(-1, 1)
         ret = angle.new_empty(angle.shape[0], 3, 4)

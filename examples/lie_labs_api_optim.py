@@ -9,7 +9,7 @@ opt = torch.optim.Adam([g1], lr=0.1)
 
 for i in range(10):
     opt.zero_grad()
-    d = g1.inv().compose(g2).log()
+    d = g2 - g1  # same as g1.local(g2)
     loss = torch.sum(d**2)
     loss.backward()
     opt.step()

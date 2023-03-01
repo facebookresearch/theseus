@@ -320,8 +320,21 @@ class LieTensor(_LieTensorBase):
     jleft_project = _no_jop
 
     def retract(self, delta: TensorType) -> "LieTensor":
-        assert isinstance(delta, torch.Tensor)
+        if not isinstance(delta, torch.Tensor):
+            raise TypeError(
+                "LieTensor.retract() expects a single torch.Tensor argument."
+            )
         return self.compose(self.exp(delta))
+
+    def local(self, other: "LieTensor") -> torch.Tensor:
+        if not isinstance(other, LieTensor):
+            raise TypeError("LieTensor.local() expects a single LieTensor argument.")
+        if not other.ltype == self.ltype:
+            raise ValueError(
+                f"Incorrect ltype for local. Expected {self.ltype}, "
+                f"received {other.ltype}."
+            )
+        return self.inv().compose(other).log()
 
     # ------------------------------------------------------
     # Overloaded python and torch operators
@@ -335,6 +348,12 @@ class LieTensor(_LieTensorBase):
                 "use group.retract(tensor)."
             )
         return self.retract(other._t)
+
+    def __sub__(self, other: TensorType) -> torch.Tensor:
+        return type_cast(LieTensor, other).local(self)
+
+    def __neg__(self) -> "LieTensor":  # type: ignore
+        return self.inv()
 
     def set_(self, tensor: "LieTensor"):  # type: ignore
         if not isinstance(tensor, LieTensor):
@@ -536,3 +555,7 @@ def jcompose(group1: LieTensor, group2: LieTensor) -> _JFnReturnType:
 
 def retract(group: LieTensor, delta: TensorType) -> LieTensor:
     return group.retract(delta)
+
+
+def local(group1: LieTensor, group2: LieTensor) -> torch.Tensor:
+    return group1.local(group2)

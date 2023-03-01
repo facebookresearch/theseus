@@ -21,6 +21,7 @@ from .lie_tensor import (  # usort: skip
     left_act,
     left_project,
     lift,
+    local,
     log,
     project,
     rand,

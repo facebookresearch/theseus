@@ -6,6 +6,7 @@ import builtins
 import threading
 import warnings
 from typing import Any, Callable, List, Optional, Protocol, Tuple, Union
+from typing import cast as type_cast
 
 import torch
 from torch.utils._pytree import tree_flatten, tree_map_only
@@ -162,6 +163,7 @@ class LieTensor(_LieTensorBase):
         torch.Tensor.grad.__get__,  # type: ignore
         torch.Tensor.clone,
         torch.Tensor.new_tensor,
+        torch.Tensor.to,
         torch.cat,
         torch.is_complex,
         # torch.stack  # requires arbitrary batch support
@@ -382,26 +384,28 @@ class LieTensor(_LieTensorBase):
 # ----------------------------
 # Tensor creation functions
 # ----------------------------
-def new(
+def as_lietensor(
     data: Any,
     ltype: Optional[_ltype] = None,
     dtype: torch.dtype = torch.float,
     device: Union[torch.device, str] = None,
 ) -> _LieTensorBase:
     if isinstance(data, LieTensor):
-        return data.new(data)
+        return data
     if ltype is None:
         raise ValueError("ltype must be provided.")
     if ltype == _ltype.tgt:
         return _TangentTensor(data, None)
-    return LieTensor(data, ltype=ltype)
+    return type_cast(
+        LieTensor, LieTensor(data, ltype=ltype).to(device=device, dtype=dtype)
+    )
 
 
-as_lietensor = new
+# With this new version of the code I like @fantaosha's proposal of using the
+# name cast() because it implies type conversion rather than a wrapper being created.
+cast = as_lietensor
 
-# With this new version of the code I like @fantaosha's proposal of using the name cast()
-# because it implies type conversion rather than a wrapper being created.
-cast = new
+from_tensor = LieTensor.from_tensor
 
 
 class _FromTensor(torch.autograd.Function):

@@ -40,6 +40,9 @@ class Robot(abc.ABC):
         if device is None:
             device = torch.device("cpu")
 
+        urdf_model = urdf.URDF.from_xml_file(urdf_file)
+        robot = Robot(urdf_model.name, dtype, device)
+
         def get_joint_type(joint: urdf.Joint):
             if joint.type == "revolute" or joint.type == "continuous":
                 return RevoluteJoint
@@ -74,91 +77,111 @@ class Robot(abc.ABC):
 
             return origin
 
-        urdf_model = urdf.URDF.from_xml_file(urdf_file)
-        robot = Robot(urdf_model.name, dtype, device)
+        def create_links():
+            for urdf_link in urdf_model.links:
+                link = Link(urdf_link.name)
+                robot._link_map[urdf_link.name] = link
 
-        for urdf_link in urdf_model.links:
-            link = Link(urdf_link.name)
-            robot._link_map[urdf_link.name] = link
+        def create_joints():
+            for urdf_joint in urdf_model.joints:
+                origin = get_origin(urdf_joint.origin)
+                joint_type = get_joint_type(urdf_joint)
+                parent = robot.link_map[urdf_joint.parent]
+                child = robot.link_map[urdf_joint.child]
+                if joint_type is FixedJoint:
+                    joint = joint_type(
+                        urdf_joint.name,
+                        parent_link=parent,
+                        child_link=child,
+                        origin=origin,
+                    )
+                else:
+                    axis = origin.new_tensor(urdf_joint.axis)
+                    joint = joint_type(
+                        urdf_joint.name,
+                        axis,
+                        parent_link=parent,
+                        child_link=child,
+                        origin=origin,
+                    )
+                child._parent_joint = joint
+                parent._add_child_joint(joint)
+                robot._joint_map[urdf_joint.name] = joint
 
-        for urdf_joint in urdf_model.joints:
-            origin = get_origin(urdf_joint.origin)
-            joint_type = get_joint_type(urdf_joint)
-            parent = robot.link_map[urdf_joint.parent]
-            child = robot.link_map[urdf_joint.child]
-            if joint_type == FixedJoint:
-                joint = joint_type(
-                    urdf_joint.name, parent_link=parent, child_link=child, origin=origin
-                )
-            else:
-                axis = origin.new_tensor(urdf_joint.axis)
-                joint = joint_type(
-                    urdf_joint.name,
-                    axis,
-                    parent_link=parent,
-                    child_link=child,
-                    origin=origin,
-                )
-            child._parent_joint = joint
-            parent._add_child_joint(joint)
-            robot._joint_map[urdf_joint.name] = joint
+        # move the child joints of any fixed joint to its parent link
+        def simplify_kinematics_tree():
+            for _, link in robot.link_map.items():
+                for joint in link._child_joints:
+                    if isinstance(joint, FixedJoint):
+                        subjoints: List[Joint] = joint.child_link.child_joints
+                        # removing children of fixed joint to avoid traversing twice
+                        joint.child_link._child_joints = []
+                        for subjoint in subjoints:
+                            subjoint._parent_link = link
+                            subjoint._origin = se3.compose(
+                                joint.origin, subjoint.origin
+                            )
+                            link._child_joints.append(subjoint)
 
-        for _, link in robot.link_map.items():
-            for joint in link._child_joints:
-                if isinstance(joint, FixedJoint):
-                    subjoints: List[Joint] = joint.child_link.child_joints
-                    joint.child_link._child_joints = []
-                    for subjoint in subjoints:
-                        subjoint._parent_link = link
-                        subjoint._origin = se3.compose(joint.origin, subjoint.origin)
-                        link.child_joints.append(subjoint)
+        def assign_link_and_joint_id():
+            # link and joint ids are assigned through BFS where fixed joints are skipped
+            # fixed joint ids are always greater than non-fixed joint ids
+            joints_to_visit: List[Joint] = []
+            root = robot.link_map[urdf_model.get_root()]
+            num_joints = 0
+            root._id = 0
+            robot._links.append(root)
+            robot._dof = 0
+            joints_to_visit = joints_to_visit + root.child_joints
 
-        joints_to_visit: List[Joint] = []
-        root = robot.link_map[urdf_model.get_root()]
-        num_joints = 0
-        root._id = 0
-        robot._links.append(root)
-        robot._dof = 0
-        joints_to_visit = joints_to_visit + root.child_joints
+            while joints_to_visit:
+                joint = joints_to_visit.pop(0)
+                # skip fixed joint when assigning joint id
+                if not isinstance(joint, FixedJoint):
+                    joint._id = num_joints
+                    robot._dof += joint.dof
+                    robot._joints.append(joint)
+                    num_joints = num_joints + 1
+                    joint.child_link._id = num_joints
+                    robot._links.append(joint.child_link)
 
-        while joints_to_visit:
-            joint = joints_to_visit.pop(0)
-            if not isinstance(joint, FixedJoint):
+                    joints_to_visit = joints_to_visit + joint.child_link.child_joints
+
+            for _, joint in robot.joint_map.items():
+                if joint.id >= 0:
+                    continue
+                # non-fixed joints should have already been processed
+                if not isinstance(joint, FixedJoint):
+                    raise ValueError(f"{joint.name} is expected to a fixed joint.")
                 joint._id = num_joints
-                robot._dof += joint.dof
                 robot._joints.append(joint)
                 num_joints = num_joints + 1
                 joint.child_link._id = num_joints
                 robot._links.append(joint.child_link)
 
-                joints_to_visit = joints_to_visit + joint.child_link.child_joints
+        def cache_ancestor_active_joint_ids():
+            for link in robot.links:
+                if link.parent_joint is not None:
+                    link._ancestor_links = link.parent_link.ancestor_links + [
+                        link.parent_link
+                    ]
+                    ancestor_active_joint_ids = (
+                        link.parent_link.ancestor_active_joint_ids
+                        if isinstance(link.parent_joint, FixedJoint)
+                        else link.parent_link.ancestor_active_joint_ids
+                        + [link.parent_joint.id]
+                    )
+                    link._ancestor_active_joint_ids = ancestor_active_joint_ids
 
-        for _, joint in robot.joint_map.items():
-            if joint.id >= 0:
-                continue
-            if not isinstance(joint, FixedJoint):
-                raise ValueError(f"{joint.name} is expected to a fixed joint.")
-            joint._id = num_joints
-            robot._joints.append(joint)
-            num_joints = num_joints + 1
-            joint.child_link._id = num_joints
-            robot._links.append(joint.child_link)
+        create_links()
+        create_joints()
+        simplify_kinematics_tree()
+        assign_link_and_joint_id()
 
         robot._num_links = len(robot.links)
         robot._num_joints = len(robot.joints)
 
-        for link in robot.links:
-            if link.parent_joint is not None:
-                link._ancestor_links = link.parent_link.ancestor_links + [
-                    link.parent_link
-                ]
-                ancestor_active_joint_ids = (
-                    link.parent_link.ancestor_active_joint_ids
-                    if isinstance(link.parent_joint, FixedJoint)
-                    else link.parent_link.ancestor_active_joint_ids
-                    + [link.parent_joint.id]
-                )
-                link._ancestor_active_joint_ids = ancestor_active_joint_ids
+        cache_ancestor_active_joint_ids()
 
         return robot
 

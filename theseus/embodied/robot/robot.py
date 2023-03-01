@@ -8,17 +8,21 @@ from typing import List, Dict, Optional
 import urdf_parser_py.urdf as urdf
 import torch
 
-from theseus.geometry.functional import so3, se3
+from theseus.labs.lie_functional import se3
+from theseus.constants import DeviceType
 from .joint import Joint, FixedJoint, RevoluteJoint, PrismaticJoint
 from .link import Link
 
 
 class Robot(abc.ABC):
-    def __init__(self, name: str, dtype: torch.dtype = None):
+    def __init__(self, name: str, dtype: torch.dtype = None, device: DeviceType = None):
         if dtype is None:
             dtype = torch.get_default_dtype()
+        if device is None:
+            device = torch.device("cpu")
         self._name: str = name
         self._dtype: torch.dtype = dtype
+        self._device: torch.device = torch.device(device)
         self._dof: int = 0
         self._num_joints: int = 0
         self._num_links: int = 0
@@ -28,9 +32,13 @@ class Robot(abc.ABC):
         self._link_map: Dict[str, Link] = {}
 
     @classmethod
-    def from_urdf_file(cls, urdf_file: str, dtype: torch.dtype = None) -> "Robot":
+    def from_urdf_file(
+        cls, urdf_file: str, dtype: torch.dtype = None, device: DeviceType = None
+    ) -> "Robot":
         if dtype is None:
             dtype = torch.get_default_dtype()
+        if device is None:
+            device = torch.device("cpu")
 
         def get_joint_type(joint: urdf.Joint):
             if joint.type == "revolute" or joint.type == "continuous":
@@ -43,24 +51,31 @@ class Robot(abc.ABC):
                 raise ValueError(f"{joint.type} is currently not supported.")
 
         def get_origin(urdf_origin: Optional[urdf.Pose] = None) -> torch.Tensor:
-            origin = torch.eye(3, 4, dtype=dtype).unsqueeze(0)
+            origin = torch.eye(3, 4, dtype=dtype, device=device).unsqueeze(0)
             if urdf_origin is None:
                 return origin
 
             if urdf_origin.xyz is not None:
-                origin[:, :, 3] = torch.tensor(urdf_origin.xyz, dtype=dtype)
+                origin[:, :, 3] = origin.new_tensor(urdf_origin.xyz)
 
             if urdf_origin.rpy is not None:
-                rpy = urdf_origin.rpy
-                rot_x = so3.exp(torch.tensor([[rpy[0], 0, 0]], dtype=dtype))
-                rot_y = so3.exp(torch.tensor([[0, rpy[1], 0]], dtype=dtype))
-                rot_z = so3.exp(torch.tensor([[0, 0, rpy[2]]], dtype=dtype))
-                origin[:, :, :3] = rot_x @ rot_y @ rot_z
+                rpy = origin.new_tensor(urdf_origin.rpy)
+                c3, c2, c1 = rpy.cos()
+                s3, s2, s1 = rpy.sin()
+                origin[:, 0, 0] = c1 * c2
+                origin[:, 0, 1] = (c1 * s2 * s3) - (c3 * s1)
+                origin[:, 0, 2] = (s1 * s3) + (c1 * c3 * s2)
+                origin[:, 1, 0] = c2 * s1
+                origin[:, 1, 1] = (c1 * c3) + (s1 * s2 * s3)
+                origin[:, 1, 2] = (c3 * s1 * s2) - (c1 * s3)
+                origin[:, 2, 0] = -s2
+                origin[:, 2, 1] = c2 * s3
+                origin[:, 2, 2] = c2 * c3
 
             return origin
 
         urdf_model = urdf.URDF.from_xml_file(urdf_file)
-        robot = Robot(urdf_model.name, dtype)
+        robot = Robot(urdf_model.name, dtype, device)
 
         for urdf_link in urdf_model.links:
             link = Link(urdf_link.name)
@@ -71,72 +86,88 @@ class Robot(abc.ABC):
             joint_type = get_joint_type(urdf_joint)
             parent = robot.link_map[urdf_joint.parent]
             child = robot.link_map[urdf_joint.child]
-            if joint_type == RevoluteJoint or joint_type == PrismaticJoint:
-                axis = torch.tensor(urdf_joint.axis, dtype=dtype)
+            if joint_type == FixedJoint:
+                joint = joint_type(
+                    urdf_joint.name, parent_link=parent, child_link=child, origin=origin
+                )
+            else:
+                axis = origin.new_tensor(urdf_joint.axis)
                 joint = joint_type(
                     urdf_joint.name,
                     axis,
-                    parent=parent,
-                    child=child,
+                    parent_link=parent,
+                    child_link=child,
                     origin=origin,
                 )
-            else:
-                joint = joint_type(
-                    urdf_joint.name, parent=parent, child=child, origin=origin
-                )
-            child.set_parent(joint)
-            parent.add_child(joint)
+            child._parent_joint = joint
+            parent._add_child_joint(joint)
             robot._joint_map[urdf_joint.name] = joint
 
         for _, link in robot.link_map.items():
-            for joint in link._children:
+            for joint in link._child_joints:
                 if isinstance(joint, FixedJoint):
-                    subjoints: List[Joint] = joint.child.children
-                    joint.child.set_children([])
+                    subjoints: List[Joint] = joint.child_link.child_joints
+                    joint.child_link._child_joints = []
                     for subjoint in subjoints:
-                        subjoint.set_parent(link)
-                        subjoint.set_origin(se3.compose(joint.origin, subjoint.origin))
-                        link.children.append(subjoint)
+                        subjoint._parent_link = link
+                        subjoint._origin = se3.compose(joint.origin, subjoint.origin)
+                        link.child_joints.append(subjoint)
 
         joints_to_visit: List[Joint] = []
         root = robot.link_map[urdf_model.get_root()]
         num_joints = 0
-        root.set_id(0)
+        root._id = 0
         robot._links.append(root)
         robot._dof = 0
-        joints_to_visit = joints_to_visit + root.children
+        joints_to_visit = joints_to_visit + root.child_joints
 
         while joints_to_visit:
             joint = joints_to_visit.pop(0)
             if not isinstance(joint, FixedJoint):
-                joint.set_id(num_joints)
-                robot._dof += joint.dof()
+                joint._id = num_joints
+                robot._dof += joint.dof
                 robot._joints.append(joint)
                 num_joints = num_joints + 1
-                joint.child.set_id(num_joints)
-                robot._links.append(joint.child)
+                joint.child_link._id = num_joints
+                robot._links.append(joint.child_link)
 
-                joints_to_visit = joints_to_visit + joint.child.children
+                joints_to_visit = joints_to_visit + joint.child_link.child_joints
 
         for _, joint in robot.joint_map.items():
             if joint.id >= 0:
                 continue
             if not isinstance(joint, FixedJoint):
                 raise ValueError(f"{joint.name} is expected to a fixed joint.")
-            joint.set_id(num_joints)
+            joint._id = num_joints
             robot._joints.append(joint)
             num_joints = num_joints + 1
-            joint.child.set_id(num_joints)
-            robot._links.append(joint.child)
+            joint.child_link._id = num_joints
+            robot._links.append(joint.child_link)
 
         robot._num_links = len(robot.links)
         robot._num_joints = len(robot.joints)
 
         for link in robot.links:
-            if link.parent is not None:
-                link.set_ancestors(link.parent.parent.ancestors + [link.parent.parent])
+            if link.parent_joint is not None:
+                link._ancestor_links = link.parent_link.ancestor_links + [
+                    link.parent_link
+                ]
+                ancestor_active_joint_ids = (
+                    link.parent_link.ancestor_active_joint_ids
+                    if isinstance(link.parent_joint, FixedJoint)
+                    else link.parent_link.ancestor_active_joint_ids
+                    + [link.parent_joint.id]
+                )
+                link._ancestor_active_joint_ids = ancestor_active_joint_ids
 
         return robot
+
+    def get_links(self, link_names: Optional[List[str]] = None) -> List[Link]:
+        return (
+            self.links
+            if link_names is None
+            else [self.link_map[name] for name in link_names]
+        )
 
     @property
     def name(self) -> str:
@@ -145,6 +176,10 @@ class Robot(abc.ABC):
     @property
     def dtype(self) -> torch.dtype:
         return self._dtype
+
+    @property
+    def device(self) -> torch.device:
+        return self._device
 
     @property
     def dof(self) -> int:

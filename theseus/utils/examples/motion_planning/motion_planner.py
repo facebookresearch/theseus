@@ -53,6 +53,57 @@ class _XYDifference(th.CostFunction):
         )
 
 
+class Nonholonomic(th.CostFunction):
+    def __init__(
+        self,
+        vel: th.Vector,
+        cost_weight: th.CostWeight,
+        name: Optional[str] = None,
+    ):
+        super().__init__(cost_weight, name=name)
+        if vel.dof() != 3:
+            raise ValueError(
+                "Nonholonomic only accepts 3D vectors, " "representing vx, vy, vtheta"
+            )
+        self.vel = vel
+        self.register_optim_vars(["vel"])
+        self.weight = cost_weight
+
+    def dim(self):
+        return 1
+
+    def _compute_error(self) -> Tuple[torch.Tensor, torch.Tensor, torch.Tensor]:
+        vel = self.vel.tensor.unsqueeze(2)
+        cos_v_theta = vel[:, 2].cos()
+        sin_v_theta = vel[:, 2].sin()
+        error = vel[:, 1] * cos_v_theta - vel[:, 0] * sin_v_theta
+        return error, cos_v_theta, sin_v_theta
+
+    def error(self) -> torch.Tensor:
+        return self._compute_error()[0]
+
+    def jacobians(self) -> Tuple[List[torch.Tensor], torch.Tensor]:
+        # Pre-allocate jacobian tensors
+        batch_size = self.vel.shape[0]
+        Jvel = self.vel.tensor.new_zeros(batch_size, 1, 3)
+
+        error, cos_v_theta, sin_v_theta = self._compute_error()
+        Jvel[..., 0] = -sin_v_theta
+        Jvel[..., 1] = cos_v_theta
+        Jvel[..., 2] = -(
+            self.vel[:, 1:2] * sin_v_theta + self.vel[:, 0:1] * cos_v_theta
+        )
+
+        return [Jvel], error
+
+    def _copy_impl(self, new_name: Optional[str] = None) -> "Nonholonomic":
+        return Nonholonomic(
+            self.vel.copy(),
+            self.weight.copy(),
+            name=new_name,
+        )
+
+
 class MotionPlannerObjective(th.Objective):
     def __init__(
         self,
@@ -65,6 +116,7 @@ class MotionPlannerObjective(th.Objective):
         use_single_collision_weight: bool = True,
         pose_type: Union[Type[th.Point2], Type[th.SE2]] = th.Point2,
         dtype: torch.dtype = torch.double,
+        nonholonomic_w: float = 0.0,
     ):
         for v in [
             map_size,
@@ -193,6 +245,10 @@ class MotionPlannerObjective(th.Objective):
             )
         )
 
+        if nonholonomic_w > 0.0:
+            assert pose_type == th.SE2
+            nhw = th.ScaleCostWeight(nonholonomic_w, name="nonholonomic_w")
+
         # Next we add 2-D collisions and GP cost functions, and associate them with the
         # cost weights created above. We need a separate cost function for each time
         # step
@@ -223,6 +279,8 @@ class MotionPlannerObjective(th.Objective):
                     )
                 )
             )
+            if nonholonomic_w > 0.0:
+                self.add(Nonholonomic(velocities[i], nhw, name=f"nonholonomic_{i}"))
 
 
 class MotionPlanner:
@@ -244,6 +302,7 @@ class MotionPlanner:
         num_time_steps: Optional[int] = None,
         use_single_collision_weight: bool = True,
         pose_type: Union[Type[th.Point2], Type[th.SE2]] = th.Point2,
+        nonholonomic_w: float = 0.0,
     ):
         if objective is None:
             self.objective = MotionPlannerObjective(
@@ -256,6 +315,7 @@ class MotionPlanner:
                 use_single_collision_weight=use_single_collision_weight,
                 pose_type=pose_type,
                 dtype=dtype,
+                nonholonomic_w=nonholonomic_w,
             )
         else:
             self.objective = objective

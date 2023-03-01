@@ -23,6 +23,7 @@ class Link(abc.ABC):
     ):
         self._name = name
         self._id = id
+        # self._parent_joint is None means that the link is rigidly connected to the world
         self._parent_joint = parent_joint
         self._child_joints = child_joints if child_joints else []
         self._ancestor_links: List[Link] = []
@@ -226,11 +227,8 @@ class RevoluteJoint(_RevoluteJointImpl):
         dtype: Optional[torch.dtype] = None,
         device: DeviceType = None,
     ):
-        if revolute_axis.ndim == 1:
-            revolute_axis = revolute_axis.view(-1, 1)
-
-        if revolute_axis.ndim != 2 or revolute_axis.shape != (3, 1):
-            raise ValueError("The revolute axis must be a 3-D vector.")
+        if revolute_axis.numel() != 3:
+            raise ValueError("The revolute axis must have 3 elements.")
 
         super().__init__(name, id, parent_link, child_link, origin, dtype, device)
 
@@ -240,7 +238,7 @@ class RevoluteJoint(_RevoluteJointImpl):
         if revolute_axis.device != self.device:
             raise ValueError(f"The device of revolute_axis should be {self.device}.")
 
-        self._axis[3:] = revolute_axis
+        self._axis[3:] = revolute_axis.view(-1, 1)
 
     def _rotation_impl(self, angle: torch.Tensor) -> torch.Tensor:
         if angle.ndim == 1:
@@ -250,7 +248,47 @@ class RevoluteJoint(_RevoluteJointImpl):
         return so3.exp(angle @ self.axis[3:].view(1, -1))
 
 
-class RevoluteJointX(_RevoluteJointImpl):
+class _RevoluteJointXYZImpl(_RevoluteJointImpl):
+    axis_info = [[0, 1, 2], [1, 2, 0], [2, 0, 1]]
+
+    def __init__(
+        self,
+        name: str,
+        axis_id: int,
+        id: Optional[int] = None,
+        parent_link: Optional[Link] = None,
+        child_link: Optional[Link] = None,
+        origin: Optional[torch.Tensor] = None,
+        dtype: Optional[torch.dtype] = None,
+        device: DeviceType = None,
+    ):
+        super().__init__(name, id, parent_link, child_link, origin, dtype, device)
+        if axis_id < 0 or axis_id >= 3:
+            raise ValueError("The axis_id must be one of (0, 1, 2).")
+        self._axis_id = axis_id
+        self._axis[self.axis_id + 3] = 1
+
+    @property
+    def axis_id(self) -> int:
+        return self._axis_id
+
+    def _rotation_impl(self, angle: torch.Tensor) -> torch.Tensor:
+        if angle.ndim == 2 and angle.shape[1] == 1:
+            angle = angle.view(-1)
+        if angle.ndim != 1:
+            raise ValueError("The joint angle must be a vector.")
+        info = _RevoluteJointXYZImpl.axis_info[self.axis_id]
+        rot = angle.new_zeros(angle.shape[0], 3, 3)
+        rot[:, info[0], info[0]] = 1
+        rot[:, info[1], info[1]] = angle.cos()
+        rot[:, info[2], info[2]] = rot[:, info[1], info[1]]
+        rot[:, info[2], info[1]] = angle.sin()
+        rot[:, info[1], info[2]] = -rot[:, info[2], info[1]]
+
+        return rot
+
+
+class RevoluteJointX(_RevoluteJointXYZImpl):
     def __init__(
         self,
         name: str,
@@ -261,24 +299,10 @@ class RevoluteJointX(_RevoluteJointImpl):
         dtype: Optional[torch.dtype] = None,
         device: DeviceType = None,
     ):
-        super().__init__(name, id, parent_link, child_link, origin, dtype, device)
-        self._axis[3] = 1
-
-    def _rotation_impl(self, angle: torch.Tensor) -> torch.Tensor:
-        if angle.ndim == 2 and angle.shape[1] == 1:
-            angle = angle.view(-1)
-        if angle.ndim != 1:
-            raise ValueError("The joint angle must be a vector.")
-        rot = angle.new_zeros(angle.shape[0], 3, 3)
-        rot[:, 0, 0] = 1
-        rot[:, 1, 1] = angle.cos()
-        rot[:, 2, 1] = angle.sin()
-        rot[:, 1, 2] = -rot[:, 2, 1]
-        rot[:, 2, 2] = rot[:, 1, 1]
-        return rot
+        super().__init__(name, id, 0, parent_link, child_link, origin, dtype, device)
 
 
-class RevoluteJointY(_RevoluteJointImpl):
+class RevoluteJointY(_RevoluteJointXYZImpl):
     def __init__(
         self,
         name: str,
@@ -289,24 +313,10 @@ class RevoluteJointY(_RevoluteJointImpl):
         dtype: Optional[torch.dtype] = None,
         device: DeviceType = None,
     ):
-        super().__init__(name, id, parent_link, child_link, origin, dtype, device)
-        self._axis[4] = 1
-
-    def _rotation_impl(self, angle: torch.Tensor) -> torch.Tensor:
-        if angle.ndim == 2 and angle.shape[1] == 1:
-            angle = angle.view(-1)
-        if angle.ndim != 1:
-            raise ValueError("The joint angle must be a vector.")
-        rot = angle.new_zeros(angle.shape[0], 3, 3)
-        rot[:, 1, 1] = 1
-        rot[:, 0, 0] = angle.cos()
-        rot[:, 0, 2] = angle.sin()
-        rot[:, 2, 0] = -rot[:, 0, 2]
-        rot[:, 2, 2] = rot[:, 0, 0]
-        return rot
+        super().__init__(name, id, 1, parent_link, child_link, origin, dtype, device)
 
 
-class RevoluteJointZ(_RevoluteJointImpl):
+class RevoluteJointZ(_RevoluteJointXYZImpl):
     def __init__(
         self,
         name: str,
@@ -317,21 +327,7 @@ class RevoluteJointZ(_RevoluteJointImpl):
         dtype: Optional[torch.dtype] = None,
         device: DeviceType = None,
     ):
-        super().__init__(name, id, parent_link, child_link, origin, dtype, device)
-        self._axis[5] = 1
-
-    def _rotation_impl(self, angle: torch.Tensor) -> torch.Tensor:
-        if angle.ndim == 2 and angle.shape[1] == 1:
-            angle = angle.view(-1)
-        if angle.ndim != 1:
-            raise ValueError("The joint angle must be a vector.")
-        rot = angle.new_zeros(angle.shape[0], 3, 3)
-        rot[:, 2, 2] = 1
-        rot[:, 0, 0] = angle.cos()
-        rot[:, 1, 0] = angle.sin()
-        rot[:, 0, 1] = -rot[:, 1, 0]
-        rot[:, 1, 1] = rot[:, 0, 0]
-        return rot
+        super().__init__(name, id, 2, parent_link, child_link, origin, dtype, device)
 
 
 class _PrismaticJointImpl(Joint):
@@ -376,11 +372,8 @@ class PrismaticJoint(_PrismaticJointImpl):
         dtype: Optional[torch.dtype] = None,
         device: DeviceType = None,
     ):
-        if prismatic_axis.ndim == 1:
-            prismatic_axis = prismatic_axis.view(-1, 1)
-
-        if prismatic_axis.ndim != 2 or prismatic_axis.shape != (3, 1):
-            raise ValueError("The prismatic axis must be a 3-D vector.")
+        if prismatic_axis.numel() != 3:
+            raise ValueError("The prismatic axis must have 3 elements.")
 
         super().__init__(name, id, parent_link, child_link, origin, dtype, device)
 
@@ -390,7 +383,7 @@ class PrismaticJoint(_PrismaticJointImpl):
         if prismatic_axis.device != self.device:
             raise ValueError(f"The device of prismatic_axis should be {self.device}.")
 
-        self._axis[:3] = prismatic_axis
+        self._axis[:3] = prismatic_axis.view(-1, 1)
 
     def _translation_impl(self, angle: torch.Tensor) -> torch.Tensor:
         if angle.ndim == 1:
@@ -400,10 +393,11 @@ class PrismaticJoint(_PrismaticJointImpl):
         return angle @ self.axis[:3].view(1, -1)
 
 
-class PrismaticJointX(_PrismaticJointImpl):
+class _PrismaticJointXYZImpl(_PrismaticJointImpl):
     def __init__(
         self,
         name: str,
+        axis_id: int,
         id: Optional[int] = None,
         parent_link: Optional[Link] = None,
         child_link: Optional[Link] = None,
@@ -412,7 +406,14 @@ class PrismaticJointX(_PrismaticJointImpl):
         device: DeviceType = None,
     ):
         super().__init__(name, id, parent_link, child_link, origin, dtype, device)
-        self._axis[3] = 1
+        if axis_id < 0 or axis_id >= 3:
+            raise ValueError("The axis_id must be one of (0, 1, 2).")
+        self._axis_id = axis_id
+        self._axis[axis_id] = 1
+
+    @property
+    def axis_id(self) -> int:
+        return self._axis_id
 
     def _translation_impl(self, angle: torch.Tensor) -> torch.Tensor:
         if angle.ndim == 2 and angle.shape[1] == 1:
@@ -420,7 +421,7 @@ class PrismaticJointX(_PrismaticJointImpl):
         if angle.ndim != 1:
             raise ValueError("The joint angle must be a vector.")
         trans = angle.new_zeros(angle.shape[0], 3)
-        trans[:, 0] = angle
+        trans[:, self.axis_id] = angle
         return trans
 
     def relative_pose(self, *args) -> torch.Tensor:
@@ -433,11 +434,11 @@ class PrismaticJointX(_PrismaticJointImpl):
             raise ValueError("The joint angle must be a vector.")
         ret = angle.new_empty(angle.shape[0], 3, 4)
         ret[:, :, :3] = self.origin[:, :, :3]
-        ret[:, :, 3] = angle * self.origin[:, :, 0] + self.origin[:, :, 3]
+        ret[:, :, 3] = angle * self.origin[:, :, self.axis_id] + self.origin[:, :, 3]
         return ret
 
 
-class PrismaticJointY(_PrismaticJointImpl):
+class PrismaticJointX(_PrismaticJointXYZImpl):
     def __init__(
         self,
         name: str,
@@ -448,33 +449,10 @@ class PrismaticJointY(_PrismaticJointImpl):
         dtype: Optional[torch.dtype] = None,
         device: DeviceType = None,
     ):
-        super().__init__(name, id, parent_link, child_link, origin, dtype, device)
-        self._axis[4] = 1
-
-    def _translation_impl(self, angle: torch.Tensor) -> torch.Tensor:
-        if angle.ndim == 2 and angle.shape[1] == 1:
-            angle = angle.view(-1)
-        if angle.ndim != 1:
-            raise ValueError("The joint angle must be a vector.")
-        trans = angle.new_zeros(angle.shape[0], 3)
-        trans[:, 1] = angle
-        return trans
-
-    def relative_pose(self, *args) -> torch.Tensor:
-        if len(args) != 1:
-            raise ValueError("Prismatic joint requires one input.")
-        angle: torch.Tensor = args[0]
-        if angle.ndim == 1:
-            angle = angle.view(-1, 1)
-        if angle.ndim != 2 or angle.shape[1] != 1:
-            raise ValueError("The joint angle must be a vector.")
-        ret = angle.new_empty(angle.shape[0], 3, 4)
-        ret[:, :, :3] = self.origin[:, :, :3]
-        ret[:, :, 3] = angle * self.origin[:, :, 1] + self.origin[:, :, 3]
-        return ret
+        super().__init__(name, id, 0, parent_link, child_link, origin, dtype, device)
 
 
-class PrismaticJointZ(_PrismaticJointImpl):
+class PrismaticJointY(_PrismaticJointXYZImpl):
     def __init__(
         self,
         name: str,
@@ -485,27 +463,18 @@ class PrismaticJointZ(_PrismaticJointImpl):
         dtype: Optional[torch.dtype] = None,
         device: DeviceType = None,
     ):
-        super().__init__(name, id, parent_link, child_link, origin, dtype, device)
-        self._axis[5] = 1
+        super().__init__(name, id, 1, parent_link, child_link, origin, dtype, device)
 
-    def _translation_impl(self, angle: torch.Tensor) -> torch.Tensor:
-        if angle.ndim == 2 and angle.shape[1] == 1:
-            angle = angle.view(-1)
-        if angle.ndim != 1:
-            raise ValueError("The joint angle must be a vector.")
-        trans = angle.new_zeros(angle.shape[0], 3)
-        trans[:, 2] = angle
-        return trans
 
-    def relative_pose(self, *args) -> torch.Tensor:
-        if len(args) != 1:
-            raise ValueError("Prismatic joint requires one input.")
-        angle: torch.Tensor = args[0]
-        if angle.ndim == 1:
-            angle = angle.view(-1, 1)
-        if angle.ndim != 2 or angle.shape[1] != 1:
-            raise ValueError("The joint angle must be a vector.")
-        ret = angle.new_empty(angle.shape[0], 3, 4)
-        ret[:, :, :3] = self.origin[:, :, :3]
-        ret[:, :, 3] = angle * self.origin[:, :, 2] + self.origin[:, :, 3]
-        return ret
+class PrismaticJointZ(_PrismaticJointXYZImpl):
+    def __init__(
+        self,
+        name: str,
+        id: Optional[int] = None,
+        parent_link: Optional[Link] = None,
+        child_link: Optional[Link] = None,
+        origin: Optional[torch.Tensor] = None,
+        dtype: Optional[torch.dtype] = None,
+        device: DeviceType = None,
+    ):
+        super().__init__(name, id, 2, parent_link, child_link, origin, dtype, device)

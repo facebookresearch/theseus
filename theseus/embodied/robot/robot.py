@@ -123,12 +123,23 @@ class Robot(abc.ABC):
                             )
                             link._child_joints.append(subjoint)
 
-        def assign_link_and_joint_id():
+        def update_kinematics_tree(joint: Joint):
+            # update joint
+            joint._id = len(robot._joints)
+            robot._joints.append(joint)
+            robot._dof += joint.dof
+            # update link
+            joint.child_link._id = len(robot._links)
+            robot._links.append(joint.child_link)
+
+        def build_kinematics_tree():
             # link and joint ids are assigned through BFS where fixed joints are skipped
             # fixed joint ids are always greater than non-fixed joint ids
+            robot._links = []
+            robot._joints = []
+
             joints_to_visit: List[Joint] = []
             root = robot.link_map[urdf_model.get_root()]
-            num_joints = 0
             root._id = 0
             robot._links.append(root)
             robot._dof = 0
@@ -138,13 +149,8 @@ class Robot(abc.ABC):
                 joint = joints_to_visit.pop(0)
                 # skip fixed joint when assigning joint id
                 if not isinstance(joint, FixedJoint):
-                    joint._id = num_joints
-                    robot._dof += joint.dof
-                    robot._joints.append(joint)
-                    num_joints = num_joints + 1
-                    joint.child_link._id = num_joints
-                    robot._links.append(joint.child_link)
-
+                    # update degrees of freedom
+                    update_kinematics_tree(joint)
                     joints_to_visit = joints_to_visit + joint.child_link.child_joints
 
             for _, joint in robot.joint_map.items():
@@ -153,11 +159,8 @@ class Robot(abc.ABC):
                 # non-fixed joints should have already been processed
                 if not isinstance(joint, FixedJoint):
                     raise ValueError(f"{joint.name} is expected to a fixed joint.")
-                joint._id = num_joints
-                robot._joints.append(joint)
-                num_joints = num_joints + 1
-                joint.child_link._id = num_joints
-                robot._links.append(joint.child_link)
+                # fixed joint ids are greather than these of non-fixed ones
+                update_kinematics_tree(joint)
 
         # cache ancester non-fixed joints to ease FK computation
         def cache_ancestor_non_fixed_joint_ids():
@@ -177,7 +180,7 @@ class Robot(abc.ABC):
         create_links()
         create_joints()
         simplify_kinematics_tree()
-        assign_link_and_joint_id()
+        build_kinematics_tree()
 
         robot._num_links = len(robot.links)
         robot._num_joints = len(robot.joints)

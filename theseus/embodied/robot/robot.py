@@ -100,7 +100,7 @@ class Robot(abc.ABC):
                     origin=origin,
                 )
             child._parent_joint = joint
-            parent.add_child_joint(joint)
+            parent._add_child_joint(joint)
             robot._joint_map[urdf_joint.name] = joint
 
         for _, link in robot.link_map.items():

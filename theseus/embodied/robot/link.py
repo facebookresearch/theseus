@@ -59,15 +59,15 @@ class Link(abc.ABC):
     def dtype(self) -> torch.dtype:
         return self._dtype
 
-    def update_ancestor_links(self):
+    def _update_ancestor_links(self):
         curr = self.parent_link
         self._ancestor_links = []
         while curr is not None:
             self._ancestor_links.insert(0, curr)
             curr = curr.parent_link
 
-    def add_child_joint(self, child_joint: Any):
+    def _add_child_joint(self, child_joint: Any):
         self._child_joints.append(child_joint)
 
-    def remove_child_joint(self, child_joint: Any):
+    def _remove_child_joint(self, child_joint: Any):
         self._child_joints.remove(child_joint)

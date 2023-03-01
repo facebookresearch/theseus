@@ -22,7 +22,7 @@ class Link(abc.ABC):
         self._parent_joint = parent_joint
         self._child_joints = child_joints if child_joints else []
         self._ancestor_links: List[Link] = []
-        self._ancestor_active_joint_ids: List[int] = []
+        self._ancestor_non_fixed_joint_ids: List[int] = []
         self._dtype = dtype
 
     @property
@@ -52,8 +52,8 @@ class Link(abc.ABC):
         return self._ancestor_links
 
     @property
-    def ancestor_active_joint_ids(self):
-        return self._ancestor_active_joint_ids
+    def ancestor_non_fixed_joint_ids(self):
+        return self._ancestor_non_fixed_joint_ids
 
     @property
     def dtype(self) -> torch.dtype:

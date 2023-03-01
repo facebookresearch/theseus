@@ -159,19 +159,20 @@ class Robot(abc.ABC):
                 joint.child_link._id = num_joints
                 robot._links.append(joint.child_link)
 
-        def cache_ancestor_active_joint_ids():
+        # cache ancester non-fixed joints to ease FK computation
+        def cache_ancestor_non_fixed_joint_ids():
             for link in robot.links:
                 if link.parent_joint is not None:
                     link._ancestor_links = link.parent_link.ancestor_links + [
                         link.parent_link
                     ]
-                    ancestor_active_joint_ids = (
-                        link.parent_link.ancestor_active_joint_ids
+                    ancestor_non_fixed_joint_ids = (
+                        link.parent_link.ancestor_non_fixed_joint_ids
                         if isinstance(link.parent_joint, FixedJoint)
-                        else link.parent_link.ancestor_active_joint_ids
+                        else link.parent_link.ancestor_non_fixed_joint_ids
                         + [link.parent_joint.id]
                     )
-                    link._ancestor_active_joint_ids = ancestor_active_joint_ids
+                    link._ancestor_non_fixed_joint_ids = ancestor_non_fixed_joint_ids
 
         create_links()
         create_joints()
@@ -181,7 +182,7 @@ class Robot(abc.ABC):
         robot._num_links = len(robot.links)
         robot._num_joints = len(robot.joints)
 
-        cache_ancestor_active_joint_ids()
+        cache_ancestor_non_fixed_joint_ids()
 
         return robot
 

@@ -99,8 +99,8 @@ class Joint(abc.ABC):
 
             if dtype is not None and origin.dtype != dtype:
                 warnings.warn(
-                    f"tensor.dtype {origin.dtype} does not match given dtype {dtype}, "
-                    "tensor.dtype will take precendence."
+                    f"The origin's dtype {origin.dtype} does not match given dtype {dtype}, "
+                    "Origin's dtype will take precendence."
                 )
             dtype = origin.dtype
 
@@ -204,11 +204,22 @@ class _RevoluteJointImpl(Joint):
     def _rotation_impl(self, angle: torch.Tensor) -> torch.Tensor:
         pass
 
+    @staticmethod
+    def _check_input(angle: torch.Tensor):
+        if angle.ndim == 1:
+            angle = angle.view(-1, 1)
+        if angle.ndim != 2 or angle.shape[1] != 1:
+            raise ValueError("The joint angle must be a vector.")
+
+    def rotation(self, angle: torch.Tensor) -> torch.Tensor:
+        _RevoluteJointImpl._check_input(angle)
+        return self._rotation_impl(angle.view(-1, 1))
+
     def relative_pose(self, *args) -> torch.Tensor:
         if len(args) != 1:
             raise ValueError("Revolute joint requires one input.")
         angle: torch.Tensor = args[0]
-        rot = self._rotation_impl(angle)
+        rot = self.rotation(angle)
         ret = angle.new_empty(angle.shape[0], 3, 4)
         ret[:, :, :3] = self.origin[:, :, :3] @ rot
         ret[:, :, 3] = self.origin[:, :, 3]
@@ -241,10 +252,6 @@ class RevoluteJoint(_RevoluteJointImpl):
         self._axis[3:] = revolute_axis.view(-1, 1)
 
     def _rotation_impl(self, angle: torch.Tensor) -> torch.Tensor:
-        if angle.ndim == 1:
-            angle = angle.view(-1, 1)
-        if angle.ndim != 2 or angle.shape[1] != 1:
-            raise ValueError("The joint angle must be a vector.")
         return so3.exp(angle @ self.axis[3:].view(1, -1))
 
 
@@ -273,10 +280,6 @@ class _RevoluteJointXYZImpl(_RevoluteJointImpl):
         return self._axis_id
 
     def _rotation_impl(self, angle: torch.Tensor) -> torch.Tensor:
-        if angle.ndim == 2 and angle.shape[1] == 1:
-            angle = angle.view(-1)
-        if angle.ndim != 1:
-            raise ValueError("The joint angle must be a vector.")
         info = _RevoluteJointXYZImpl.axis_info[self.axis_id]
         rot = angle.new_zeros(angle.shape[0], 3, 3)
         rot[:, info[0], info[0]] = 1
@@ -347,11 +350,22 @@ class _PrismaticJointImpl(Joint):
     def _translation_impl(self, angle: torch.Tensor) -> torch.Tensor:
         pass
 
+    @staticmethod
+    def _check_input(angle: torch.Tensor):
+        if angle.ndim == 1:
+            angle = angle.view(-1, 1)
+        if angle.ndim != 2 or angle.shape[1] != 1:
+            raise ValueError("The joint angle must be a vector.")
+
+    def translation(self, angle: torch.Tensor) -> torch.Tensor:
+        _PrismaticJointImpl._check_input(angle)
+        return self.translation(angle.view(-1, 1))
+
     def relative_pose(self, *args) -> torch.Tensor:
         if len(args) != 1:
             raise ValueError("Prismatic joint requires one input.")
         angle: torch.Tensor = args[0]
-        trans = self._translation_impl(angle)
+        trans = self.translation(angle)
         ret = angle.new_empty(angle.shape[0], 3, 4)
         ret[:, :, :3] = self.origin[:, :, :3]
         ret[:, :, 3:] = (
@@ -386,10 +400,6 @@ class PrismaticJoint(_PrismaticJointImpl):
         self._axis[:3] = prismatic_axis.view(-1, 1)
 
     def _translation_impl(self, angle: torch.Tensor) -> torch.Tensor:
-        if angle.ndim == 1:
-            angle = angle.view(-1, 1)
-        if angle.ndim != 2 or angle.shape[1] != 1:
-            raise ValueError("The joint angle must be a vector.")
         return angle @ self.axis[:3].view(1, -1)
 
 
@@ -416,10 +426,6 @@ class _PrismaticJointXYZImpl(_PrismaticJointImpl):
         return self._axis_id
 
     def _translation_impl(self, angle: torch.Tensor) -> torch.Tensor:
-        if angle.ndim == 2 and angle.shape[1] == 1:
-            angle = angle.view(-1)
-        if angle.ndim != 1:
-            raise ValueError("The joint angle must be a vector.")
         trans = angle.new_zeros(angle.shape[0], 3)
         trans[:, self.axis_id] = angle
         return trans
@@ -428,10 +434,8 @@ class _PrismaticJointXYZImpl(_PrismaticJointImpl):
         if len(args) != 1:
             raise ValueError("Prismatic joint requires one input.")
         angle: torch.Tensor = args[0]
-        if angle.ndim == 1:
-            angle = angle.view(-1, 1)
-        if angle.ndim != 2 or angle.shape[1] != 1:
-            raise ValueError("The joint angle must be a vector.")
+        _PrismaticJointXYZImpl._check_input(angle)
+        angle = angle.view(-1, 1)
         ret = angle.new_empty(angle.shape[0], 3, 4)
         ret[:, :, :3] = self.origin[:, :, :3]
         ret[:, :, 3] = angle * self.origin[:, :, self.axis_id] + self.origin[:, :, 3]

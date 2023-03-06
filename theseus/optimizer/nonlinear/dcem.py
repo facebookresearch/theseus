@@ -2,9 +2,9 @@ from typing import Callable, NoReturn, Optional, Union, List
 
 import numpy as np
 import torch
-from lml import LML
 from torch.distributions import Normal
 
+from theseus.third_party.lml import LML
 from theseus.core.objective import Objective
 from theseus.optimizer import OptimizerInfo
 from theseus.optimizer.variable_ordering import VariableOrdering

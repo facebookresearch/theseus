@@ -158,7 +158,6 @@ class DCEM(NonlinearOptimizer):
         end_iter_callback: Optional[EndIterCallbackType] = None,
         **kwargs,
     ) -> int:
-
         converged_indices = torch.zeros_like(info.last_err).bool()
         iters_done = 0
         for it_ in range(num_iter):

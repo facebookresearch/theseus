@@ -4,7 +4,7 @@
 # LICENSE file in the root directory of this source tree.
 
 from .dogleg import Dogleg
-from .dcem import DCem
+from .dcem import DCEM
 from .gauss_newton import GaussNewton
 from .levenberg_marquardt import LevenbergMarquardt
 from .nonlinear_least_squares import NonlinearLeastSquares

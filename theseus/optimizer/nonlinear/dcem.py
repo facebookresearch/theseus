@@ -108,10 +108,7 @@ class DCEM(NonlinearOptimizer):
             X_samples.append(self._mu_vec_to_dict(sample))
 
         fX = torch.stack(
-            [
-                self.objective.error_squared_norm(X_samples[i])
-                for i in range(self.n_samples)
-            ],
+            [self.objective.error_metric(X_samples[i]) for i in range(self.n_samples)],
             dim=1,
         )
 

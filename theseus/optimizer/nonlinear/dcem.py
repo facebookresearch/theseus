@@ -69,12 +69,6 @@ class DCEM(NonlinearOptimizer):
         self.temp = temp
         self.normalize = normalize
         self.tot_dof = sum([x.dof() for x in self.ordering])
-        self.sigma = (
-            torch.ones(
-                (self.ordering[0].shape[0], self.tot_dof), device=objective.device
-            )
-            * init_sigma
-        )
         self.lml_eps = lml_eps
         self.lml_verbose = lml_verbose
         self.init_sigma = init_sigma
@@ -87,7 +81,7 @@ class DCEM(NonlinearOptimizer):
             idx += var.dof()
         return mu_dic
 
-    def _reinit_sigma(self, init_sigma=1.0, **kwargs):
+    def _reinit_sigma(self, init_sigma):
         self.sigma = (
             torch.ones(
                 (self.ordering[0].shape[0], self.tot_dof), device=self.objective.device
@@ -218,7 +212,8 @@ class DCEM(NonlinearOptimizer):
         **kwargs,
     ) -> OptimizerInfo:
         backward_mode = BackwardMode.resolve(backward_mode)
-        self._reinit_sigma(**kwargs)
+        init_sigma = kwargs.get("init_sigma", self.init_sigma)
+        self._reinit_sigma(init_sigma)
 
         with torch.no_grad():
             info = self._init_info(

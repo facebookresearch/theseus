@@ -95,124 +95,7 @@ class DCEM(NonlinearOptimizer):
             * init_sigma
         )
 
-    def _all_solve(
-        self,
-        num_iters,
-        init_sigma: Union[torch.Tensor, float] = 1.0,
-        info: NonlinearOptimizerInfo = None,
-        verbose: bool = False,
-        end_iter_callback: Optional[EndIterCallbackType] = None,
-        **kwargs,
-    ):
-        converged_indices = torch.zeros_like(info.last_err).bool()
-
-        device = self.objective.device
-        n_batch = self.ordering[0].shape[0]
-
-        init_mu = torch.cat([var.tensor for var in self.ordering], dim=-1)
-        init_sigma = torch.ones((n_batch, self.tot_dof), device=device) * init_sigma
-
-        mu = init_mu.clone()
-        sigma = init_sigma.clone()
-
-        assert mu.shape == (n_batch, self.tot_dof)
-        assert sigma.shape == (n_batch, self.tot_dof)
-
-        for itr in range(num_iters):
-            # X = Normal(mu, sigma + 1e-5).rsample((self.n_samples,))
-            X = Normal(mu, sigma).rsample((self.n_samples,))
-
-            X_samples = []
-            for sample in X:
-                X_samples.append(self._mu_vec_to_dict(sample))
-
-            fX = torch.stack(
-                [
-                    self.objective.error_squared_norm(X_samples[i])
-                    for i in range(self.n_samples)
-                ],
-                dim=1,
-            )
-
-            assert fX.shape == (n_batch, self.n_samples)
-
-            if self.temp is not None and self.temp < np.infty:
-                if self.normalize:
-                    fX_mu = fX.mean(dim=1).unsqueeze(1)
-                    fX_sigma = fX.std(dim=1).unsqueeze(1)
-                    _fX = (fX - fX_mu) / (fX_sigma + 1e-6)
-                else:
-                    _fX = fX
-
-                if self.n_elite == 1:
-                    # indexes = LML(N=n_elite, verbose=lml_verbose, eps=lml_eps)(-_fX*temp)
-                    indexes = torch.softmax(-_fX * self.temp, dim=1)
-                else:
-                    indexes = LML(N=self.n_elite, verbose=False, eps=self.lml_eps)(
-                        -_fX * self.temp
-                    )
-                indexes = indexes.unsqueeze(2)
-
-            else:
-                indexes_vals = fX.argsort(dim=1)[:, : self.n_elite]
-                # TODO: A scatter would be more efficient here.
-                indexes = torch.zeros(n_batch, self.n_samples, device=device)
-                for j in range(n_batch):
-                    for v in indexes_vals[j]:
-                        indexes[j, v] = 1.0
-                indexes = indexes.unsqueeze(2)
-            # indexes.shape should be (n_batch, n_sample, 1)
-
-            X = X.transpose(0, 1)
-
-            assert indexes.shape[:2] == X.shape[:2]
-            # print("Samples:", X)
-            X_I = indexes * X
-
-            # old_mu = mu.clone().detach()
-
-            mu = torch.sum(X_I, dim=1) / self.n_elite
-            sigma = (
-                (indexes * (X - mu.unsqueeze(1)) ** 2).sum(dim=1) / self.n_elite
-            ).sqrt()
-
-            assert sigma.shape == (n_batch, self.tot_dof)
-
-            with torch.no_grad():
-                err = self.objective.error_squared_norm(self._mu_vec_to_dict(mu)) / 2
-                self._update_info(info, itr, err, converged_indices)
-                if verbose:
-                    print(
-                        f"Nonlinear optimizer. Iteration: {itr+1}. "
-                        f"Error: {err.mean().item()}"
-                    )
-                converged_indices = self._check_convergence(err, info.last_err)
-                info.status[
-                    np.array(converged_indices.cpu().numpy())
-                ] = NonlinearOptimizerStatus.CONVERGED
-
-                # TODO
-                # Doesn't work with lml_eps = 1e-5.
-                # and with lml_eps= 1e-4, gives suboptimal solution
-
-                # if converged_indices.all():
-                #     break  # nothing else will happen at this point
-
-                info.last_err = err
-
-                if end_iter_callback is not None:
-                    end_iter_callback(self, info, mu, itr)
-
-        info.status[
-            info.status == NonlinearOptimizerStatus.START
-        ] = NonlinearOptimizerStatus.MAX_ITERATIONS
-
-        self.objective.update(self._mu_vec_to_dict(mu))
-
-        # return self._mu_vec_to_dict(mu)
-        return itr
-
-    def _solve(self):
+    def _CEM_step(self):
         device = self.objective.device
         n_batch = self.ordering[0].shape[0]
 
@@ -264,25 +147,8 @@ class DCEM(NonlinearOptimizer):
         X = X.transpose(0, 1)
 
         assert indexes.shape[:2] == X.shape[:2]
-        # print("Samples:", X)
+
         X_I = indexes * X
-        # top_k_idx_11 = np.argsort(indexes[11].squeeze(1).cpu().numpy())[::-1][
-        #     : self.n_elite
-        # ]
-        # top_k_idx_12 = np.argsort(indexes[12].squeeze(1).cpu().numpy())[::-1][
-        #     : self.n_elite
-        # ]
-        # print(indexes[11][:50].squeeze(1), indexes[12][:50].squeeze(1))
-        # print("top K indices:", top_k_idx_11, top_k_idx_12)
-        # print(
-        #     indexes[11].squeeze(1).cpu().numpy()[top_k_idx_11],
-        #     indexes[12].squeeze(1).cpu().numpy()[top_k_idx_12],
-        # )
-        # print(X[11][top_k_idx_11.copy()])
-        # print(
-        #     mu[11].cpu().numpy(),
-        #     self.sigma[11].cpu().numpy(),
-        # )
 
         mu = torch.sum(X_I, dim=1) / self.n_elite
         self.sigma = (
@@ -307,7 +173,7 @@ class DCEM(NonlinearOptimizer):
         for it_ in range(num_iter):
             iters_done += 1
             try:
-                mu = self._solve()
+                mu = self._CEM_step()
             except RuntimeError as error:
                 raise RuntimeError(f"There is an error in update {error}")
 

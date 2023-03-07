@@ -312,7 +312,7 @@ def _run_optimizer_test(
         )
 
         loss0 = F.mse_loss(
-            pred_vars["coefficients"].abs(), target_vars["coefficients"].abs()
+            pred_vars["coefficients"], target_vars["coefficients"]
         ).item()
         assert not (
             (info.status == th.NonlinearOptimizerStatus.START)
@@ -348,9 +348,7 @@ def _run_optimizer_test(
             | (info.status == th.NonlinearOptimizerStatus.FAIL)
         ).all()
 
-        mse_loss = F.mse_loss(
-            pred_vars["coefficients"].abs(), target_vars["coefficients"].abs()
-        )
+        mse_loss = F.mse_loss(pred_vars["coefficients"], target_vars["coefficients"])
 
         if learning_method == "leo":
             # groundtruth cost

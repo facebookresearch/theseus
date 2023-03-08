@@ -26,12 +26,12 @@ device = "cuda:0" if torch.cuda.is_available() else "cpu"
 
 
 def model(x, b):
-    return (b[..., :1] * x) ** 2 + b[..., 1:]
+    return b[..., :1] * x**2 + b[..., 1:]
 
 
 def model_grad(x, b):
-    g1 = 2 * (b[..., :1] * x) * x
-    g2 = b[..., 1:] * torch.ones_like(x)
+    g1 = x**2
+    g2 = torch.ones_like(x)
     return g1, g2
 
 

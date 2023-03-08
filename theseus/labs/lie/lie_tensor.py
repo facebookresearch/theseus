@@ -2,7 +2,6 @@
 #
 # This source code is licensed under the MIT license found in the
 # LICENSE file in the root directory of this source tree.
-import builtins
 import threading
 import warnings
 from typing import Any, Callable, List, Optional, Protocol, Tuple, Union
@@ -17,7 +16,7 @@ from theseus.labs.lie.functional.lie_group import LieGroupFns, UnaryOperatorOpFn
 from theseus.labs.lie.functional import se3 as _se3_impl, so3 as _so3_impl
 from .types import ltype as _ltype, SE3, SO3
 
-Device = Union[torch.device, str, builtins.int, None]
+Device = Union[torch.device, str, None]
 TensorType = Union[torch.Tensor, "_LieTensorBase"]
 _JFnReturnType = Tuple[List[torch.Tensor], TensorType]
 
@@ -239,7 +238,9 @@ class LieTensor(_LieTensorBase):
             raise ValueError("f{op_name} requires both tensors to have same ltype.")
 
     # Returns a new LieTensor with the given data and the same ltype as self
-    def new(self, args: Any, device: Device = None) -> "LieTensor":  # type: ignore
+    def new(  # type: ignore
+        self, args: Any, device: Device = None, dtype: Optional[torch.dtype] = None
+    ) -> "LieTensor":
         if isinstance(args, LieTensor):
             warnings.warn(
                 "Calling new() on a LieTensor results in shared data storage. "
@@ -247,10 +248,15 @@ class LieTensor(_LieTensorBase):
                 "lie_tensor.clone().",
                 UserWarning,
             )
-            return LieTensor(args._t, ltype=self.ltype)
-        if isinstance(args, torch.Tensor):
-            return LieTensor.from_tensor(args, self.ltype)
-        return LieTensor(torch.as_tensor(args, device=device), ltype=self.ltype)
+            tensor_arg = args._t
+            dtype = dtype or self.dtype
+        elif isinstance(args, torch.Tensor):
+            tensor_arg = args
+            dtype = dtype or args.dtype
+        else:
+            tensor_arg = torch.as_tensor(args)
+            dtype = dtype or torch.get_default_dtype()
+        return LieTensor(tensor_arg.to(device=device, dtype=dtype), ltype=self.ltype)
 
     # ------------------------------------------------------
     # ------ Operators

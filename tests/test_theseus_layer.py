@@ -196,13 +196,15 @@ def _run_optimizer_test(
     force_vectorization=False,
     max_iterations=10,
     lr=0.075,
+    loss_ratio_target=0.01,
 ):
     device = "cuda:0" if torch.cuda.is_available() else "cpu"
     print(f"_run_test_for: {device}")
     print(
         f"testing for optimizer {nonlinear_optimizer_cls.__name__}, "
         f"cost weight modeled as {cost_weight_model}, "
-        f"linear solver {linear_solver_cls.__name__}"
+        f"linear solver {linear_solver_cls.__name__} "
+        f"learning method {learning_method}"
     )
 
     rng = torch.Generator(device=device)
@@ -286,6 +288,7 @@ def _run_optimizer_test(
         max_iterations=max_iterations,
     )
     layer_to_learn.to(device)
+    layer_to_learn.verify_jacobians()
 
     # Check the initial solution quality to check how much has loss improved later
 
@@ -372,10 +375,11 @@ def _run_optimizer_test(
             loss = mse_loss
 
         loss.backward()
-        print("Loss: ", loss.item())
         optimizer.step()
 
-        if mse_loss.item() / loss0 < 1e-2:
+        loss_ratio = mse_loss.item() / loss0
+        print("Loss: ", mse_loss.item(), ". Loss ratio: ", loss_ratio)
+        if loss_ratio < loss_ratio_target:
             solved = True
             break
     assert solved

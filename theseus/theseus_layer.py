@@ -23,6 +23,7 @@ from theseus.geometry import LieGroup, Manifold
 from theseus.optimizer import Optimizer, OptimizerInfo
 from theseus.optimizer.linear import LinearSolver
 from theseus.optimizer.nonlinear import BackwardMode, GaussNewton
+from theseus.utils import check_jacobians
 
 
 class TheseusLayer(nn.Module):
@@ -145,6 +146,18 @@ class TheseusLayer(nn.Module):
     @property
     def dtype(self) -> torch.dtype:
         return self.objective.dtype
+
+    def verify_jacobians(self, num_checks: int = 1, tol: float = 1.0e-3):
+        success = True
+        for cf in self.objective.cost_functions.values():
+            try:
+                check_jacobians(cf, num_checks=num_checks, tol=tol)
+            except RuntimeError as e:
+                print(f"Jacobians check for cost function named {cf.name} failed.")
+                print(e)
+                success = False
+        if success:
+            print("Jacobians check were successful!")
 
 
 def _forward(

@@ -9,6 +9,7 @@ import scipy.sparse
 import torch
 import torch.nn as nn
 
+import theseus as th
 import theseus.utils as thutils
 
 
@@ -154,3 +155,16 @@ def test_sparse_mv_cpu(batch_size, num_rows, num_cols, fill):
 @pytest.mark.parametrize("fill", [0.1, 0.9])
 def test_sparse_mv_cuda(batch_size, num_rows, num_cols, fill):
     _check_sparse_mv_and_mtv(batch_size, num_rows, num_cols, fill, "cuda:0")
+
+
+def test_jacobians_check():
+    se3s = [th.SE3() for _ in range(3)]
+    w = th.ScaleCostWeight(0.5)
+    cf = th.Difference(se3s[0], se3s[1], w)
+    thutils.check_jacobians(cf, 1)
+
+    cf = th.Between(se3s[0], se3s[1], se3s[2], w)
+    thutils.check_jacobians(cf, 1)
+
+    cf = th.eb.DoubleIntegrator(se3s[0], th.Vector(6), se3s[1], th.Vector(6), 1.0, w)
+    thutils.check_jacobians(cf, 1)

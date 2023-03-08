@@ -7,7 +7,7 @@ import torch
 
 from typing import List, Optional
 
-from theseus.labs.lie_functional import se3
+from theseus.labs.lie.functional import se3
 from .robot import Robot, Joint, Link
 
 # TODO: Add support for joints with DOF>1
@@ -64,9 +64,7 @@ def ForwardKinematicsFactory(robot: Robot, link_names: Optional[List[str]] = Non
             joint: Joint = link.parent_joint
             if joint.id >= robot.dof:
                 break
-            jposes[:, :, joint.id : joint.id + 1] = (
-                se3.adjoint(poses[link.id]) @ joint.axis
-            )
+            jposes[:, :, joint.id : joint.id + 1] = se3.adj(poses[link.id]) @ joint.axis
 
         return jposes
 
@@ -81,7 +79,7 @@ def ForwardKinematicsFactory(robot: Robot, link_names: Optional[List[str]] = Non
             pose = poses[link_id]
             jac = jposes.new_zeros(angles.shape[0], 6, robot.dof)
             sel = robot.links[link_id].ancestor_non_fixed_joint_ids
-            jac[:, :, sel] = se3.adjoint(se3.inverse(pose)) @ jposes[:, :, sel]
+            jac[:, :, sel] = se3.adj(se3.inv(pose)) @ jposes[:, :, sel]
             jacs.append(jac)
 
         return jacs, rets

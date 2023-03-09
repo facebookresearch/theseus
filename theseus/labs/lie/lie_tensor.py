@@ -4,7 +4,7 @@
 # LICENSE file in the root directory of this source tree.
 import threading
 import warnings
-from typing import Any, Callable, List, Optional, Protocol, Tuple, Union
+from typing import Any, Callable, List, Optional, Tuple, Union
 from typing import cast as type_cast
 
 import torch
@@ -12,13 +12,16 @@ from torch.utils._pytree import tree_flatten, tree_map_only
 from torch.types import Number
 
 from theseus.labs.lie.functional.constants import DeviceType
-from theseus.labs.lie.functional.lie_group import LieGroupFns, UnaryOperatorOpFnType
-from theseus.labs.lie.functional import se3 as _se3_impl, so3 as _so3_impl
-from .types import ltype as _ltype, SE3, SO3
-
-Device = Union[torch.device, str, None]
-TensorType = Union[torch.Tensor, "_LieTensorBase"]
-_JFnReturnType = Tuple[List[torch.Tensor], TensorType]
+from theseus.labs.lie.functional.lie_group import UnaryOperatorOpFnType
+from .types import (
+    ltype as _ltype,
+    Device,
+    SE3,
+    SO3,
+    TensorType,
+    _JFnReturnType,
+    _RandFnType,
+)
 
 
 class _LieAsEuclideanContext:
@@ -49,13 +52,6 @@ class as_euclidean:
 
 def euclidean_enabled() -> bool:
     return _LieAsEuclideanContext.get_context()
-
-
-def _get_fn_lib(ltype: _ltype):
-    return {
-        SE3: _se3_impl,
-        SO3: _so3_impl,
-    }[ltype]
 
 
 class _LieTensorBase(torch.Tensor):
@@ -102,15 +98,6 @@ class _LieTensorBase(torch.Tensor):
         return tree_map_only(torch.Tensor, lambda x: cls(x, ltype), ret)
 
 
-class _TangentTensor(_LieTensorBase):
-    def __init__(self, data: Any, ltype: _ltype, requires_grad=None):
-        super().__init__(data, _ltype.tgt, requires_grad=requires_grad)
-
-    @classmethod
-    def __torch_function__(cls, func, types, args=(), kwargs=None):
-        return cls._torch_func_impl_eucl(func, types, args, kwargs)
-
-
 _EUCLID_GRAD_MARKER = "_lie_euclidean_grad"
 
 
@@ -133,15 +120,6 @@ class _EuclideanGrad(torch.Tensor):
             _mark(a)
 
         return super().__torch_function__(func, types, args, kwargs or {})
-
-
-def _eval_op(
-    fn_lib: LieGroupFns,
-    op_name: str,
-    input0: torch.Tensor,
-    jacobians: Optional[List[torch.Tensor]] = None,
-) -> torch.Tensor:
-    return getattr(fn_lib, op_name)(input0, jacobians=jacobians)
 
 
 def _LIE_TENSOR_GRAD_ERROR_MSG(func):
@@ -188,21 +166,11 @@ class LieTensor(_LieTensorBase):
     ]
 
     def __init__(self, tensor: torch.Tensor, ltype: _ltype, requires_grad=None):
-        LieTensor._check_is_not_tgt_ltype(ltype)
         super().__init__(tensor, ltype, requires_grad=requires_grad)
-        self._fn_lib = _get_fn_lib(self.ltype)
-        self._fn_lib.check_group_tensor(self.as_subclass(torch.Tensor))
-
-    @staticmethod
-    def _check_is_not_tgt_ltype(ltype: _ltype):
-        if ltype == _ltype.tgt:
-            raise ValueError(
-                "For tangent tensors, please use lie.cast or lie.as_lietensor."
-            )
+        self.ltype._fn_lib.check_group_tensor(self.as_subclass(torch.Tensor))
 
     @staticmethod
     def from_tensor(tensor: torch.Tensor, ltype: _ltype) -> "LieTensor":
-        LieTensor._check_is_not_tgt_ltype(ltype)
         return _FromTensor.apply(tensor, ltype)
 
     @classmethod
@@ -263,49 +231,28 @@ class LieTensor(_LieTensorBase):
     # ------------------------------------------------------
     # ------ Operators
     # ------------------------------------------------------
-    # The following could be static methods, because self is used
-    # only to infer the type. But for each of this, there are also
-    # versions such as:
-    #   - `lie.exp(ltype, tangent_vector)`
-    #   - `lie.lift(ltype, matrix)`
-    # that we expect to be more commonly used.
-    def exp(self, tangent_vector: torch.Tensor) -> "LieTensor":  # type: ignore
-        return self.new(_eval_op(self._fn_lib, "exp", tangent_vector))
-
-    def hat(self, tangent_vector: torch.Tensor) -> torch.Tensor:
-        return _eval_op(self._fn_lib, "hat", tangent_vector)
-
-    def vee(self, matrix: torch.Tensor) -> torch.Tensor:
-        return _eval_op(self._fn_lib, "vee", matrix)
-
-    def lift(self, matrix: torch.Tensor) -> torch.Tensor:
-        return _eval_op(self._fn_lib, "lift", matrix)
-
-    def project(self, matrix: torch.Tensor) -> torch.Tensor:
-        return _eval_op(self._fn_lib, "project", matrix)
-
     # For the next ones the output also depends on self's data
     def log(self) -> torch.Tensor:
-        return self._fn_lib.log(self._t)
+        return self.ltype._fn_lib.log(self._t)
 
     def adj(self) -> torch.Tensor:
-        return self._fn_lib.adj(self._t)
+        return self.ltype._fn_lib.adj(self._t)
 
     def inv(self) -> "LieTensor":
-        return self.new(self._fn_lib.inv(self._t))
+        return self.new(self.ltype._fn_lib.inv(self._t))
 
     def compose(self, other: "LieTensor") -> "LieTensor":
         self._check_ltype(other, "compose")
-        return self.new(self._fn_lib.compose(self._t, other._t))
+        return self.new(self.ltype._fn_lib.compose(self._t, other._t))
 
     def transform_from(self, other: torch.Tensor) -> torch.Tensor:
-        return self._fn_lib.transform_from(self._t, other)
+        return self.ltype._fn_lib.transform_from(self._t, other)
 
     def left_act(self, matrix: torch.Tensor) -> torch.Tensor:
-        return self._fn_lib.left_act(self._t, matrix)
+        return self.ltype._fn_lib.left_act(self._t, matrix)
 
     def left_project(self, matrix: torch.Tensor) -> torch.Tensor:
-        return self._fn_lib.left_project(self._t, matrix)
+        return self.ltype._fn_lib.left_project(self._t, matrix)
 
     # ------------------------------------------------------
     # Operator Jacobians
@@ -322,24 +269,21 @@ class LieTensor(_LieTensorBase):
             op_res = self.new(op_res)
         return jacs, op_res
 
-    def jexp(self, tangent_vector: torch.Tensor) -> _JFnReturnType:
-        return self._unary_jop_base(tangent_vector, self._fn_lib.exp)
-
     def jlog(self) -> _JFnReturnType:
-        return self._unary_jop_base(self._t, self._fn_lib.log, out_is_group=False)
+        return self._unary_jop_base(self._t, self.ltype._fn_lib.log, out_is_group=False)
 
     def jinv(self) -> _JFnReturnType:
-        return self._unary_jop_base(self._t, self._fn_lib.inv)
+        return self._unary_jop_base(self._t, self.ltype._fn_lib.inv)
 
     def jcompose(self, other: "LieTensor") -> _JFnReturnType:
         self._check_ltype(other, "jcompose")
         jacs: List[torch.Tensor] = []
-        op_res = self.new(self._fn_lib.compose(self._t, other._t, jacobians=jacs))
+        op_res = self.new(self.ltype._fn_lib.compose(self._t, other._t, jacobians=jacs))
         return jacs, op_res
 
     def jtransform_from(self, other: torch.Tensor) -> _JFnReturnType:
         jacs: List[torch.Tensor] = []
-        op_res = self._fn_lib.transform_from(self._t, other, jacobians=jacs)
+        op_res = self.ltype._fn_lib.transform_from(self._t, other, jacobians=jacs)
         return jacs, op_res
 
     def _no_jop(self, input0: TensorType) -> _JFnReturnType:
@@ -358,7 +302,7 @@ class LieTensor(_LieTensorBase):
             raise TypeError(
                 "LieTensor.retract() expects a single torch.Tensor argument."
             )
-        return self.compose(self.exp(delta))
+        return self.compose(self.ltype.exp(delta))
 
     def local(self, other: "LieTensor") -> torch.Tensor:
         if not isinstance(other, LieTensor):
@@ -376,26 +320,13 @@ class LieTensor(_LieTensorBase):
     # ------------------------------------------------------
     # Overloaded python and torch operators
     # ------------------------------------------------------
-    def __add__(self, other: TensorType) -> "LieTensor":
-        if not isinstance(other, _TangentTensor):
-            raise TypeError(
-                "Operator + is only supported for tensors of ltype=tgt. "
-                "If you intend to add the raw tensor data, please use group._t. "
-                "If you intend to retract, then cast your tensor to ltype=tgt, or "
-                "use group.retract(tensor)."
-            )
-        return self.retract(other._t)
-
-    def __sub__(self, other: TensorType) -> torch.Tensor:
+    def __mul__(self, other: TensorType) -> "LieTensor":
         if not isinstance(other, LieTensor):
             raise TypeError(
-                f"Incorrect argument for __sub__. "
+                f"Incorrect argument for '*' operator. "
                 f"Expected LieTensor, but got {type(other)}"
             )
-        return type_cast(LieTensor, other).local(self)
-
-    def __neg__(self) -> "LieTensor":  # type: ignore
-        return self.inv()
+        return type_cast(LieTensor, other).compose(self)
 
     def set_(self, tensor: "LieTensor"):  # type: ignore
         if not isinstance(tensor, LieTensor):
@@ -411,7 +342,7 @@ class LieTensor(_LieTensorBase):
 
     def add_(self, tensor: torch.Tensor, *, alpha: Number = 1.0):  # type: ignore
         if hasattr(tensor, _EUCLID_GRAD_MARKER):
-            grad = self._fn_lib.left_project(self._t, tensor)
+            grad = self.ltype._fn_lib.left_project(self._t, tensor)
             res = self.retract(grad * alpha)
             self.set_(res)
         else:
@@ -455,8 +386,6 @@ def as_lietensor(
         return data
     if ltype is None:
         raise ValueError("ltype must be provided.")
-    if ltype == _ltype.tgt:
-        return _TangentTensor(data, None)
     return type_cast(
         LieTensor, LieTensor(data, ltype=ltype).to(device=device, dtype=dtype)
     )
@@ -479,41 +408,24 @@ class _FromTensor(torch.autograd.Function):
         return grad_output, None
 
 
-# Similar to the one in functional, except it returns a LieTensor
-# and receives a ltype
-class _RandFnType(Protocol):
-    def __call__(
-        self,
-        *args: Any,
-        generator: Optional[torch.Generator] = None,
-        dtype: Optional[torch.dtype] = None,
-        device: DeviceType = None,
-        requires_grad: bool = False,
-    ) -> LieTensor:
-        pass
-
-
-def _build_random_fn(op_name: str) -> _RandFnType:
+def _build_random_fn(op_name: str, ltype: _ltype) -> _RandFnType:
     assert op_name in ["rand", "randn"]
 
     def fn(
-        *args: Any,
+        *size: Any,
         generator: Optional[torch.Generator] = None,
         dtype: Optional[torch.dtype] = None,
         device: DeviceType = None,
         requires_grad: bool = False,
     ) -> LieTensor:
-        good = all([isinstance(a, int) for a in args[:-1]]) and isinstance(
-            args[-1], _ltype
-        )
+        good = all([isinstance(a, int) for a in size])
         if not good:
-            arg_types = " ".join(type(a).__name__ for a in args)
+            arg_types = " ".join(type(a).__name__ for a in size)
             raise TypeError(
                 f"{op_name}() received invalid combination of arguments - "
-                f"got ({arg_types}), but expected (tuple of ints size, ltype)."
+                f"got ({arg_types}), but expected (tuple of ints)."
             )
-        size, ltype = args[:-1], args[-1]
-        fn = {SE3: getattr(_se3_impl, op_name), SO3: getattr(_so3_impl, op_name)}[ltype]
+        fn = getattr(ltype._fn_lib, op_name)
         return LieTensor(
             fn(
                 *size,
@@ -529,8 +441,11 @@ def _build_random_fn(op_name: str) -> _RandFnType:
     return fn
 
 
-rand: _RandFnType = _build_random_fn("rand")
-randn: _RandFnType = _build_random_fn("randn")
+SE3.rand = _build_random_fn("rand", SE3)
+SE3.randn = _build_random_fn("randn", SE3)
+SO3.rand = _build_random_fn("rand", SO3)
+SO3.randn = _build_random_fn("randn", SO3)
+SE3._create_lie_tensor = SO3._create_lie_tensor = LieTensor
 
 
 def log(group: LieTensor) -> torch.Tensor:
@@ -543,26 +458,6 @@ def adj(group: LieTensor) -> torch.Tensor:
 
 def inv(group: LieTensor) -> LieTensor:
     return group.inv()
-
-
-def exp(tangent_vector: torch.Tensor, ltype: _ltype) -> "LieTensor":
-    return LieTensor(_eval_op(_get_fn_lib(ltype), "exp", tangent_vector), ltype)
-
-
-def hat(tangent_vector: torch.Tensor, ltype: _ltype) -> torch.Tensor:
-    return _eval_op(_get_fn_lib(ltype), "hat", tangent_vector)
-
-
-def vee(matrix: torch.Tensor, ltype: _ltype) -> torch.Tensor:
-    return _eval_op(_get_fn_lib(ltype), "vee", matrix)
-
-
-def lift(matrix: torch.Tensor, ltype: _ltype) -> torch.Tensor:
-    return _eval_op(_get_fn_lib(ltype), "lift", matrix)
-
-
-def project(matrix: torch.Tensor, ltype: _ltype) -> torch.Tensor:
-    return _eval_op(_get_fn_lib(ltype), "project", matrix)
 
 
 def compose(group1: LieTensor, group2: LieTensor) -> LieTensor:
@@ -587,12 +482,6 @@ def jlog(group: LieTensor) -> _JFnReturnType:
 
 def jinv(group: LieTensor) -> _JFnReturnType:
     return group.jinv()
-
-
-def jexp(tangent_vector: torch.Tensor, ltype: _ltype) -> _JFnReturnType:
-    jacs: List[torch.Tensor] = []
-    exp_tensor = _eval_op(_get_fn_lib(ltype), "exp", tangent_vector, jacobians=jacs)
-    return jacs, LieTensor(exp_tensor, ltype)
 
 
 def jcompose(group1: LieTensor, group2: LieTensor) -> _JFnReturnType:

@@ -118,3 +118,20 @@ def test_op(op_name, ltype_str, batch_size, rng):
         # Check class-version
         jac_c, out_c = _to_functional_fmt(getattr(c, f"j{op_name}")(*c_inputs))
         torch.testing.assert_close([jac1, out], [jac_c, out_c])
+
+
+@run_if_labs()
+def test_backward_works():
+    import theseus.labs.lie as lie
+
+    # Run optimization to check that the compute graph is not broken
+    g1 = lie.rand(1, lie.SE3, requires_grad=True)
+    g2 = lie.rand(1, lie.SE3)
+    opt = torch.optim.Adam([g1], lr=0.1)
+    for i in range(10):
+        opt.zero_grad()
+        d = g1.local(g2)
+        loss = torch.sum(d**2)
+        loss.backward()
+        opt.step()
+        print(f"Iter {i}. Loss: {loss.item(): .3f}")

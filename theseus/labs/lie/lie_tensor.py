@@ -256,7 +256,9 @@ class LieTensor(_LieTensorBase):
         else:
             tensor_arg = torch.as_tensor(args)
             dtype = dtype or torch.get_default_dtype()
-        return LieTensor(tensor_arg.to(device=device, dtype=dtype), ltype=self.ltype)
+        return LieTensor.from_tensor(
+            tensor_arg.to(device=device, dtype=dtype), ltype=self.ltype
+        )
 
     # ------------------------------------------------------
     # ------ Operators

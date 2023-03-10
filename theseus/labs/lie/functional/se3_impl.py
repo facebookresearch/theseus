@@ -783,9 +783,9 @@ class Compose(lie_group.BinaryOperator):
     def backward(cls, ctx, grad_output):
         group0: torch.Tensor = ctx.saved_tensors[0]
         group1: torch.Tensor = ctx.saved_tensors[1]
-        grad_input0 = group0.new_zeros(grad_output.shape[0], 3, 4)
-        grad_input0[:, :, :3] = grad_output @ group1.transpose(1, 2)
-        grad_input0[:, :, 3] = grad_output[:, :, 3]
+        grad_input0 = torch.cat(
+            (grad_output @ group1.transpose(1, 2), grad_output[:, :, 3:]), dim=-1
+        )
         grad_input1 = group0[:, :, :3].transpose(1, 2) @ grad_output
         return grad_input0, grad_input1
 

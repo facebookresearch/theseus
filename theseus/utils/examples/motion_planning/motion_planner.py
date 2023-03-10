@@ -9,6 +9,7 @@ from typing import Any, Dict, List, Optional, Tuple, Type, Union
 import torch
 
 import theseus as th
+from theseus.embodied import Nonholonomic
 
 
 class _XYDifference(th.CostFunction):
@@ -50,61 +51,6 @@ class _XYDifference(th.CostFunction):
     def _copy_impl(self, new_name: Optional[str] = None) -> "_XYDifference":
         return _XYDifference(  # type: ignore
             self.var.copy(), self.target.copy(), self.weight.copy(), name=new_name
-        )
-
-
-class Nonholonomic(th.CostFunction):
-    def __init__(
-        self,
-        pose: th.SE2,
-        vel: th.Vector,
-        cost_weight: th.CostWeight,
-        name: Optional[str] = None,
-    ):
-        super().__init__(cost_weight, name=name)
-        if vel.dof() != 3:
-            raise ValueError(
-                "Nonholonomic only accepts 3D velocity vectors, "
-                "representing vx, vy, vtheta."
-            )
-        self.pose = pose
-        self.vel = vel
-        self.register_optim_vars(["pose", "vel"])
-        self.weight = cost_weight
-
-    def dim(self):
-        return 1
-
-    def _compute_error(self) -> Tuple[torch.Tensor, torch.Tensor, torch.Tensor]:
-        vel = self.vel.tensor
-        cos, sin = self.pose.rotation.to_cos_sin()
-        J_theta_pose = []
-        self.pose.theta(jacobians=J_theta_pose)
-        error = vel[:, 1] * cos - vel[:, 0] * sin
-        J_error_theta = -(vel[:, 1] * sin + vel[:, 0] * cos).view(-1, 1, 1)
-        J_error_pose = J_error_theta.matmul(J_theta_pose[0])
-        J_error_vel = self.vel.tensor.new_zeros(vel.shape[0], 1, 3)
-        J_error_vel[:, 0, 0] = -sin
-        J_error_vel[:, 0, 1] = cos
-        return error.view(-1, 1), J_error_pose, J_error_vel
-
-    def error(self) -> torch.Tensor:
-        return self._compute_error()[0]
-
-    def jacobians(self) -> Tuple[List[torch.Tensor], torch.Tensor]:
-        # Pre-allocate jacobian tensors
-        batch_size = self.vel.shape[0]
-        Jvel = self.vel.tensor.new_zeros(batch_size, 1, 3)
-
-        error, Jpose, Jvel = self._compute_error()
-        return [Jpose, Jvel], error
-
-    def _copy_impl(self, new_name: Optional[str] = None) -> "Nonholonomic":
-        return Nonholonomic(
-            self.pose.copy(),
-            self.vel.copy(),
-            self.weight.copy(),
-            name=new_name,
         )
 
 
@@ -285,7 +231,12 @@ class MotionPlannerObjective(th.Objective):
             )
             if nonholonomic_w > 0.0:
                 self.add(
-                    Nonholonomic(poses[i], velocities[i], nhw, name=f"nonholonomic_{i}")
+                    Nonholonomic(
+                        poses[i],  # type: ignore
+                        velocities[i],
+                        nhw,
+                        name=f"nonholonomic_{i}",
+                    )
                 )
 
 
@@ -517,3 +468,14 @@ class MotionPlanner:
             pose_type=self.objective.pose_type,
             dtype=self.dtype,
         )
+
+
+# from theseus.utils import check_jacobians
+
+
+# pose = th.SE2.rand(10)
+# vel = th.Vector.rand(10, 3)
+# w = th.ScaleCostWeight(1.0)
+# cf = Nonholonomic(pose, vel, w)
+# check_jacobians(cf, num_checks=100, tol=0.0001)
+# print("YES!!!")

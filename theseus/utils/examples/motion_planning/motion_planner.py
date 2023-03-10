@@ -468,14 +468,3 @@ class MotionPlanner:
             pose_type=self.objective.pose_type,
             dtype=self.dtype,
         )
-
-
-# from theseus.utils import check_jacobians
-
-
-# pose = th.SE2.rand(10)
-# vel = th.Vector.rand(10, 3)
-# w = th.ScaleCostWeight(1.0)
-# cf = Nonholonomic(pose, vel, w)
-# check_jacobians(cf, num_checks=100, tol=0.0001)
-# print("YES!!!")

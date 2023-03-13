@@ -32,19 +32,19 @@ map_size = batch["map_tensor"].shape[1]
 trajectory_len = batch["expert_trajectory"].shape[2]
 num_time_steps = trajectory_len - 1
 map_size = batch["map_tensor"].shape[1]
-safety_distance = 0.4
-robot_radius = 0.2
+safety_distance = 1.5
+robot_radius = 0.25
 total_time = 10.0
 dt_val = total_time / num_time_steps
 Qc_inv = torch.eye(3)
-collision_w = 5.0
+collision_w = 20.0
 boundary_w = 100.0
 
 # Create the planner
 planner = theg.MotionPlanner(
     optim_method="levenberg_marquardt",
-    max_optim_iters=20,
-    step_size=0.3,
+    max_optim_iters=50,
+    step_size=0.25,
     map_size=map_size,
     epsilon_dist=safety_distance + robot_radius,
     total_time=total_time,
@@ -53,13 +53,14 @@ planner = theg.MotionPlanner(
     num_time_steps=num_time_steps,
     device=device,
     pose_type=th.SE2,
-    nonholonomic_w=5.0,
+    nonholonomic_w=10.0,
+    positive_vel_w=5.0,
 )
 
 # #### INITIALIZE OPTIMIZER VARIABLES
 start = torch.zeros(batch["expert_trajectory"].shape[0], 4)
 start[:, :2] = batch["expert_trajectory"][:, :2, 0]
-start[:, 2] = 1
+start[:, 3] = -1
 goal = batch["expert_trajectory"][:, :2, -1]
 planner_inputs = {
     "sdf_origin": batch["sdf_origin"].to(device),
@@ -93,9 +94,9 @@ sdf = th.eb.SignedDistanceField2D(
     th.Variable(batch["sdf_data"]),
 )
 figures = theg.generate_trajectory_figs(
-    batch["map_tensor"][:1].cpu(),
+    batch["map_tensor"][1:].cpu(),
     sdf,
-    [solution[:1].cpu()],
+    [solution[1:].cpu()],
     robot_radius,
     max_num_figures=1,
     fig_idx_robot=0,

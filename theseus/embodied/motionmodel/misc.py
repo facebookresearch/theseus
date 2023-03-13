@@ -3,7 +3,7 @@
 # This source code is licensed under the MIT license found in the
 # LICENSE file in the root directory of this source tree.
 
-from typing import List, Optional, Tuple, Union
+from typing import List, Optional, Sequence, Tuple, Union
 
 import torch
 
@@ -20,6 +20,7 @@ class HingeLoss(CostFunction):
         cost_weight: CostWeight,
         name: Optional[str] = None,
         side: str = "both",
+        dims: Optional[Sequence[int]] = None,
     ):
         super().__init__(cost_weight, name=name)
         self.vector = vector
@@ -28,13 +29,18 @@ class HingeLoss(CostFunction):
         for v in [self.limit, self.threshold]:
             if not v.ndim == 2 and v.shape[1] == 1:
                 raise ValueError("Limit and threshold must be scalar variables.")
+        if self.threshold.tensor.max() < 0.0:
+            raise ValueError("The threshold must be a positive scalar.")
         self.register_optim_var("vector")
         self.register_aux_vars(["limit", "threshold"])
         if side not in ["below", "above", "both"]:
             raise ValueError("side must be one of 'both', 'above', 'below'.")
         self.side = side
+        self.dims = dims
 
     def dim(self):
+        if self.dims is not None:
+            return len(self.dims)
         return self.vector.dof()
 
     def _compute_error(self) -> Tuple[torch.Tensor, torch.Tensor, torch.Tensor]:
@@ -45,11 +51,16 @@ class HingeLoss(CostFunction):
         up_limit = limit - threshold
         below_idx = vector < down_limit
         above_idx = vector > up_limit
-        error = vector.new_zeros(vector.shape)
+        base_error = vector.new_zeros(vector.shape)
         if self.side in ["below", "both"]:
-            error = torch.where(below_idx, down_limit - vector, error)
+            base_error = torch.where(below_idx, down_limit - vector, base_error)
         if self.side in ["above", "both"]:
-            error = torch.where(above_idx, vector - up_limit, error)
+            base_error = torch.where(above_idx, vector - up_limit, base_error)
+        error = (
+            base_error
+            if self.dims is None
+            else base_error[:, self.dims].view(-1, self.dim())
+        )
         return error, below_idx, above_idx
 
     def error(self) -> torch.Tensor:
@@ -57,13 +68,20 @@ class HingeLoss(CostFunction):
 
     def jacobians(self) -> Tuple[List[torch.Tensor], torch.Tensor]:
         error, below_idx, above_idx = self._compute_error()
-        J = self.vector.tensor.new_zeros(
-            self.vector.shape[0], self.dim(), self.vector.dof()
+        raw_J = self.vector.tensor.new_zeros(
+            self.vector.shape[0], self.vector.dof(), self.vector.dof()
         )
         if self.side in ["below", "both"]:
-            J[below_idx.diag_embed()] = -1.0
+            raw_J[below_idx.diag_embed()] = -1.0
         if self.side in ["above", "both"]:
-            J[above_idx.diag_embed()] = 1.0
+            raw_J[above_idx.diag_embed()] = 1.0
+
+        J = (
+            raw_J
+            if self.dims is None
+            else raw_J[:, self.dims, :].view(-1, self.dim(), self.vector.dof())
+        )
+
         return [J], error
 
     def _copy_impl(self, new_name: Optional[str] = None) -> "HingeLoss":
@@ -74,6 +92,7 @@ class HingeLoss(CostFunction):
             self.weight.copy(),
             name=new_name,
             side=self.side,
+            dims=self.dims,
         )
 
 

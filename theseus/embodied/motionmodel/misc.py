@@ -19,6 +19,7 @@ class HingeLoss(CostFunction):
         threshold: Union[float, torch.Tensor, Variable],
         cost_weight: CostWeight,
         name: Optional[str] = None,
+        side: str = "both",
     ):
         super().__init__(cost_weight, name=name)
         self.vector = vector
@@ -29,6 +30,9 @@ class HingeLoss(CostFunction):
                 raise ValueError("Limit and threshold must be scalar variables.")
         self.register_optim_var("vector")
         self.register_aux_vars(["limit", "threshold"])
+        if side not in ["below", "above", "both"]:
+            raise ValueError("side must be one of 'both', 'above', 'below'.")
+        self.side = side
 
     def dim(self):
         return self.vector.dof()
@@ -42,8 +46,10 @@ class HingeLoss(CostFunction):
         below_idx = vector < down_limit
         above_idx = vector > up_limit
         error = vector.new_zeros(vector.shape)
-        error = torch.where(below_idx, down_limit - vector, error)
-        error = torch.where(above_idx, vector - up_limit, error)
+        if self.side in ["below", "both"]:
+            error = torch.where(below_idx, down_limit - vector, error)
+        if self.side in ["above", "both"]:
+            error = torch.where(above_idx, vector - up_limit, error)
         return error, below_idx, above_idx
 
     def error(self) -> torch.Tensor:
@@ -54,8 +60,10 @@ class HingeLoss(CostFunction):
         J = self.vector.tensor.new_zeros(
             self.vector.shape[0], self.dim(), self.vector.dof()
         )
-        J[below_idx.diag_embed()] = -1.0
-        J[above_idx.diag_embed()] = 1.0
+        if self.side in ["below", "both"]:
+            J[below_idx.diag_embed()] = -1.0
+        if self.side in ["above", "both"]:
+            J[above_idx.diag_embed()] = 1.0
         return [J], error
 
     def _copy_impl(self, new_name: Optional[str] = None) -> "HingeLoss":
@@ -65,6 +73,7 @@ class HingeLoss(CostFunction):
             self.threshold.copy(),
             self.weight.copy(),
             name=new_name,
+            side=self.side,
         )
 
 

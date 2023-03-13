@@ -4,5 +4,5 @@
 # LICENSE file in the root directory of this source tree.
 
 from .double_integrator import DoubleIntegrator, GPCostWeight, GPMotionModel
-from .misc import Nonholonomic
+from .misc import HingeLoss, Nonholonomic
 from .quasi_static_pushing_planar import QuasiStaticPushingPlanar

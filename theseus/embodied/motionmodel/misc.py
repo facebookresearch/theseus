@@ -7,8 +7,65 @@ from typing import List, Optional, Tuple, Union
 
 import torch
 
-from theseus.core import CostFunction, CostWeight
+from theseus.core import CostFunction, CostWeight, Variable, as_variable
 from theseus.geometry import SE2, Point3, Vector
+
+
+class HingeLoss(CostFunction):
+    def __init__(
+        self,
+        vector: Vector,
+        limit: Union[float, torch.Tensor, Variable],
+        threshold: Union[float, torch.Tensor, Variable],
+        cost_weight: CostWeight,
+        name: Optional[str] = None,
+    ):
+        super().__init__(cost_weight, name=name)
+        self.vector = vector
+        self.limit = as_variable(limit, name=f"{self.name}__vlimit")
+        self.threshold = as_variable(threshold, name=f"{self.name}__vthres")
+        for v in [self.limit, self.threshold]:
+            if not v.ndim == 2 and v.shape[1] == 1:
+                raise ValueError("Limit and threshold must be scalar variables.")
+        self.register_optim_var("vector")
+        self.register_aux_vars(["limit", "threshold"])
+
+    def dim(self):
+        return self.vector.dof()
+
+    def _compute_error(self) -> Tuple[torch.Tensor, torch.Tensor, torch.Tensor]:
+        vector = self.vector.tensor
+        limit = self.limit.tensor
+        threshold = self.threshold.tensor
+        down_limit = -limit + threshold
+        up_limit = limit - threshold
+        below_idx = vector < down_limit
+        above_idx = vector > up_limit
+        error = vector.new_zeros(vector.shape)
+        error = torch.where(below_idx, down_limit - vector, error)
+        error = torch.where(above_idx, vector - up_limit, error)
+        return error, below_idx, above_idx
+
+    def error(self) -> torch.Tensor:
+        return self._compute_error()[0]
+
+    def jacobians(self) -> Tuple[List[torch.Tensor], torch.Tensor]:
+        error, below_idx, above_idx = self._compute_error()
+        J = self.vector.tensor.new_zeros(
+            self.vector.shape[0], self.dim(), self.vector.dof()
+        )
+        J[below_idx.diag_embed()] = -1.0
+        J[above_idx.diag_embed()] = 1.0
+        return [J], error
+
+    def _copy_impl(self, new_name: Optional[str] = None) -> "HingeLoss":
+        return HingeLoss(
+            self.vector.copy(),
+            self.limit.copy(),
+            self.threshold.copy(),
+            self.weight.copy(),
+            name=new_name,
+        )
 
 
 class Nonholonomic(CostFunction):

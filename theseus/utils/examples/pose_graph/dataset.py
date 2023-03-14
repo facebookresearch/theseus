@@ -282,9 +282,9 @@ class PoseGraphDataset:
             noise_relative_pose = th.SE3.exp_map(
                 torch.cat(
                     [
-                        rotation_noise
-                        * (2 * torch.rand(dataset_size, 3, dtype=dtype) - 1),
                         translation_noise
+                        * (2.0 * torch.rand(dataset_size, 3, dtype=dtype) - 1),
+                        rotation_noise
                         * (2.0 * torch.rand(dataset_size, 3, dtype=dtype) - 1),
                     ],
                     dim=1,
@@ -322,9 +322,9 @@ class PoseGraphDataset:
                         noise_relative_pose = th.SE3.exp_map(
                             torch.cat(
                                 [
-                                    rotation_noise
-                                    * (2 * torch.rand(1, 3, dtype=dtype) - 1),
                                     translation_noise
+                                    * (2 * torch.rand(1, 3, dtype=dtype) - 1),
+                                    rotation_noise
                                     * (2.0 * torch.rand(1, 3, dtype=dtype) - 1),
                                 ],
                                 dim=1,
@@ -354,8 +354,8 @@ class PoseGraphDataset:
             noise_pose = th.SE3.exp_map(
                 torch.cat(
                     [
-                        rotation_noise * (2 * torch.rand(1, 3, dtype=dtype) - 1),
-                        translation_noise * (2.0 * torch.rand(1, 3, dtype=dtype) - 1),
+                        translation_noise * (2 * torch.rand(1, 3, dtype=dtype) - 1),
+                        rotation_noise * (2.0 * torch.rand(1, 3, dtype=dtype) - 1),
                     ],
                     dim=1,
                 )

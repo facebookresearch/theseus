@@ -27,6 +27,10 @@ def check_group_tensor(tensor: torch.Tensor):
     so3.check_group_tensor(tensor[:, :, :3])
 
 
+def check_transform_tensor(tensor: torch.Tensor):
+    so3.check_transform_tensor(tensor)
+
+
 def check_tangent_vector(tangent_vector: torch.Tensor):
     _check = tangent_vector.ndim == 3 and tangent_vector.shape[1:] == (6, 1)
     _check |= tangent_vector.ndim == 2 and tangent_vector.shape[1] == 6
@@ -662,6 +666,7 @@ _jinverse_autograd_fn = _jinverse_impl
 # -----------------------------------------------------------------------------
 def _hat_impl(tangent_vector: torch.Tensor) -> torch.Tensor:
     check_tangent_vector(tangent_vector)
+    tangent_vector = tangent_vector.view(-1, 6)
     matrix = tangent_vector.new_zeros(tangent_vector.shape[0], 4, 4)
     matrix[:, :3, :3] = so3._hat_impl(tangent_vector[:, 3:])
     matrix[:, :3, 3] = tangent_vector[:, :3]
@@ -792,6 +797,52 @@ class Compose(lie_group.BinaryOperator):
 
 _compose_autograd_fn = Compose.apply
 _jcompose_autograd_fn = _jcompose_impl
+
+
+# -----------------------------------------------------------------------------
+# Transform From
+# -----------------------------------------------------------------------------
+def _transform_from_impl(group: torch.Tensor, tensor: torch.Tensor) -> torch.Tensor:
+    check_group_tensor(group)
+    check_transform_tensor(tensor)
+    ret = group[:, :, -1:] + group[:, :, :3] @ tensor.view(-1, 3, 1)
+    return ret.reshape(tensor.shape)
+
+
+def _jtransform_from_impl(
+    group: torch.Tensor, tensor: torch.Tensor
+) -> Tuple[List[torch.Tensor], torch.Tensor]:
+    check_group_tensor(group)
+    check_transform_tensor(tensor)
+    jacobian_g = group.new_empty(group.shape[0], 3, 6)
+    jacobian_g[:, :, :3] = so3._hat_impl(tensor) @ group[:, :, :3]
+    jacobian_g[:, :, 3:] = -group[:, :, :3] @ so3._hat_impl(tensor)
+    jacobian_p = group[:, :, :3].view(tensor.shape[:-1] + (3, 3))
+    jacobians = []
+    jacobians.append(jacobian_g)
+    jacobians.append(jacobian_p)
+    return jacobians, _transform_from_impl(group, tensor)
+
+
+class TransformFrom(lie_group.BinaryOperator):
+    @classmethod
+    def forward(cls, ctx, group, tensor):
+        group: torch.Tensor = cast(torch.Tensor, group)
+        tensor: torch.Tensor = cast(torch.Tensor, tensor)
+        ret = _transform_from_impl(group, tensor)
+        ctx.save_for_backward(group, tensor)
+        return ret
+
+    @classmethod
+    def backward(cls, ctx, grad_output):
+        group: torch.Tensor = ctx.saved_tensors[0]
+        tensor: torch.Tensor = ctx.saved_tensors[1]
+        grad_output: torch.Tensor = grad_output.view(-1, 3, 1)
+        grad_input0 = torch.cat(
+            (grad_output @ tensor.view(-1, 1, 3), grad_output), dim=-1
+        )
+        grad_input1 = group[:, :, :3].transpose(1, 2) @ grad_output
+        return grad_input0, grad_input1.view(tensor.shape)
 
 
 # -----------------------------------------------------------------------------

@@ -44,6 +44,10 @@ def check_tangent_vector(tangent_vector: torch.Tensor):
         raise ValueError("Tangent vectors of SO3 should be 3-D vectors.")
 
 
+def check_transform_tensor(tensor: torch.Tensor):
+    check_tangent_vector(tensor)
+
+
 def check_hat_matrix(matrix: torch.Tensor):
     if matrix.ndim != 3 or matrix.shape[1:] != (3, 3):
         raise ValueError("Hat matrices of SO(3) can only be 3x3 matrices")

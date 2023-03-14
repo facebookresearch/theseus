@@ -609,6 +609,50 @@ _jcompose_autograd_fn = _jcompose_impl
 
 
 # -----------------------------------------------------------------------------
+# Transform From
+# -----------------------------------------------------------------------------
+def _transform_from_impl(group: torch.Tensor, tensor: torch.Tensor) -> torch.Tensor:
+    check_group_tensor(group)
+    check_transform_tensor(tensor)
+    ret = group @ tensor.view(-1, 3, 1)
+    return ret.reshape(tensor.shape)
+
+
+def _jtransform_from_impl(
+    group: torch.Tensor, tensor: torch.Tensor
+) -> Tuple[List[torch.Tensor], torch.Tensor]:
+    check_group_tensor(group)
+    check_transform_tensor(tensor)
+    jacobian_g = _hat_autograd_fn(tensor) @ group
+    jacobian_p = group.view(tensor.shape[:-1] + (3, 3))
+    jacobians = []
+    jacobians.append(jacobian_g)
+    jacobians.append(jacobian_p)
+    return jacobians, _transform_from_impl(group, tensor)
+
+
+class TransformFrom(lie_group.BinaryOperator):
+    @classmethod
+    def forward(cls, ctx, group, tensor):
+        group: torch.Tensor = cast(torch.Tensor, group)
+        tensor: torch.Tensor = cast(torch.Tensor, tensor)
+        ret = _transform_from_impl(group, tensor)
+        ctx.save_for_backward(group, tensor)
+        return ret
+
+    @classmethod
+    def backward(cls, ctx, grad_output):
+        group: torch.Tensor = ctx.saved_tensors[0]
+        tensor: torch.Tensor = ctx.saved_tensors[1]
+        grad_output: torch.Tensor = grad_output.view(-1, 3, 1)
+        grad_input0 = torch.cat(
+            (grad_output @ tensor.view(-1, 1, 3), grad_output), dim=-1
+        )
+        grad_input1 = group[:, :, :3].transpose(1, 2) @ grad_output
+        return grad_input0, grad_input1.view(tensor.shape)
+
+
+# -----------------------------------------------------------------------------
 # Unit Quaternion to Rotation Matrix
 # -----------------------------------------------------------------------------
 def _quaternion_to_rotation_impl(quaternion: torch.Tensor) -> torch.Tensor:

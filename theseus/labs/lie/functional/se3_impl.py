@@ -815,8 +815,8 @@ def _jtransform_from_impl(
     check_group_tensor(group)
     check_transform_tensor(tensor)
     jacobian_g = group.new_empty(group.shape[0], 3, 6)
-    jacobian_g[:, :, :3] = so3._hat_impl(tensor) @ group[:, :, :3]
-    jacobian_g[:, :, 3:] = -group[:, :, :3] @ so3._hat_impl(tensor)
+    jacobian_g[:, :, :3] = so3._hat_autograd_fn(tensor) @ group[:, :, :3]
+    jacobian_g[:, :, 3:] = -group[:, :, :3] @ so3._hat_autograd_fn(tensor)
     jacobian_p = group[:, :, :3].view(tensor.shape[:-1] + (3, 3))
     jacobians = []
     jacobians.append(jacobian_g)

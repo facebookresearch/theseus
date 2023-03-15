@@ -47,6 +47,7 @@ def _get_lie_tensor_inputs(input_types, sampled_inputs, ltype):
         "lift",
         "project",
         "compose",
+        "transform_from",
         "left_act",
         "left_project",
         "log",

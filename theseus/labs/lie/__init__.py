@@ -10,6 +10,7 @@ from .lie_tensor import (  # usort: skip
     as_lietensor,
     cast,
     compose,
+    transform_from,
     exp,
     from_tensor,
     hat,

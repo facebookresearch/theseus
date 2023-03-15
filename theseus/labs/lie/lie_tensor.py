@@ -299,7 +299,7 @@ class LieTensor(_LieTensorBase):
         return self.new(self._fn_lib.compose(self._t, other._t))
 
     def transform_from(self, other: torch.Tensor) -> torch.Tensor:
-        return self.new(self._fn_lib.transform_from(self._t, other))
+        return self._fn_lib.transform_from(self._t, other)
 
     def left_act(self, matrix: torch.Tensor) -> torch.Tensor:
         return self._fn_lib.left_act(self._t, matrix)
@@ -562,6 +562,10 @@ def project(matrix: torch.Tensor, ltype: _ltype) -> torch.Tensor:
 
 def compose(group1: LieTensor, group2: LieTensor) -> LieTensor:
     return group1.compose(group2)
+
+
+def transform_from(group1: LieTensor, tensor: torch.Tensor) -> torch.Tensor:
+    return group1.transform_from(tensor)
 
 
 def left_act(group: LieTensor, matrix: torch.Tensor) -> torch.Tensor:

@@ -645,11 +645,13 @@ class TransformFrom(lie_group.BinaryOperator):
         group: torch.Tensor = ctx.saved_tensors[0]
         tensor: torch.Tensor = ctx.saved_tensors[1]
         grad_output: torch.Tensor = grad_output.view(-1, 3, 1)
-        grad_input0 = torch.cat(
-            (grad_output @ tensor.view(-1, 1, 3), grad_output), dim=-1
-        )
+        grad_input0 = grad_output @ tensor.view(-1, 1, 3)
         grad_input1 = group[:, :, :3].transpose(1, 2) @ grad_output
         return grad_input0, grad_input1.view(tensor.shape)
+
+
+_transform_from_autograd_fn = TransformFrom.apply
+_jtransform_from_autograd_fn = _jtransform_from_impl
 
 
 # -----------------------------------------------------------------------------

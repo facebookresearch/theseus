@@ -845,6 +845,10 @@ class TransformFrom(lie_group.BinaryOperator):
         return grad_input0, grad_input1.view(tensor.shape)
 
 
+_transform_from_autograd_fn = TransformFrom.apply
+_jtransform_from_autograd_fn = _jtransform_from_impl
+
+
 # -----------------------------------------------------------------------------
 # Lift
 # -----------------------------------------------------------------------------

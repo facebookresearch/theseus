@@ -337,6 +337,11 @@ class LieTensor(_LieTensorBase):
         op_res = self.new(self._fn_lib.compose(self._t, other._t, jacobians=jacs))
         return jacs, op_res
 
+    def jtransform_from(self, other: torch.Tensor) -> _JFnReturnType:
+        jacs: List[torch.Tensor] = []
+        op_res = self._fn_lib.transform_from(self._t, other, jacobians=jacs)
+        return jacs, op_res
+
     def _no_jop(self, input0: TensorType) -> _JFnReturnType:
         raise NotImplementedError
 
@@ -592,6 +597,10 @@ def jexp(tangent_vector: torch.Tensor, ltype: _ltype) -> _JFnReturnType:
 
 def jcompose(group1: LieTensor, group2: LieTensor) -> _JFnReturnType:
     return group1.jcompose(group2)
+
+
+def jtransform_from(group1: LieTensor, tensor: torch.Tensor) -> _JFnReturnType:
+    return group1.jtransform_from(tensor)
 
 
 def retract(group: LieTensor, delta: TensorType) -> LieTensor:

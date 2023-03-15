@@ -183,7 +183,9 @@ class LieGroupFns:
         self.compose, self.jcompose = BinaryOperatorFactory(module, "compose")
         self.left_act = BinaryOperatorFactory(module, "left_act")[0]
         self.left_project = BinaryOperatorFactory(module, "left_project")[0]
-        self.transform_from = BinaryOperatorFactory(module, "transform_from")[0]
+        self.transform_from, self.jtransform_from = BinaryOperatorFactory(
+            module, "transform_from"
+        )
         self.check_group_tensor: _CheckFnType = module.check_group_tensor
         self.check_tangent_vector: _CheckFnType = module.check_tangent_vector
         self.check_hat_matrix: _CheckFnType = module.check_hat_matrix

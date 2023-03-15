@@ -298,6 +298,9 @@ class LieTensor(_LieTensorBase):
         self._check_ltype(other, "compose")
         return self.new(self._fn_lib.compose(self._t, other._t))
 
+    def transform_from(self, other: torch.Tensor) -> torch.Tensor:
+        return self.new(self._fn_lib.transform_from(self._t, other))
+
     def left_act(self, matrix: torch.Tensor) -> torch.Tensor:
         return self._fn_lib.left_act(self._t, matrix)
 

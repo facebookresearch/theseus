@@ -131,7 +131,7 @@ install_torch: &install_torch
       name: Install Torch
       working_directory: ~/project
       command: |
-        pip install torch
+        pip install torch==1.13.0
 
 install_recent_cmake_2004: &install_recent_cmake_2004
   - run:

@@ -646,12 +646,59 @@ class TransformFrom(lie_group.BinaryOperator):
         tensor: torch.Tensor = ctx.saved_tensors[1]
         grad_output: torch.Tensor = grad_output.view(-1, 3, 1)
         grad_input0 = grad_output @ tensor.view(-1, 1, 3)
-        grad_input1 = group[:, :, :3].transpose(1, 2) @ grad_output
+        grad_input1 = group.transpose(1, 2) @ grad_output
         return grad_input0, grad_input1.view(tensor.shape)
 
 
 _transform_from_autograd_fn = TransformFrom.apply
 _jtransform_from_autograd_fn = _jtransform_from_impl
+
+
+# -----------------------------------------------------------------------------
+# Transform To
+# -----------------------------------------------------------------------------
+def _transform_to_impl(group: torch.Tensor, tensor: torch.Tensor) -> torch.Tensor:
+    check_group_tensor(group)
+    check_transform_tensor(tensor)
+    ret = group.transpose(1, 2) @ tensor.view(-1, 3, 1)
+    return ret.reshape(tensor.shape)
+
+
+def _jtransform_to_impl(
+    group: torch.Tensor, tensor: torch.Tensor
+) -> Tuple[List[torch.Tensor], torch.Tensor]:
+    check_group_tensor(group)
+    check_transform_tensor(tensor)
+    group_inv = group.transpose(1, 2)
+    jacobian_g = -_hat_autograd_fn(group_inv @ tensor)
+    jacobian_p = group_inv.view(tensor.shape[:-1] + (3, 3))
+    jacobians = []
+    jacobians.append(jacobian_g)
+    jacobians.append(jacobian_p)
+    return jacobians, _transform_to_impl(group, tensor)
+
+
+class TransformTo(lie_group.BinaryOperator):
+    @classmethod
+    def forward(cls, ctx, group, tensor):
+        group: torch.Tensor = cast(torch.Tensor, group)
+        tensor: torch.Tensor = cast(torch.Tensor, tensor)
+        ret = _transform_to_impl(group, tensor)
+        ctx.save_for_backward(group, tensor)
+        return ret
+
+    @classmethod
+    def backward(cls, ctx, grad_output):
+        group: torch.Tensor = ctx.saved_tensors[0]
+        tensor: torch.Tensor = ctx.saved_tensors[1]
+        grad_output: torch.Tensor = grad_output.view(-1, 1, 3)
+        grad_input0 = tensor.view(-1, 3, 1) @ grad_output
+        grad_input1 = group.transpose(1, 2) @ grad_output
+        return grad_input0, grad_input1.view(tensor.shape)
+
+
+_transform_to_autograd_fn = TransformTo.apply
+_jtransform_to_autograd_fn = _jtransform_to_impl
 
 
 # -----------------------------------------------------------------------------

@@ -1,4 +1,4 @@
-from typing import Callable, NoReturn, Optional, Union, List
+from typing import Callable, NoReturn, Optional, Union, List, Dict
 
 import numpy as np
 import torch
@@ -37,13 +37,13 @@ class DCEM(NonlinearOptimizer):
         self,
         objective: Objective,
         vectorize: bool = False,
-        max_iterations: int = 50,  # 50 for test_theseus
-        n_sample: int = 100,  # 100 for test_theseus
-        n_elite: int = 5,  # 5
+        max_iterations: int = 50,
+        n_sample: int = 100,
+        n_elite: int = 5,
         temp: float = 1.0,
-        init_sigma: Union[float, torch.Tensor, List[float]] = 1.0,
-        lb=None,
-        ub=None,
+        init_sigma: Union[float, torch.Tensor] = 1.0,
+        lb: float = None,
+        ub: float = None,
         lml_verbose: bool = False,
         lml_eps: float = 1e-3,
         normalize: bool = True,
@@ -68,12 +68,12 @@ class DCEM(NonlinearOptimizer):
         self.ub = ub
         self.temp = temp
         self.normalize = normalize
-        self.tot_dof = sum([x.dof() for x in self.ordering])
+        self._tot_dof = sum([x.dof() for x in self.ordering])
         self.lml_eps = lml_eps
         self.lml_verbose = lml_verbose
         self.init_sigma = init_sigma
 
-    def _mu_vec_to_dict(self, mu):
+    def _mu_vec_to_dict(self, mu: torch.Tensor) -> Dict[str, torch.Tensor]:
         idx = 0
         mu_dic = {}
         for var in self.ordering:
@@ -81,15 +81,19 @@ class DCEM(NonlinearOptimizer):
             idx += var.dof()
         return mu_dic
 
-    def _reinit_sigma(self, init_sigma):
+    def reset_sigma(self, init_sigma: Union[float, torch.Tensor]) -> None:
         self.sigma = (
             torch.ones(
-                (self.ordering[0].shape[0], self.tot_dof), device=self.objective.device
+                (self.objective.batch_size, self._tot_dof), device=self.objective.device
             )
             * init_sigma
         )
 
     def _CEM_step(self):
+        """
+        Performs one iteration of CEM.
+        Updates the self.sigma and return the new mu.
+        """
         device = self.objective.device
         n_batch = self.ordering[0].shape[0]
 
@@ -97,7 +101,7 @@ class DCEM(NonlinearOptimizer):
 
         X = Normal(mu, self.sigma).rsample((self.n_samples,))
 
-        X_samples = []
+        X_samples: List[Dict[str, torch.Tensor]] = []
         for sample in X:
             X_samples.append(self._mu_vec_to_dict(sample))
 
@@ -146,7 +150,7 @@ class DCEM(NonlinearOptimizer):
             (indexes * (X - mu.unsqueeze(1)) ** 2).sum(dim=1) / self.n_elite
         ).sqrt()
 
-        assert self.sigma.shape == (n_batch, self.tot_dof)
+        assert self.sigma.shape == (n_batch, self._tot_dof)
 
         return self._mu_vec_to_dict(mu)
 
@@ -165,7 +169,7 @@ class DCEM(NonlinearOptimizer):
             try:
                 mu = self._CEM_step()
             except RuntimeError as error:
-                raise RuntimeError(f"There is an error in update {error}")
+                raise RuntimeError(f"There is an error in update {error}.")
 
             self.objective.update(mu)
 
@@ -212,7 +216,7 @@ class DCEM(NonlinearOptimizer):
     ) -> OptimizerInfo:
         backward_mode = BackwardMode.resolve(backward_mode)
         init_sigma = kwargs.get("init_sigma", self.init_sigma)
-        self._reinit_sigma(init_sigma)
+        self.reset_sigma(init_sigma)
 
         with torch.no_grad():
             info = self._init_info(
@@ -227,11 +231,9 @@ class DCEM(NonlinearOptimizer):
 
         if backward_mode in [BackwardMode.UNROLL, BackwardMode.DLM]:
             self._optimize_loop(
-                start_iter=0,
                 num_iter=self.params.max_iterations,
                 info=info,
                 verbose=verbose,
-                truncated_grad_loop=False,
                 end_iter_callback=end_iter_callback,
                 **kwargs,
             )
@@ -242,4 +244,6 @@ class DCEM(NonlinearOptimizer):
             return info
 
         else:
-            raise ValueError("Use Unroll as backward mode for now")
+            raise NotImplementedError(
+                "DCEM currently only supports 'unroll' backward mode."
+            )

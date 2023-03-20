@@ -21,6 +21,7 @@ from .common import BATCH_SIZES_TO_TEST, TEST_EPS, check_lie_group_function, run
         "inverse",
         "hat",
         "compose",
+        "transform_from",
         "quaternion_to_rotation",
         "lift",
         "project",

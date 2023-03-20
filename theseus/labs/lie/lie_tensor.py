@@ -298,6 +298,9 @@ class LieTensor(_LieTensorBase):
         self._check_ltype(other, "compose")
         return self.new(self._fn_lib.compose(self._t, other._t))
 
+    def transform_from(self, other: torch.Tensor) -> torch.Tensor:
+        return self._fn_lib.transform_from(self._t, other)
+
     def left_act(self, matrix: torch.Tensor) -> torch.Tensor:
         return self._fn_lib.left_act(self._t, matrix)
 
@@ -332,6 +335,11 @@ class LieTensor(_LieTensorBase):
         self._check_ltype(other, "jcompose")
         jacs: List[torch.Tensor] = []
         op_res = self.new(self._fn_lib.compose(self._t, other._t, jacobians=jacs))
+        return jacs, op_res
+
+    def jtransform_from(self, other: torch.Tensor) -> _JFnReturnType:
+        jacs: List[torch.Tensor] = []
+        op_res = self._fn_lib.transform_from(self._t, other, jacobians=jacs)
         return jacs, op_res
 
     def _no_jop(self, input0: TensorType) -> _JFnReturnType:
@@ -561,6 +569,10 @@ def compose(group1: LieTensor, group2: LieTensor) -> LieTensor:
     return group1.compose(group2)
 
 
+def transform_from(group1: LieTensor, tensor: torch.Tensor) -> torch.Tensor:
+    return group1.transform_from(tensor)
+
+
 def left_act(group: LieTensor, matrix: torch.Tensor) -> torch.Tensor:
     return group.left_act(matrix)
 
@@ -585,6 +597,10 @@ def jexp(tangent_vector: torch.Tensor, ltype: _ltype) -> _JFnReturnType:
 
 def jcompose(group1: LieTensor, group2: LieTensor) -> _JFnReturnType:
     return group1.jcompose(group2)
+
+
+def jtransform_from(group1: LieTensor, tensor: torch.Tensor) -> _JFnReturnType:
+    return group1.jtransform_from(tensor)
 
 
 def retract(group: LieTensor, delta: TensorType) -> LieTensor:

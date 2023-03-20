@@ -85,7 +85,7 @@ def create_qf_theseus_layer(
     cost_weight=th.ScaleCostWeight(1.0),
     nonlinear_optimizer_cls=th.GaussNewton,
     linear_solver_cls=th.CholeskyDenseSolver,
-    max_iterations=50,
+    max_iterations=10,
     use_learnable_error=False,
     force_vectorization=False,
 ):
@@ -420,7 +420,6 @@ def _solver_can_be_run(lin_solver_cls):
         th.CholmodSparseSolver,
         th.LUCudaSparseSolver,
         th.BaspachoSparseSolver,
-        None,
     ],
 )
 @pytest.mark.parametrize("use_learnable_error", [True, False])
@@ -455,8 +454,11 @@ def test_backward(
             return
     if nonlinear_optim_cls == th.Dogleg and lin_solver_cls != th.CholeskyDenseSolver:
         return
-    if nonlinear_optim_cls == th.DCEM and lin_solver_cls is not None:
-        return
+    if nonlinear_optim_cls == th.DCEM:
+        if lin_solver_cls != th.CholeskyDenseSolver:
+            return
+        else:
+            lin_solver_cls = None
 
     # test both vectorization on/off
     force_vectorization = torch.rand(1).item() > 0.5

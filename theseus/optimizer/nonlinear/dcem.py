@@ -1,4 +1,4 @@
-from typing import Callable, NoReturn, Optional, Union, List, Dict
+from typing import Optional, Union, List, Dict
 
 import numpy as np
 import torch
@@ -14,11 +14,8 @@ from .nonlinear_optimizer import (
     BackwardMode,
     NonlinearOptimizerInfo,
     NonlinearOptimizerStatus,
+    EndIterCallbackType,
 )
-
-EndIterCallbackType = Callable[
-    ["DCEM", NonlinearOptimizerInfo, torch.Tensor, int], NoReturn
-]
 
 
 class DCEM(NonlinearOptimizer):
@@ -186,10 +183,6 @@ class DCEM(NonlinearOptimizer):
                 info.status[
                     np.array(converged_indices.cpu().numpy())
                 ] = NonlinearOptimizerStatus.CONVERGED
-
-                # TODO
-                # Doesn't work with lml_eps = 1e-5.
-                # and with lml_eps= 1e-4, gives suboptimal solution
 
                 if converged_indices.all():
                     break  # nothing else will happen at this point

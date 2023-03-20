@@ -245,8 +245,8 @@ class LieTensor(_LieTensorBase):
         self._check_ltype(other, "compose")
         return self.new(self.ltype._fn_lib.compose(self._t, other._t))
 
-    def transform_from(self, other: torch.Tensor) -> torch.Tensor:
-        return self.ltype._fn_lib.transform_from(self._t, other)
+    def transform_from(self, point: torch.Tensor) -> torch.Tensor:
+        return self.ltype._fn_lib.transform_from(self._t, point)
 
     def left_act(self, matrix: torch.Tensor) -> torch.Tensor:
         return self.ltype._fn_lib.left_act(self._t, matrix)
@@ -281,9 +281,9 @@ class LieTensor(_LieTensorBase):
         op_res = self.new(self.ltype._fn_lib.compose(self._t, other._t, jacobians=jacs))
         return jacs, op_res
 
-    def jtransform_from(self, other: torch.Tensor) -> _JFnReturnType:
+    def jtransform_from(self, point: torch.Tensor) -> _JFnReturnType:
         jacs: List[torch.Tensor] = []
-        op_res = self.ltype._fn_lib.transform_from(self._t, other, jacobians=jacs)
+        op_res = self.ltype._fn_lib.transform_from(self._t, point, jacobians=jacs)
         return jacs, op_res
 
     def _no_jop(self, input0: TensorType) -> _JFnReturnType:
@@ -327,6 +327,14 @@ class LieTensor(_LieTensorBase):
                 f"Expected LieTensor, but got {type(other)}"
             )
         return type_cast(LieTensor, other).compose(self)
+
+    def __matmul__(self, point: TensorType) -> torch.Tensor:
+        if isinstance(point, LieTensor):
+            raise TypeError(
+                "Incorrect argument for '@' operator. "
+                "Expected a torch.Tensor (x, y, z), but got a LieTensor."
+            )
+        return self.transform_from(point)
 
     def set_(self, tensor: "LieTensor"):  # type: ignore
         if not isinstance(tensor, LieTensor):

@@ -107,48 +107,76 @@ class Nonholonomic(CostFunction):
         super().__init__(cost_weight, name=name)
         if vel.dof() != 3 or pose.dof() != 3:
             raise ValueError(
-                "Nonholonomic only accepts 3D velocity or poses (x, y, z dims). "
+                "Nonholonomic only accepts 3D velocity or poses (x, y, theta dims). "
                 "Poses can either be SE2 or Vector variables. Velocities only Vector."
             )
         self.pose = pose
         self.vel = vel
         self.register_optim_vars(["pose", "vel"])
         self.weight = cost_weight
+        is_se2 = isinstance(self.pose, SE2)
+        self._compute_error_impl = (
+            self._compute_error_se2_impl if is_se2 else self._compute_error_vector_impl
+        )
+        self._compute_jacobians = (
+            self._compute_jacobians_se2 if is_se2 else self._compute_jacobians_vector
+        )
 
     def dim(self):
         return 1
 
+    def _compute_error_se2_impl(
+        self,
+    ) -> Tuple[torch.Tensor, Optional[torch.Tensor], Optional[torch.Tensor]]:
+        return self.vel[:, 1], None, None
+
+    def _compute_error_vector_impl(
+        self,
+    ) -> Tuple[torch.Tensor, Optional[torch.Tensor], Optional[torch.Tensor]]:
+        cos = self.pose[:, 2].cos()
+        sin = self.pose[:, 2].sin()
+        error = self.vel[:, 1] * cos - self.vel[:, 0] * sin
+        return error, cos, sin
+
     def _compute_error(
         self,
     ) -> Tuple[torch.Tensor, Optional[torch.Tensor], Optional[torch.Tensor]]:
-        vel = self.vel.tensor
-        if isinstance(self.pose, SE2):
-            error = vel[:, 1]
-            cos, sin = None, None
-        else:
-            cos = self.pose[:, 2].cos()
-            sin = self.pose[:, 2].sin()
-            error = vel[:, 1] * cos - vel[:, 0] * sin
+        error, cos, sin = self._compute_error_impl()
         return error.view(-1, 1), cos, sin
 
     def error(self) -> torch.Tensor:
         return self._compute_error()[0]
+
+    def _compute_jacobians_se2(
+        self,
+        error: torch.Tensor,
+        cos: torch.Tensor,
+        sin: torch.Tensor,
+    ) -> Tuple[torch.Tensor, torch.Tensor]:
+        Jpose = error.new_zeros(error.shape[0], 1, 3)
+        Jvel = error.new_zeros(error.shape[0], 1, 3)
+        Jvel[:, 0, 1] = 1
+        return Jpose, Jvel
+
+    def _compute_jacobians_vector(
+        self,
+        error: torch.Tensor,
+        cos: torch.Tensor,
+        sin: torch.Tensor,
+    ) -> Tuple[torch.Tensor, torch.Tensor]:
+        Jpose = self.vel.tensor.new_zeros(self.vel.shape[0], 1, 3)
+        Jvel = self.vel.tensor.new_zeros(self.vel.shape[0], 1, 3)
+        Jpose[:, 0, 2] = -(self.vel[:, 1] * sin + self.vel[:, 0] * cos)
+        Jvel[:, 0, 0] = -sin
+        Jvel[:, 0, 1] = cos
+        return Jpose, Jvel
 
     def jacobians(self) -> Tuple[List[torch.Tensor], torch.Tensor]:
         # Pre-allocate jacobian tensors
         batch_size = self.vel.shape[0]
         Jvel = self.vel.tensor.new_zeros(batch_size, 1, 3)
         error, cos, sin = self._compute_error()
-        if isinstance(self.pose, SE2):
-            Jpose = error.new_zeros(error.shape[0], 1, 3)
-            Jvel = error.new_zeros(error.shape[0], 1, 3)
-            Jvel[:, 0, 1] = 1
-        else:
-            Jpose = self.vel.tensor.new_zeros(self.vel.shape[0], 1, 3)
-            Jvel = self.vel.tensor.new_zeros(self.vel.shape[0], 1, 3)
-            Jpose[:, 0, 2] = -(self.vel[:, 1] * sin + self.vel[:, 0] * cos)
-            Jvel[:, 0, 0] = -sin
-            Jvel[:, 0, 1] = cos
+        Jpose, Jvel = self._compute_jacobians(error, cos, sin)
         return [Jpose, Jvel], error
 
     def _copy_impl(self, new_name: Optional[str] = None) -> "Nonholonomic":

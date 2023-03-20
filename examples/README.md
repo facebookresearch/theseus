@@ -7,7 +7,7 @@ learn the cost weight as a function of pose.
 - **motion_planning_2d.py:** Is an example of how to set up a differentiable motion planning
 problem, inspired by [Bhardwaj et al. 2020](https://arxiv.org/pdf/1907.09591.pdf).
 - **se2_planning.py:** Brief example of how to use SE2 variables with the motion planner
-utility, to handle poses with angles in 2D maps.
+utility, to handle poses with angles in 2D maps and nonholonomic constraints.
 - **tactile_pose_estimation.py:** Is an example of how to set up learning models for
 tactile pose estimation, as described in [Sodhi et al. 2021](https://arxiv.org/abs/1705.10664).
 - **backward_modes.py:** Shows how to compute derivatives through Theseus solves and switch between backward modes.

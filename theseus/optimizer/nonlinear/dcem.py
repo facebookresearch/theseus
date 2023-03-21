@@ -125,15 +125,20 @@ class DCEM(NonlinearOptimizer):
                     N=self.n_elite, verbose=self.lml_verbose, eps=self.lml_eps
                 )(-_fX * self.temp)
             indexes = indexes.unsqueeze(2)
+            eps = 0
 
         else:
             indexes_vals = fX.argsort(dim=1)[:, : self.n_elite]
-            # TODO: A scatter would be more efficient here.
-            indexes = torch.zeros(n_batch, self.n_samples, device=device)
-            for j in range(n_batch):
-                for v in indexes_vals[j]:
-                    indexes[j, v] = 1.0
+            # Scatter 1.0 to the indexes using indexes_vals
+            indexes = torch.zeros(n_batch, self.n_samples, device=device).scatter_(
+                1, indexes_vals, 1.0
+            )
+            # indexes = torch.zeros(n_batch, self.n_samples, device=device)
+            # for j in range(n_batch):
+            #     for v in indexes_vals[j]:
+            #         indexes[j, v] = 1.0
             indexes = indexes.unsqueeze(2)
+            eps = 1e-10
         # indexes.shape should be (n_batch, n_sample, 1)
 
         X = X.transpose(0, 1)
@@ -145,7 +150,7 @@ class DCEM(NonlinearOptimizer):
         mu = torch.sum(X_I, dim=1) / self.n_elite
         self.sigma = (
             (indexes * (X - mu.unsqueeze(1)) ** 2).sum(dim=1) / self.n_elite
-        ).sqrt()
+        ).sqrt() + eps  # adding eps to avoid sigma=0, which is happening when temp=None
 
         assert self.sigma.shape == (n_batch, self._tot_dof)
 

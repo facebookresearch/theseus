@@ -133,10 +133,6 @@ class DCEM(NonlinearOptimizer):
             indexes = torch.zeros(n_batch, self.n_samples, device=device).scatter_(
                 1, indexes_vals, 1.0
             )
-            # indexes = torch.zeros(n_batch, self.n_samples, device=device)
-            # for j in range(n_batch):
-            #     for v in indexes_vals[j]:
-            #         indexes[j, v] = 1.0
             indexes = indexes.unsqueeze(2)
             eps = 1e-10
         # indexes.shape should be (n_batch, n_sample, 1)

@@ -30,9 +30,7 @@ def _get_lie_tensor_inputs(input_types, sampled_inputs, ltype):
 
     x = _get_typed_tensor(0)
     if len(sampled_inputs) == 1:
-        # For static method (exp, hat, vee, lift, project), we need to
-        # specify the ltype as the second input
-        return (x,) if input_types[0][0] == "group" else (x, ltype)
+        return (x,)
     y = _get_typed_tensor(1)
     return (x, y)
 
@@ -88,14 +86,18 @@ def test_op(op_name, ltype_str, batch_size, rng):
     for input_types in all_input_types:
         inputs = sample_inputs(input_types, batch_size, torch.float32, rng)
         lie_tensor_inputs = _get_lie_tensor_inputs(input_types, inputs, ltype)
-        out = _to_functional_fmt(getattr(lie, op_name)(*lie_tensor_inputs))
+        fn_holder_object = ltype if hasattr(ltype, op_name) else lie
+        out = _to_functional_fmt(getattr(fn_holder_object, op_name)(*lie_tensor_inputs))
         impl_out = getattr(impl_module, f"_{impl_name}_autograd_fn")(*inputs)
         torch.testing.assert_close(out, impl_out)
 
         # Also check that class-version is correct
+        if hasattr(ltype, op_name):
+            continue  # No class version for things like exp, hat, vee, etc.
+
         # Use a dummy group for static ops (e.g., exp, hat)
         c = (
-            lie.rand(1, ltype, generator=rng, dtype=torch.float32)
+            ltype.rand(1, generator=rng, dtype=torch.float32)
             if isinstance(lie_tensor_inputs[-1], lie.ltype)
             else lie_tensor_inputs[0]
         )
@@ -111,14 +113,18 @@ def test_op(op_name, ltype_str, batch_size, rng):
         out_c = _to_functional_fmt(getattr(c, op_name)(*c_inputs))
         torch.testing.assert_close(out, out_c)
 
-    if op_name in ["exp", "compose", "log", "inv"]:
-        jac1, out = _to_functional_fmt(getattr(lie, f"j{op_name}")(*lie_tensor_inputs))
+    if op_name in ["exp", "compose", "log", "inv", "transform_from"]:
+        fn_holder_object = ltype if op_name == "exp" else lie
+        jac1, out = _to_functional_fmt(
+            getattr(fn_holder_object, f"j{op_name}")(*lie_tensor_inputs)
+        )
         impl_jac, impl_out = getattr(impl_module, f"_j{impl_name}_autograd_fn")(*inputs)
         torch.testing.assert_close([jac1, out], [impl_jac, impl_out])
 
-        # Check class-version
-        jac_c, out_c = _to_functional_fmt(getattr(c, f"j{op_name}")(*c_inputs))
-        torch.testing.assert_close([jac1, out], [jac_c, out_c])
+        # Check class-version (exp doesn't have a class version)
+        if op_name != "exp":
+            jac_c, out_c = _to_functional_fmt(getattr(c, f"j{op_name}")(*c_inputs))
+            torch.testing.assert_close([jac1, out], [jac_c, out_c])
 
 
 @run_if_labs()
@@ -126,8 +132,8 @@ def test_backward_works():
     import theseus.labs.lie as lie
 
     # Run optimization to check that the compute graph is not broken
-    g1 = lie.rand(1, lie.SE3, requires_grad=True)
-    g2 = lie.rand(1, lie.SE3)
+    g1 = lie.SE3.rand(1, requires_grad=True)
+    g2 = lie.SE3.rand(1)
     opt = torch.optim.Adam([g1], lr=0.1)
     for i in range(10):
         opt.zero_grad()

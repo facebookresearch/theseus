@@ -5,7 +5,7 @@
 
 import abc
 import warnings
-from typing import Any, Callable, Dict, NoReturn, Optional, Tuple, Type, Union
+from typing import Any, Dict, Optional, Tuple, Type, Union
 
 import torch
 
@@ -22,12 +22,8 @@ from .nonlinear_optimizer import (
     NonlinearOptimizer,
     NonlinearOptimizerInfo,
     NonlinearOptimizerStatus,
+    EndIterCallbackType,
 )
-
-
-EndIterCallbackType = Callable[
-    ["NonlinearOptimizer", NonlinearOptimizerInfo, torch.Tensor, int], NoReturn
-]
 
 
 # Base class for all optimizers for NLLS problems,

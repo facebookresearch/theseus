@@ -8,7 +8,7 @@ import math
 import warnings
 from dataclasses import dataclass
 from enum import Enum
-from typing import Dict, Optional, Tuple, Union
+from typing import Dict, Optional, Tuple, Union, Callable, NoReturn
 
 import numpy as np
 import torch
@@ -72,6 +72,11 @@ class NonlinearOptimizerInfo(OptimizerInfo):
     last_err: torch.Tensor
     best_err: torch.Tensor
     state_history: Optional[Dict[str, torch.Tensor]]  # variable name to state history
+
+
+EndIterCallbackType = Callable[
+    ["NonlinearOptimizer", NonlinearOptimizerInfo, torch.Tensor, int], NoReturn
+]
 
 
 # Base class for all nonlinear optimizers.

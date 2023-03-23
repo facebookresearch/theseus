@@ -86,6 +86,7 @@ from .optimizer.linear import (  # usort: skip
 )
 from .optimizer.nonlinear import (  # usort: skip
     BackwardMode,
+    DCEM,
     Dogleg,
     GaussNewton,
     LevenbergMarquardt,

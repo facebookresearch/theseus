@@ -9,7 +9,7 @@ from typing import Any, Dict, List, Optional, Tuple, Type, Union
 import torch
 
 import theseus as th
-from theseus.embodied import HingeLoss, Nonholonomic
+from theseus.embodied import HingeCost, Nonholonomic
 
 
 class _XYDifference(th.CostFunction):
@@ -245,7 +245,7 @@ class MotionPlannerObjective(th.Objective):
                 )
             if positive_vel_w:
                 self.add(
-                    HingeLoss(
+                    HingeCost(
                         velocities[i - 1],
                         0.0,
                         1.0,

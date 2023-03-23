@@ -11,7 +11,7 @@ from theseus.core import CostFunction, CostWeight, Variable, as_variable
 from theseus.geometry import SE2, Point3, Vector
 
 
-class HingeLoss(CostFunction):
+class HingeCost(CostFunction):
     def __init__(
         self,
         vector: Vector,
@@ -84,8 +84,8 @@ class HingeLoss(CostFunction):
 
         return [J], error
 
-    def _copy_impl(self, new_name: Optional[str] = None) -> "HingeLoss":
-        return HingeLoss(
+    def _copy_impl(self, new_name: Optional[str] = None) -> "HingeCost":
+        return HingeCost(
             self.vector.copy(),
             self.limit.copy(),
             self.threshold.copy(),

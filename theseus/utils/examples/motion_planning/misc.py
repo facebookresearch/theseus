@@ -141,8 +141,8 @@ def _get_triangle_pts(x, y, theta, radius):
         triangle_pts.append((x_new, y_new))
 
     _append(theta, 1.0)
-    _append(theta + np.pi / 2, 0.5)
-    _append(theta - np.pi / 2, 0.5)
+    _append(theta + np.pi / 2, 0.3)
+    _append(theta - np.pi / 2, 0.3)
     return triangle_pts
 
 
@@ -157,7 +157,7 @@ def _add_robot_to_trajectory(
         else:
             triangle_pts = _get_triangle_pts(x_list[i], y_list[i], theta[i], radius)
             patches.append(mpl.patches.Polygon(triangle_pts))
-            alpha_ = 2 * alpha
+            alpha_ = 4 * alpha
     patch_collection = mpl.collections.PatchCollection(
         patches, alpha=alpha_, color=color
     )

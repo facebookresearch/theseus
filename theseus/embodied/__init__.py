@@ -11,5 +11,7 @@ from .motionmodel import (
     DoubleIntegrator,
     GPCostWeight,
     GPMotionModel,
+    HingeCost,
+    Nonholonomic,
     QuasiStaticPushingPlanar,
 )

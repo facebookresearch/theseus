@@ -9,6 +9,7 @@ from typing import Any, Dict, List, Optional, Tuple, Type, Union
 import torch
 
 import theseus as th
+from theseus.embodied import HingeCost, Nonholonomic
 
 
 class _XYDifference(th.CostFunction):
@@ -65,6 +66,8 @@ class MotionPlannerObjective(th.Objective):
         use_single_collision_weight: bool = True,
         pose_type: Union[Type[th.Point2], Type[th.SE2]] = th.Point2,
         dtype: torch.dtype = torch.double,
+        nonholonomic_w: float = 0.0,
+        positive_vel_w: float = 0.0,
     ):
         for v in [
             map_size,
@@ -193,6 +196,14 @@ class MotionPlannerObjective(th.Objective):
             )
         )
 
+        if nonholonomic_w > 0.0:
+            assert pose_type == th.SE2
+            nhw = th.ScaleCostWeight(nonholonomic_w, name="nonholonomic_w")
+
+        if positive_vel_w > 0.0:
+            assert pose_type == th.SE2
+            pvw = th.ScaleCostWeight(positive_vel_w, name="positive_vel_w")
+
         # Next we add 2-D collisions and GP cost functions, and associate them with the
         # cost weights created above. We need a separate cost function for each time
         # step
@@ -223,6 +234,27 @@ class MotionPlannerObjective(th.Objective):
                     )
                 )
             )
+            if nonholonomic_w > 0.0:
+                self.add(
+                    Nonholonomic(
+                        poses[i],  # type: ignore
+                        velocities[i],
+                        nhw,
+                        name=f"nonholonomic_{i}",
+                    )
+                )
+            if positive_vel_w:
+                self.add(
+                    HingeCost(
+                        velocities[i - 1],
+                        0.0,
+                        1.0,
+                        pvw,
+                        name=f"positive_vel_{i}",
+                        side="below",
+                        dims=[0],
+                    ),
+                )
 
 
 class MotionPlanner:
@@ -244,6 +276,8 @@ class MotionPlanner:
         num_time_steps: Optional[int] = None,
         use_single_collision_weight: bool = True,
         pose_type: Union[Type[th.Point2], Type[th.SE2]] = th.Point2,
+        nonholonomic_w: float = 0.0,
+        positive_vel_w: float = 0.0,
     ):
         if objective is None:
             self.objective = MotionPlannerObjective(
@@ -256,6 +290,8 @@ class MotionPlanner:
                 use_single_collision_weight=use_single_collision_weight,
                 pose_type=pose_type,
                 dtype=dtype,
+                nonholonomic_w=nonholonomic_w,
+                positive_vel_w=positive_vel_w,
             )
         else:
             self.objective = objective

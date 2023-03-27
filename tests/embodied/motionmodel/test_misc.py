@@ -19,7 +19,7 @@ def test_nonholonomic():
     check_jacobians(cf, num_checks=100, tol=1e-5)
 
 
-def test_hinge_loss():
+def test_hinge_cost_basic():
     rng = torch.Generator()
     rng.manual_seed(0)
     batch_size = 10

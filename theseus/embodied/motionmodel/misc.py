@@ -3,7 +3,7 @@
 # This source code is licensed under the MIT license found in the
 # LICENSE file in the root directory of this source tree.
 
-from typing import List, Optional, Sequence, Tuple, Union
+from typing import List, Optional, Tuple, Union
 
 import torch
 
@@ -19,28 +19,33 @@ class HingeCost(CostFunction):
         threshold: Union[float, torch.Tensor, Variable],
         cost_weight: CostWeight,
         name: Optional[str] = None,
-        side: str = "both",
-        dims: Optional[Sequence[int]] = None,
     ):
         super().__init__(cost_weight, name=name)
         self.vector = vector
+        limit = HingeCost._convert_to_tensor_if_float(limit, vector.dof())
+        threshold = HingeCost._convert_to_tensor_if_float(threshold, vector.dof())
         self.limit = as_variable(limit, name=f"{self.name}__vlimit")
         self.threshold = as_variable(threshold, name=f"{self.name}__vthres")
         for v in [self.limit, self.threshold]:
-            if not v.ndim == 2 and v.shape[1] == 1:
-                raise ValueError("Limit and threshold must be scalar variables.")
+            if not v.ndim == 2 or not v.shape[1] == vector.dof():
+                raise ValueError(
+                    f"Limit and threshold must be 1D variables with "
+                    f"dimension equal to `vector.dof()` ({vector.dof()})."
+                )
         if self.threshold.tensor.max() < 0.0:
-            raise ValueError("The threshold must be a positive scalar.")
+            raise ValueError("Threshold values must be positive numbers.")
         self.register_optim_var("vector")
         self.register_aux_vars(["limit", "threshold"])
-        if side not in ["below", "above", "both"]:
-            raise ValueError("side must be one of 'both', 'above', 'below'.")
-        self.side = side
-        self.dims = dims
+
+    @staticmethod
+    def _convert_to_tensor_if_float(
+        value: Union[float, torch.Tensor, Variable], dof: int
+    ) -> Union[torch.Tensor, Variable]:
+        if isinstance(value, float):
+            return torch.ones(1, dof) * value
+        return value
 
     def dim(self):
-        if self.dims is not None:
-            return len(self.dims)
         return self.vector.dof()
 
     def _compute_error(self) -> Tuple[torch.Tensor, torch.Tensor, torch.Tensor]:
@@ -51,16 +56,9 @@ class HingeCost(CostFunction):
         up_limit = limit - threshold
         below_idx = vector < down_limit
         above_idx = vector > up_limit
-        base_error = vector.new_zeros(vector.shape)
-        if self.side in ["below", "both"]:
-            base_error = torch.where(below_idx, down_limit - vector, base_error)
-        if self.side in ["above", "both"]:
-            base_error = torch.where(above_idx, vector - up_limit, base_error)
-        error = (
-            base_error
-            if self.dims is None
-            else base_error[:, self.dims].view(-1, self.dim())
-        )
+        error = vector.new_zeros(vector.shape)
+        error = torch.where(below_idx, down_limit - vector, error)
+        error = torch.where(above_idx, vector - up_limit, error)
         return error, below_idx, above_idx
 
     def error(self) -> torch.Tensor:
@@ -68,20 +66,11 @@ class HingeCost(CostFunction):
 
     def jacobians(self) -> Tuple[List[torch.Tensor], torch.Tensor]:
         error, below_idx, above_idx = self._compute_error()
-        raw_J = self.vector.tensor.new_zeros(
+        J = self.vector.tensor.new_zeros(
             self.vector.shape[0], self.vector.dof(), self.vector.dof()
         )
-        if self.side in ["below", "both"]:
-            raw_J[below_idx.diag_embed()] = -1.0
-        if self.side in ["above", "both"]:
-            raw_J[above_idx.diag_embed()] = 1.0
-
-        J = (
-            raw_J
-            if self.dims is None
-            else raw_J[:, self.dims, :].view(-1, self.dim(), self.vector.dof())
-        )
-
+        J[below_idx.diag_embed()] = -1.0
+        J[above_idx.diag_embed()] = 1.0
         return [J], error
 
     def _copy_impl(self, new_name: Optional[str] = None) -> "HingeCost":
@@ -91,8 +80,6 @@ class HingeCost(CostFunction):
             self.threshold.copy(),
             self.weight.copy(),
             name=new_name,
-            side=self.side,
-            dims=self.dims,
         )
 
 

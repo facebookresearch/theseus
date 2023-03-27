@@ -42,7 +42,7 @@ def test_hinge_cost_basic():
             )
         vector[:, 2 * how_many :] = limit + _rand_chunk()
         v = th.Vector(tensor=vector)
-        cf = th.eb.HingeCost(v, limit, threshold, th.ScaleCostWeight(1.0))
+        cf = th.eb.HingeCost(v, -limit, limit, threshold, th.ScaleCostWeight(1.0))
 
         jacobians, error = cf.jacobians()
         assert jacobians[0].shape == (batch_size, 3 * how_many, 3 * how_many)

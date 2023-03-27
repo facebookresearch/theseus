@@ -15,18 +15,21 @@ class HingeCost(CostFunction):
     def __init__(
         self,
         vector: Vector,
-        limit: Union[float, torch.Tensor, Variable],
+        down_limit: Union[float, torch.Tensor, Variable],
+        up_limit: Union[float, torch.Tensor, Variable],
         threshold: Union[float, torch.Tensor, Variable],
         cost_weight: CostWeight,
         name: Optional[str] = None,
     ):
         super().__init__(cost_weight, name=name)
         self.vector = vector
-        limit = HingeCost._convert_to_tensor_if_float(limit, vector.dof())
+        down_limit = HingeCost._convert_to_tensor_if_float(down_limit, vector.dof())
+        up_limit = HingeCost._convert_to_tensor_if_float(up_limit, vector.dof())
         threshold = HingeCost._convert_to_tensor_if_float(threshold, vector.dof())
-        self.limit = as_variable(limit, name=f"{self.name}__vlimit")
+        self.down_limit = as_variable(down_limit, name=f"{self.name}__vlimit")
+        self.up_limit = as_variable(up_limit, name=f"{self.name}__vlimit")
         self.threshold = as_variable(threshold, name=f"{self.name}__vthres")
-        for v in [self.limit, self.threshold]:
+        for v in [self.down_limit, self.up_limit, self.threshold]:
             if not v.ndim == 2 or not v.shape[1] == vector.dof():
                 raise ValueError(
                     f"Limit and threshold must be 1D variables with "
@@ -35,7 +38,7 @@ class HingeCost(CostFunction):
         if self.threshold.tensor.max() < 0.0:
             raise ValueError("Threshold values must be positive numbers.")
         self.register_optim_var("vector")
-        self.register_aux_vars(["limit", "threshold"])
+        self.register_aux_vars(["down_limit", "up_limit", "threshold"])
 
     @staticmethod
     def _convert_to_tensor_if_float(
@@ -50,10 +53,9 @@ class HingeCost(CostFunction):
 
     def _compute_error(self) -> Tuple[torch.Tensor, torch.Tensor, torch.Tensor]:
         vector = self.vector.tensor
-        limit = self.limit.tensor
         threshold = self.threshold.tensor
-        down_limit = -limit + threshold
-        up_limit = limit - threshold
+        down_limit = self.down_limit.tensor + threshold
+        up_limit = self.up_limit.tensor - threshold
         below_idx = vector < down_limit
         above_idx = vector > up_limit
         error = vector.new_zeros(vector.shape)
@@ -76,7 +78,8 @@ class HingeCost(CostFunction):
     def _copy_impl(self, new_name: Optional[str] = None) -> "HingeCost":
         return HingeCost(
             self.vector.copy(),
-            self.limit.copy(),
+            self.down_limit.copy(),
+            self.up_limit.copy(),
             self.threshold.copy(),
             self.weight.copy(),
             name=new_name,

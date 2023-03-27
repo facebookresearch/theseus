@@ -26,9 +26,9 @@ class HingeCost(CostFunction):
         down_limit = HingeCost._convert_to_tensor_if_float(down_limit, vector.dof())
         up_limit = HingeCost._convert_to_tensor_if_float(up_limit, vector.dof())
         threshold = HingeCost._convert_to_tensor_if_float(threshold, vector.dof())
-        self.down_limit = as_variable(down_limit, name=f"{self.name}__vlimit")
-        self.up_limit = as_variable(up_limit, name=f"{self.name}__vlimit")
-        self.threshold = as_variable(threshold, name=f"{self.name}__vthres")
+        self.down_limit = as_variable(down_limit, name=f"{self.name}__downlimit")
+        self.up_limit = as_variable(up_limit, name=f"{self.name}__uplimit")
+        self.threshold = as_variable(threshold, name=f"{self.name}__thres")
         for v in [self.down_limit, self.up_limit, self.threshold]:
             if not v.ndim == 2 or not v.shape[1] == vector.dof():
                 raise ValueError(

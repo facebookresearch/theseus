@@ -247,12 +247,11 @@ class MotionPlannerObjective(th.Objective):
                 self.add(
                     HingeCost(
                         velocities[i - 1],
-                        0.0,
+                        torch.tensor([0.0, -torch.inf, -torch.inf]).view(1, 3),
+                        torch.tensor([torch.inf, torch.inf, torch.inf]).view(1, 3),
                         1.0,
                         pvw,
                         name=f"positive_vel_{i}",
-                        side="below",
-                        dims=[0],
                     ),
                 )
 

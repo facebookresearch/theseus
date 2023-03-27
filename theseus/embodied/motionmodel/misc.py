@@ -35,10 +35,18 @@ class HingeCost(CostFunction):
                     f"Limit and threshold must be 1D variables with "
                     f"dimension equal to `vector.dof()` ({vector.dof()})."
                 )
+        HingeCost._check_limits(self.down_limit, self.up_limit)
         if self.threshold.tensor.max() < 0.0:
             raise ValueError("Threshold values must be positive numbers.")
         self.register_optim_var("vector")
         self.register_aux_vars(["down_limit", "up_limit", "threshold"])
+
+    @staticmethod
+    def _check_limits(down_limit: Variable, up_limit: Variable):
+        dof = down_limit.shape[1]
+        for i in range(dof):
+            if not (down_limit[:, i] <= up_limit[:, i]).all():
+                raise ValueError("All down_limit must be <= than up_limit.")
 
     @staticmethod
     def _convert_to_tensor_if_float(

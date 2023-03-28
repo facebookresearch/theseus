@@ -24,7 +24,7 @@ def test_nonholonomic():
     check_jacobians(cf, num_checks=100, tol=1e-5)
 
 
-def test_hinge_loss():
+def test_hinge_cost():
     rng = torch.Generator()
     rng.manual_seed(0)
     batch_size = 10
@@ -47,7 +47,7 @@ def test_hinge_loss():
             )
         vector[:, 2 * how_many :] = limit + _rand_chunk()
         v = th.Vector(tensor=vector)
-        cf = th.eb.HingeCost(v, limit, threshold, th.ScaleCostWeight(1.0))
+        cf = th.eb.HingeCost(v, -limit, limit, threshold, th.ScaleCostWeight(1.0))
 
         jacobians, error = cf.jacobians()
         assert jacobians[0].shape == (batch_size, 3 * how_many, 3 * how_many)

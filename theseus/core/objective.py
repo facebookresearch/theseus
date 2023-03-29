@@ -45,6 +45,7 @@ class Objective:
         self,
         dtype: Optional[torch.dtype] = None,
         error_metric_fn: Optional[ErrorMetric] = None,
+        __allow_mixed_optim_aux_vars__: bool = False,  # experimental
     ):
         # maps variable names to the variable objects
         self.optim_vars: OrderedDict[str, Manifold] = OrderedDict()
@@ -128,6 +129,8 @@ class Objective:
             error_metric_fn if error_metric_fn is not None else error_squared_norm_fn
         )
 
+        self._allow_mixed_optim_aux_vars = __allow_mixed_optim_aux_vars__
+
     def _add_function_variables(
         self,
         function: TheseusFunction,
@@ -173,6 +176,9 @@ class Objective:
             # add to either self.optim_vars,
             # self.cost_weight_optim_vars or self.aux_vars
             self_vars_of_this_type[variable.name] = variable
+
+            if self._allow_mixed_optim_aux_vars and variable not in self_var_to_fn_map:
+                self_var_to_fn_map[variable] = []
 
             # add to list of functions connected to this variable
             self_var_to_fn_map[variable].append(function)
@@ -251,16 +257,17 @@ class Objective:
                 cost_function.aux_vars, cost_function.weight.aux_vars
             )
         ]
-        dual_var_err_msg = (
-            "Objective does not support a variable being both "
-            + "an optimization variable and an auxiliary variable."
-        )
-        for optim_name in optim_vars_names:
-            if self.has_aux_var(optim_name):
-                raise ValueError(dual_var_err_msg)
-        for aux_name in aux_vars_names:
-            if self.has_optim_var(aux_name):
-                raise ValueError(dual_var_err_msg)
+        if not self._allow_mixed_optim_aux_vars:
+            dual_var_err_msg = (
+                "Objective does not support a variable being both "
+                + "an optimization variable and an auxiliary variable."
+            )
+            for optim_name in optim_vars_names:
+                if self.has_aux_var(optim_name):
+                    raise ValueError(dual_var_err_msg)
+            for aux_name in aux_vars_names:
+                if self.has_optim_var(aux_name):
+                    raise ValueError(dual_var_err_msg)
 
     # returns a reference to the cost function with the given name
     def get_cost_function(self, name: str) -> CostFunction:

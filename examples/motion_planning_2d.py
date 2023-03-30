@@ -69,9 +69,7 @@ def run_learning_loop(cfg):
     )
 
     motion_planner = theg.MotionPlanner(
-        cfg.optim_params.method,
-        cfg.optim_params.max_iters,
-        step_size=cfg.optim_params.step_size,
+        cfg.optim_params.init,
         map_size=cfg.img_size,
         epsilon_dist=cfg.obs_params.safety_dist + cfg.robot_radius,
         total_time=cfg.total_time,

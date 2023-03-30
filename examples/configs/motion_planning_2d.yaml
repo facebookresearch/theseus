@@ -31,9 +31,11 @@ obs_params:
   weight: 100.0
   safety_dist: 0.4
 optim_params:
-  method: levenberg_marquardt
-  max_iters: 2
-  step_size: 0.3
+  init: 
+    - "LevenbergMarquardt"
+    - kwargs:
+      max_iters: 2
+      step_size: 0.3
   kwargs:
     damping: 0.1
 

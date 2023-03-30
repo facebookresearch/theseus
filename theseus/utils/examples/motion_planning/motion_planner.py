@@ -260,9 +260,7 @@ class MotionPlanner:
     # If objective is given, this overrides problem arguments
     def __init__(
         self,
-        optim_method: str,
-        max_optim_iters: int,
-        step_size: float = 1.0,
+        optimizer_config: Tuple[str, Dict[str, Any]],
         objective: Optional[MotionPlannerObjective] = None,
         device: th.DeviceType = "cpu",
         dtype: torch.dtype = torch.double,
@@ -295,30 +293,16 @@ class MotionPlanner:
         else:
             self.objective = objective
 
-        self.optim_method = optim_method
-        self.max_optim_iters = max_optim_iters
-        self.step_size = step_size
+        self.optimizer_config = optimizer_config
         self.device = device
         self.dtype = dtype
 
         # Finally, create the Nonlinear Least Squares optimizer for this objective
         # and wrap both into a TheseusLayer
         optimizer: th.NonlinearLeastSquares
-        if optim_method == "gauss_newton":
-            optimizer = th.GaussNewton(
-                self.objective,
-                th.CholeskyDenseSolver,
-                max_iterations=max_optim_iters,
-                step_size=step_size,
-            )
-        elif optim_method == "levenberg_marquardt":
-            optimizer = th.LevenbergMarquardt(
-                self.objective,
-                th.CholeskyDenseSolver,
-                max_iterations=max_optim_iters,
-                step_size=step_size,
-            )
-
+        optimizer_cls = getattr(th, optimizer_config[0])
+        assert issubclass(optimizer_cls, th.NonlinearLeastSquares)
+        optimizer = optimizer_cls(self.objective, **optimizer_config[1])
         self.layer = th.TheseusLayer(optimizer)
         self.layer.to(device=device, dtype=dtype)
 
@@ -472,9 +456,7 @@ class MotionPlanner:
 
     def copy(self, collision_weight: Optional[float] = None) -> "MotionPlanner":
         return MotionPlanner(
-            self.optim_method,
-            self.max_optim_iters,
-            step_size=self.step_size,
+            self.optimizer_config,
             map_size=self.objective.map_size,
             epsilon_dist=self.objective.epsilon_dist,
             total_time=self.objective.total_time,

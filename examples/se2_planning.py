@@ -48,9 +48,10 @@ boundary_w = 100.0
 
 # Create the planner
 planner = theg.MotionPlanner(
-    optim_method="levenberg_marquardt",
-    max_optim_iters=50,
-    step_size=0.25,
+    optimizer_config=(
+        "LevenbergMarquardt",
+        {"max_optim_iters": 50, "step_size": 0.25},
+    ),
     map_size=map_size,
     epsilon_dist=safety_distance + robot_radius,
     total_time=total_time,

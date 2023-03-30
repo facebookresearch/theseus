@@ -5,7 +5,7 @@
 # to install theseus.
 #
 # To use this script, from root theesus folder run 
-#    ./build_scripts/build_wheel.sh ROOT_DIR COMMIT CUDA_VERSION THESEUS_VERSION(optional) INCLUDE_LABS(optional)
+#    ./build_scripts/build_wheel.sh ROOT_DIR COMMIT CUDA_VERSION THESEUS_VERSION(optional) INCLUDE_LABS(optional) NIGHTLY(optional)
 #
 # ROOT_DIR: is the directory where the Dockerfile, tar.gz and .whl files will be stored
 #   (under a new subdirectory named theseus_docker_3.9)
@@ -20,7 +20,7 @@
 #   THESEUS_VERSION and COMMIT are also ignored, since version is set to YYYY.MM.DD.
 #   and commit is set to `main`.
 #   
-#   will run and store results under ./theseus_docker_3.9
+#   will run and store results under ./theseus_docker_3.10
 # -----------------
 
 # Ensure that 3-6 arguments 

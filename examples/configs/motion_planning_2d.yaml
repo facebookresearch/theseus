@@ -33,8 +33,7 @@ obs_params:
 optim_params:
   init: 
     - "LevenbergMarquardt"
-    - kwargs:
-      max_iters: 2
+    - max_iterations: 2
       step_size: 0.3
   kwargs:
     damping: 0.1

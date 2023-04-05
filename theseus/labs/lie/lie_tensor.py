@@ -72,9 +72,9 @@ class _LieTensorBase(torch.Tensor):
     def to_torch(cls, args: Any):
         return tree_map_only(cls, lambda x: x._t, args)
 
-    @classmethod
-    def resolve_ltype(cls, t: Any):
-        return t.ltype if isinstance(t, cls) else None
+    @staticmethod
+    def resolve_ltype(t: Any):
+        return t.ltype if hasattr(t, "ltype") else None
 
     @classmethod
     def get_ltype(cls, args):
@@ -143,7 +143,7 @@ class LieTensor(_LieTensorBase):
         torch.Tensor.layout.__get__,  # type: ignore
         torch.Tensor.requires_grad.__get__,  # type: ignore
         torch.Tensor.retains_grad.__get__,  # type: ignore
-        torch.Tensor.shape.__get__,  # type: ignore
+        torch.Tensor.__getitem__,  # type: ignore
         torch.Tensor.clone,
         torch.Tensor.__format__,
         torch.Tensor.new_tensor,
@@ -163,6 +163,8 @@ class LieTensor(_LieTensorBase):
         torch.Tensor.new_ones,
         torch.allclose,
         torch.isclose,
+        torch.Tensor.shape.__get__,  # type: ignore
+        torch.Tensor.ndim.__get__,  # type: ignore
     ]
 
     def __init__(self, tensor: torch.Tensor, ltype: _ltype, requires_grad=None):
@@ -185,7 +187,15 @@ class LieTensor(_LieTensorBase):
             if func == torch.Tensor.grad.__get__:
                 return _EuclideanGrad(ret) if ret is not None else ret
             # tree-map to set the ltypes correctly
-            return tree_map_only(LieTensor, lambda x: LieTensor(ret, ltype), ret)
+            if func == torch.Tensor.__getitem__:
+                if isinstance(args[1], tuple):
+                    raise NotImplementedError(
+                        "LieTensor currently only supports slicing the batch dimension."
+                    )
+                assert ret.ndim in [2, 3]
+                if ret.ndim == 2:
+                    ret = ret._t.unsqueeze(0)
+            return tree_map_only(torch.Tensor, lambda x: LieTensor(x, ltype), ret)
         raise NotImplementedError(
             "Tried to call a torch function not supported by LieTensor. "
             "If trying to operate on the raw tensor data, please use group._t, "

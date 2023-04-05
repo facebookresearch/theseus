@@ -72,6 +72,10 @@ class ltype:
     rand: _RandFnType
     randn: _RandFnType
     identity: _IdentityFnType
+    _call_impl: Callable[[torch.Tensor], "LieTensor"]
+
+    def __call__(self, tensor: torch.Tensor) -> "LieTensor":
+        return self._call_impl(tensor)
 
     _create_lie_tensor: Callable[[torch.Tensor, "ltype"], "LieTensor"]
 

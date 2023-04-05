@@ -144,6 +144,7 @@ class LieTensor(_LieTensorBase):
         torch.Tensor.layout.__get__,  # type: ignore
         torch.Tensor.requires_grad.__get__,  # type: ignore
         torch.Tensor.retains_grad.__get__,  # type: ignore
+        torch.Tensor.storage,  # type: ignore
         torch.Tensor.__getitem__,  # type: ignore
         torch.Tensor.clone,
         torch.Tensor.__format__,
@@ -164,6 +165,7 @@ class LieTensor(_LieTensorBase):
         torch.Tensor.new_ones,
         torch.allclose,
         torch.isclose,
+        torch.Tensor.grad_fn.__get__,  # type: ignore
         torch.Tensor.shape.__get__,  # type: ignore
         torch.Tensor.ndim.__get__,  # type: ignore
     ]
@@ -488,12 +490,21 @@ def _build_identity_fn(ltype: _ltype) -> _IdentityFnType:
     return fn
 
 
+def _build_call_impl(ltype: _ltype) -> Callable[[torch.Tensor], LieTensor]:
+    def fn(tensor: torch.Tensor) -> LieTensor:
+        return LieTensor(tensor, ltype)
+
+    return fn
+
+
 SE3.rand = _build_random_fn("rand", SE3)
 SE3.randn = _build_random_fn("randn", SE3)
 SE3.identity = _build_identity_fn(SE3)
+SE3._call_impl = _build_call_impl(SE3)
 SO3.rand = _build_random_fn("rand", SO3)
 SO3.randn = _build_random_fn("randn", SO3)
 SO3.identity = _build_identity_fn(SO3)
+SO3._call_impl = _build_call_impl(SO3)
 SE3._create_lie_tensor = SO3._create_lie_tensor = LieTensor
 
 

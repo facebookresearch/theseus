@@ -6,7 +6,7 @@ from enum import Enum
 from typing import Any, Callable, List, Optional, Protocol, Tuple, Union, TYPE_CHECKING
 
 import torch
-from theseus.labs.lie.functional import se3 as _se3_impl, so3 as _so3_impl
+from theseus.labs.lie.functional import SE3 as _se3_impl, SO3 as _so3_impl
 from theseus.labs.lie.functional.constants import DeviceType
 from theseus.labs.lie.functional.lie_group import LieGroupFns
 

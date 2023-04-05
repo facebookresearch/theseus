@@ -81,19 +81,9 @@ def rand(
 ) -> torch.Tensor:
     if len(size) != 1:
         raise ValueError("The size should be 1D.")
-    rotation = so3.rand(
-        size[0],
-        generator=generator,
-        dtype=dtype,
-        device=device,
-    )
+    rotation = so3.rand(size[0], generator=generator, dtype=dtype, device=device)
     translation = torch.rand(
-        size[0],
-        3,
-        1,
-        generator=generator,
-        dtype=dtype,
-        device=device,
+        size[0], 3, 1, generator=generator, dtype=dtype, device=device
     )
     ret = torch.cat((rotation, translation), dim=2)
     ret.requires_grad_(requires_grad)
@@ -112,21 +102,31 @@ def randn(
 ) -> torch.Tensor:
     if len(size) != 1:
         raise ValueError("The size should be 1D.")
-    rotation = so3.randn(
-        size[0],
-        generator=generator,
-        dtype=dtype,
-        device=device,
-    )
+    rotation = so3.randn(size[0], generator=generator, dtype=dtype, device=device)
     translation = torch.randn(
-        size[0],
-        3,
-        1,
-        generator=generator,
-        dtype=dtype,
-        device=device,
+        size[0], 3, 1, generator=generator, dtype=dtype, device=device
     )
     ret = torch.cat((rotation, translation), dim=2)
+    ret.requires_grad_(requires_grad)
+    return ret
+
+
+# -----------------------------------------------------------------------------
+# Identity
+# -----------------------------------------------------------------------------
+def identity(
+    *size: int,
+    dtype: Optional[torch.dtype] = None,
+    device: constants.DeviceType = None,
+    requires_grad: bool = False,
+) -> torch.Tensor:
+    if len(size) != 1:
+        raise ValueError("The size should be 1D.")
+    ret = torch.tensor(
+        [[1.0, 0.0, 0.0, 0.0], [0.0, 1.0, 0.0, 0.0], [0.0, 0.0, 1.0, 0.0]],
+        dtype=dtype,
+        device=device,
+    ).repeat(size[0], 1, 1)
     ret.requires_grad_(requires_grad)
     return ret
 

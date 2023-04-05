@@ -19,6 +19,7 @@ from .types import (
     SE3,
     SO3,
     TensorType,
+    _IdentityFnType,
     _JFnReturnType,
     _RandFnType,
 )
@@ -459,10 +460,40 @@ def _build_random_fn(op_name: str, ltype: _ltype) -> _RandFnType:
     return fn
 
 
+def _build_identity_fn(ltype: _ltype) -> _IdentityFnType:
+    def fn(
+        *size: Any,
+        dtype: Optional[torch.dtype] = None,
+        device: DeviceType = None,
+        requires_grad: bool = False,
+    ) -> LieTensor:
+        good = all([isinstance(a, int) for a in size])
+        if not good:
+            arg_types = " ".join(type(a).__name__ for a in size)
+            raise TypeError(
+                f"identity() received invalid combination of arguments - "
+                f"got ({arg_types}), but expected (tuple of ints)."
+            )
+        return LieTensor(
+            ltype._fn_lib.identity(
+                *size,
+                dtype=dtype,
+                device=device,
+                requires_grad=requires_grad,
+            ),
+            ltype,
+            requires_grad=requires_grad,
+        )
+
+    return fn
+
+
 SE3.rand = _build_random_fn("rand", SE3)
 SE3.randn = _build_random_fn("randn", SE3)
+SE3.identity = _build_identity_fn(SE3)
 SO3.rand = _build_random_fn("rand", SO3)
 SO3.randn = _build_random_fn("randn", SO3)
+SO3.identity = _build_identity_fn(SO3)
 SE3._create_lie_tensor = SO3._create_lie_tensor = LieTensor
 
 

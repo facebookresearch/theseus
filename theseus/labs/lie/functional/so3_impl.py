@@ -151,6 +151,22 @@ def randn(
 
 
 # -----------------------------------------------------------------------------
+# Identity
+# -----------------------------------------------------------------------------
+def identity(
+    *size: int,
+    dtype: Optional[torch.dtype] = None,
+    device: constants.DeviceType = None,
+    requires_grad: bool = False,
+) -> torch.Tensor:
+    if len(size) != 1:
+        raise ValueError("The size should be 1D.")
+    ret = torch.eye(3, device=device, dtype=dtype).repeat(size[0], 1, 1)
+    ret.requires_grad_(requires_grad)
+    return ret
+
+
+# -----------------------------------------------------------------------------
 # Exponential Map
 # -----------------------------------------------------------------------------
 def _exp_impl(tangent_vector: torch.Tensor) -> torch.Tensor:

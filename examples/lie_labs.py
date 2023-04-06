@@ -47,7 +47,7 @@ g3_leaf = lie.SO3(g3_data)  # creates a leaf tensor and copies data
 assert g3_leaf.grad_fn is None
 assert not is_shared(g3_leaf, g3_data)
 
-# -- lie.LieTensor() constructor is equilvalent to lie.SO3()
+# -- lie.LieTensor() constructor is equivalent to lie.SO3()
 g3_leaf_2 = lie.LieTensor(g3_data, lie.SO3)
 assert g3_leaf_2.grad_fn is None
 assert not is_shared(g3_leaf_2, g3_data)
@@ -56,7 +56,7 @@ assert not is_shared(g3_leaf_2, g3_data)
 # -- as_lietensor()
 g4 = lie.as_lietensor(g3_data, lie.SO3)
 assert is_shared(g3_data, g4)  # shares storage if possible
-assert g4.grad_fn is not None  # result is not a leaf
+assert g4.grad_fn is not None  # result is not a leaf tensor
 # Calling with a LieTensor returns the same tensor...
 g5 = lie.as_lietensor(g3, lie.SO3)
 assert g5 is g3
@@ -66,7 +66,7 @@ assert g5_double is not g3
 assert not is_shared(g5_double, g3)
 
 # -- cast()
-g6 = lie.cast(g3_data, lie.SO3)  # alias for as_lietensor
+g6 = lie.cast(g3_data, lie.SO3)  # alias for as_lietensor()
 assert is_shared(g3_data, g6)
 
 # -- LieTensor.new()

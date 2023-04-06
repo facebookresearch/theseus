@@ -4,7 +4,7 @@
 # LICENSE file in the root directory of this source tree.
 import threading
 import warnings
-from typing import Any, Callable, List, Optional, Tuple, Union
+from typing import Any, Callable, List, Optional, Tuple
 from typing import cast as type_cast
 
 import torch
@@ -56,15 +56,30 @@ def euclidean_enabled() -> bool:
 
 
 class _LieTensorBase(torch.Tensor):
-    def __new__(cls, data: torch.Tensor, ltype: _ltype, requires_grad=False):
-        return cls._make_subclass(cls, data, requires_grad)  # type: ignore
+    def __new__(
+        cls,
+        data: torch.Tensor,
+        ltype: _ltype,
+        requires_grad: bool = False,
+        _shared_memory: bool = False,
+    ):
+        return cls._make_subclass(
+            cls, data if _shared_memory else data.clone(), requires_grad  # type: ignore
+        )
 
     @property
     def _t(self) -> torch.Tensor:
         return self.as_subclass(torch.Tensor)
 
-    def __init__(self, data: Any, ltype: _ltype, requires_grad=None):
+    def __init__(
+        self,
+        data: Any,
+        ltype: _ltype,
+        requires_grad: Optional[bool] = None,
+        _shared_memory: bool = False,
+    ):
         self.ltype = ltype
+        self.ltype._fn_lib.check_group_tensor(self.as_subclass(torch.Tensor))
 
     def __repr__(self) -> str:  # type: ignore
         return f"LieTensor({self._t}, ltype=lie.{self.ltype})"
@@ -170,9 +185,19 @@ class LieTensor(_LieTensorBase):
         torch.Tensor.ndim.__get__,  # type: ignore
     ]
 
-    def __init__(self, tensor: torch.Tensor, ltype: _ltype, requires_grad=None):
-        super().__init__(tensor, ltype, requires_grad=requires_grad)
-        self.ltype._fn_lib.check_group_tensor(self.as_subclass(torch.Tensor))
+    def __init__(
+        self,
+        tensor: torch.Tensor,
+        ltype: _ltype,
+        requires_grad: Optional[bool] = None,
+        _shared_memory: bool = False,
+    ):
+        super().__init__(
+            tensor,
+            ltype,
+            requires_grad=requires_grad,
+            _shared_memory=_shared_memory,
+        )
 
     @staticmethod
     def from_tensor(tensor: torch.Tensor, ltype: _ltype) -> "LieTensor":
@@ -198,12 +223,13 @@ class LieTensor(_LieTensorBase):
                 assert ret.ndim in [2, 3]
                 if ret.ndim == 2:
                     ret = ret._t.unsqueeze(0)
-            return tree_map_only(torch.Tensor, lambda x: LieTensor(x, ltype), ret)
-        raise NotImplementedError(
-            "Tried to call a torch function not supported by LieTensor. "
-            "If trying to operate on the raw tensor data, please use group._t, "
-            "or run inside the context lie.as_euclidean()."
-        )
+            return tree_map_only(torch.Tensor, lambda x: from_tensor(x, ltype), ret)
+        return NotImplemented
+        # raise NotImplementedError(
+        #     "Tried to call a torch function not supported by LieTensor. "
+        #     "If trying to operate on the raw tensor data, please use group._t, "
+        #     "or run inside the context lie.as_euclidean()."
+        # )
 
     @classmethod
     def __torch_function__(cls, func, types, args=(), kwargs=None):
@@ -401,28 +427,39 @@ def as_lietensor(
     data: Any,
     ltype: Optional[_ltype] = None,
     dtype: torch.dtype = torch.float,
-    device: Union[torch.device, str] = None,
+    device: DeviceType = None,
 ) -> _LieTensorBase:
     if isinstance(data, LieTensor):
-        return data
+        data.to()
+        if data.dtype == dtype and data.device == torch.device(device or "cpu"):
+            return data
+        return type_cast(LieTensor, data.to(device=device, dtype=dtype))
     if ltype is None:
         raise ValueError("ltype must be provided.")
     return type_cast(
-        LieTensor, LieTensor(data, ltype=ltype).to(device=device, dtype=dtype)
+        LieTensor,
+        LieTensor.from_tensor(data, ltype=ltype).to(device=device, dtype=dtype),
     )
 
 
-# With this new version of the code I like @fantaosha's proposal of using the
-# name cast() because it implies type conversion rather than a wrapper being created.
-cast = as_lietensor
+def cast(
+    data: Any,
+    ltype: Optional[_ltype] = None,
+    dtype: torch.dtype = torch.float,
+    device: DeviceType = None,
+) -> _LieTensorBase:
+    return as_lietensor(data, ltype=ltype, dtype=dtype, device=device)
 
-from_tensor = LieTensor.from_tensor
+
+from_tensor: Callable[[torch.Tensor, _ltype], LieTensor] = LieTensor.from_tensor
 
 
 class _FromTensor(torch.autograd.Function):
     @staticmethod
     def forward(ctx: Any, tensor: torch.Tensor, ltype: _ltype) -> LieTensor:  # type: ignore
-        return LieTensor(tensor, ltype, requires_grad=tensor.requires_grad)
+        return LieTensor(
+            tensor, ltype, requires_grad=tensor.requires_grad, _shared_memory=True
+        )
 
     @staticmethod
     def backward(ctx: Any, grad_output: torch.Tensor) -> Tuple[torch.Tensor, None]:  # type: ignore
@@ -457,6 +494,7 @@ def _build_random_fn(op_name: str, ltype: _ltype) -> _RandFnType:
             ),
             ltype,
             requires_grad=requires_grad,
+            _shared_memory=True,
         )
 
     return fn
@@ -485,6 +523,7 @@ def _build_identity_fn(ltype: _ltype) -> _IdentityFnType:
             ),
             ltype,
             requires_grad=requires_grad,
+            _shared_memory=True,
         )
 
     return fn

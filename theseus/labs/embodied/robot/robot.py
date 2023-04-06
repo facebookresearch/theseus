@@ -8,7 +8,7 @@ from typing import List, Dict, Optional
 import urdf_parser_py.urdf as urdf
 import torch
 
-from theseus.labs.lie.functional import se3
+from theseus.labs.lie.functional import SE3
 from theseus.constants import DeviceType
 from .joint import Joint, FixedJoint, RevoluteJoint, PrismaticJoint, Link
 
@@ -117,7 +117,7 @@ class Robot(abc.ABC):
                         joint.child_link._child_joints = []
                         for subjoint in subjoints:
                             subjoint._parent_link = link
-                            subjoint._origin = se3.compose(
+                            subjoint._origin = SE3.compose(
                                 joint.origin, subjoint.origin
                             )
                             link._child_joints.append(subjoint)

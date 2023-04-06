@@ -57,7 +57,7 @@ def test_backward(batch_size: int, dtype: torch.dtype):
 @pytest.mark.parametrize("batch_size", [1, 20, 40])
 @pytest.mark.parametrize("dtype", [torch.float32, torch.float64])
 def test_jacobian(batch_size: int, dtype: torch.dtype):
-    from theseus.labs.lie.functional import se3
+    from theseus.labs.lie.functional import SE3
     from theseus.labs.embodied.robot.forward_kinematics import Robot
     from theseus.labs.embodied.robot.forward_kinematics import get_forward_kinematics
 
@@ -76,7 +76,7 @@ def test_jacobian(batch_size: int, dtype: torch.dtype):
     jacs_expected = []
     for pose, jac_dense in zip(poses, jacs_dense):
         jac_dense = jac_dense[sels, :, :, sels].transpose(-1, 1).transpose(-1, -2)
-        jac_expected = se3.left_project(pose, jac_dense).transpose(-1, -2)
+        jac_expected = SE3.left_project(pose, jac_dense).transpose(-1, -2)
         jac_expected[:, 3:] *= 0.5
         jacs_expected.append(jac_expected)
 

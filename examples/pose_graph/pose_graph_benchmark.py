@@ -66,6 +66,7 @@ def main(cfg):
         step_size=1,
         linearization_cls=th.SparseLinearization,
         linear_solver_cls=th.CholmodSparseSolver,
+        linear_solver_kwargs={"damping": 1e-6},
         vectorize=True,
     )
 

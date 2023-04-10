@@ -237,8 +237,8 @@ class PoseGraphDataset:
     @staticmethod
     def generate_synthetic_3D(
         num_poses: int,
-        rotation_noise: float = 0.05,
         translation_noise: float = 0.1,
+        rotation_noise: float = 0.05,
         loop_closure_ratio: float = 0.2,
         loop_closure_outlier_ratio: float = 0.05,
         max_num_loop_closures: int = 10,
@@ -273,8 +273,9 @@ class PoseGraphDataset:
             gt_relative_pose = th.SE3.exp_map(
                 torch.cat(
                     [
-                        torch.rand(dataset_size, 3, dtype=dtype) - 0.5,
-                        2.0 * torch.rand(dataset_size, 3, dtype=dtype) - 1,
+                        2.0 * torch.rand(dataset_size, 3, dtype=dtype)
+                        - 1,  # translation
+                        torch.rand(dataset_size, 3, dtype=dtype) - 0.5,  # rotation
                     ],
                     dim=1,
                 )
@@ -323,7 +324,7 @@ class PoseGraphDataset:
                             torch.cat(
                                 [
                                     translation_noise
-                                    * (2 * torch.rand(1, 3, dtype=dtype) - 1),
+                                    * (2.0 * torch.rand(1, 3, dtype=dtype) - 1),
                                     rotation_noise
                                     * (2.0 * torch.rand(1, 3, dtype=dtype) - 1),
                                 ],
@@ -354,7 +355,7 @@ class PoseGraphDataset:
             noise_pose = th.SE3.exp_map(
                 torch.cat(
                     [
-                        translation_noise * (2 * torch.rand(1, 3, dtype=dtype) - 1),
+                        translation_noise * (2.0 * torch.rand(1, 3, dtype=dtype) - 1),
                         rotation_noise * (2.0 * torch.rand(1, 3, dtype=dtype) - 1),
                     ],
                     dim=1,

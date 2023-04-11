@@ -22,6 +22,7 @@ class SignedDistanceField2D:
         cell_size: Union[float, torch.Tensor, Variable],
         sdf_data: Optional[Union[torch.Tensor, Variable]] = None,
         occupancy_map: Optional[Union[torch.Tensor, Variable]] = None,
+        occupancy_threshold: float = 0.75,
     ):
         if occupancy_map is not None:
             if sdf_data is not None:
@@ -29,7 +30,9 @@ class SignedDistanceField2D:
                     "Only one of sdf_data and occupancy_map should be provided."
                 )
             sdf_data = self._compute_sdf_data_from_map(
-                occupancy_map, SignedDistanceField2D.convert_cell_size(cell_size).tensor
+                occupancy_map,
+                SignedDistanceField2D.convert_cell_size(cell_size).tensor,
+                threshold=occupancy_threshold,
             )
         else:
             if sdf_data is None:
@@ -47,6 +50,7 @@ class SignedDistanceField2D:
         self,
         occupancy_map_batch: Union[Variable, torch.Tensor],
         cell_size: torch.Tensor,
+        threshold: float = 0.75,
     ) -> Variable:
         if isinstance(occupancy_map_batch, Variable):
             occupancy_map_batch = occupancy_map_batch.tensor
@@ -65,7 +69,7 @@ class SignedDistanceField2D:
         for i in range(num_maps):
             occupancy_map = occupancy_map_batch[i]
 
-            cur_map = occupancy_map > 0.75
+            cur_map = occupancy_map > threshold
             cur_map = cur_map.int()
 
             if torch.max(cur_map) == 0:

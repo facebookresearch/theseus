@@ -245,14 +245,13 @@ class LieTensor(_LieTensorBase):
             raise ValueError("f{op_name} requires both tensors to have same ltype.")
 
     # Returns a new LieTensor with the given data and the same ltype as self
-    def new(  # type: ignore
+    def new_lietensor(  # type: ignore
         self, args: Any, device: Device = None, dtype: Optional[torch.dtype] = None
     ) -> "LieTensor":
         if isinstance(args, LieTensor):
             warnings.warn(
-                "Calling new() on a LieTensor results in shared data storage. "
                 "To copy construct from a LieTensor, it is recommended to use "
-                "lie_tensor.clone().",
+                "t.clone().detach() instead of lie_tensor.new_lietensor(t)",
                 UserWarning,
             )
             tensor_arg = args._t
@@ -263,9 +262,7 @@ class LieTensor(_LieTensorBase):
         else:
             tensor_arg = torch.as_tensor(args)
             dtype = dtype or torch.get_default_dtype()
-        return LieTensor.from_tensor(
-            tensor_arg.to(device=device, dtype=dtype), ltype=self.ltype
-        )
+        return LieTensor(tensor_arg.to(device=device, dtype=dtype), ltype=self.ltype)
 
     # ------------------------------------------------------
     # ------ Operators
@@ -278,11 +275,13 @@ class LieTensor(_LieTensorBase):
         return self.ltype._fn_lib.adj(self._t)
 
     def inv(self) -> "LieTensor":
-        return self.new(self.ltype._fn_lib.inv(self._t))
+        return self.from_tensor(self.ltype._fn_lib.inv(self._t), self.ltype)
 
     def compose(self, other: "LieTensor") -> "LieTensor":
         self._check_ltype(other, "compose")
-        return self.new(self.ltype._fn_lib.compose(self._t, other._t))
+        return self.from_tensor(
+            self.ltype._fn_lib.compose(self._t, other._t), self.ltype
+        )
 
     def transform_from(self, point: torch.Tensor) -> torch.Tensor:
         return self.ltype._fn_lib.transform_from(self._t, point)
@@ -305,7 +304,7 @@ class LieTensor(_LieTensorBase):
         jacs: List[torch.Tensor] = []
         op_res: TensorType = fn(input0, jacobians=jacs)
         if out_is_group:
-            op_res = self.new(op_res)
+            op_res = self.from_tensor(op_res, self.ltype)
         return jacs, op_res
 
     def jlog(self) -> _JFnReturnType:
@@ -317,7 +316,9 @@ class LieTensor(_LieTensorBase):
     def jcompose(self, other: "LieTensor") -> _JFnReturnType:
         self._check_ltype(other, "jcompose")
         jacs: List[torch.Tensor] = []
-        op_res = self.new(self.ltype._fn_lib.compose(self._t, other._t, jacobians=jacs))
+        op_res = self.from_tensor(
+            self.ltype._fn_lib.compose(self._t, other._t, jacobians=jacs), self.ltype
+        )
         return jacs, op_res
 
     def jtransform_from(self, point: torch.Tensor) -> _JFnReturnType:

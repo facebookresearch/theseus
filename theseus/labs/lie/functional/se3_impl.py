@@ -114,6 +114,9 @@ def randn(
 # -----------------------------------------------------------------------------
 # Identity
 # -----------------------------------------------------------------------------
+_BASE_IDENTITY_SE3 = [[1.0, 0.0, 0.0, 0.0], [0.0, 1.0, 0.0, 0.0], [0.0, 0.0, 1.0, 0.0]]
+
+
 def identity(
     *size: int,
     dtype: Optional[torch.dtype] = None,
@@ -122,11 +125,9 @@ def identity(
 ) -> torch.Tensor:
     if len(size) != 1:
         raise ValueError("The size should be 1D.")
-    ret = torch.tensor(
-        [[1.0, 0.0, 0.0, 0.0], [0.0, 1.0, 0.0, 0.0], [0.0, 0.0, 1.0, 0.0]],
-        dtype=dtype,
-        device=device,
-    ).repeat(size[0], 1, 1)
+    ret = torch.tensor(_BASE_IDENTITY_SE3, dtype=dtype, device=device).repeat(
+        size[0], 1, 1
+    )
     ret.requires_grad_(requires_grad)
     return ret
 

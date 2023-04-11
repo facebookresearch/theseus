@@ -7,7 +7,7 @@ import torch
 from typing import cast, List, Tuple, Optional
 
 from . import constants
-from . import lie_group, so3_impl as so3
+from . import lie_group, so3_impl as SO3
 from .utils import get_module
 
 
@@ -24,11 +24,11 @@ def check_group_tensor(tensor: torch.Tensor):
             raise ValueError(
                 f"SE3 data tensors can only be 3x4 matrices, but got shape {tensor.shape}."
             )
-    so3.check_group_tensor(tensor[:, :, :3])
+    SO3.check_group_tensor(tensor[:, :, :3])
 
 
 def check_transform_tensor(tensor: torch.Tensor):
-    so3.check_transform_tensor(tensor)
+    SO3.check_transform_tensor(tensor)
 
 
 def check_tangent_vector(tangent_vector: torch.Tensor):
@@ -47,7 +47,7 @@ def check_hat_matrix(matrix: torch.Tensor):
     if matrix[:, -1].abs().max() > constants._SE3_NEAR_ZERO_EPS[matrix.dtype]:
         raise ValueError("The last row for hat matrices of SE(3) must be zero")
 
-    so3.check_hat_matrix(matrix[:, :3, :3])
+    SO3.check_hat_matrix(matrix[:, :3, :3])
 
 
 def check_lift_matrix(matrix: torch.Tensor):
@@ -81,7 +81,7 @@ def rand(
 ) -> torch.Tensor:
     if len(size) != 1:
         raise ValueError("The size should be 1D.")
-    rotation = so3.rand(size[0], generator=generator, dtype=dtype, device=device)
+    rotation = SO3.rand(size[0], generator=generator, dtype=dtype, device=device)
     translation = torch.rand(
         size[0], 3, 1, generator=generator, dtype=dtype, device=device
     )
@@ -102,7 +102,7 @@ def randn(
 ) -> torch.Tensor:
     if len(size) != 1:
         raise ValueError("The size should be 1D.")
-    rotation = so3.randn(size[0], generator=generator, dtype=dtype, device=device)
+    rotation = SO3.randn(size[0], generator=generator, dtype=dtype, device=device)
     translation = torch.randn(
         size[0], 3, 1, generator=generator, dtype=dtype, device=device
     )
@@ -320,7 +320,7 @@ def _jexp_impl(
         -one_minus_cosine_by_theta2.view(-1, 1) * v
         - theta_minus_sine_by_theta3_t.view(-1, 1) * wv
     )
-    jac_temp_t += so3._hat_autograd_fn(jac_temp_v)
+    jac_temp_t += SO3._hat_autograd_fn(jac_temp_v)
     diag_jac_t = torch.diagonal(jac_temp_t, dim1=1, dim2=2)
     diag_jac_t += (sw.view(-1, 1, 3) @ v.view(-1, 3, 1)).view(-1, 1)
 
@@ -594,7 +594,7 @@ def _adjoint_impl(group: torch.Tensor) -> torch.Tensor:
     ret = group.new_zeros(group.shape[0], 6, 6)
     ret[:, :3, :3] = group[:, :3, :3]
     ret[:, 3:, 3:] = group[:, :3, :3]
-    ret[:, :3, 3:] = so3._hat_impl(group[:, :3, 3]) @ group[:, :3, :3]
+    ret[:, :3, 3:] = SO3._hat_impl(group[:, :3, 3]) @ group[:, :3, :3]
     return ret
 
 
@@ -615,9 +615,9 @@ class Adjoint(lie_group.UnaryOperator):
         grad_input_rot = (
             grad_output[:, :3, :3]
             + grad_output[:, 3:, 3:]
-            - so3._hat_impl(group[:, :, 3]) @ grad_output[:, :3, 3:]
+            - SO3._hat_impl(group[:, :, 3]) @ grad_output[:, :3, 3:]
         )
-        grad_input_t = so3._project_impl(
+        grad_input_t = SO3._project_impl(
             grad_output[:, :3, 3:] @ group[:, :, :3].transpose(1, 2)
         ).view(-1, 3, 1)
 
@@ -668,7 +668,7 @@ def _hat_impl(tangent_vector: torch.Tensor) -> torch.Tensor:
     check_tangent_vector(tangent_vector)
     tangent_vector = tangent_vector.view(-1, 6)
     matrix = tangent_vector.new_zeros(tangent_vector.shape[0], 4, 4)
-    matrix[:, :3, :3] = so3._hat_impl(tangent_vector[:, 3:])
+    matrix[:, :3, :3] = SO3._hat_impl(tangent_vector[:, 3:])
     matrix[:, :3, 3] = tangent_vector[:, :3]
 
     return matrix
@@ -739,7 +739,7 @@ class Vee(lie_group.UnaryOperator):
         grad_output: torch.Tensor = cast(torch.Tensor, grad_output)
         grad_input = grad_output.new_zeros(grad_output.shape[0], 4, 4)
         grad_input[:, :3, 3] = grad_output[:, :3]
-        grad_input[:, :3, :3] = 0.5 * so3._hat_impl(grad_output[:, 3:])
+        grad_input[:, :3, :3] = 0.5 * SO3._hat_impl(grad_output[:, 3:])
         return grad_input
 
 
@@ -815,8 +815,8 @@ def _jtransform_from_impl(
     check_group_tensor(group)
     check_transform_tensor(tensor)
     jacobian_g = group.new_empty(group.shape[0], 3, 6)
-    jacobian_g[:, :, :3] = so3._hat_autograd_fn(tensor) @ group[:, :, :3]
-    jacobian_g[:, :, 3:] = -group[:, :, :3] @ so3._hat_autograd_fn(tensor)
+    jacobian_g[:, :, :3] = SO3._hat_autograd_fn(tensor) @ group[:, :, :3]
+    jacobian_g[:, :, 3:] = -group[:, :, :3] @ SO3._hat_autograd_fn(tensor)
     jacobian_p = group[:, :, :3].view(tensor.shape[:-1] + (3, 3))
     jacobians = []
     jacobians.append(jacobian_g)
@@ -856,7 +856,7 @@ def _lift_impl(matrix: torch.Tensor) -> torch.Tensor:
     if not check_lift_matrix(matrix):
         raise ValueError("Inconsistent shape for the matrix to lift.")
     ret = matrix.new_zeros(matrix.shape[:-1] + (3, 4))
-    ret[..., :, :3] = so3._lift_impl(matrix[..., 3:])
+    ret[..., :, :3] = SO3._lift_impl(matrix[..., 3:])
     ret[..., :, 3] = matrix[..., :3]
 
     return ret
@@ -934,7 +934,7 @@ project, jproject = lie_group.UnaryOperatorFactory(_module, "project")
 def _left_act_impl(group: torch.Tensor, matrix: torch.Tensor) -> torch.Tensor:
     check_group_tensor(group)
     check_left_act_matrix(matrix)
-    ret = so3._left_act_impl(group[:, :, :3], matrix)
+    ret = SO3._left_act_impl(group[:, :, :3], matrix)
     return ret
 
 

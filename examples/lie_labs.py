@@ -70,9 +70,9 @@ g6 = lie.cast(g3_data, lie.SO3)  # alias for as_lietensor()
 assert is_shared(g3_data, g6)
 
 # -- LieTensor.new()
-g7 = g3.new(g3_data)
-assert is_shared(g3_data, g7)  # shares storage
-assert g7.grad_fn is not None  # differentiable
+g7 = g3.new_lietensor(g3_data)
+assert not is_shared(g3_data, g7)  # doesn't share storage
+assert g7.grad_fn is None  # creates a leaf
 
 # ### Lie operations
 v = torch.randn(batch_size, 6)

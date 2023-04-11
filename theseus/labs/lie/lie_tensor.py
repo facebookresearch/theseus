@@ -224,12 +224,11 @@ class LieTensor(_LieTensorBase):
                 if ret.ndim == 2:
                     ret = ret._t.unsqueeze(0)
             return tree_map_only(torch.Tensor, lambda x: from_tensor(x, ltype), ret)
-        return NotImplemented
-        # raise NotImplementedError(
-        #     "Tried to call a torch function not supported by LieTensor. "
-        #     "If trying to operate on the raw tensor data, please use group._t, "
-        #     "or run inside the context lie.as_euclidean()."
-        # )
+        raise NotImplementedError(
+            "Tried to call a torch function not supported by LieTensor. "
+            "If trying to operate on the raw tensor data, please use group._t, "
+            "or run inside the context lie.as_euclidean()."
+        )
 
     @classmethod
     def __torch_function__(cls, func, types, args=(), kwargs=None):
@@ -431,7 +430,6 @@ def as_lietensor(
     device: DeviceType = None,
 ) -> _LieTensorBase:
     if isinstance(data, LieTensor):
-        data.to()
         if data.dtype == dtype and data.device == torch.device(device or "cpu"):
             return data
         return type_cast(LieTensor, data.to(device=device, dtype=dtype))

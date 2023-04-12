@@ -23,6 +23,7 @@ class SignedDistanceField2D:
         sdf_data: Optional[Union[torch.Tensor, Variable]] = None,
         occupancy_map: Optional[Union[torch.Tensor, Variable]] = None,
         occupancy_threshold: float = 0.75,
+        sdf_boundary_value: float = 0.0,
     ):
         if occupancy_map is not None:
             if sdf_data is not None:
@@ -45,6 +46,7 @@ class SignedDistanceField2D:
         self.update_data(origin, sdf_data, cell_size)
         self._num_rows = sdf_data.shape[1]
         self._num_cols = sdf_data.shape[2]
+        self.sdf_boundary_value = sdf_boundary_value
 
     def _compute_sdf_data_from_map(
         self,
@@ -216,7 +218,7 @@ class SignedDistanceField2D:
             + hrdiff * lcdiff * gather_sdf(lri, hci)
             + lrdiff * lcdiff * gather_sdf(hri, hci)
         )
-        dist[out_of_bounds_idx] = 0
+        dist[out_of_bounds_idx] = self.sdf_boundary_value
 
         # Compute the jacobians
 

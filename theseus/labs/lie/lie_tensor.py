@@ -250,7 +250,7 @@ class LieTensor(_LieTensorBase):
         if isinstance(args, LieTensor):
             warnings.warn(
                 "To copy construct from a LieTensor, it is recommended to use "
-                "t.clone().detach() instead of lie_tensor.new_lietensor(t)",
+                "lie_tensor.clone().detach() instead of lie_tensor.new_lietensor(t)",
                 UserWarning,
             )
             tensor_arg = args._t

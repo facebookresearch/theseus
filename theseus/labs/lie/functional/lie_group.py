@@ -169,6 +169,16 @@ class _RandFnType(Protocol):
         pass
 
 
+class _IdentityFnType(Protocol):
+    def __call__(
+        *size: int,
+        dtype: Optional[torch.dtype] = None,
+        device: DeviceType = None,
+        requires_grad: bool = False,
+    ) -> torch.Tensor:
+        pass
+
+
 # Namespace to facilitate type-checking downstream
 class LieGroupFns:
     def __init__(self, module):
@@ -199,3 +209,4 @@ class LieGroupFns:
         self.check_left_project_matrix: _CheckFnType = module.check_left_project_matrix
         self.rand: _RandFnType = module.rand
         self.randn: _RandFnType = module.randn
+        self.identity: _IdentityFnType = module.identity

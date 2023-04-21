@@ -6,7 +6,7 @@ from enum import Enum
 from typing import Any, Callable, List, Optional, Protocol, Tuple, Union, TYPE_CHECKING
 
 import torch
-from theseus.labs.lie.functional import se3 as _se3_impl, so3 as _so3_impl
+from theseus.labs.lie.functional import SE3 as _se3_impl, SO3 as _so3_impl
 from theseus.labs.lie.functional.constants import DeviceType
 from theseus.labs.lie.functional.lie_group import LieGroupFns
 
@@ -14,13 +14,23 @@ if TYPE_CHECKING:
     from .lie_tensor import LieTensor, _LieTensorBase
 
 
-# Similar to the one in functional, except it returns a LieTensor
-# and receives a ltype
+# The next two are similar to the ones in functional, except they return a LieTensor.
 class _RandFnType(Protocol):
     def __call__(
         self,
         *size: Any,
         generator: Optional[torch.Generator] = None,
+        dtype: Optional[torch.dtype] = None,
+        device: DeviceType = None,
+        requires_grad: bool = False,
+    ) -> "LieTensor":
+        pass
+
+
+class _IdentityFnType(Protocol):
+    def __call__(
+        self,
+        *size: int,
         dtype: Optional[torch.dtype] = None,
         device: DeviceType = None,
         requires_grad: bool = False,
@@ -61,6 +71,11 @@ class ltype:
 
     rand: _RandFnType
     randn: _RandFnType
+    identity: _IdentityFnType
+    _call_impl: Callable[[torch.Tensor], "LieTensor"]
+
+    def __call__(self, tensor: torch.Tensor) -> "LieTensor":
+        return self._call_impl(tensor)
 
     _create_lie_tensor: Callable[[torch.Tensor, "ltype"], "LieTensor"]
 
@@ -85,6 +100,9 @@ class ltype:
 
     def project(self, matrix: torch.Tensor) -> torch.Tensor:
         return _eval_op(self._fn_lib, "project", matrix)
+
+    def __str__(self) -> str:
+        return self._lt.name
 
 
 SE3 = ltype(_ltype.SE3)

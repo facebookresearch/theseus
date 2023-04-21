@@ -8,7 +8,7 @@ import warnings
 from typing import List, Optional
 import torch
 
-from theseus.labs.lie.functional import so3
+from theseus.labs.lie.functional import SO3
 from theseus.constants import DeviceType
 
 
@@ -255,7 +255,7 @@ class RevoluteJoint(_RevoluteJointImpl):
         self._axis[3:] = revolute_axis.view(-1, 1)
 
     def _rotation_impl(self, angle: torch.Tensor) -> torch.Tensor:
-        return so3.exp(angle @ self.axis[3:].view(1, -1))
+        return SO3.exp(angle @ self.axis[3:].view(1, -1))
 
 
 class _RevoluteJointXYZImpl(_RevoluteJointImpl):

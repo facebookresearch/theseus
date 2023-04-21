@@ -7,7 +7,7 @@ import torch
 
 from typing import List, Optional
 
-from theseus.labs.lie.functional import se3
+from theseus.labs.lie.functional import SE3
 from .robot import Robot, Joint, Link
 
 # TODO: Add support for joints with DOF>1
@@ -46,7 +46,7 @@ def ForwardKinematicsFactory(robot: Robot, link_names: Optional[List[str]] = Non
                 if joint.id < robot.dof
                 else joint.relative_pose()
             )
-            poses[curr.id] = se3.compose(poses[prev.id], relative_pose)
+            poses[curr.id] = SE3.compose(poses[prev.id], relative_pose)
 
         return poses
 
@@ -64,7 +64,7 @@ def ForwardKinematicsFactory(robot: Robot, link_names: Optional[List[str]] = Non
             joint: Joint = link.parent_joint
             if joint.id >= robot.dof:
                 break
-            jposes[:, :, joint.id : joint.id + 1] = se3.adj(poses[link.id]) @ joint.axis
+            jposes[:, :, joint.id : joint.id + 1] = SE3.adj(poses[link.id]) @ joint.axis
 
         return jposes
 
@@ -79,7 +79,7 @@ def ForwardKinematicsFactory(robot: Robot, link_names: Optional[List[str]] = Non
             pose = poses[link_id]
             jac = jposes.new_zeros(angles.shape[0], 6, robot.dof)
             sel = robot.links[link_id].ancestor_non_fixed_joint_ids
-            jac[:, :, sel] = se3.adj(se3.inv(pose)) @ jposes[:, :, sel]
+            jac[:, :, sel] = SE3.adj(SE3.inv(pose)) @ jposes[:, :, sel]
             jacs.append(jac)
 
         return jacs, rets
@@ -107,7 +107,7 @@ def ForwardKinematicsFactory(robot: Robot, link_names: Optional[List[str]] = Non
                 ancestor_non_fixed_joint_ids = robot.links[
                     link_id
                 ].ancestor_non_fixed_joint_ids
-                temp = se3.project(
+                temp = SE3.project(
                     torch.cat(
                         (grad_output @ ret.transpose(1, 2), grad_output[:, :, 3:]),
                         dim=-1,

@@ -666,11 +666,16 @@ _jinverse_impl = lie_group.JInverseImplFactory(_module)
 
 
 class Inverse(lie_group.UnaryOperator):
+    generate_vmap_rule = True
+
     @staticmethod
-    def forward(ctx, group):
+    def forward(group):
         group: torch.Tensor = cast(torch.Tensor, group)
-        ctx.save_for_backward(group)
         return _inverse_impl(group)
+
+    @staticmethod
+    def setup_context(ctx, inputs, _):
+        ctx.save_for_backward(inputs[0])  # inputs is (group,)
 
     @staticmethod
     def backward(ctx, grad_output):

@@ -44,12 +44,12 @@ from .variable import Variable
 # Finally, since we apply the weight before the robust loss, we adopt the convention
 # that `robust_cost_fn.jacobians() == robust_cost_fn.weighted_jacobians_error()`, and
 # `robust_cost_fn.error() == robust_cost_fn.weighed_error()`.
-class RobustCostFunction(th.CostFunction):
+class RobustCostFunction(CostFunction):
     _EPS = 1e-20
 
     def __init__(
         self,
-        cost_function: th.CostFunction,
+        cost_function: CostFunction,
         loss_cls: Type[RobustLoss],
         log_loss_radius: Variable,
         name: Optional[str] = None,

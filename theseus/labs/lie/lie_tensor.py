@@ -156,6 +156,7 @@ class LieTensor(_LieTensorBase):
         torch.Tensor.is_sparse.__get__,  # type: ignore
         torch.Tensor.is_quantized.__get__,  # type: ignore
         torch.Tensor.grad.__get__,  # type: ignore
+        torch.Tensor.grad.__set__,  # type: ignore
         torch.Tensor.layout.__get__,  # type: ignore
         torch.Tensor.requires_grad.__get__,  # type: ignore
         torch.Tensor.retains_grad.__get__,  # type: ignore
@@ -224,11 +225,12 @@ class LieTensor(_LieTensorBase):
                 if ret.ndim == 2:
                     ret = ret._t.unsqueeze(0)
             return tree_map_only(torch.Tensor, lambda x: from_tensor(x, ltype), ret)
-        raise NotImplementedError(
-            "Tried to call a torch function not supported by LieTensor. "
-            "If trying to operate on the raw tensor data, please use group._t, "
-            "or run inside the context lie.as_euclidean()."
-        )
+        return NotImplemented
+        # raise NotImplementedError(
+        #     "Tried to call a torch function not supported by LieTensor. "
+        #     "If trying to operate on the raw tensor data, please use group._t, "
+        #     "or run inside the context lie.as_euclidean()."
+        # )
 
     @classmethod
     def __torch_function__(cls, func, types, args=(), kwargs=None):

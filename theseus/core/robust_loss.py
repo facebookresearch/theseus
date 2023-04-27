@@ -11,13 +11,14 @@ _LOSS_EPS = 1e-20
 
 
 class RobustLoss(abc.ABC):
+    # .suqre() make it easier to compare with residual.square(), which is x
     @classmethod
     def evaluate(cls, x: torch.Tensor, log_radius: torch.Tensor) -> torch.Tensor:
-        return cls._evaluate_impl(x, log_radius.exp())
-
+        return cls._evaluate_impl(x, log_radius.square()) 
+    
     @classmethod
     def linearize(cls, x: torch.Tensor, log_radius: torch.Tensor) -> torch.Tensor:
-        return cls._linearize_impl(x, log_radius.exp())
+        return cls._linearize_impl(x, log_radius.square())
 
     @staticmethod
     @abc.abstractmethod

@@ -8,6 +8,7 @@ from typing import cast, List, Tuple, Optional
 
 from . import constants
 from . import lie_group
+from .check_contexts import checks_base
 from .utils import get_module
 
 
@@ -19,29 +20,34 @@ _module = get_module(__name__)
 
 
 def check_group_tensor(tensor: torch.Tensor):
-    with torch.no_grad():
-        if tensor.ndim != 3 or tensor.shape[1:] != (3, 3):
+    def _impl(t_):
+        if t_.ndim != 3 or t_.shape[1:] != (3, 3):
             raise ValueError("SO3 data tensors can only be 3x3 matrices.")
 
-        MATRIX_EPS = constants._SO3_MATRIX_EPS[tensor.dtype]
-        if tensor.dtype != torch.float64:
-            tensor = tensor.double()
+        MATRIX_EPS = constants._SO3_MATRIX_EPS[t_.dtype]
+        if t_.dtype != torch.float64:
+            t_ = t_.double()
 
         _check = (
-            torch.matmul(tensor, tensor.transpose(1, 2))
-            - torch.eye(3, 3, dtype=tensor.dtype, device=tensor.device)
+            torch.matmul(t_, t_.transpose(1, 2))
+            - torch.eye(3, 3, dtype=t_.dtype, device=t_.device)
         ).abs().max().item() < MATRIX_EPS
-        _check &= (torch.linalg.det(tensor) - 1).abs().max().item() < MATRIX_EPS
+        _check &= (torch.linalg.det(t_) - 1).abs().max().item() < MATRIX_EPS
 
-    if not _check:
-        raise ValueError("Invalid data tensor for SO3.")
+        if not _check:
+            raise ValueError("Invalid data tensor for SO3.")
+
+    checks_base(tensor, _impl)
 
 
 def check_tangent_vector(tangent_vector: torch.Tensor):
-    _check = tangent_vector.ndim == 3 and tangent_vector.shape[1:] == (3, 1)
-    _check |= tangent_vector.ndim == 2 and tangent_vector.shape[1] == 3
-    if not _check:
-        raise ValueError("Tangent vectors of SO3 should be 3-D vectors.")
+    def _impl(t_: torch.Tensor):
+        _check = t_.ndim == 3 and t_.shape[1:] == (3, 1)
+        _check |= t_.ndim == 2 and t_.shape[1] == 3
+        if not _check:
+            raise ValueError("Tangent vectors of SO3 should be 3-D vectors.")
+
+    checks_base(tangent_vector, _impl)
 
 
 def check_transform_tensor(tensor: torch.Tensor):
@@ -51,36 +57,48 @@ def check_transform_tensor(tensor: torch.Tensor):
 
 
 def check_hat_matrix(matrix: torch.Tensor):
-    if matrix.ndim != 3 or matrix.shape[1:] != (3, 3):
-        raise ValueError("Hat matrices of SO(3) can only be 3x3 matrices")
+    def _impl(t_: torch.Tensor):
+        if t_.ndim != 3 or t_.shape[1:] != (3, 3):
+            raise ValueError("Hat matrices of SO(3) can only be 3x3 matrices")
 
-    if (matrix.transpose(1, 2) + matrix).abs().max().item() > constants._SO3_HAT_EPS[
-        matrix.dtype
-    ]:
-        raise ValueError("Hat matrices of SO(3) can only be skew-symmetric.")
+        if (t_.transpose(1, 2) + t_).abs().max().item() > constants._SO3_HAT_EPS[
+            t_.dtype
+        ]:
+            raise ValueError("Hat matrices of SO(3) can only be skew-symmetric.")
+
+    checks_base(matrix, _impl)
 
 
 def check_unit_quaternion(quaternion: torch.Tensor):
-    if quaternion.ndim != 2 or quaternion.shape[1] != 4:
-        raise ValueError("Quaternions can only be 4-D vectors.")
+    def _impl(t_: torch.Tensor):
+        if t_.ndim != 2 or t_.shape[1] != 4:
+            raise ValueError("Quaternions can only be 4-D vectors.")
 
-    QUANTERNION_EPS = constants._SO3_QUATERNION_EPS[quaternion.dtype]
+        QUANTERNION_EPS = constants._SO3_QUATERNION_EPS[t_.dtype]
 
-    if quaternion.dtype != torch.float64:
-        quaternion = quaternion.double()
+        if t_.dtype != torch.float64:
+            t_ = t_.double()
 
-    if (torch.linalg.norm(quaternion, dim=1) - 1).abs().max().item() >= QUANTERNION_EPS:
-        raise ValueError("Not unit quaternions.")
+        if (torch.linalg.norm(t_, dim=1) - 1).abs().max().item() >= QUANTERNION_EPS:
+            raise ValueError("Not unit quaternions.")
+
+    checks_base(quaternion, _impl)
 
 
 def check_left_act_matrix(matrix: torch.Tensor):
-    if matrix.shape[-2] != 3:
-        raise ValueError("Inconsistent shape for the matrix.")
+    def _impl(t_: torch.Tensor):
+        if t_.shape[-2] != 3:
+            raise ValueError("Inconsistent shape for the matrix.")
+
+    checks_base(matrix, _impl)
 
 
 def check_left_project_matrix(matrix: torch.Tensor):
-    if matrix.shape[-2:] != (3, 3):
-        raise ValueError("Inconsistent shape for the matrix.")
+    def _impl(t_: torch.Tensor):
+        if t_.shape[-2:] != (3, 3):
+            raise ValueError("Inconsistent shape for the matrix.")
+
+    checks_base(matrix, _impl)
 
 
 # -----------------------------------------------------------------------------

@@ -8,6 +8,7 @@ from typing import cast, List, Tuple, Optional
 
 from . import constants
 from . import lie_group, so3_impl as SO3
+from .check_contexts import checks_base
 from .utils import get_module
 
 
@@ -19,12 +20,14 @@ _module = get_module(__name__)
 
 
 def check_group_tensor(tensor: torch.Tensor):
-    with torch.no_grad():
-        if tensor.ndim != 3 or tensor.shape[1:] != (3, 4):
+    def _impl(t_: torch.Tensor):
+        if t_.ndim != 3 or t_.shape[1:] != (3, 4):
             raise ValueError(
-                f"SE3 data tensors can only be 3x4 matrices, but got shape {tensor.shape}."
+                f"SE3 data tensors can only be 3x4 matrices, but got shape {t_.shape}."
             )
-    SO3.check_group_tensor(tensor[:, :, :3])
+        SO3.check_group_tensor(t_[:, :, :3])
+
+    checks_base(tensor, _impl)
 
 
 def check_transform_tensor(tensor: torch.Tensor):
@@ -32,40 +35,61 @@ def check_transform_tensor(tensor: torch.Tensor):
 
 
 def check_tangent_vector(tangent_vector: torch.Tensor):
-    _check = tangent_vector.ndim == 3 and tangent_vector.shape[1:] == (6, 1)
-    _check |= tangent_vector.ndim == 2 and tangent_vector.shape[1] == 6
-    if not _check:
-        raise ValueError(
-            f"Tangent vectors of SE3 should be 6-D vectors, but got shape {tangent_vector.shape}."
-        )
+    def _impl(t_: torch.Tensor):
+        _check = t_.ndim == 3 and t_.shape[1:] == (6, 1)
+        _check |= t_.ndim == 2 and t_.shape[1] == 6
+        if not _check:
+            raise ValueError(
+                f"Tangent vectors of SE3 should be 6-D vectors, "
+                f"but got shape {t_.shape}."
+            )
+
+    checks_base(tangent_vector, _impl)
 
 
 def check_hat_matrix(matrix: torch.Tensor):
-    if matrix.ndim != 3 or matrix.shape[1:] != (4, 4):
-        raise ValueError("Hat matrices of SE(3) can only be 3x4 matrices")
+    def _impl(t_: torch.Tensor):
+        if t_.ndim != 3 or t_.shape[1:] != (4, 4):
+            raise ValueError("Hat matrices of SE(3) can only be 3x4 matrices")
 
-    if matrix[:, -1].abs().max() > constants._SE3_NEAR_ZERO_EPS[matrix.dtype]:
-        raise ValueError("The last row for hat matrices of SE(3) must be zero")
+        if t_[:, -1].abs().max() > constants._SE3_NEAR_ZERO_EPS[t_.dtype]:
+            raise ValueError("The last row for hat matrices of SE(3) must be zero")
 
-    SO3.check_hat_matrix(matrix[:, :3, :3])
+        SO3.check_hat_matrix(t_[:, :3, :3])
+
+    checks_base(matrix, _impl)
 
 
 def check_lift_matrix(matrix: torch.Tensor):
-    return matrix.shape[-1] == 6
+    def _impl(t_: torch.Tensor):
+        if not t_.shape[-1] == 6:
+            raise ValueError("Inconsistent shape for the matrix to lift.")
+
+    checks_base(matrix, _impl)
 
 
 def check_project_matrix(matrix: torch.Tensor):
-    return matrix.shape[-2:] == (3, 4)
+    def _impl(t_: torch.Tensor):
+        if not t_.shape[-2:] == (3, 4):
+            raise ValueError("Inconsistent shape for the matrix to project.")
+
+    checks_base(matrix, _impl)
 
 
 def check_left_act_matrix(matrix: torch.Tensor):
-    if matrix.shape[-2] != 3:
-        raise ValueError("Inconsistent shape for the matrix.")
+    def _impl(t_: torch.Tensor):
+        if t_.shape[-2] != 3:
+            raise ValueError("Inconsistent shape for the matrix.")
+
+    checks_base(matrix, _impl)
 
 
 def check_left_project_matrix(matrix: torch.Tensor):
-    if matrix.shape[-2:] != (3, 4):
-        raise ValueError("Inconsistent shape for the matrix.")
+    def _impl(t_: torch.Tensor):
+        if t_.shape[-2:] != (3, 4):
+            raise ValueError("Inconsistent shape for the matrix.")
+
+    checks_base(matrix, _impl)
 
 
 # -----------------------------------------------------------------------------
@@ -854,8 +878,7 @@ _jtransform_from_autograd_fn = _jtransform_from_impl
 # Lift
 # -----------------------------------------------------------------------------
 def _lift_impl(matrix: torch.Tensor) -> torch.Tensor:
-    if not check_lift_matrix(matrix):
-        raise ValueError("Inconsistent shape for the matrix to lift.")
+    check_lift_matrix(matrix)
     ret = matrix.new_zeros(matrix.shape[:-1] + (3, 4))
     ret[..., :, :3] = SO3._lift_impl(matrix[..., 3:])
     ret[..., :, 3] = matrix[..., :3]
@@ -890,9 +913,7 @@ lift, jlift = lie_group.UnaryOperatorFactory(_module, "lift")
 # Project
 # -----------------------------------------------------------------------------
 def _project_impl(matrix: torch.Tensor) -> torch.Tensor:
-    if not check_project_matrix(matrix):
-        raise ValueError("Inconsistent shape for the matrix to project.")
-
+    check_project_matrix(matrix)
     return torch.stack(
         (
             matrix[..., 0, 3],

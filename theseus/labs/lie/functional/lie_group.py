@@ -41,9 +41,9 @@ def LeftProjectImplFactory(module):
 
 
 class UnaryOperator(torch.autograd.Function):
-    @classmethod
+    @staticmethod
     @abc.abstractmethod
-    def forward(cls, ctx, input):
+    def forward(ctx, input):
         pass
 
 
@@ -101,9 +101,9 @@ def UnaryOperatorFactory(
 
 
 class BinaryOperator(torch.autograd.Function):
-    @classmethod
+    @staticmethod
     @abc.abstractmethod
-    def forward(cls, ctx, input0, input1):
+    def forward(ctx, input0, input1):
         pass
 
 

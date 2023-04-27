@@ -44,12 +44,12 @@ from .variable import Variable
 # Finally, since we apply the weight before the robust loss, we adopt the convention
 # that `robust_cost_fn.jacobians() == robust_cost_fn.weighted_jacobians_error()`, and
 # `robust_cost_fn.error() == robust_cost_fn.weighed_error()`.
-class RobustCostFunction(CostFunction):
+class RobustCostFunction(th.CostFunction):
     _EPS = 1e-20
 
     def __init__(
         self,
-        cost_function: CostFunction,
+        cost_function: th.CostFunction,
         loss_cls: Type[RobustLoss],
         log_loss_radius: Variable,
         name: Optional[str] = None,
@@ -80,9 +80,13 @@ class RobustCostFunction(CostFunction):
 
     def weighted_error(self) -> torch.Tensor:
         weighted_error = self.cost_function.weighted_error()
-        squared_norm = torch.sum(weighted_error**2, dim=1, keepdim=True)
+        
+        squared_norm = weighted_error**2
+        # Inside will compare squared_norm with exp(radius)
         error_loss = self.loss.evaluate(squared_norm, self.log_loss_radius.tensor)
-
+        #print(weighted_error, error_loss)
+        #print("scaled", error_loss)
+        #print(self.dim())
         # The return value is a hacky way to make it so that
         # ||weighted_error||^2 = error_loss
         # By doing this we avoid having to change the objective's error computation
@@ -91,8 +95,7 @@ class RobustCostFunction(CostFunction):
         # of dim = robust_fn.cost_function.dim() to do the linearization properly,
         # but the actual error has dim = 1, being the result of loss(||error||^2).
         return (
-            torch.ones_like(weighted_error)
-            * (error_loss / self.dim() + RobustCostFunction._EPS).sqrt()
+          (error_loss  + RobustCostFunction._EPS).sqrt()
         )
 
     def jacobians(self) -> Tuple[List[torch.Tensor], torch.Tensor]:
@@ -107,15 +110,26 @@ class RobustCostFunction(CostFunction):
             weighted_jacobians,
             weighted_error,
         ) = self.cost_function.weighted_jacobians_error()
-        squared_norm = torch.sum(weighted_error**2, dim=1, keepdim=True)
+        #squared_norm = torch.sum(weighted_error**2, dim=1, keepdim=True)
+        #print(weighted_error.shape)
+        # I do not check the linearization part. I assume they should be correct
+        squared_norm = weighted_error**2
         rescale = (
             self.loss.linearize(squared_norm, self.log_loss_radius.tensor)
             + RobustCostFunction._EPS
         ).sqrt()
+        #print(rescale.shape)
+        # The rescale should be reshape as the jocobian shape such that the multipilication works and fulfill the chain rule
+        # However, I am not quite sure about the below code is universal to different type of problems, especially
+        # the final dimension in rescale.view(weighted_error.shape[0], weighted_error.shape[1], 1), In my case,
+        # I will split the vector-form aux input to single one. For example,
+        # the position vector P, I will split it in to x, y, z.
+        # Currently, the aux input are all in (Batch, dim), I am not sure whether there is a case, the aux input is
+        # with 3 axis, which is (Batch, dim1, dim2)
 
         return [
-            rescale.view(-1, 1, 1) * jacobian for jacobian in weighted_jacobians
-        ], rescale * weighted_error
+            rescale.view(weighted_error.shape[0], weighted_error.shape[1], 1) * jacobian for jacobian in weighted_jacobians
+        ], rescale.view(weighted_error.shape[0], weighted_error.shape[1]) * weighted_error
 
     def dim(self) -> int:
         return self.cost_function.dim()

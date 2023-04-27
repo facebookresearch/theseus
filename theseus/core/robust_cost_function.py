@@ -111,7 +111,8 @@ class RobustCostFunction(th.CostFunction):
             weighted_error,
         ) = self.cost_function.weighted_jacobians_error()
         #squared_norm = torch.sum(weighted_error**2, dim=1, keepdim=True)
-        #print(weighted_error.shape)
+        #print(len(weighted_jacobians), weighted_error.shape, weighted_error.dim(), self.cost_function.dim())
+        
         # I do not check the linearization part. I assume they should be correct
         squared_norm = weighted_error**2
         rescale = (
@@ -126,10 +127,13 @@ class RobustCostFunction(th.CostFunction):
         # the position vector P, I will split it in to x, y, z.
         # Currently, the aux input are all in (Batch, dim), I am not sure whether there is a case, the aux input is
         # with 3 axis, which is (Batch, dim1, dim2)
-
+        for jacobian in weighted_jacobians:
+            rescale_tile = rescale.unsqueeze(2)
+            rescale_tile = torch.tile(rescale_tile, (1, 1, jacobian.shape[2]))
+                
         return [
-            rescale.view(weighted_error.shape[0], weighted_error.shape[1], 1) * jacobian for jacobian in weighted_jacobians
-        ], rescale.view(weighted_error.shape[0], weighted_error.shape[1]) * weighted_error
+            rescale_tile * jacobian for jacobian in weighted_jacobians
+        ], rescale * weighted_error
 
     def dim(self) -> int:
         return self.cost_function.dim()

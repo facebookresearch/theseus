@@ -1029,17 +1029,6 @@ _left_project_impl = lie_group.LeftProjectImplFactory(_module)
 _jleft_project_impl = None
 
 
-def _left_project_backward_helper(group, matrix, grad_output_lifted) -> torch.Tensor:
-    group_inv = _inverse_impl(group)
-    jac_ginv = _left_act_backward_helper(group_inv, matrix, grad_output_lifted)
-    jac_rot = jac_ginv[:, :, :3].transpose(1, 2) - group[:, :, 3:] @ jac_ginv[
-        :, :, 3:
-    ].transpose(1, 2)
-    jac_t = -group[:, :, :3] @ jac_ginv[:, :, 3:]
-    jac_g = torch.cat((jac_rot, jac_t), dim=-1)
-    return jac_g
-
-
 class LeftProject(lie_group.BinaryOperator):
     @staticmethod
     def forward(ctx, group, matrix):

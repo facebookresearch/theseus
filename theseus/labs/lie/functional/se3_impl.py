@@ -356,11 +356,15 @@ def _jexp_impl(
 
 class Exp(lie_group.UnaryOperator):
     @staticmethod
-    def forward(ctx, tangent_vector):
+    def forward(tangent_vector):
         tangent_vector: torch.Tensor = cast(torch.Tensor, tangent_vector)
         ret = _exp_impl(tangent_vector)
-        ctx.save_for_backward(tangent_vector, ret)
         return ret
+
+    @staticmethod
+    def setup_context(ctx, inputs, outputs):
+        # inputs is (tangent_vector,). outputs is exp_map
+        ctx.save_for_backward(inputs[0], outputs)
 
     @staticmethod
     def backward(ctx, grad_output):
@@ -369,15 +373,15 @@ class Exp(lie_group.UnaryOperator):
         if not hasattr(ctx, "jacobians"):
             ctx.jacobians: torch.Tensor = _jexp_impl(tangent_vector)[0][0]
         jacs = ctx.jacobians
-        dg = group[:, :, :3].transpose(1, 2) @ grad_output
-        grad_input = jacs.transpose(1, 2) @ torch.stack(
+        dg = group[..., :3].transpose(-2, -1) @ grad_output
+        grad_input = jacs.transpose(-2, -1) @ torch.stack(
             (
-                dg[:, 0, 3],
-                dg[:, 1, 3],
-                dg[:, 2, 3],
-                dg[:, 2, 1] - dg[:, 1, 2],
-                dg[:, 0, 2] - dg[:, 2, 0],
-                dg[:, 1, 0] - dg[:, 0, 1],
+                dg[..., 0, 3],
+                dg[..., 1, 3],
+                dg[..., 2, 3],
+                dg[..., 2, 1] - dg[..., 1, 2],
+                dg[..., 0, 2] - dg[..., 2, 0],
+                dg[..., 1, 0] - dg[..., 0, 1],
             ),
             dim=1,
         ).view(-1, 6, 1)
@@ -593,8 +597,8 @@ class Log(lie_group.UnaryOperator):
 
     @staticmethod
     def setup_context(ctx, inputs, outputs):
-        # inputs is (group,). outputs is (tangent_vector,)
-        ctx.save_for_backward(outputs[0], inputs[0])
+        # inputs is (group,). outputs is tangent_vector
+        ctx.save_for_backward(outputs, inputs[0])
         pass
 
     @staticmethod
@@ -660,8 +664,8 @@ _jadjoint_autograd_fn = None
 # -----------------------------------------------------------------------------
 def _inverse_impl(group: torch.Tensor) -> torch.Tensor:
     check_group_tensor(group)
-    R = group[:, :, :3].transpose(1, 2)
-    return torch.cat((R, -R @ group[:, :, 3:]), dim=2)
+    R = group[..., :3].transpose(-2, -1)
+    return torch.cat((R, -R @ group[..., 3:]), dim=-1)
 
 
 _jinverse_impl = lie_group.JInverseImplFactory(_module)
@@ -710,10 +714,14 @@ _jhat_impl = None
 
 class Hat(lie_group.UnaryOperator):
     @staticmethod
-    def forward(ctx, tangent_vector):
+    def forward(tangent_vector):
         tangent_vector: torch.Tensor = cast(torch.Tensor, tangent_vector)
         ret = _hat_impl(tangent_vector)
         return ret
+
+    @staticmethod
+    def setup_context(ctx, inputs, outputs):
+        pass
 
     @staticmethod
     def backward(ctx, grad_output):
@@ -969,7 +977,7 @@ project, jproject = lie_group.UnaryOperatorFactory(_module, "project")
 def _left_act_impl(group: torch.Tensor, matrix: torch.Tensor) -> torch.Tensor:
     check_group_tensor(group)
     check_left_act_matrix(matrix)
-    ret = SO3._left_act_impl(group[:, :, :3], matrix)
+    ret = SO3._left_act_impl(group[..., :3], matrix)
     return ret
 
 

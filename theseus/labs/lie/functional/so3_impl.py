@@ -541,10 +541,14 @@ _jhat_impl = None
 
 class Hat(lie_group.UnaryOperator):
     @staticmethod
-    def forward(ctx, tangent_vector):
+    def forward(tangent_vector):
         tangent_vector: torch.Tensor = cast(torch.Tensor, tangent_vector)
         ret = _hat_impl(tangent_vector)
         return ret
+
+    @staticmethod
+    def setup_context(ctx, inputs, outputs):
+        pass
 
     @staticmethod
     def backward(ctx, grad_output):

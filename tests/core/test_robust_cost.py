@@ -136,3 +136,53 @@ def test_mask_jacobians(loss_cls):
     torch.testing.assert_close(err, err_expected)
     for j1, j2 in zip(jac, jac_expected):
         torch.testing.assert_close(j1, j2)
+
+
+@pytest.mark.parametrize("batch_size", [1, 4])
+def test_flatten_dims(batch_size):
+    n = 10
+    w = th.ScaleCostWeight(0.5)
+    log_loss_radius = th.as_variable(0.5)
+
+    # First create an objective with individual cost functions per error term
+    xs = [th.Vector(1, name=f"x{i}") for i in range(n)]
+    ts = [th.Vector(1, name=f"t{i}") for i in range(n)]
+    obj_unrolled = th.Objective()
+    for i in range(n):
+        obj_unrolled.add(
+            th.RobustCostFunction(
+                th.Difference(xs[i], ts[i], w, name=f"cf{i}"),
+                th.HuberLoss,
+                log_loss_radius,
+                name=f"rcf{i}",
+            )
+        )
+    lin_unrolled = th.DenseLinearization(obj_unrolled)
+    th_inputs = {f"x{i}": torch.ones(batch_size, 1) * (i + 1) for i in range(n)}
+    obj_unrolled.update(th_inputs)
+    lin_unrolled.linearize()
+
+    # Now one with a single vectorized cost function, and flatten_dims=True
+    xb = th.Vector(n, name="xb")
+    tb = th.Vector(n, name="tb")
+    obj_flattened = th.Objective()
+    obj_flattened.add(
+        th.RobustCostFunction(
+            th.Difference(xb, tb, w, name="cfb"),
+            th.HuberLoss,
+            log_loss_radius,
+            name="rcf",
+            flatten_dims=True,
+        )
+    )
+    lin_flattened = th.DenseLinearization(obj_flattened)
+    th_inputs = {
+        "xb": torch.cat([torch.ones(batch_size, 1) * (i + 1) for i in range(n)], dim=1)
+    }
+    obj_flattened.update(th_inputs)
+    lin_flattened.linearize()
+
+    # Both objectives should result in the same error and linearizations
+    torch.testing.assert_close(obj_unrolled.error(), obj_flattened.error())
+    torch.testing.assert_close(lin_unrolled.b, lin_flattened.b)
+    torch.testing.assert_close(lin_unrolled.AtA, lin_flattened.AtA)

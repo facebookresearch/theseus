@@ -52,6 +52,7 @@ class RobustCostFunction(CostFunction):
         cost_function: CostFunction,
         loss_cls: Type[RobustLoss],
         log_loss_radius: Variable,
+        flatten_dims: bool = False,
         name: Optional[str] = None,
     ):
         self.cost_function = cost_function
@@ -70,6 +71,7 @@ class RobustCostFunction(CostFunction):
         self.log_loss_radius = log_loss_radius
         self.register_aux_var("log_loss_radius")
         self.loss = loss_cls()
+        self.flatten_dims = flatten_dims
 
     def error(self) -> torch.Tensor:
         warnings.warn(
@@ -80,9 +82,13 @@ class RobustCostFunction(CostFunction):
 
     def weighted_error(self) -> torch.Tensor:
         weighted_error = self.cost_function.weighted_error()
+        if self.flatten_dims:
+            weighted_error = weighted_error.reshape(-1, 1)
         squared_norm = torch.sum(weighted_error**2, dim=1, keepdim=True)
         error_loss = self.loss.evaluate(squared_norm, self.log_loss_radius.tensor)
 
+        if self.flatten_dims:
+            return (error_loss.reshape(-1, self.dim()) + RobustCostFunction._EPS).sqrt()
         # The return value is a hacky way to make it so that
         # ||weighted_error||^2 = error_loss
         # By doing this we avoid having to change the objective's error computation
@@ -107,15 +113,25 @@ class RobustCostFunction(CostFunction):
             weighted_jacobians,
             weighted_error,
         ) = self.cost_function.weighted_jacobians_error()
+        if self.flatten_dims:
+            weighted_error = weighted_error.reshape(-1, 1)
+            for i, wj in enumerate(weighted_jacobians):
+                weighted_jacobians[i] = wj.diagonal(dim1=1, dim2=2).reshape(-1, 1, 1)
         squared_norm = torch.sum(weighted_error**2, dim=1, keepdim=True)
         rescale = (
             self.loss.linearize(squared_norm, self.log_loss_radius.tensor)
             + RobustCostFunction._EPS
         ).sqrt()
 
-        return [
+        rescaled_jacobians = [
             rescale.view(-1, 1, 1) * jacobian for jacobian in weighted_jacobians
-        ], rescale * weighted_error
+        ]
+        rescaled_error = rescale * weighted_error
+        if self.flatten_dims:
+            return [
+                rj.reshape(-1, self.dim()).diag_embed() for rj in rescaled_jacobians
+            ], rescaled_error.reshape(-1, self.dim())
+        return rescaled_jacobians, rescaled_error
 
     def dim(self) -> int:
         return self.cost_function.dim()
@@ -126,6 +142,7 @@ class RobustCostFunction(CostFunction):
             type(self.loss),
             self.log_loss_radius.copy(),
             name=new_name,
+            flatten_dims=self.flatten_dims,
         )
 
     @property

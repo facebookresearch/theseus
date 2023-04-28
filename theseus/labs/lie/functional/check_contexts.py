@@ -39,4 +39,6 @@ class enable_checks(_LieGroupCheckContext):
 def checks_base(tensor: torch.Tensor, check_impl: Callable[[torch.Tensor], None]):
     if not _LieGroupCheckContext.get_context():
         return
+    if torch._C._functorch.is_batchedtensor(tensor):
+        raise RuntimeError("Lie group checks must be turned off to run with vmap.")
     check_impl(tensor)

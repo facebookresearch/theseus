@@ -635,24 +635,27 @@ _jadjoint_impl = None
 
 class Adjoint(lie_group.UnaryOperator):
     @staticmethod
-    def forward(ctx, group):
+    def forward(group):
         group: torch.Tensor = cast(torch.Tensor, group)
-        ctx.save_for_backward(group)
         return _adjoint_impl(group)
+
+    @staticmethod
+    def setup_context(ctx, inputs, outputs):
+        ctx.save_for_backward(inputs[0])  # inputs is (group,)
 
     @staticmethod
     def backward(ctx, grad_output):
         group: torch.Tensor = ctx.saved_tensors[0]
         grad_input_rot = (
-            grad_output[:, :3, :3]
-            + grad_output[:, 3:, 3:]
-            - SO3._hat_impl(group[:, :, 3]) @ grad_output[:, :3, 3:]
+            grad_output[..., :3, :3]
+            + grad_output[..., 3:, 3:]
+            - SO3._hat_impl(group[..., 3]) @ grad_output[..., :3, 3:]
         )
         grad_input_t = SO3._project_impl(
-            grad_output[:, :3, 3:] @ group[:, :, :3].transpose(1, 2)
+            grad_output[..., :3, 3:] @ group[..., :3].transpose(-2, -1)
         ).view(-1, 3, 1)
 
-        return torch.cat((grad_input_rot, grad_input_t), dim=2)
+        return torch.cat((grad_input_rot, grad_input_t), dim=-1)
 
 
 _adjoint_autograd_fn = Adjoint.apply
@@ -767,17 +770,21 @@ _jvee_impl = None
 
 class Vee(lie_group.UnaryOperator):
     @staticmethod
-    def forward(ctx, tangent_vector):
+    def forward(tangent_vector):
         tangent_vector: torch.Tensor = cast(torch.Tensor, tangent_vector)
         ret = _vee_impl(tangent_vector)
         return ret
 
     @staticmethod
+    def setup_context(ctx, inputs, outputs):
+        pass
+
+    @staticmethod
     def backward(ctx, grad_output):
         grad_output: torch.Tensor = cast(torch.Tensor, grad_output)
         grad_input = grad_output.new_zeros(grad_output.shape[0], 4, 4)
-        grad_input[:, :3, 3] = grad_output[:, :3]
-        grad_input[:, :3, :3] = 0.5 * SO3._hat_impl(grad_output[:, 3:])
+        grad_input[..., :3, 3] = grad_output[..., :3]
+        grad_input[..., :3, :3] = 0.5 * SO3._hat_impl(grad_output[..., 3:])
         return grad_input
 
 
@@ -815,12 +822,15 @@ def _jcompose_impl(
 
 class Compose(lie_group.BinaryOperator):
     @staticmethod
-    def forward(ctx, group0, group1):
+    def forward(group0, group1):
         group0: torch.Tensor = cast(torch.Tensor, group0)
         group1: torch.Tensor = cast(torch.Tensor, group1)
         ret = _compose_impl(group0, group1)
-        ctx.save_for_backward(group0, group1)
         return ret
+
+    @staticmethod
+    def setup_context(ctx, inputs, outputs):
+        ctx.save_for_backward(inputs[0], inputs[1])  # the two groups
 
     @staticmethod
     def backward(ctx, grad_output):

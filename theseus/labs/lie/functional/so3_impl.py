@@ -525,12 +525,12 @@ _jinverse_autograd_fn = _jinverse_impl
 def _hat_impl(tangent_vector: torch.Tensor) -> torch.Tensor:
     check_tangent_vector(tangent_vector)
     matrix = tangent_vector.new_zeros(tangent_vector.shape[0], 3, 3)
-    matrix[:, 0, 1] = -tangent_vector[:, 2].view(-1)
-    matrix[:, 0, 2] = tangent_vector[:, 1].view(-1)
-    matrix[:, 1, 2] = -tangent_vector[:, 0].view(-1)
-    matrix[:, 1, 0] = tangent_vector[:, 2].view(-1)
-    matrix[:, 2, 0] = -tangent_vector[:, 1].view(-1)
-    matrix[:, 2, 1] = tangent_vector[:, 0].view(-1)
+    matrix[..., 0, 1] = -tangent_vector[..., 2].view(-1)
+    matrix[..., 0, 2] = tangent_vector[..., 1].view(-1)
+    matrix[..., 1, 2] = -tangent_vector[..., 0].view(-1)
+    matrix[..., 1, 0] = tangent_vector[..., 2].view(-1)
+    matrix[..., 2, 0] = -tangent_vector[..., 1].view(-1)
+    matrix[..., 2, 1] = tangent_vector[..., 0].view(-1)
 
     return matrix
 

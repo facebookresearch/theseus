@@ -103,6 +103,8 @@ def UnaryOperatorFactory(
 
 
 class BinaryOperator(torch.autograd.Function):
+    generate_vmap_rule = True
+
     @staticmethod
     @abc.abstractmethod
     def forward(ctx, input0, input1):

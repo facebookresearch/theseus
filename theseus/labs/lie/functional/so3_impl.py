@@ -4,6 +4,7 @@
 # LICENSE file in the root directory of this source tree.
 
 import torch
+import math
 from typing import cast, List, Tuple, Optional
 
 from . import constants
@@ -38,6 +39,12 @@ def check_group_tensor(tensor: torch.Tensor):
             raise ValueError("Invalid data tensor for SO3.")
 
     checks_base(tensor, _impl)
+
+
+def check_matrix_tensor(tensor: torch.Tensor):
+    with torch.no_grad():
+        if tensor.ndim != 3 or tensor.shape[1:] != (3, 3):
+            raise ValueError("Matrix tensors can only be 3x3 matrices.")
 
 
 def check_tangent_vector(tangent_vector: torch.Tensor):
@@ -973,6 +980,49 @@ class LeftProject(lie_group.BinaryOperator):
 
 _left_project_autograd_fn = LeftProject.apply
 _jleft_project_autograd_fn = _jleft_project_impl
+
+
+# -----------------------------------------------------------------------------
+# Normalize
+# -----------------------------------------------------------------------------
+class Normalize(lie_group.UnaryOperator):
+    @classmethod
+    def forward(cls, ctx, matrix):
+        check_matrix_tensor(matrix)
+        matrix: torch.Tensor = cast(torch.Tensor, matrix)
+        u, s, v = torch.svd(matrix)
+        ctx.save_for_backward(u, s, v)
+        sign = torch.det(u @ v).view(-1, 1, 1)
+        ctx.save_for_backward(u, s, sign)
+        v[:, :, 2:] = torch.where(sign > 0, v[:, :, 2:], -v[:, :, 2:])
+        return u @ v.transpose(1, 2)
+
+    @classmethod
+    def backward(cls, ctx, grad_output):
+        u, s, v, sign = ctx.saved_tensors
+        grad_u: torch.Tensor = grad_output @ torch.cat(
+            (v[:, :, :2], v[:, :, 2:] @ sign)
+        )
+        grad_v: torch.Tensor = grad_output.transpose(1, 2) @ u
+        s_squared: torch.Tensor = s.pow(2)
+        F = s_squared.view(-1, 1, 3).expand(-1, 3, 3) - s_squared.view(-1, 3, 1).expand(
+            -1, 3, 3
+        )
+        F = torch.where(F == 0, (torch.ones(1) * math.inf).expand(F.shape), F)
+        F = F.pow(-1)
+        u_term: torch.Tensor = u @ (
+            F * (u.transpose(1, 2) @ grad_u - grad_u.transpose(1, 2) @ u)
+        )
+        v_term: torch.Tensor = (
+            F * (v.transpose(1, 2) @ grad_v - grad_v.transpose(1, 2) @ u)
+        ) @ v.transpose(1, 2)
+        return torch.einsum("n...ij, nj->n...ij", u_term, s) + torch.einsum(
+            "ni, n...ij->n...ij", s, v_term
+        )
+
+
+_normalize_autograd_fn = Normalize.apply
+_jnormalize_autograd_fn = None
 
 
 _fns = lie_group.LieGroupFns(_module)

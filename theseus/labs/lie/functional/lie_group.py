@@ -217,6 +217,7 @@ class LieGroupFns:
         self.exp, self.jexp = UnaryOperatorFactory(module, "exp")
         self.log, self.jlog = UnaryOperatorFactory(module, "log")
         self.adj = UnaryOperatorFactory(module, "adjoint")[0]
+        self.normalize = UnaryOperatorFactory(module, "normalize")[0]
         self.inv, self.jinv = UnaryOperatorFactory(module, "inverse")
         self.hat = UnaryOperatorFactory(module, "hat")[0]
         self.vee = UnaryOperatorFactory(module, "vee")[0]

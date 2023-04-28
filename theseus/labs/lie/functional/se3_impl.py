@@ -30,6 +30,14 @@ def check_group_tensor(tensor: torch.Tensor):
     checks_base(tensor, _impl)
 
 
+def check_matrix_tensor(tensor: torch.Tensor):
+    with torch.no_grad():
+        if tensor.ndim != 3 or tensor.shape[1:] != (3, 4):
+            raise ValueError(
+                f"SE3 data tensors can only be 3x4 matrices, but got shape {tensor.shape}."
+            )
+
+
 def check_transform_tensor(tensor: torch.Tensor):
     SO3.check_transform_tensor(tensor)
 
@@ -1064,5 +1072,24 @@ _left_project_autograd_fn = LeftProject.apply
 _jleft_project_autograd_fn = _jleft_project_impl
 
 left_project, jleft_project = lie_group.BinaryOperatorFactory(_module, "left_project")
+
+
+# -----------------------------------------------------------------------------
+# Normalize
+# -----------------------------------------------------------------------------
+class Normalize(lie_group.UnaryOperator):
+    @classmethod
+    def forward(cls, ctx, matrix):
+        return torch.cat(
+            (SO3._normalize_autograd_fn(matrix[:, :, :3]), matrix[:, :, 3:]), -1
+        )
+
+    # @classmethod
+    # def backward(cls, ctx, grad_output):
+
+
+_normalize_autograd_fn = Normalize.apply
+_jnormalize_autograd_fn = None
+
 
 _fns = lie_group.LieGroupFns(_module)

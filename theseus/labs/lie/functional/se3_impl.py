@@ -586,22 +586,24 @@ def _jlog_impl(group: torch.Tensor) -> Tuple[List[torch.Tensor], torch.Tensor]:
 
 class Log(lie_group.UnaryOperator):
     @staticmethod
-    def forward(ctx, group):
+    def forward(group):
         group: torch.Tensor = cast(torch.Tensor, group)
         tangent_vector = _log_impl(group)
-        ctx.save_for_backward(tangent_vector, group)
         return tangent_vector
+
+    @staticmethod
+    def setup_context(ctx, inputs, outputs):
+        # inputs is (group,). outputs is (tangent_vector,)
+        ctx.save_for_backward(outputs[0], inputs[0])
+        pass
 
     @staticmethod
     def backward(ctx, grad_output):
         group: torch.Tensor = ctx.saved_tensors[1]
-        if not hasattr(ctx, "jacobians"):
-            ctx.jacobians: torch.Tensor = _jlog_impl(group)[0][0]
-            ctx.jacobians[:, :, 3:] *= 0.5
+        jacobians = _jlog_impl(group)[0][0]
+        jacobians[..., 3:] *= 0.5
+        temp = lift((jacobians.transpose(1, 2) @ grad_output.unsqueeze(-1)).squeeze(-1))
 
-        temp = lift(
-            (ctx.jacobians.transpose(1, 2) @ grad_output.unsqueeze(-1)).squeeze(-1)
-        )
         jac_g = torch.einsum("nij, n...jk->n...ik", group[:, :, :3], temp)
         return jac_g
 
@@ -666,15 +668,13 @@ _jinverse_impl = lie_group.JInverseImplFactory(_module)
 
 
 class Inverse(lie_group.UnaryOperator):
-    generate_vmap_rule = True
-
     @staticmethod
     def forward(group):
         group: torch.Tensor = cast(torch.Tensor, group)
         return _inverse_impl(group)
 
     @staticmethod
-    def setup_context(ctx, inputs, _):
+    def setup_context(ctx, inputs, outputs):
         ctx.save_for_backward(inputs[0])  # inputs is (group,)
 
     @staticmethod
@@ -897,10 +897,14 @@ _jlift_impl = None
 
 class Lift(lie_group.UnaryOperator):
     @staticmethod
-    def forward(ctx, matrix):
+    def forward(matrix):
         matrix: torch.Tensor = cast(torch.Tensor, matrix)
         ret = _lift_impl(matrix)
         return ret
+
+    @staticmethod
+    def setup_context(ctx, inputs, outputs):
+        pass
 
     @staticmethod
     def backward(ctx, grad_output):
@@ -938,10 +942,14 @@ _jproject_impl = None
 
 class Project(lie_group.UnaryOperator):
     @staticmethod
-    def forward(ctx, matrix):
+    def forward(matrix):
         matrix: torch.Tensor = cast(torch.Tensor, matrix)
         ret = _project_impl(matrix)
         return ret
+
+    @staticmethod
+    def setup_context(ctx, inputs, outputs):
+        pass
 
     @staticmethod
     def backward(ctx, grad_output):

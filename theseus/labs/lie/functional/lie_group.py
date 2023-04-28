@@ -41,6 +41,8 @@ def LeftProjectImplFactory(module):
 
 
 class UnaryOperator(torch.autograd.Function):
+    generate_vmap_rule = True
+
     @staticmethod
     @abc.abstractmethod
     def forward(ctx, input):

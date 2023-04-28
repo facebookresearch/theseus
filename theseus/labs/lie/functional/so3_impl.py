@@ -641,7 +641,7 @@ def _jtransform_from_impl(
 ) -> Tuple[List[torch.Tensor], torch.Tensor]:
     check_group_tensor(group)
     check_transform_tensor(tensor)
-    jacobian_g = _hat_autograd_fn(tensor) @ group
+    jacobian_g = -group @ _hat_autograd_fn(tensor)
     jacobian_p = group.view(tensor.shape[:-1] + (3, 3))
     jacobians = []
     jacobians.append(jacobian_g)

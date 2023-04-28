@@ -874,12 +874,16 @@ def _jtransform_from_impl(
 
 class TransformFrom(lie_group.BinaryOperator):
     @staticmethod
-    def forward(ctx, group, tensor):
+    def forward(group, tensor):
         group: torch.Tensor = cast(torch.Tensor, group)
         tensor: torch.Tensor = cast(torch.Tensor, tensor)
         ret = _transform_from_impl(group, tensor)
-        ctx.save_for_backward(group, tensor)
         return ret
+
+    @staticmethod
+    def setup_context(ctx, inputs, outputs):
+        # inputs is (group, tensor)
+        ctx.save_for_backward(inputs[0], inputs[1])
 
     @staticmethod
     def backward(ctx, grad_output):

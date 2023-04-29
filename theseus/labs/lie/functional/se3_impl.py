@@ -370,9 +370,7 @@ class Exp(lie_group.UnaryOperator):
     def backward(cls, ctx, grad_output):
         tangent_vector: torch.Tensor = ctx.saved_tensors[0]
         group: torch.Tensor = ctx.saved_tensors[1]
-        if not hasattr(ctx, "jacobians"):
-            ctx.jacobians: torch.Tensor = _jexp_impl(tangent_vector)[0][0]
-        jacs = ctx.jacobians
+        jacs = _jexp_impl(tangent_vector)[0][0]
         dg = group[..., :3].transpose(-2, -1) @ grad_output
         grad_input = jacs.transpose(-2, -1) @ torch.stack(
             (
@@ -599,7 +597,6 @@ class Log(lie_group.UnaryOperator):
     def setup_context(cls, ctx, inputs, outputs):
         # inputs is (group,). outputs is tangent_vector
         ctx.save_for_backward(outputs, inputs[0])
-        pass
 
     @classmethod
     def backward(cls, ctx, grad_output):

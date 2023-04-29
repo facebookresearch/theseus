@@ -298,9 +298,7 @@ class Exp(lie_group.UnaryOperator):
     def backward(cls, ctx, grad_output):
         tangent_vector: torch.Tensor = ctx.saved_tensors[0]
         group: torch.Tensor = ctx.saved_tensors[1]
-        if not hasattr(ctx, "jacobians"):
-            ctx.jacobians: torch.Tensor = _jexp_impl(tangent_vector)[0][0]
-        jacs = ctx.jacobians
+        jacs = _jexp_impl(tangent_vector)[0][0]
         dR = group.transpose(-2, -1) @ grad_output
         grad_input = jacs.transpose(-2, -1) @ torch.stack(
             (
@@ -460,11 +458,9 @@ class Log(lie_group.UnaryOperator):
     @classmethod
     def backward(cls, ctx, grad_output):
         group: torch.Tensor = ctx.saved_tensors[1]
-        if not hasattr(ctx, "jacobians"):
-            ctx.jacobians: torch.Tensor = 0.5 * _jlog_impl(group)[0][0]
-
+        jacobians = 0.5 * _jlog_impl(group)[0][0]
         temp = _lift_autograd_fn(
-            (ctx.jacobians.transpose(-2, -1) @ grad_output.unsqueeze(-1)).squeeze(-1)
+            (jacobians.transpose(-2, -1) @ grad_output.unsqueeze(-1)).squeeze(-1)
         )
         return torch.einsum("nij,n...jk->n...ik", group, temp)
 
@@ -811,11 +807,7 @@ class QuaternionToRotation(lie_group.UnaryOperator):
     def backward(cls, ctx, grad_output):
         quaternion: torch.Tensor = ctx.saved_tensors[0]
         group: torch.Tensor = ctx.saved_tensors[1]
-        if not hasattr(ctx, "jacobians"):
-            ctx.jacobians: torch.Tensor = _jquaternion_to_rotation_impl(quaternion)[0][
-                0
-            ]
-        jacs = ctx.jacobians
+        jacs = _jquaternion_to_rotation_impl(quaternion)[0][0]
         dR = group.transpose(1, 2) @ grad_output
         grad_input = jacs.transpose(1, 2) @ torch.stack(
             (

@@ -78,7 +78,7 @@ def test_jacrev_unary(batch_size, name):
 
 @run_if_labs()
 @pytest.mark.parametrize("batch_size", [1, 10, 100])
-@pytest.mark.parametrize("name", ["compose"])
+@pytest.mark.parametrize("name", ["compose", "transform_from"])
 def test_jacrev_binary(batch_size, name):
     if not hasattr(torch, "vmap"):
         return

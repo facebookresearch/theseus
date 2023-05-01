@@ -1000,6 +1000,42 @@ def _normalize_impl(matrix: torch.Tensor):
     return _normalize_impl_helper(matrix)[0]
 
 
+def _normalize_backward_helper(
+    u: torch.Tensor,
+    s: torch.Tensor,
+    v: torch.Tensor,
+    sign: torch.Tensor,
+    grad_output: torch.Tensor,
+):
+    def _skew_symm(matrix: torch.Tensor) -> torch.Tensor:
+        return matrix - matrix.transpose(-1, -2)
+
+    ut = u.transpose(1, 2)
+    vt = v.transpose(1, 2)
+    grad_u: torch.Tensor = grad_output @ torch.cat(
+        (v[:, :, :2], v[:, :, 2:] @ sign), dim=-1
+    )
+    grad_v: torch.Tensor = grad_output.transpose(1, 2) @ torch.cat(
+        (u[:, :, :2], u[:, :, 2:] @ sign), dim=-1
+    )
+    s_squared: torch.Tensor = s.pow(2)
+    F = s_squared.view(-1, 1, 3).expand(-1, 3, 3) - s_squared.view(-1, 3, 1).expand(
+        -1, 3, 3
+    )
+    F = torch.where(F == 0, grad_output.new_ones(1) * torch.inf, F)
+    F = F.pow(-1)
+
+    u_term: torch.Tensor = u @ (F * _skew_symm(ut @ grad_u))
+    u_term = torch.einsum("n...ij, nj->n...ij", u_term, s)
+    u_term = u_term @ vt
+
+    v_term: torch.Tensor = (F * _skew_symm(vt @ grad_v)) @ v.transpose(1, 2)
+    v_term = torch.einsum("ni, n...ij->n...ij", s, v_term)
+    v_term = u @ v_term
+
+    return u_term + v_term
+
+
 class Normalize(lie_group.UnaryOperator):
     @classmethod
     def _forward_impl(cls, matrix):
@@ -1017,33 +1053,8 @@ class Normalize(lie_group.UnaryOperator):
 
     @classmethod
     def backward(cls, ctx, grad_output, _):
-        def _skew_symm(matrix: torch.Tensor) -> torch.Tensor:
-            return matrix - matrix.transpose(-1, -2)
-
         u, s, v, sign = ctx.saved_tensors
-        ut = u.transpose(1, 2)
-        vt = v.transpose(1, 2)
-        grad_u: torch.Tensor = grad_output @ torch.cat(
-            (v[:, :, :2], v[:, :, 2:] @ sign), dim=-1
-        )
-        grad_v: torch.Tensor = grad_output.transpose(1, 2) @ torch.cat(
-            (u[:, :, :2], u[:, :, 2:] @ sign), dim=-1
-        )
-        s_squared: torch.Tensor = s.pow(2)
-        F = s_squared.view(-1, 1, 3).expand(-1, 3, 3) - s_squared.view(-1, 3, 1).expand(
-            -1, 3, 3
-        )
-        F = torch.where(F == 0, grad_output.new_ones(1) * torch.inf, F)
-        F = F.pow(-1)
-
-        u_term: torch.Tensor = u @ (F * _skew_symm(ut @ grad_u))
-        u_term = torch.einsum("n...ij, nj->n...ij", u_term, s)
-        u_term = u_term @ vt
-
-        v_term: torch.Tensor = (F * _skew_symm(vt @ grad_v)) @ v.transpose(1, 2)
-        v_term = torch.einsum("ni, n...ij->n...ij", s, v_term)
-        v_term = u @ v_term
-        return u_term + v_term, None
+        return _normalize_backward_helper(u, s, v, sign, grad_output), None
 
 
 def _normalize_autograd_fn(matrix: torch.Tensor):

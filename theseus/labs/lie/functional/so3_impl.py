@@ -996,7 +996,7 @@ def _normalize_impl_helper(matrix: torch.Tensor):
     return u @ vt, {"u": u, "s": s, "v": v, "sign": sign}
 
 
-def _normalize_impl(matrix: torch.Tensor):
+def _normalize_impl(matrix: torch.Tensor) -> torch.Tensor:
     return _normalize_impl_helper(matrix)[0]
 
 
@@ -1006,7 +1006,7 @@ def _normalize_backward_helper(
     v: torch.Tensor,
     sign: torch.Tensor,
     grad_output: torch.Tensor,
-):
+) -> torch.Tensor:
     def _skew_symm(matrix: torch.Tensor) -> torch.Tensor:
         return matrix - matrix.transpose(-1, -2)
 

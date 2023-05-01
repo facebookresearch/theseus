@@ -1017,6 +1017,9 @@ class Normalize(lie_group.UnaryOperator):
 
     @classmethod
     def backward(cls, ctx, grad_output, _):
+        def _skew_symm(matrix: torch.Tensor) -> torch.Tensor:
+            return matrix - matrix.transpose(-1, -2)
+
         u, s, v, sign = ctx.saved_tensors
         ut = u.transpose(1, 2)
         vt = v.transpose(1, 2)
@@ -1033,13 +1036,11 @@ class Normalize(lie_group.UnaryOperator):
         F = torch.where(F == 0, grad_output.new_ones(1) * torch.inf, F)
         F = F.pow(-1)
 
-        u_term: torch.Tensor = u @ (F * (ut @ grad_u - grad_u.transpose(1, 2) @ u))
+        u_term: torch.Tensor = u @ (F * _skew_symm(ut @ grad_u))
         u_term = torch.einsum("n...ij, nj->n...ij", u_term, s)
         u_term = u_term @ vt
 
-        v_term: torch.Tensor = (
-            F * (vt @ grad_v - grad_v.transpose(1, 2) @ v)
-        ) @ v.transpose(1, 2)
+        v_term: torch.Tensor = (F * _skew_symm(vt @ grad_v)) @ v.transpose(1, 2)
         v_term = torch.einsum("ni, n...ij->n...ij", s, v_term)
         v_term = u @ v_term
         return u_term + v_term, None

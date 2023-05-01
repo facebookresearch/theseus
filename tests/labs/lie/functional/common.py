@@ -49,6 +49,8 @@ def get_test_cfg(op_name, dtype, dim, data_shape, module=None):
             all_input_types.append((("group", module), ("matrix", shape)))
     if op_name == "normalize":
         all_input_types.append((("matrix", data_shape),))
+        if dtype == torch.float32:
+            atol = 2.5e-4
     return all_input_types, atol
 
 

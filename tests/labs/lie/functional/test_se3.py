@@ -33,6 +33,7 @@ from .common import (
         "project",
         "left_act",
         "left_project",
+        "normalize",
     ],
 )
 @pytest.mark.parametrize("batch_size", BATCH_SIZES_TO_TEST)

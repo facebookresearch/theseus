@@ -47,6 +47,8 @@ def get_test_cfg(op_name, dtype, dim, data_shape, module=None):
             ((torch.randint(1, 5, ()).item(),) + data_shape),
         ]:
             all_input_types.append((("group", module), ("matrix", shape)))
+    if op_name == "normalize":
+        all_input_types.append((("matrix", data_shape),))
     return all_input_types, atol
 
 

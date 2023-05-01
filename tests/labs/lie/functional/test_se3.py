@@ -8,7 +8,14 @@ import pytest
 import torch
 
 from tests.decorators import run_if_labs
-from .common import BATCH_SIZES_TO_TEST, TEST_EPS, check_lie_group_function, run_test_op
+from .common import (
+    BATCH_SIZES_TO_TEST,
+    TEST_EPS,
+    check_lie_group_function,
+    check_jacrev_binary,
+    check_jacrev_unary,
+    run_test_op,
+)
 
 
 @run_if_labs()
@@ -57,3 +64,24 @@ def test_vee(batch_size: int, dtype: torch.dtype):
     torch.testing.assert_close(
         actual_tangent_vector, tangent_vector, atol=TEST_EPS, rtol=TEST_EPS
     )
+
+
+@run_if_labs()
+@pytest.mark.parametrize("batch_size", [1, 10, 100])
+@pytest.mark.parametrize("name", ["exp", "inv"])
+def test_jacrev_unary(batch_size, name):
+    import theseus.labs.lie.functional as lieF
+
+    check_jacrev_unary(lieF.SE3, 6, batch_size, name)
+
+
+@run_if_labs()
+@pytest.mark.parametrize("batch_size", [1, 10, 100])
+@pytest.mark.parametrize("name", ["compose", "transform_from"])
+def test_jacrev_binary(batch_size, name):
+    if not hasattr(torch, "vmap"):
+        return
+
+    import theseus.labs.lie.functional as lieF
+
+    check_jacrev_binary(lieF.SE3, batch_size, name)

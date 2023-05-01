@@ -8,6 +8,7 @@ from typing import cast, List, Tuple, Optional
 
 from . import constants
 from . import lie_group
+from .check_contexts import checks_base
 from .utils import get_module
 
 
@@ -19,29 +20,34 @@ _module = get_module(__name__)
 
 
 def check_group_tensor(tensor: torch.Tensor):
-    with torch.no_grad():
-        if tensor.ndim != 3 or tensor.shape[1:] != (3, 3):
+    def _impl(t_):
+        if t_.ndim != 3 or t_.shape[1:] != (3, 3):
             raise ValueError("SO3 data tensors can only be 3x3 matrices.")
 
-        MATRIX_EPS = constants._SO3_MATRIX_EPS[tensor.dtype]
-        if tensor.dtype != torch.float64:
-            tensor = tensor.double()
+        MATRIX_EPS = constants._SO3_MATRIX_EPS[t_.dtype]
+        if t_.dtype != torch.float64:
+            t_ = t_.double()
 
         _check = (
-            torch.matmul(tensor, tensor.transpose(1, 2))
-            - torch.eye(3, 3, dtype=tensor.dtype, device=tensor.device)
+            torch.matmul(t_, t_.transpose(1, 2))
+            - torch.eye(3, 3, dtype=t_.dtype, device=t_.device)
         ).abs().max().item() < MATRIX_EPS
-        _check &= (torch.linalg.det(tensor) - 1).abs().max().item() < MATRIX_EPS
+        _check &= (torch.linalg.det(t_) - 1).abs().max().item() < MATRIX_EPS
 
-    if not _check:
-        raise ValueError("Invalid data tensor for SO3.")
+        if not _check:
+            raise ValueError("Invalid data tensor for SO3.")
+
+    checks_base(tensor, _impl)
 
 
 def check_tangent_vector(tangent_vector: torch.Tensor):
-    _check = tangent_vector.ndim == 3 and tangent_vector.shape[1:] == (3, 1)
-    _check |= tangent_vector.ndim == 2 and tangent_vector.shape[1] == 3
-    if not _check:
-        raise ValueError("Tangent vectors of SO3 should be 3-D vectors.")
+    def _impl(t_: torch.Tensor):
+        _check = t_.ndim == 3 and t_.shape[1:] == (3, 1)
+        _check |= t_.ndim == 2 and t_.shape[1] == 3
+        if not _check:
+            raise ValueError("Tangent vectors of SO3 should be 3-D vectors.")
+
+    checks_base(tangent_vector, _impl)
 
 
 def check_transform_tensor(tensor: torch.Tensor):
@@ -51,36 +57,48 @@ def check_transform_tensor(tensor: torch.Tensor):
 
 
 def check_hat_matrix(matrix: torch.Tensor):
-    if matrix.ndim != 3 or matrix.shape[1:] != (3, 3):
-        raise ValueError("Hat matrices of SO(3) can only be 3x3 matrices")
+    def _impl(t_: torch.Tensor):
+        if t_.ndim != 3 or t_.shape[1:] != (3, 3):
+            raise ValueError("Hat matrices of SO(3) can only be 3x3 matrices")
 
-    if (matrix.transpose(1, 2) + matrix).abs().max().item() > constants._SO3_HAT_EPS[
-        matrix.dtype
-    ]:
-        raise ValueError("Hat matrices of SO(3) can only be skew-symmetric.")
+        if (t_.transpose(1, 2) + t_).abs().max().item() > constants._SO3_HAT_EPS[
+            t_.dtype
+        ]:
+            raise ValueError("Hat matrices of SO(3) can only be skew-symmetric.")
+
+    checks_base(matrix, _impl)
 
 
 def check_unit_quaternion(quaternion: torch.Tensor):
-    if quaternion.ndim != 2 or quaternion.shape[1] != 4:
-        raise ValueError("Quaternions can only be 4-D vectors.")
+    def _impl(t_: torch.Tensor):
+        if t_.ndim != 2 or t_.shape[1] != 4:
+            raise ValueError("Quaternions can only be 4-D vectors.")
 
-    QUANTERNION_EPS = constants._SO3_QUATERNION_EPS[quaternion.dtype]
+        QUANTERNION_EPS = constants._SO3_QUATERNION_EPS[t_.dtype]
 
-    if quaternion.dtype != torch.float64:
-        quaternion = quaternion.double()
+        if t_.dtype != torch.float64:
+            t_ = t_.double()
 
-    if (torch.linalg.norm(quaternion, dim=1) - 1).abs().max().item() >= QUANTERNION_EPS:
-        raise ValueError("Not unit quaternions.")
+        if (torch.linalg.norm(t_, dim=1) - 1).abs().max().item() >= QUANTERNION_EPS:
+            raise ValueError("Not unit quaternions.")
+
+    checks_base(quaternion, _impl)
 
 
 def check_left_act_matrix(matrix: torch.Tensor):
-    if matrix.shape[-2] != 3:
-        raise ValueError("Inconsistent shape for the matrix.")
+    def _impl(t_: torch.Tensor):
+        if t_.shape[-2] != 3:
+            raise ValueError("Inconsistent shape for the matrix.")
+
+    checks_base(matrix, _impl)
 
 
 def check_left_project_matrix(matrix: torch.Tensor):
-    if matrix.shape[-2:] != (3, 3):
-        raise ValueError("Inconsistent shape for the matrix.")
+    def _impl(t_: torch.Tensor):
+        if t_.shape[-2:] != (3, 3):
+            raise ValueError("Inconsistent shape for the matrix.")
+
+    checks_base(matrix, _impl)
 
 
 # -----------------------------------------------------------------------------
@@ -266,27 +284,29 @@ def _jexp_impl(
 
 class Exp(lie_group.UnaryOperator):
     @classmethod
-    def forward(cls, ctx, tangent_vector):
+    def _forward_impl(cls, tangent_vector):
         tangent_vector: torch.Tensor = cast(torch.Tensor, tangent_vector)
         ret = _exp_impl(tangent_vector)
-        ctx.save_for_backward(tangent_vector, ret)
         return ret
+
+    @classmethod
+    def setup_context(cls, ctx, inputs, outputs):
+        # inputs is (tangent_vector, ). outputs is exp_map
+        ctx.save_for_backward(inputs[0], outputs)
 
     @classmethod
     def backward(cls, ctx, grad_output):
         tangent_vector: torch.Tensor = ctx.saved_tensors[0]
         group: torch.Tensor = ctx.saved_tensors[1]
-        if not hasattr(ctx, "jacobians"):
-            ctx.jacobians: torch.Tensor = _jexp_impl(tangent_vector)[0][0]
-        jacs = ctx.jacobians
-        dR = group.transpose(1, 2) @ grad_output
-        grad_input = jacs.transpose(1, 2) @ torch.stack(
+        jacs = _jexp_impl(tangent_vector)[0][0]
+        dR = group.transpose(-2, -1) @ grad_output
+        grad_input = jacs.transpose(-2, -1) @ torch.stack(
             (
-                dR[:, 2, 1] - dR[:, 1, 2],
-                dR[:, 0, 2] - dR[:, 2, 0],
-                dR[:, 1, 0] - dR[:, 0, 1],
+                dR[..., 2, 1] - dR[..., 1, 2],
+                dR[..., 0, 2] - dR[..., 2, 0],
+                dR[..., 1, 0] - dR[..., 0, 1],
             ),
-            dim=1,
+            dim=-1,
         ).view(-1, 3, 1)
         return grad_input.view(-1, 3)
 
@@ -425,20 +445,22 @@ def _jlog_impl(group: torch.Tensor) -> Tuple[List[torch.Tensor], torch.Tensor]:
 
 class Log(lie_group.UnaryOperator):
     @classmethod
-    def forward(cls, ctx, group):
+    def _forward_impl(cls, group):
         group: torch.Tensor = cast(torch.Tensor, group)
         tangent_vector = _log_impl(group)
-        ctx.save_for_backward(tangent_vector, group)
         return tangent_vector
+
+    @classmethod
+    def setup_context(cls, ctx, inputs, outputs):
+        # inputs is (group, ). outputs is tangent_vector
+        ctx.save_for_backward(outputs, inputs[0])
 
     @classmethod
     def backward(cls, ctx, grad_output):
         group: torch.Tensor = ctx.saved_tensors[1]
-        if not hasattr(ctx, "jacobians"):
-            ctx.jacobians: torch.Tensor = 0.5 * _jlog_impl(group)[0][0]
-
+        jacobians = 0.5 * _jlog_impl(group)[0][0]
         temp = _lift_autograd_fn(
-            (ctx.jacobians.transpose(1, 2) @ grad_output.unsqueeze(-1)).squeeze(-1)
+            (jacobians.transpose(-2, -1) @ grad_output.unsqueeze(-1)).squeeze(-1)
         )
         return torch.einsum("nij,n...jk->n...ik", group, temp)
 
@@ -462,7 +484,7 @@ _jadjoint_impl = None
 
 class Adjoint(lie_group.UnaryOperator):
     @classmethod
-    def forward(cls, ctx, group):
+    def _forward_impl(cls, group):
         group: torch.Tensor = cast(torch.Tensor, group)
         return _adjoint_impl(group)
 
@@ -488,7 +510,7 @@ _jinverse_impl = lie_group.JInverseImplFactory(_module)
 
 class Inverse(lie_group.UnaryOperator):
     @classmethod
-    def forward(cls, ctx, group):
+    def _forward_impl(cls, group):
         group: torch.Tensor = cast(torch.Tensor, group)
         return _inverse_impl(group)
 
@@ -507,12 +529,12 @@ _jinverse_autograd_fn = _jinverse_impl
 def _hat_impl(tangent_vector: torch.Tensor) -> torch.Tensor:
     check_tangent_vector(tangent_vector)
     matrix = tangent_vector.new_zeros(tangent_vector.shape[0], 3, 3)
-    matrix[:, 0, 1] = -tangent_vector[:, 2].view(-1)
-    matrix[:, 0, 2] = tangent_vector[:, 1].view(-1)
-    matrix[:, 1, 2] = -tangent_vector[:, 0].view(-1)
-    matrix[:, 1, 0] = tangent_vector[:, 2].view(-1)
-    matrix[:, 2, 0] = -tangent_vector[:, 1].view(-1)
-    matrix[:, 2, 1] = tangent_vector[:, 0].view(-1)
+    matrix[..., 0, 1] = -tangent_vector[..., 2].view(-1)
+    matrix[..., 0, 2] = tangent_vector[..., 1].view(-1)
+    matrix[..., 1, 2] = -tangent_vector[..., 0].view(-1)
+    matrix[..., 1, 0] = tangent_vector[..., 2].view(-1)
+    matrix[..., 2, 0] = -tangent_vector[..., 1].view(-1)
+    matrix[..., 2, 1] = tangent_vector[..., 0].view(-1)
 
     return matrix
 
@@ -523,19 +545,23 @@ _jhat_impl = None
 
 class Hat(lie_group.UnaryOperator):
     @classmethod
-    def forward(cls, ctx, tangent_vector):
+    def _forward_impl(cls, tangent_vector):
         tangent_vector: torch.Tensor = cast(torch.Tensor, tangent_vector)
         ret = _hat_impl(tangent_vector)
         return ret
+
+    @classmethod
+    def setup_context(cls, ctx, inputs, outputs):
+        pass
 
     @classmethod
     def backward(cls, ctx, grad_output):
         grad_output: torch.Tensor = cast(torch.Tensor, grad_output)
         return torch.stack(
             (
-                grad_output[:, 2, 1] - grad_output[:, 1, 2],
-                grad_output[:, 0, 2] - grad_output[:, 2, 0],
-                grad_output[:, 1, 0] - grad_output[:, 0, 1],
+                grad_output[..., 2, 1] - grad_output[..., 1, 2],
+                grad_output[..., 0, 2] - grad_output[..., 2, 0],
+                grad_output[..., 1, 0] - grad_output[..., 0, 1],
             ),
             dim=1,
         )
@@ -566,7 +592,7 @@ _jvee_impl = None
 
 class Vee(lie_group.UnaryOperator):
     @classmethod
-    def forward(cls, ctx, tangent_vector):
+    def _forward_impl(cls, tangent_vector):
         tangent_vector: torch.Tensor = cast(torch.Tensor, tangent_vector)
         ret = _vee_impl(tangent_vector)
         return ret
@@ -606,12 +632,16 @@ def _jcompose_impl(
 
 class Compose(lie_group.BinaryOperator):
     @classmethod
-    def forward(cls, ctx, group0, group1):
+    def _forward_impl(cls, group0, group1):
         group0: torch.Tensor = cast(torch.Tensor, group0)
         group1: torch.Tensor = cast(torch.Tensor, group1)
         ret = _compose_impl(group0, group1)
-        ctx.save_for_backward(group0, group1)
         return ret
+
+    @classmethod
+    def setup_context(cls, ctx, inputs, outputs):
+        # inputs is (group0, group1)
+        ctx.save_for_backward(inputs[0], inputs[1])
 
     @classmethod
     def backward(cls, ctx, grad_output):
@@ -651,12 +681,16 @@ def _jtransform_from_impl(
 
 class TransformFrom(lie_group.BinaryOperator):
     @classmethod
-    def forward(cls, ctx, group, tensor):
+    def _forward_impl(cls, group, tensor):
         group: torch.Tensor = cast(torch.Tensor, group)
         tensor: torch.Tensor = cast(torch.Tensor, tensor)
         ret = _transform_from_impl(group, tensor)
-        ctx.save_for_backward(group, tensor)
         return ret
+
+    @classmethod
+    def setup_context(cls, ctx, inputs, outputs):
+        # inputs is (group, tensor)
+        ctx.save_for_backward(inputs[0], inputs[1])
 
     @classmethod
     def backward(cls, ctx, grad_output):
@@ -759,21 +793,21 @@ def _jquaternion_to_rotation_impl(
 
 class QuaternionToRotation(lie_group.UnaryOperator):
     @classmethod
-    def forward(cls, ctx, quaternion):
+    def _forward_impl(cls, quaternion):
         quaternion: torch.Tensor = cast(torch.Tensor, quaternion)
         ret = _quaternion_to_rotation_impl(quaternion)
-        ctx.save_for_backward(quaternion, ret)
         return ret
+
+    @classmethod
+    def setup_context(cls, ctx, inputs, outputs):
+        # inputs is (quaternion,). outputs is rotation
+        ctx.save_for_backward(inputs[0], outputs)
 
     @classmethod
     def backward(cls, ctx, grad_output):
         quaternion: torch.Tensor = ctx.saved_tensors[0]
         group: torch.Tensor = ctx.saved_tensors[1]
-        if not hasattr(ctx, "jacobians"):
-            ctx.jacobians: torch.Tensor = _jquaternion_to_rotation_impl(quaternion)[0][
-                0
-            ]
-        jacs = ctx.jacobians
+        jacs = _jquaternion_to_rotation_impl(quaternion)[0][0]
         dR = group.transpose(1, 2) @ grad_output
         grad_input = jacs.transpose(1, 2) @ torch.stack(
             (
@@ -814,7 +848,7 @@ _jlift_impl = None
 
 class Lift(lie_group.UnaryOperator):
     @classmethod
-    def forward(cls, ctx, matrix):
+    def _forward_impl(cls, matrix):
         matrix: torch.Tensor = cast(torch.Tensor, matrix)
         ret = _lift_impl(matrix)
         return ret
@@ -852,7 +886,7 @@ _jproject_impl = None
 
 class Project(lie_group.UnaryOperator):
     @classmethod
-    def forward(cls, ctx, matrix):
+    def _forward_impl(cls, matrix):
         matrix: torch.Tensor = cast(torch.Tensor, matrix)
         ret = _project_impl(matrix)
         return ret
@@ -879,12 +913,16 @@ def _left_act_impl(group: torch.Tensor, matrix: torch.Tensor) -> torch.Tensor:
 
 class LeftAct(lie_group.BinaryOperator):
     @classmethod
-    def forward(cls, ctx, group, matrix):
+    def _forward_impl(cls, group, matrix):
         group: torch.Tensor = cast(torch.Tensor, group)
         matrix: torch.Tensor = cast(torch.Tensor, matrix)
         ret = _left_act_impl(group, matrix)
-        ctx.save_for_backward(group, matrix)
         return ret
+
+    @classmethod
+    def setup_context(cls, ctx, inputs, outputs):
+        # inputs is (group, matrix)
+        ctx.save_for_backward(inputs[0], inputs[1])
 
     @classmethod
     def backward(cls, ctx, grad_output):
@@ -910,12 +948,16 @@ _jleft_project_impl = None
 
 class LeftProject(lie_group.BinaryOperator):
     @classmethod
-    def forward(cls, ctx, group, matrix):
+    def _forward_impl(cls, group, matrix):
         group: torch.Tensor = cast(torch.Tensor, group)
         matrix: torch.Tensor = cast(torch.Tensor, matrix)
         ret = _left_project_impl(group, matrix)
-        ctx.save_for_backward(group, matrix)
         return ret
+
+    @classmethod
+    def setup_context(cls, ctx, inputs, outputs):
+        # inputs is (group, matrix)
+        ctx.save_for_backward(inputs[0], inputs[1])
 
     @classmethod
     def backward(cls, ctx, grad_output):

@@ -41,9 +41,25 @@ def LeftProjectImplFactory(module):
 
 
 class UnaryOperator(torch.autograd.Function):
+    generate_vmap_rule = True
+
     @classmethod
     @abc.abstractmethod
-    def forward(cls, ctx, input):
+    def _forward_impl(cls, tensor: torch.Tensor) -> torch.Tensor:
+        pass
+
+    @classmethod
+    def forward(cls, *args):
+        assert len(args) in [1, 2]
+        if len(args) == 1:  # torch >= 2.0, args is (tensor,)
+            output = cls._forward_impl(args[0])
+        else:  # args is (ctx, tensor)
+            output = cls._forward_impl(args[1])
+            cls.setup_context(args[0], (args[1],), output)
+        return output
+
+    @staticmethod
+    def setup_context(ctx, inputs, outputs):
         pass
 
 
@@ -101,9 +117,25 @@ def UnaryOperatorFactory(
 
 
 class BinaryOperator(torch.autograd.Function):
+    generate_vmap_rule = True
+
     @classmethod
     @abc.abstractmethod
-    def forward(cls, ctx, input0, input1):
+    def _forward_impl(cls, input0, input1):
+        pass
+
+    @classmethod
+    def forward(cls, *args):
+        assert len(args) in [2, 3]
+        if len(args) == 2:  # torch >= 2.0, args is (tensor1, tensor2)
+            output = cls._forward_impl(args[0], args[1])
+        else:  # args is (ctx, tensor)
+            output = cls._forward_impl(args[1], args[2])
+            cls.setup_context(args[0], (args[1], args[2]), output)
+        return output
+
+    @classmethod
+    def setup_context(cls, ctx, inputs, outputs):
         pass
 
 

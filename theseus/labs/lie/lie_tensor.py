@@ -156,6 +156,7 @@ class LieTensor(_LieTensorBase):
         torch.Tensor.is_sparse.__get__,  # type: ignore
         torch.Tensor.is_quantized.__get__,  # type: ignore
         torch.Tensor.grad.__get__,  # type: ignore
+        torch.Tensor.grad.__set__,  # type: ignore
         torch.Tensor.layout.__get__,  # type: ignore
         torch.Tensor.requires_grad.__get__,  # type: ignore
         torch.Tensor.retains_grad.__get__,  # type: ignore

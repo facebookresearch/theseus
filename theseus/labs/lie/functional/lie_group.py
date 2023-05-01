@@ -2,12 +2,11 @@
 #
 # This source code is licensed under the MIT license found in the
 # LICENSE file in the root directory of this source tree.
+import abc
+from typing import Any, Callable, List, Tuple, Optional, Protocol
 
 import torch
-import abc
-
 from .constants import DeviceType
-from typing import Callable, List, Tuple, Optional, Protocol
 from .utils import check_jacobians_list
 
 # There are four functions associated with each Lie group operator xxx.
@@ -45,7 +44,7 @@ class UnaryOperator(torch.autograd.Function):
 
     @classmethod
     @abc.abstractmethod
-    def _forward_impl(cls, tensor: torch.Tensor) -> torch.Tensor:
+    def _forward_impl(cls, tensor: torch.Tensor) -> Any:
         pass
 
     @classmethod

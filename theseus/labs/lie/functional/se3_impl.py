@@ -31,11 +31,13 @@ def check_group_tensor(tensor: torch.Tensor):
 
 
 def check_matrix_tensor(tensor: torch.Tensor):
-    with torch.no_grad():
-        if tensor.ndim != 3 or tensor.shape[1:] != (3, 4):
+    def _impl(t_):
+        if t_.ndim != 3 or t_.shape[-2:] != (3, 4):
             raise ValueError(
-                f"SE3 data tensors can only be 3x4 matrices, but got shape {tensor.shape}."
+                f"SE3 data tensors can only be 3x4 matrices, but got shape {t_.shape}."
             )
+
+    checks_base(tensor, _impl)
 
 
 def check_transform_tensor(tensor: torch.Tensor):

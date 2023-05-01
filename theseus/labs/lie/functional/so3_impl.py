@@ -42,9 +42,11 @@ def check_group_tensor(tensor: torch.Tensor):
 
 
 def check_matrix_tensor(tensor: torch.Tensor):
-    with torch.no_grad():
-        if tensor.ndim != 3 or tensor.shape[1:] != (3, 3):
+    def _impl(t_: torch.Tensor):
+        if t_.ndim != 3 or t_.shape[-2:] != (3, 3):
             raise ValueError("Matrix tensors can only be 3x3 matrices.")
+
+    checks_base(tensor, _impl)
 
 
 def check_tangent_vector(tangent_vector: torch.Tensor):
@@ -992,19 +994,26 @@ def _normalize_impl(matrix: torch.Tensor):
     vt = torch.cat(
         (v[:, :, :2], torch.where(sign > 0, v[:, :, 2:], -v[:, :, 2:])), dim=-1
     ).transpose(1, 2)
-    return u @ vt, (u, s, v, sign)
+    return u @ vt, {"u": u, "s": s, "v": v, "sign": sign}
 
 
 class Normalize(lie_group.UnaryOperator):
     @classmethod
-    def forward(cls, ctx, matrix):
+    def _forward_impl(cls, matrix):
         matrix: torch.Tensor = matrix
-        output, (u, s, v, sign) = _normalize_impl(matrix)
-        ctx.save_for_backward(u, s, v, sign)
-        return output
+        output, svd_info = _normalize_impl(matrix)
+        return output, svd_info
+
+    @staticmethod
+    def setup_context(ctx, inputs, outputs):
+        # outputs is (normalized_out, svd_info)
+        svd_info = outputs[1]
+        ctx.save_for_backward(
+            svd_info["u"], svd_info["s"], svd_info["v"], svd_info["sign"]
+        )
 
     @classmethod
-    def backward(cls, ctx, grad_output):
+    def backward(cls, ctx, grad_output, _):
         u, s, v, sign = ctx.saved_tensors
         ut = u.transpose(1, 2)
         vt = v.transpose(1, 2)
@@ -1030,7 +1039,7 @@ class Normalize(lie_group.UnaryOperator):
         ) @ v.transpose(1, 2)
         v_term = torch.einsum("ni, n...ij->n...ij", s, v_term)
         v_term = u @ v_term
-        return u_term + v_term
+        return u_term + v_term, None
 
 
 _normalize_autograd_fn = Normalize.apply

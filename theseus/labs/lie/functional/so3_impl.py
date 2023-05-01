@@ -4,7 +4,6 @@
 # LICENSE file in the root directory of this source tree.
 
 import torch
-import math
 from typing import cast, List, Tuple, Optional
 
 from . import constants
@@ -987,7 +986,7 @@ _jleft_project_autograd_fn = _jleft_project_impl
 # -----------------------------------------------------------------------------
 # Normalize
 # -----------------------------------------------------------------------------
-def _normalize_impl(matrix: torch.Tensor):
+def _normalize_impl_helper(matrix: torch.Tensor):
     check_matrix_tensor(matrix)
     u, s, v = torch.svd(matrix)
     sign = torch.det(u @ v).view(-1, 1, 1)
@@ -997,11 +996,15 @@ def _normalize_impl(matrix: torch.Tensor):
     return u @ vt, {"u": u, "s": s, "v": v, "sign": sign}
 
 
+def _normalize_impl(matrix: torch.Tensor):
+    return _normalize_impl_helper(matrix)[0]
+
+
 class Normalize(lie_group.UnaryOperator):
     @classmethod
     def _forward_impl(cls, matrix):
         matrix: torch.Tensor = matrix
-        output, svd_info = _normalize_impl(matrix)
+        output, svd_info = _normalize_impl_helper(matrix)
         return output, svd_info
 
     @staticmethod
@@ -1027,7 +1030,7 @@ class Normalize(lie_group.UnaryOperator):
         F = s_squared.view(-1, 1, 3).expand(-1, 3, 3) - s_squared.view(-1, 3, 1).expand(
             -1, 3, 3
         )
-        F = torch.where(F == 0, (torch.ones(1) * math.inf).expand(F.shape), F)
+        F = torch.where(F == 0, grad_output.new_ones(1) * torch.inf, F)
         F = F.pow(-1)
 
         u_term: torch.Tensor = u @ (F * (ut @ grad_u - grad_u.transpose(1, 2) @ u))
@@ -1042,7 +1045,10 @@ class Normalize(lie_group.UnaryOperator):
         return u_term + v_term, None
 
 
-_normalize_autograd_fn = Normalize.apply
+def _normalize_autograd_fn(matrix: torch.Tensor):
+    return Normalize.apply(matrix)[0]
+
+
 _jnormalize_autograd_fn = None
 
 

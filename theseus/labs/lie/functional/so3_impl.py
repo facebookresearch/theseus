@@ -35,14 +35,18 @@ def check_group_tensor(tensor: torch.Tensor):
             raise ValueError("Invalid data tensor for SO3.")
 
     if tensor.shape[-2:] != (3, 3):
-        raise ValueError("SO3 data tensors can only be 3x3 matrices.")
+        raise ValueError(
+            f"SO3 data tensors can must have shape (..., 3, 3) but got shape {tensor.shape}."
+        )
 
     checks_base(tensor, _impl)
 
 
 def check_matrix_tensor(tensor: torch.Tensor):
     if tensor.shape[-2:] != (3, 3):
-        raise ValueError("Matrix tensors can only be 3x3 matrices.")
+        raise ValueError(
+            f"SO3 data tensors can must have shape (..., 3, 3) but got shape {tensor.shape}."
+        )
 
 
 def check_tangent_vector(tangent_vector: torch.Tensor):

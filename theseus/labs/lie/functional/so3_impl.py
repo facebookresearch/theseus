@@ -319,8 +319,8 @@ class Exp(lie_group.UnaryOperator):
                 dR[..., 1, 0] - dR[..., 0, 1],
             ),
             dim=-1,
-        ).view(-1, 3, 1)
-        return grad_input.view(-1, 3)
+        ).view(tangent_vector.shape + (1,))
+        return grad_input.view_as(tangent_vector)
 
 
 # TODO: Implement analytic backward for _jexp_impl

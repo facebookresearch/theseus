@@ -313,9 +313,9 @@ class Exp(lie_group.UnaryOperator):
         jacs = _jexp_impl(tangent_vector)[0][0]
         dR = group.transpose(-2, -1) @ grad_output
         shape = (
-            tangent_vector.shape[:-1]
+            tangent_vector.shape[:-2]
             if tangent_vector.shape[-1] == 1
-            else tangent_vector.shape[:-2]
+            else tangent_vector.shape[:-1]
         )
         grad_input = jacs.transpose(-2, -1) @ torch.stack(
             (
@@ -324,7 +324,7 @@ class Exp(lie_group.UnaryOperator):
                 dR[..., 1, 0] - dR[..., 0, 1],
             ),
             dim=-1,
-        ).view(shape + (1,))
+        ).view(shape + (3, 1))
         return grad_input.view_as(tangent_vector)
 
 

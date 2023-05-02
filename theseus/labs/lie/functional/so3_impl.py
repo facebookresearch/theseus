@@ -40,6 +40,14 @@ def check_group_tensor(tensor: torch.Tensor):
     checks_base(tensor, _impl)
 
 
+def check_matrix_tensor(tensor: torch.Tensor):
+    def _impl(t_: torch.Tensor):
+        if t_.ndim != 3 or t_.shape[-2:] != (3, 3):
+            raise ValueError("Matrix tensors can only be 3x3 matrices.")
+
+    checks_base(tensor, _impl)
+
+
 def check_tangent_vector(tangent_vector: torch.Tensor):
     def _impl(t_: torch.Tensor):
         _check = t_.ndim == 3 and t_.shape[1:] == (3, 1)
@@ -973,6 +981,87 @@ class LeftProject(lie_group.BinaryOperator):
 
 _left_project_autograd_fn = LeftProject.apply
 _jleft_project_autograd_fn = _jleft_project_impl
+
+
+# -----------------------------------------------------------------------------
+# Normalize
+# -----------------------------------------------------------------------------
+def _normalize_impl_helper(matrix: torch.Tensor):
+    check_matrix_tensor(matrix)
+    u, s, v = torch.svd(matrix)
+    sign = torch.det(u @ v).view(-1, 1, 1)
+    vt = torch.cat(
+        (v[:, :, :2], torch.where(sign > 0, v[:, :, 2:], -v[:, :, 2:])), dim=-1
+    ).transpose(1, 2)
+    return u @ vt, {"u": u, "s": s, "v": v, "sign": sign}
+
+
+def _normalize_impl(matrix: torch.Tensor) -> torch.Tensor:
+    return _normalize_impl_helper(matrix)[0]
+
+
+def _normalize_backward_helper(
+    u: torch.Tensor,
+    s: torch.Tensor,
+    v: torch.Tensor,
+    sign: torch.Tensor,
+    grad_output: torch.Tensor,
+) -> torch.Tensor:
+    def _skew_symm(matrix: torch.Tensor) -> torch.Tensor:
+        return matrix - matrix.transpose(-1, -2)
+
+    ut = u.transpose(1, 2)
+    vt = v.transpose(1, 2)
+    grad_u: torch.Tensor = grad_output @ torch.cat(
+        (v[:, :, :2], v[:, :, 2:] @ sign), dim=-1
+    )
+    grad_v: torch.Tensor = grad_output.transpose(1, 2) @ torch.cat(
+        (u[:, :, :2], u[:, :, 2:] @ sign), dim=-1
+    )
+    s_squared: torch.Tensor = s.pow(2)
+    F = s_squared.view(-1, 1, 3).expand(-1, 3, 3) - s_squared.view(-1, 3, 1).expand(
+        -1, 3, 3
+    )
+    F = torch.where(F == 0, grad_output.new_ones(1) * torch.inf, F)
+    F = F.pow(-1)
+
+    u_term: torch.Tensor = u @ (F * _skew_symm(ut @ grad_u))
+    u_term = torch.einsum("n...ij, nj->n...ij", u_term, s)
+    u_term = u_term @ vt
+
+    v_term: torch.Tensor = (F * _skew_symm(vt @ grad_v)) @ vt
+    v_term = torch.einsum("ni, n...ij->n...ij", s, v_term)
+    v_term = u @ v_term
+
+    return u_term + v_term
+
+
+class Normalize(lie_group.UnaryOperator):
+    @classmethod
+    def _forward_impl(cls, matrix):
+        matrix: torch.Tensor = matrix
+        output, svd_info = _normalize_impl_helper(matrix)
+        return output, svd_info
+
+    @staticmethod
+    def setup_context(ctx, inputs, outputs):
+        # outputs is (normalized_out, svd_info)
+        svd_info = outputs[1]
+        ctx.save_for_backward(
+            svd_info["u"], svd_info["s"], svd_info["v"], svd_info["sign"]
+        )
+
+    @classmethod
+    def backward(cls, ctx, grad_output, _):
+        u, s, v, sign = ctx.saved_tensors
+        return _normalize_backward_helper(u, s, v, sign, grad_output), None
+
+
+def _normalize_autograd_fn(matrix: torch.Tensor):
+    return Normalize.apply(matrix)[0]
+
+
+_jnormalize_autograd_fn = None
 
 
 _fns = lie_group.LieGroupFns(_module)

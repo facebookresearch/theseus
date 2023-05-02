@@ -30,6 +30,16 @@ def check_group_tensor(tensor: torch.Tensor):
     checks_base(tensor, _impl)
 
 
+def check_matrix_tensor(tensor: torch.Tensor):
+    def _impl(t_):
+        if t_.ndim != 3 or t_.shape[-2:] != (3, 4):
+            raise ValueError(
+                f"SE3 data tensors can only be 3x4 matrices, but got shape {t_.shape}."
+            )
+
+    checks_base(tensor, _impl)
+
+
 def check_transform_tensor(tensor: torch.Tensor):
     SO3.check_transform_tensor(tensor)
 
@@ -1064,5 +1074,52 @@ _left_project_autograd_fn = LeftProject.apply
 _jleft_project_autograd_fn = _jleft_project_impl
 
 left_project, jleft_project = lie_group.BinaryOperatorFactory(_module, "left_project")
+
+
+# -----------------------------------------------------------------------------
+# Normalize
+# -----------------------------------------------------------------------------
+def _normalize_impl(matrix: torch.Tensor) -> torch.Tensor:
+    check_matrix_tensor(matrix)
+    rotation = SO3._normalize_impl_helper(matrix[..., :, :3])[0]
+    translation = matrix[..., :, 3:]
+    return torch.cat((rotation, translation), dim=-1)
+
+
+class Normalize(lie_group.UnaryOperator):
+    @classmethod
+    def _forward_impl(cls, matrix):
+        check_matrix_tensor(matrix)
+        matrix: torch.Tensor = matrix
+        rotation, svd_info = SO3._normalize_impl_helper(matrix[..., :, :3])
+        translation = matrix[..., :, 3:]
+        output = torch.cat((rotation, translation), dim=-1)
+        return output, svd_info
+
+    @staticmethod
+    def setup_context(ctx, inputs, outputs):
+        # outputs is (normalized_out, svd_info)
+        svd_info = outputs[1]
+        ctx.save_for_backward(
+            svd_info["u"], svd_info["s"], svd_info["v"], svd_info["sign"]
+        )
+
+    @classmethod
+    def backward(cls, ctx, grad_output, _):
+        u, s, v, sign = ctx.saved_tensors
+        grad_input1 = SO3._normalize_backward_helper(
+            u, s, v, sign, grad_output[..., :, :3]
+        )
+        grad_input2 = grad_output[..., :, 3:]
+        grad_input = torch.cat((grad_input1, grad_input2), dim=-1)
+        return grad_input, None
+
+
+def _normalize_autograd_fn(matrix: torch.Tensor):
+    return Normalize.apply(matrix)[0]
+
+
+_jnormalize_autograd_fn = None
+
 
 _fns = lie_group.LieGroupFns(_module)

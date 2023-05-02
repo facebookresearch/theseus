@@ -21,7 +21,7 @@ _module = get_module(__name__)
 
 def check_group_tensor(tensor: torch.Tensor):
     def _impl(t_: torch.Tensor):
-        SO3.check_group_tensor(t_[:, :, :3])
+        SO3.check_group_tensor(t_[..., :3])
 
     if tensor.shape[-2:] != (3, 4):
         raise ValueError(
@@ -54,13 +54,13 @@ def check_tangent_vector(tangent_vector: torch.Tensor):
 
 def check_hat_matrix(matrix: torch.Tensor):
     def _impl(t_: torch.Tensor):
-        if t_[:, -1].abs().max() > constants._SE3_NEAR_ZERO_EPS[t_.dtype]:
+        if t_[..., -1].abs().max() > constants._SE3_NEAR_ZERO_EPS[t_.dtype]:
             raise ValueError("The last row for hat matrices of SE(3) must be zero")
 
-        SO3.check_hat_matrix(t_[:, :3, :3])
+        SO3.check_hat_matrix(t_[..., :3, :3])
 
     if matrix.shape[-2:] != (4, 4):
-        raise ValueError("Hat matrices of SE(3) can only be 3x4 matrices")
+        raise ValueError("Hat matrices of SE(3) can only be 4x4 matrices")
 
     checks_base(matrix, _impl)
 

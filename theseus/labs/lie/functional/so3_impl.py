@@ -545,13 +545,16 @@ _jinverse_autograd_fn = _jinverse_impl
 # -----------------------------------------------------------------------------
 def _hat_impl(tangent_vector: torch.Tensor) -> torch.Tensor:
     check_tangent_vector(tangent_vector)
-    matrix = tangent_vector.new_zeros(tangent_vector.shape[0], 3, 3)
-    matrix[..., 0, 1] = -tangent_vector[..., 2].view(-1)
-    matrix[..., 0, 2] = tangent_vector[..., 1].view(-1)
-    matrix[..., 1, 2] = -tangent_vector[..., 0].view(-1)
-    matrix[..., 1, 0] = tangent_vector[..., 2].view(-1)
-    matrix[..., 2, 0] = -tangent_vector[..., 1].view(-1)
-    matrix[..., 2, 1] = tangent_vector[..., 0].view(-1)
+    if tangent_vector.shape[-1] == 1:
+        tangent_vector = tangent_vector.squeeze(-1)
+    batch = tangent_vector.shape[:-1]
+    matrix = tangent_vector.new_zeros(batch + (3, 3))
+    matrix[..., 0, 1] = -tangent_vector[..., 2]
+    matrix[..., 0, 2] = tangent_vector[..., 1]
+    matrix[..., 1, 2] = -tangent_vector[..., 0]
+    matrix[..., 1, 0] = tangent_vector[..., 2]
+    matrix[..., 2, 0] = -tangent_vector[..., 1]
+    matrix[..., 2, 1] = tangent_vector[..., 0]
 
     return matrix
 
@@ -569,19 +572,21 @@ class Hat(lie_group.UnaryOperator):
 
     @classmethod
     def setup_context(cls, ctx, inputs, outputs):
-        pass
+        # inputs is (tangent_vector, )
+        ctx.save_for_backward(inputs[0])
 
     @classmethod
     def backward(cls, ctx, grad_output):
         grad_output: torch.Tensor = cast(torch.Tensor, grad_output)
+        tangent_vector: torch.Tensor = ctx.saved_tensors[0]
         return torch.stack(
             (
                 grad_output[..., 2, 1] - grad_output[..., 1, 2],
                 grad_output[..., 0, 2] - grad_output[..., 2, 0],
                 grad_output[..., 1, 0] - grad_output[..., 0, 1],
             ),
-            dim=1,
-        )
+            dim=-1,
+        ).view_as(tangent_vector)
 
 
 _hat_autograd_fn = Hat.apply

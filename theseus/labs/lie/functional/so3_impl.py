@@ -60,7 +60,7 @@ def check_transform_tensor(tensor: torch.Tensor):
 
 def check_hat_matrix(matrix: torch.Tensor):
     def _impl(t_: torch.Tensor):
-        if (t_.transpose(1, 2) + t_).abs().max().item() > constants._SO3_HAT_EPS[
+        if (t_.transpose(-1, -2) + t_).abs().max().item() > constants._SO3_HAT_EPS[
             t_.dtype
         ]:
             raise ValueError("Hat matrices of SO(3) can only be skew-symmetric.")

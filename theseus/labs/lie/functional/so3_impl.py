@@ -199,7 +199,7 @@ def _exp_impl(tangent_vector: torch.Tensor) -> torch.Tensor:
     check_tangent_vector(tangent_vector)
     if tangent_vector.shape[-1] == 1:
         tangent_vector = tangent_vector.squeeze(-1)
-    theta = torch.linalg.norm(tangent_vector, dim=-1, keepdim=True).unsqueeze(1)
+    theta = torch.linalg.norm(tangent_vector, dim=-1, keepdim=True).unsqueeze(-1)
     theta2 = theta**2
     # Compute the approximations when theta ~ 0
     near_zero = theta < constants._SO3_NEAR_ZERO_EPS[tangent_vector.dtype]
@@ -221,10 +221,10 @@ def _exp_impl(tangent_vector: torch.Tensor) -> torch.Tensor:
         @ tangent_vector.view(shape + (1, 3))
     )
 
-    ret[..., 0, 0] += cosine.view(shape + (1,))
-    ret[..., 1, 1] += cosine.view(shape + (1,))
-    ret[..., 2, 2] += cosine.view(shape + (1,))
-    sine_axis = sine_by_theta.view(-1, 1) * tangent_vector
+    ret[..., 0, 0] += cosine.view(shape)
+    ret[..., 1, 1] += cosine.view(shape)
+    ret[..., 2, 2] += cosine.view(shape)
+    sine_axis = sine_by_theta.view(shape + (1,)) * tangent_vector
     ret[..., 0, 1] -= sine_axis[..., 2]
     ret[..., 1, 0] += sine_axis[..., 2]
     ret[..., 0, 2] += sine_axis[..., 1]

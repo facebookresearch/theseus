@@ -20,9 +20,6 @@ _module = get_module(__name__)
 
 
 def check_group_tensor(tensor: torch.Tensor):
-    if tensor.shape[-2:] != (3, 3):
-        raise ValueError("SO3 data tensors can only be 3x3 matrices.")
-
     def _impl(t_):
         MATRIX_EPS = constants._SO3_MATRIX_EPS[t_.dtype]
         if t_.dtype != torch.float64:
@@ -36,6 +33,9 @@ def check_group_tensor(tensor: torch.Tensor):
 
         if not _check:
             raise ValueError("Invalid data tensor for SO3.")
+
+    if tensor.shape[-2:] != (3, 3):
+        raise ValueError("SO3 data tensors can only be 3x3 matrices.")
 
     checks_base(tensor, _impl)
 
@@ -59,22 +59,19 @@ def check_transform_tensor(tensor: torch.Tensor):
 
 
 def check_hat_matrix(matrix: torch.Tensor):
-    if matrix.shape[-2:] != (3, 3):
-        raise ValueError("Hat matrices of SO(3) can only be 3x3 matrices")
-
     def _impl(t_: torch.Tensor):
         if (t_.transpose(1, 2) + t_).abs().max().item() > constants._SO3_HAT_EPS[
             t_.dtype
         ]:
             raise ValueError("Hat matrices of SO(3) can only be skew-symmetric.")
 
+    if matrix.shape[-2:] != (3, 3):
+        raise ValueError("Hat matrices of SO(3) can only be 3x3 matrices")
+
     checks_base(matrix, _impl)
 
 
 def check_unit_quaternion(quaternion: torch.Tensor):
-    if quaternion.shape[-1] != 4:
-        raise ValueError("Quaternions can only be 4-D vectors.")
-
     def _impl(t_: torch.Tensor):
         QUANTERNION_EPS = constants._SO3_QUATERNION_EPS[t_.dtype]
 
@@ -83,6 +80,9 @@ def check_unit_quaternion(quaternion: torch.Tensor):
 
         if (torch.linalg.norm(t_, dim=-1) - 1).abs().max().item() >= QUANTERNION_EPS:
             raise ValueError("Not unit quaternions.")
+
+    if quaternion.shape[-1] != 4:
+        raise ValueError("Quaternions can only be 4-D vectors.")
 
     checks_base(quaternion, _impl)
 

@@ -220,7 +220,6 @@ def _exp_impl(tangent_vector: torch.Tensor) -> torch.Tensor:
         * tangent_vector.view(shape + (3, 1))
         @ tangent_vector.view(shape + (1, 3))
     )
-
     ret[..., 0, 0] += cosine.view(shape)
     ret[..., 1, 1] += cosine.view(shape)
     ret[..., 2, 2] += cosine.view(shape)
@@ -239,12 +238,13 @@ def _jexp_impl(
     tangent_vector: torch.Tensor,
 ) -> Tuple[List[torch.Tensor], torch.Tensor]:
     check_tangent_vector(tangent_vector)
-    tangent_vector = tangent_vector.view(-1, 3)
-    theta = torch.linalg.norm(tangent_vector, dim=1, keepdim=True).unsqueeze(1)
+    if tangent_vector.shape[-1] == 1:
+        tangent_vector = tangent_vector.squeeze(-1)
+    theta = torch.linalg.norm(tangent_vector, dim=-1, keepdim=True).unsqueeze(-1)
     theta2 = theta**2
     # Compute the approximations when theta ~ 0
     near_zero = theta < constants._SO3_NEAR_ZERO_EPS[tangent_vector.dtype]
-    non_zero = torch.ones(1, dtype=tangent_vector.dtype, device=tangent_vector.device)
+    non_zero = tangent_vector.new_ones(1)
     theta_nz = torch.where(near_zero, non_zero, theta)
     theta2_nz = torch.where(near_zero, non_zero, theta2)
     sine = theta.sin()
@@ -259,36 +259,37 @@ def _jexp_impl(
         near_zero, torch.zeros_like(theta), (theta - sine) / theta3_nz
     )
 
+    shape = tangent_vector.shape[:-1]
     ret = (
         one_minus_cosine_by_theta2
-        * tangent_vector.view(-1, 3, 1)
-        @ tangent_vector.view(-1, 1, 3)
+        * tangent_vector.view(shape + (3, 1))
+        @ tangent_vector.view(shape + (1, 3))
     )
-    ret[:, 0, 0] += cosine.view(-1)
-    ret[:, 1, 1] += cosine.view(-1)
-    ret[:, 2, 2] += cosine.view(-1)
-    sine_axis = sine_by_theta.view(-1, 1) * tangent_vector
-    ret[:, 0, 1] -= sine_axis[:, 2]
-    ret[:, 1, 0] += sine_axis[:, 2]
-    ret[:, 0, 2] += sine_axis[:, 1]
-    ret[:, 2, 0] -= sine_axis[:, 1]
-    ret[:, 1, 2] -= sine_axis[:, 0]
-    ret[:, 2, 1] += sine_axis[:, 0]
+    ret[..., 0, 0] += cosine.view(shape)
+    ret[..., 1, 1] += cosine.view(shape)
+    ret[..., 2, 2] += cosine.view(shape)
+    sine_axis = sine_by_theta.view(shape + (1,)) * tangent_vector
+    ret[..., 0, 1] -= sine_axis[..., 2]
+    ret[..., 1, 0] += sine_axis[..., 2]
+    ret[..., 0, 2] += sine_axis[..., 1]
+    ret[..., 2, 0] -= sine_axis[..., 1]
+    ret[..., 1, 2] -= sine_axis[..., 0]
+    ret[..., 2, 1] += sine_axis[..., 0]
 
     jac = (
         theta_minus_sine_by_theta3
-        * tangent_vector.view(-1, 3, 1)
-        @ tangent_vector.view(-1, 1, 3)
+        * tangent_vector.view(shape + (3, 1))
+        @ tangent_vector.view(shape + (1, 3))
     )
-    diag_jac = jac.diagonal(dim1=1, dim2=2)
-    diag_jac += sine_by_theta.view(-1, 1)
-    jac_temp = one_minus_cosine_by_theta2.view(-1, 1) * tangent_vector
-    jac[:, 0, 1] += jac_temp[:, 2]
-    jac[:, 1, 0] -= jac_temp[:, 2]
-    jac[:, 0, 2] -= jac_temp[:, 1]
-    jac[:, 2, 0] += jac_temp[:, 1]
-    jac[:, 1, 2] += jac_temp[:, 0]
-    jac[:, 2, 1] -= jac_temp[:, 0]
+    diag_jac = jac.diagonal(dim1=-1, dim2=-2)
+    diag_jac += sine_by_theta.view(shape + (1,))
+    jac_temp = one_minus_cosine_by_theta2.view(shape + (1,)) * tangent_vector
+    jac[..., 0, 1] += jac_temp[..., 2]
+    jac[..., 1, 0] -= jac_temp[..., 2]
+    jac[..., 0, 2] -= jac_temp[..., 1]
+    jac[..., 2, 0] += jac_temp[..., 1]
+    jac[..., 1, 2] += jac_temp[..., 0]
+    jac[..., 2, 1] -= jac_temp[..., 0]
 
     return [jac], ret
 

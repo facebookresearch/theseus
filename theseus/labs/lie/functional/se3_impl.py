@@ -47,7 +47,7 @@ def check_tangent_vector(tangent_vector: torch.Tensor):
     _check |= tangent_vector.shape[-1] == 6
     if not _check:
         raise ValueError(
-            f"Tangent vectors of SE3 should be 6-D vectors, "
+            f"Tangent vectors of SE3 must have shape (..., 6) or (..., 6, 1), "
             f"but got shape {tangent_vector.shape}."
         )
 
@@ -55,12 +55,15 @@ def check_tangent_vector(tangent_vector: torch.Tensor):
 def check_hat_matrix(matrix: torch.Tensor):
     def _impl(t_: torch.Tensor):
         if t_[..., -1].abs().max() > constants._SE3_NEAR_ZERO_EPS[t_.dtype]:
-            raise ValueError("The last row for hat matrices of SE(3) must be zero")
+            raise ValueError("The last row for hat matrices of SE3 must be zero")
 
         SO3.check_hat_matrix(t_[..., :3, :3])
 
     if matrix.shape[-2:] != (4, 4):
-        raise ValueError("Hat matrices of SE(3) can only be 4x4 matrices")
+        raise ValueError(
+            f"Hat matrices of SE3 must have shape (..., 4, 4), "
+            f"but got shape {matrix.shape}."
+        )
 
     checks_base(matrix, _impl)
 

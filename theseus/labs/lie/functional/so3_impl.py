@@ -53,7 +53,10 @@ def check_tangent_vector(tangent_vector: torch.Tensor):
     _check = tangent_vector.shape[-2:] == (3, 1)
     _check |= tangent_vector.shape[-1] == 3
     if not _check:
-        raise ValueError("Tangent vectors of SO3 should be 3-D vectors.")
+        raise ValueError(
+            f"Tangent vectors of SO3 must have shape (..., 3) or (..., 3, 1), "
+            f"but got shape {tangent_vector.shape}."
+        )
 
 
 def check_transform_tensor(tensor: torch.Tensor):
@@ -67,10 +70,13 @@ def check_hat_matrix(matrix: torch.Tensor):
         if (t_.transpose(-1, -2) + t_).abs().max().item() > constants._SO3_HAT_EPS[
             t_.dtype
         ]:
-            raise ValueError("Hat matrices of SO(3) can only be skew-symmetric.")
+            raise ValueError("Hat matrices of SO3 can only be skew-symmetric.")
 
     if matrix.shape[-2:] != (3, 3):
-        raise ValueError("Hat matrices of SO(3) can only be 3x3 matrices")
+        raise ValueError(
+            f"Hat matrices of SO3 must have shape (..., 3, 3), "
+            f"but got shape {matrix.shape}."
+        )
 
     checks_base(matrix, _impl)
 
@@ -86,6 +92,10 @@ def check_unit_quaternion(quaternion: torch.Tensor):
             raise ValueError("Not unit quaternions.")
 
     if quaternion.shape[-1] != 4:
+        raise ValueError(
+            f"Quaternions must have shape (..., 4), "
+            f"but got shape {quaternion.shape}."
+        )
         raise ValueError("Quaternions can only be 4-D vectors.")
 
     checks_base(quaternion, _impl)

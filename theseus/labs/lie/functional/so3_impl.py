@@ -1029,7 +1029,7 @@ def _normalize_backward_helper(
     u_term = torch.einsum("n...ij, nj->n...ij", u_term, s)
     u_term = u_term @ vt
 
-    v_term: torch.Tensor = (F * _skew_symm(vt @ grad_v)) @ v.transpose(1, 2)
+    v_term: torch.Tensor = (F * _skew_symm(vt @ grad_v)) @ vt
     v_term = torch.einsum("ni, n...ij->n...ij", s, v_term)
     v_term = u @ v_term
 

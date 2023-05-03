@@ -111,10 +111,11 @@ class NonlinearOptimizer(Optimizer, abc.ABC):
         if err.abs().mean() < self.params.abs_err_tolerance:
             return torch.ones_like(err).bool()
 
-        abs_error = (last_err - err).abs()
-        rel_error = abs_error / last_err
-        return (abs_error < self.params.abs_err_tolerance).logical_or(
-            rel_error < self.params.rel_err_tolerance
+        err_change = last_err - err
+        abs_err_change = err_change.abs()
+        rel_err_change = (err_change / last_err).abs()
+        return (abs_err_change < self.params.abs_err_tolerance).logical_or(
+            rel_err_change < self.params.rel_err_tolerance
         )
 
     def _maybe_init_best_solution(

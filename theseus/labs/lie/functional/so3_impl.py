@@ -963,10 +963,11 @@ _jleft_project_autograd_fn = _jleft_project_impl
 # -----------------------------------------------------------------------------
 def _normalize_impl_helper(matrix: torch.Tensor):
     check_matrix_tensor(matrix)
+    size = matrix.shape[:-2]
     u, s, v = torch.svd(matrix)
-    sign = torch.det(u @ v).view(-1, 1, 1)
+    sign = torch.det(u @ v).view(size + (1, 1))
     vt = torch.cat(
-        (v[:, :, :2], torch.where(sign > 0, v[:, :, 2:], -v[:, :, 2:])), dim=-1
+        (v[..., :2], torch.where(sign > 0, v[..., 2:], -v[..., 2:])), dim=-1
     ).transpose(1, 2)
     return u @ vt, {"u": u, "s": s, "v": v, "sign": sign}
 
@@ -985,18 +986,19 @@ def _normalize_backward_helper(
     def _skew_symm(matrix: torch.Tensor) -> torch.Tensor:
         return matrix - matrix.transpose(-1, -2)
 
-    ut = u.transpose(1, 2)
-    vt = v.transpose(1, 2)
+    size = u.shape[:-2]
+    ut = u.transpose(-1, -2)
+    vt = v.transpose(-1, -2)
     grad_u: torch.Tensor = grad_output @ torch.cat(
-        (v[:, :, :2], v[:, :, 2:] @ sign), dim=-1
+        (v[..., :2], v[..., 2:] @ sign), dim=-1
     )
-    grad_v: torch.Tensor = grad_output.transpose(1, 2) @ torch.cat(
-        (u[:, :, :2], u[:, :, 2:] @ sign), dim=-1
+    grad_v: torch.Tensor = grad_output.transpose(-1, -2) @ torch.cat(
+        (u[..., :2], u[..., 2:] @ sign), dim=-1
     )
     s_squared: torch.Tensor = s.pow(2)
-    F = s_squared.view(-1, 1, 3).expand(-1, 3, 3) - s_squared.view(-1, 3, 1).expand(
-        -1, 3, 3
-    )
+    F = s_squared.view(size + (1, 3)).expand(size + (3, 3)) - s_squared.view(
+        size + (3, 1)
+    ).expand(size + (3, 3))
     F = torch.where(F == 0, grad_output.new_ones(1) * torch.inf, F)
     F = F.pow(-1)
 

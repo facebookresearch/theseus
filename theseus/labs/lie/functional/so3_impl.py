@@ -736,11 +736,11 @@ def _quaternion_to_rotation_impl(quaternion: torch.Tensor) -> torch.Tensor:
         quaternion = quaternion.unsqueeze(0)
     check_unit_quaternion(quaternion)
 
-    quaternion = quaternion / torch.norm(quaternion, dim=1, keepdim=True)
-    w = quaternion[:, 0]
-    x = quaternion[:, 1]
-    y = quaternion[:, 2]
-    z = quaternion[:, 3]
+    quaternion = quaternion / torch.norm(quaternion, dim=-1, keepdim=True)
+    w = quaternion[..., 0]
+    x = quaternion[..., 1]
+    y = quaternion[..., 2]
+    z = quaternion[..., 3]
 
     q00 = w * w
     q01 = w * x
@@ -753,16 +753,17 @@ def _quaternion_to_rotation_impl(quaternion: torch.Tensor) -> torch.Tensor:
     q23 = y * z
     q33 = z * z
 
-    ret = quaternion.new_zeros(quaternion.shape[0], 3, 3)
-    ret[:, 0, 0] = q00 + q11 - q22 - q33
-    ret[:, 0, 1] = 2 * (q12 - q03)
-    ret[:, 0, 2] = 2 * (q13 + q02)
-    ret[:, 1, 0] = 2 * (q12 + q03)
-    ret[:, 1, 1] = q00 - q11 + q22 - q33
-    ret[:, 1, 2] = 2 * (q23 - q01)
-    ret[:, 2, 0] = 2 * (q13 - q02)
-    ret[:, 2, 1] = 2 * (q23 + q01)
-    ret[:, 2, 2] = q00 - q11 - q22 + q33
+    batch = quaternion.shape[:-1]
+    ret = quaternion.new_zeros(batch + (3, 3))
+    ret[..., 0, 0] = q00 + q11 - q22 - q33
+    ret[..., 0, 1] = 2 * (q12 - q03)
+    ret[..., 0, 2] = 2 * (q13 + q02)
+    ret[..., 1, 0] = 2 * (q12 + q03)
+    ret[..., 1, 1] = q00 - q11 + q22 - q33
+    ret[..., 1, 2] = 2 * (q23 - q01)
+    ret[..., 2, 0] = 2 * (q13 - q02)
+    ret[..., 2, 1] = 2 * (q23 + q01)
+    ret[..., 2, 2] = q00 - q11 - q22 + q33
     return ret
 
 
@@ -773,12 +774,12 @@ def _jquaternion_to_rotation_impl(
         quaternion = quaternion.unsqueeze(0)
     check_unit_quaternion(quaternion)
 
-    quaternion_norm = torch.norm(quaternion, dim=1, keepdim=True)
+    quaternion_norm = torch.norm(quaternion, dim=-1, keepdim=True)
     quaternion = quaternion / quaternion_norm
-    w = quaternion[:, 0]
-    x = quaternion[:, 1]
-    y = quaternion[:, 2]
-    z = quaternion[:, 3]
+    w = quaternion[..., 0]
+    x = quaternion[..., 1]
+    y = quaternion[..., 2]
+    z = quaternion[..., 3]
 
     q00 = w * w
     q01 = w * x
@@ -791,24 +792,25 @@ def _jquaternion_to_rotation_impl(
     q23 = y * z
     q33 = z * z
 
-    ret = quaternion.new_zeros(quaternion.shape[0], 3, 3)
-    ret[:, 0, 0] = q00 + q11 - q22 - q33
-    ret[:, 0, 1] = 2 * (q12 - q03)
-    ret[:, 0, 2] = 2 * (q13 + q02)
-    ret[:, 1, 0] = 2 * (q12 + q03)
-    ret[:, 1, 1] = q00 - q11 + q22 - q33
-    ret[:, 1, 2] = 2 * (q23 - q01)
-    ret[:, 2, 0] = 2 * (q13 - q02)
-    ret[:, 2, 1] = 2 * (q23 + q01)
-    ret[:, 2, 2] = q00 - q11 - q22 + q33
+    batch = quaternion.shape[:-1]
+    ret = quaternion.new_zeros(batch + (3, 3))
+    ret[..., 0, 0] = q00 + q11 - q22 - q33
+    ret[..., 0, 1] = 2 * (q12 - q03)
+    ret[..., 0, 2] = 2 * (q13 + q02)
+    ret[..., 1, 0] = 2 * (q12 + q03)
+    ret[..., 1, 1] = q00 - q11 + q22 - q33
+    ret[..., 1, 2] = 2 * (q23 - q01)
+    ret[..., 2, 0] = 2 * (q13 - q02)
+    ret[..., 2, 1] = 2 * (q23 + q01)
+    ret[..., 2, 2] = q00 - q11 - q22 + q33
 
     temp = -2 * quaternion / quaternion_norm
-    jac = quaternion.new_zeros(quaternion.shape[0], 3, 4)
-    jac[:, :, :1] = temp[:, 1:].view(-1, 3, 1)
-    jac[:, :, 1:] = _hat_autograd_fn(temp[:, 1:])
-    jac[:, 0, 1] = -temp[:, 0]
-    jac[:, 1, 2] = -temp[:, 0]
-    jac[:, 2, 3] = -temp[:, 0]
+    jac = quaternion.new_zeros(batch + (3, 4))
+    jac[..., :, :1] = temp[..., 1:].view(batch + (3, 1))
+    jac[..., :, 1:] = _hat_autograd_fn(temp[..., 1:])
+    jac[..., 0, 1] = -temp[..., 0]
+    jac[..., 1, 2] = -temp[..., 0]
+    jac[..., 2, 3] = -temp[..., 0]
 
     return [jac], ret
 
@@ -830,16 +832,17 @@ class QuaternionToRotation(lie_group.UnaryOperator):
         quaternion: torch.Tensor = ctx.saved_tensors[0]
         group: torch.Tensor = ctx.saved_tensors[1]
         jacs = _jquaternion_to_rotation_impl(quaternion)[0][0]
-        dR = group.transpose(1, 2) @ grad_output
-        grad_input = jacs.transpose(1, 2) @ torch.stack(
+        dR = group.transpose(-1, -2) @ grad_output
+        batch = quaternion.shape[:-1]
+        grad_input = jacs.transpose(-1, -2) @ torch.stack(
             (
-                dR[:, 2, 1] - dR[:, 1, 2],
-                dR[:, 0, 2] - dR[:, 2, 0],
-                dR[:, 1, 0] - dR[:, 0, 1],
+                dR[..., 2, 1] - dR[..., 1, 2],
+                dR[..., 0, 2] - dR[..., 2, 0],
+                dR[..., 1, 0] - dR[..., 0, 1],
             ),
-            dim=1,
-        ).view(-1, 3, 1)
-        return grad_input.view(-1, 4)
+            dim=-1,
+        ).view(batch + (3, 1))
+        return grad_input.view_as(quaternion)
 
 
 _quaternion_to_rotation_autograd_fn = QuaternionToRotation.apply

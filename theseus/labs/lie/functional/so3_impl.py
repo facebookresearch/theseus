@@ -323,8 +323,7 @@ _jexp_autograd_fn = _jexp_impl
 # -----------------------------------------------------------------------------
 # Logarithm Map
 # -----------------------------------------------------------------------------
-def _log_impl(group: torch.Tensor) -> torch.Tensor:
-    check_group_tensor(group)
+def _log_impl_helper(group: torch.Tensor):
     size = group.shape[:-2]
     sine_axis = group.new_zeros(size + (3,))
     sine_axis[..., 0] = 0.5 * (group[..., 2, 1] - group[..., 1, 2])
@@ -372,58 +371,22 @@ def _log_impl(group: torch.Tensor) -> torch.Tensor:
         near_pi.view(size + (1,)), axis * (theta * sign).view(size + (1,)), ret
     )
 
+    return tangent_vector, (theta, sine, cosine)
+
+
+def _log_impl(group: torch.Tensor) -> torch.Tensor:
+    check_group_tensor(group)
+    tangent_vector, _ = _log_impl_helper(group)
     return tangent_vector
 
 
 def _jlog_impl(group: torch.Tensor) -> Tuple[List[torch.Tensor], torch.Tensor]:
     check_group_tensor(group)
+    tangent_vector, (theta, sine, cosine) = _log_impl_helper(group)
     size = group.shape[:-2]
-    sine_axis = group.new_zeros(size + (3,))
-    sine_axis[..., 0] = 0.5 * (group[..., 2, 1] - group[..., 1, 2])
-    sine_axis[..., 1] = 0.5 * (group[..., 0, 2] - group[..., 2, 0])
-    sine_axis[..., 2] = 0.5 * (group[..., 1, 0] - group[..., 0, 1])
-    cosine = 0.5 * (group[..., 0, 0] + group[..., 1, 1] + group[..., 2, 2] - 1)
-    sine = sine_axis.norm(dim=-1)
-    theta = torch.atan2(sine, cosine)
 
     near_zero = theta < constants._SO3_NEAR_ZERO_EPS[group.dtype]
-
-    near_pi = 1 + cosine <= constants._SO3_NEAR_PI_EPS[group.dtype]
-    # theta != pi
-    near_zero_or_near_pi = torch.logical_or(near_zero, near_pi)
-    # Compute the approximation of theta / sin(theta) when theta is near to 0
     non_zero = group.new_ones(1)
-    sine_nz = torch.where(near_zero_or_near_pi, non_zero, sine)
-    scale = torch.where(
-        near_zero_or_near_pi,
-        1 + sine**2 / 6,
-        theta / sine_nz,
-    )
-    ret = sine_axis * scale.view(size + (1,))
-
-    # # theta ~ pi
-    ddiag = torch.diagonal(group, dim1=-2, dim2=-1)
-    # Find the index of major coloumns and diagonals
-    major = torch.logical_and(
-        ddiag[..., 1] > ddiag[..., 0], ddiag[..., 1] > ddiag[..., 2]
-    ) + 2 * torch.logical_and(
-        ddiag[..., 2] > ddiag[..., 0], ddiag[..., 2] > ddiag[..., 1]
-    )
-    major = major.view(-1)
-    aux = torch.ones(size, dtype=torch.bool)
-    sel_rows = 0.5 * (group[aux, major] + group[aux, :, major]).view(size + (3,))
-    sel_rows[aux, major] -= cosine.view(-1)
-    axis = sel_rows / torch.where(
-        near_zero,
-        non_zero,
-        sel_rows.norm(dim=-1),
-    ).view(size + (1,))
-    sign_tmp = sine_axis[aux, major].sign().view(size)
-    sign = torch.where(sign_tmp != 0, sign_tmp, torch.ones_like(sign_tmp))
-    tangent_vector = torch.where(
-        near_pi.view(size + (1,)), axis * (theta * sign).view(size + (1,)), ret
-    )
-
     theta2 = theta**2
     sine_theta = sine * theta
     two_cosine_minus_two = 2 * cosine - 2

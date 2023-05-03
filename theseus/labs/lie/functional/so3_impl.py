@@ -240,6 +240,29 @@ def _exp_impl(tangent_vector: torch.Tensor) -> torch.Tensor:
     return ret
 
 
+def _jexp_impl_helper(
+    tangent_vector: torch.Tensor,
+    sine_by_theta: torch.Tensor,
+    one_minus_cosine_by_theta2: torch.Tensor,
+    theta_minus_sine_by_theta3: torch.Tensor,
+):
+    size = tangent_vector.shape[:-1]
+    jac = theta_minus_sine_by_theta3 * (
+        tangent_vector.view(size + (3, 1)) @ tangent_vector.view(size + (1, 3))
+    )
+    diag_jac = jac.diagonal(dim1=-1, dim2=-2)
+    diag_jac += sine_by_theta.view(size + (1,))
+    jac_temp = one_minus_cosine_by_theta2.view(size + (1,)) * tangent_vector
+    jac[..., 0, 1] += jac_temp[..., 2]
+    jac[..., 1, 0] -= jac_temp[..., 2]
+    jac[..., 0, 2] -= jac_temp[..., 1]
+    jac[..., 2, 0] += jac_temp[..., 1]
+    jac[..., 1, 2] += jac_temp[..., 0]
+    jac[..., 2, 1] -= jac_temp[..., 0]
+
+    return jac, (None,)
+
+
 def _jexp_impl(
     tangent_vector: torch.Tensor,
 ) -> Tuple[List[torch.Tensor], torch.Tensor]:
@@ -256,27 +279,18 @@ def _jexp_impl(
         sine_by_theta,
         one_minus_cosine_by_theta2,
     ) = _exp_impl_helper(tangent_vector)
-    theta3_nz = theta_nz * theta2_nz
 
     near_zero = theta < constants._SO3_NEAR_ZERO_EPS[tangent_vector.dtype]
-    size = tangent_vector.shape[:-1]
+    theta3_nz = theta_nz * theta2_nz
     theta_minus_sine_by_theta3 = torch.where(
         near_zero, torch.zeros_like(theta), (theta - sine) / theta3_nz
     )
-    jac = (
-        theta_minus_sine_by_theta3
-        * tangent_vector.view(size + (3, 1))
-        @ tangent_vector.view(size + (1, 3))
+    jac, _ = _jexp_impl_helper(
+        tangent_vector,
+        sine_by_theta,
+        one_minus_cosine_by_theta2,
+        theta_minus_sine_by_theta3,
     )
-    diag_jac = jac.diagonal(dim1=-1, dim2=-2)
-    diag_jac += sine_by_theta.view(size + (1,))
-    jac_temp = one_minus_cosine_by_theta2.view(size + (1,)) * tangent_vector
-    jac[..., 0, 1] += jac_temp[..., 2]
-    jac[..., 1, 0] -= jac_temp[..., 2]
-    jac[..., 0, 2] -= jac_temp[..., 1]
-    jac[..., 2, 0] += jac_temp[..., 1]
-    jac[..., 1, 2] += jac_temp[..., 0]
-    jac[..., 2, 1] -= jac_temp[..., 0]
 
     return [jac], ret
 

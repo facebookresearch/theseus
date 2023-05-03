@@ -587,6 +587,7 @@ class Adjoint(lie_group.UnaryOperator):
     @classmethod
     def backward(cls, ctx, grad_output):
         group: torch.Tensor = ctx.saved_tensors[0]
+        size = group.shape[:-2]
         grad_input_rot = (
             grad_output[..., :3, :3]
             + grad_output[..., 3:, 3:]
@@ -594,7 +595,7 @@ class Adjoint(lie_group.UnaryOperator):
         )
         grad_input_t = SO3._project_impl(
             grad_output[..., :3, 3:] @ group[..., :3].transpose(-2, -1)
-        ).view(-1, 3, 1)
+        ).view(*size, 3, 1)
 
         return torch.cat((grad_input_rot, grad_input_t), dim=-1)
 

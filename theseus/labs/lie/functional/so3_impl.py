@@ -982,7 +982,7 @@ def _normalize_impl_helper(matrix: torch.Tensor):
     sign = torch.det(u @ v).view(size + (1, 1))
     vt = torch.cat(
         (v[..., :2], torch.where(sign > 0, v[..., 2:], -v[..., 2:])), dim=-1
-    ).transpose(1, 2)
+    ).transpose(-1, -2)
     return u @ vt, {"u": u, "s": s, "v": v, "sign": sign}
 
 
@@ -1017,11 +1017,11 @@ def _normalize_backward_helper(
     F = F.pow(-1)
 
     u_term: torch.Tensor = u @ (F * _skew_symm(ut @ grad_u))
-    u_term = torch.einsum("n...ij, nj->n...ij", u_term, s)
+    u_term = torch.einsum("n...ij, n...j->n...ij", u_term, s)
     u_term = u_term @ vt
 
     v_term: torch.Tensor = (F * _skew_symm(vt @ grad_v)) @ vt
-    v_term = torch.einsum("ni, n...ij->n...ij", s, v_term)
+    v_term = torch.einsum("n...i, n...ij->n...ij", s, v_term)
     v_term = u @ v_term
 
     return u_term + v_term

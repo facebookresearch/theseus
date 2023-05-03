@@ -856,8 +856,8 @@ _jtransform_from_autograd_fn = _jtransform_from_impl
 def _lift_impl(matrix: torch.Tensor) -> torch.Tensor:
     check_lift_matrix(matrix)
     ret = matrix.new_zeros(matrix.shape[:-1] + (3, 4))
-    ret[..., :, :3] = SO3._lift_impl(matrix[..., 3:])
-    ret[..., :, 3] = matrix[..., :3]
+    ret[..., :3] = SO3._lift_impl(matrix[..., 3:])
+    ret[..., 3] = matrix[..., :3]
 
     return ret
 
@@ -1023,8 +1023,8 @@ left_project, jleft_project = lie_group.BinaryOperatorFactory(_module, "left_pro
 # -----------------------------------------------------------------------------
 def _normalize_impl(matrix: torch.Tensor) -> torch.Tensor:
     check_matrix_tensor(matrix)
-    rotation = SO3._normalize_impl_helper(matrix[..., :, :3])[0]
-    translation = matrix[..., :, 3:]
+    rotation = SO3._normalize_impl_helper(matrix[..., :3])[0]
+    translation = matrix[..., 3:]
     return torch.cat((rotation, translation), dim=-1)
 
 
@@ -1033,8 +1033,8 @@ class Normalize(lie_group.UnaryOperator):
     def _forward_impl(cls, matrix):
         check_matrix_tensor(matrix)
         matrix: torch.Tensor = matrix
-        rotation, svd_info = SO3._normalize_impl_helper(matrix[..., :, :3])
-        translation = matrix[..., :, 3:]
+        rotation, svd_info = SO3._normalize_impl_helper(matrix[..., :3])
+        translation = matrix[..., 3:]
         output = torch.cat((rotation, translation), dim=-1)
         return output, svd_info
 
@@ -1050,9 +1050,9 @@ class Normalize(lie_group.UnaryOperator):
     def backward(cls, ctx, grad_output, _):
         u, s, v, sign = ctx.saved_tensors
         grad_input1 = SO3._normalize_backward_helper(
-            u, s, v, sign, grad_output[..., :, :3]
+            u, s, v, sign, grad_output[..., :3]
         )
-        grad_input2 = grad_output[..., :, 3:]
+        grad_input2 = grad_output[..., 3:]
         grad_input = torch.cat((grad_input1, grad_input2), dim=-1)
         return grad_input, None
 

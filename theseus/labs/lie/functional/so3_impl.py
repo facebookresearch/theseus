@@ -477,7 +477,7 @@ _jadjoint_autograd_fn = None
 # -----------------------------------------------------------------------------
 def _inverse_impl(group: torch.Tensor) -> torch.Tensor:
     check_group_tensor(group)
-    return group.transpose(1, 2)
+    return group.transpose(-1, -2)
 
 
 _jinverse_impl = lie_group.JInverseImplFactory(_module)
@@ -491,7 +491,7 @@ class Inverse(lie_group.UnaryOperator):
 
     @classmethod
     def backward(cls, ctx, grad_output):
-        return grad_output.transpose(1, 2)
+        return grad_output.transpose(-1, -2)
 
 
 _inverse_autograd_fn = Inverse.apply

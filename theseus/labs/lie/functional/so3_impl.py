@@ -121,11 +121,8 @@ def rand(
 ) -> torch.Tensor:
     # Reference:
     # https://web.archive.org/web/20211105205926/http://planning.cs.uiuc.edu/node198.html
-    if len(size) != 1:
-        raise ValueError("The size should be 1D.")
     u = torch.rand(
-        3,
-        size[0],
+        (3,) + size,
         generator=generator,
         dtype=dtype,
         device=device,
@@ -142,9 +139,9 @@ def rand(
             b * torch.sin(u3),
             b * torch.cos(u3),
         ],
-        dim=1,
+        dim=-1,
     )
-    assert quaternion.shape == (size[0], 4)
+    assert quaternion.shape == size + (4,)
     ret = _quaternion_to_rotation_autograd_fn(quaternion)
     ret.requires_grad_(requires_grad)
     return ret
@@ -160,13 +157,10 @@ def randn(
     device: constants.DeviceType = None,
     requires_grad: bool = False,
 ) -> torch.Tensor:
-    if len(size) != 1:
-        raise ValueError("The size should be 1D.")
     ret = _exp_autograd_fn(
         constants.PI
         * torch.randn(
-            size[0],
-            3,
+            size + (3,),
             generator=generator,
             dtype=dtype,
             device=device,
@@ -185,9 +179,7 @@ def identity(
     device: constants.DeviceType = None,
     requires_grad: bool = False,
 ) -> torch.Tensor:
-    if len(size) != 1:
-        raise ValueError("The size should be 1D.")
-    ret = torch.eye(3, device=device, dtype=dtype).repeat(size[0], 1, 1)
+    ret = torch.eye(3, device=device, dtype=dtype).repeat(size + (1, 1))
     ret.requires_grad_(requires_grad)
     return ret
 

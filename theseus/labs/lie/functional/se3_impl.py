@@ -645,10 +645,15 @@ _jinverse_autograd_fn = _jinverse_impl
 # -----------------------------------------------------------------------------
 def _hat_impl(tangent_vector: torch.Tensor) -> torch.Tensor:
     check_tangent_vector(tangent_vector)
-    tangent_vector = tangent_vector.view(-1, 6)
-    matrix = tangent_vector.new_zeros(tangent_vector.shape[0], 4, 4)
-    matrix[:, :3, :3] = SO3._hat_impl(tangent_vector[:, 3:])
-    matrix[:, :3, 3] = tangent_vector[:, :3]
+    size = (
+        tangent_vector.shape[:-2]
+        if tangent_vector.shape[-1] == 1
+        else tangent_vector.shape[:-1]
+    )
+    tangent_vector = tangent_vector.view(*size, 6)
+    matrix = tangent_vector.new_zeros(*size, 4, 4)
+    matrix[..., :3, :3] = SO3._hat_impl(tangent_vector[..., 3:])
+    matrix[..., :3, 3] = tangent_vector[..., :3]
 
     return matrix
 
@@ -666,22 +671,24 @@ class Hat(lie_group.UnaryOperator):
 
     @classmethod
     def setup_context(cls, ctx, inputs, outputs):
-        pass
+        # inputs is (tangent_vector, )
+        ctx.save_for_backward(inputs[0])
 
     @classmethod
     def backward(cls, ctx, grad_output):
         grad_output: torch.Tensor = cast(torch.Tensor, grad_output)
+        tangent_vector: torch.Tensor = ctx.saved_tensors[0]
         return torch.stack(
             (
-                grad_output[:, 0, 3],
-                grad_output[:, 1, 3],
-                grad_output[:, 2, 3],
-                grad_output[:, 2, 1] - grad_output[:, 1, 2],
-                grad_output[:, 0, 2] - grad_output[:, 2, 0],
-                grad_output[:, 1, 0] - grad_output[:, 0, 1],
+                grad_output[..., 0, 3],
+                grad_output[..., 1, 3],
+                grad_output[..., 2, 3],
+                grad_output[..., 2, 1] - grad_output[..., 1, 2],
+                grad_output[..., 0, 2] - grad_output[..., 2, 0],
+                grad_output[..., 1, 0] - grad_output[..., 0, 1],
             ),
-            dim=1,
-        )
+            dim=-1,
+        ).view_as(tangent_vector)
 
 
 _hat_autograd_fn = Hat.apply

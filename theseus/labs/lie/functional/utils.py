@@ -18,3 +18,7 @@ def get_module(module_name):
 
 def get_cls_module(cls):
     return get_module(cls.__module__)
+
+
+def shape_err_msg(data_type: str, expected_shape: str, tensor_shape: torch.Size) -> str:
+    return f"{data_type} must have shape {expected_shape} but got shape {tensor_shape}."

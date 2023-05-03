@@ -25,7 +25,7 @@ def check_group_tensor(tensor: torch.Tensor):
 
     if tensor.shape[-2:] != (3, 4):
         raise ValueError(
-            f"SE3 data tensors can must have shape (..., 3, 4) but got shape {tensor.shape}."
+            f"SE3 data tensors must have shape (..., 3, 4) but got shape {tensor.shape}."
         )
 
     checks_base(tensor, _impl)
@@ -34,7 +34,7 @@ def check_group_tensor(tensor: torch.Tensor):
 def check_matrix_tensor(tensor: torch.Tensor):
     if tensor.shape[-2:] != (3, 4):
         raise ValueError(
-            f"SE3 data tensors can must have shape (..., 3, 4) but got shape {tensor.shape}."
+            f"SE3 data tensors must have shape (..., 3, 4) but got shape {tensor.shape}."
         )
 
 
@@ -47,7 +47,7 @@ def check_tangent_vector(tangent_vector: torch.Tensor):
     _check |= tangent_vector.shape[-1] == 6
     if not _check:
         raise ValueError(
-            f"Tangent vectors of SE3 must have shape (..., 6) or (..., 6, 1), "
+            f"Tangent vectors of SE3 must have shape (..., 6) or (..., 6, 1) "
             f"but got shape {tangent_vector.shape}."
         )
 
@@ -61,8 +61,7 @@ def check_hat_matrix(matrix: torch.Tensor):
 
     if matrix.shape[-2:] != (4, 4):
         raise ValueError(
-            f"Hat matrices of SE3 must have shape (..., 4, 4), "
-            f"but got shape {matrix.shape}."
+            f"Hat matrices of SE3 must have shape (..., 4, 4) but got shape {matrix.shape}."
         )
 
     checks_base(matrix, _impl)

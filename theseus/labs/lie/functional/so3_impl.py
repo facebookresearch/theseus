@@ -36,7 +36,7 @@ def check_group_tensor(tensor: torch.Tensor):
 
     if tensor.shape[-2:] != (3, 3):
         raise ValueError(
-            f"SO3 data tensors can must have shape (..., 3, 3) but got shape {tensor.shape}."
+            f"SO3 data tensors must have shape (..., 3, 3) but got shape {tensor.shape}."
         )
 
     checks_base(tensor, _impl)
@@ -45,7 +45,7 @@ def check_group_tensor(tensor: torch.Tensor):
 def check_matrix_tensor(tensor: torch.Tensor):
     if tensor.shape[-2:] != (3, 3):
         raise ValueError(
-            f"SO3 data tensors can must have shape (..., 3, 3) but got shape {tensor.shape}."
+            f"SO3 data tensors must have shape (..., 3, 3) but got shape {tensor.shape}."
         )
 
 
@@ -54,7 +54,7 @@ def check_tangent_vector(tangent_vector: torch.Tensor):
     _check |= tangent_vector.shape[-1] == 3
     if not _check:
         raise ValueError(
-            f"Tangent vectors of SO3 must have shape (..., 3) or (..., 3, 1), "
+            f"Tangent vectors of SO3 must have shape (..., 3) or (..., 3, 1) "
             f"but got shape {tangent_vector.shape}."
         )
 
@@ -74,8 +74,7 @@ def check_hat_matrix(matrix: torch.Tensor):
 
     if matrix.shape[-2:] != (3, 3):
         raise ValueError(
-            f"Hat matrices of SO3 must have shape (..., 3, 3), "
-            f"but got shape {matrix.shape}."
+            f"Hat matrices of SO3 must have shape (..., 3, 3) but got shape {matrix.shape}."
         )
 
     checks_base(matrix, _impl)
@@ -93,10 +92,8 @@ def check_unit_quaternion(quaternion: torch.Tensor):
 
     if quaternion.shape[-1] != 4:
         raise ValueError(
-            f"Quaternions must have shape (..., 4), "
-            f"but got shape {quaternion.shape}."
+            f"Quaternions must have shape (..., 4) but got shape {quaternion.shape}."
         )
-        raise ValueError("Quaternions can only be 4-D vectors.")
 
     checks_base(quaternion, _impl)
 

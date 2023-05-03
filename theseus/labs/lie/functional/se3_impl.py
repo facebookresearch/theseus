@@ -157,7 +157,7 @@ def identity(
 # -----------------------------------------------------------------------------
 def _exp_impl_helper(tangent_vector: torch.Tensor):
     size = tangent_vector.shape[:-1]
-    ret = tangent_vector.new_zeros((size + (3, 4)))
+    ret = tangent_vector.new_zeros(*size, 3, 4)
 
     # Compute the rotation
     ret[..., :3], (
@@ -172,8 +172,8 @@ def _exp_impl_helper(tangent_vector: torch.Tensor):
     ) = SO3._exp_impl_helper(tangent_vector[..., 3:])
 
     # Compute the translation
-    tangent_vector_lin = tangent_vector[..., :3].view(size + (3, 1))
-    tangent_vector_ang = tangent_vector[..., 3:].view(size + (3, 1))
+    tangent_vector_lin = tangent_vector[..., :3].view(*size, 3, 1)
+    tangent_vector_ang = tangent_vector[..., 3:].view(*size, 3, 1)
     near_zero = theta < constants._SO3_NEAR_ZERO_EPS[tangent_vector.dtype]
     theta3_nz = theta_nz * theta2_nz
     theta_minus_sine_by_theta3_t = torch.where(
@@ -213,7 +213,7 @@ def _jexp_impl_helper(
     theta_minus_sine_by_theta3_rot: torch.Tensor,
 ):
     size = tangent_vector.shape[:-1]
-    jac = tangent_vector.new_zeros(size + (6, 6))
+    jac = tangent_vector.new_zeros(*size, 6, 6)
 
     # compute rotation jacobians
     jac[..., :3, :3], _ = SO3._jexp_impl_helper(
@@ -243,20 +243,20 @@ def _jexp_impl_helper(
     v = tangent_vector[..., :3]
     wv = w.cross(v, dim=-1)
     wwv = w.cross(wv, dim=-1)
-    sw = theta_minus_sine_by_theta3_t.view(size + (1,)) * w
+    sw = theta_minus_sine_by_theta3_t.view(*size, 1) * w
 
     jac_temp_t = (
-        d_one_minus_cosine_by_theta2.view(size + (1,)) * wv
-        + d_theta_minus_sine_by_theta3.view(size + (1,)) * wwv
-    ).view(size + (3, 1)) @ w.view(size + (1, 3))
-    jac_temp_t -= v.view(size + (3, 1)) @ sw.view(size + (1, 3))
+        d_one_minus_cosine_by_theta2.view(*size, 1) * wv
+        + d_theta_minus_sine_by_theta3.view(*size, 1) * wwv
+    ).view(*size, 3, 1) @ w.view(*size, 1, 3)
+    jac_temp_t -= v.view(*size, 3, 1) @ sw.view(*size, 1, 3)
     jac_temp_v = (
-        -one_minus_cosine_by_theta2.view(size + (1,)) * v
-        - theta_minus_sine_by_theta3_t.view(size + (1,)) * wv
+        -one_minus_cosine_by_theta2.view(*size, 1) * v
+        - theta_minus_sine_by_theta3_t.view(*size, 1) * wv
     )
     jac_temp_t += SO3._hat_autograd_fn(jac_temp_v)
     diag_jac_t = torch.diagonal(jac_temp_t, dim1=-1, dim2=-2)
-    diag_jac_t += (sw.view(size + (1, 3)) @ v.view(size + (3, 1))).view(size + (1,))
+    diag_jac_t += (sw.view(*size, 1, 3) @ v.view(*size, 3, 1)).view(*size, 1)
 
     jac[..., :3, 3:] = rotation.transpose(-1, -2) @ jac_temp_t
 
@@ -562,10 +562,11 @@ _jlog_autograd_fn = _jlog_impl
 # -----------------------------------------------------------------------------
 def _adjoint_impl(group: torch.Tensor) -> torch.Tensor:
     check_group_tensor(group)
-    ret = group.new_zeros(group.shape[0], 6, 6)
-    ret[:, :3, :3] = group[:, :3, :3]
-    ret[:, 3:, 3:] = group[:, :3, :3]
-    ret[:, :3, 3:] = SO3._hat_impl(group[:, :3, 3]) @ group[:, :3, :3]
+    size = group.shape[:-2]
+    ret = group.new_zeros(*size, 6, 6)
+    ret[..., :3, :3] = group[..., :3, :3]
+    ret[..., 3:, 3:] = group[..., :3, :3]
+    ret[..., :3, 3:] = SO3._hat_impl(group[..., :3, 3]) @ group[..., :3, :3]
     return ret
 
 

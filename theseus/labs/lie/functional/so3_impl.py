@@ -214,16 +214,16 @@ def _exp_impl(tangent_vector: torch.Tensor) -> torch.Tensor:
         near_zero, 0.5 * sine_by_theta, (1 - cosine) / theta2_nz
     )
 
-    shape = tangent_vector.shape[:-1]
+    batch = tangent_vector.shape[:-1]
     ret = (
         one_minus_cosine_by_theta2
-        * tangent_vector.view(shape + (3, 1))
-        @ tangent_vector.view(shape + (1, 3))
+        * tangent_vector.view(batch + (3, 1))
+        @ tangent_vector.view(batch + (1, 3))
     )
-    ret[..., 0, 0] += cosine.view(shape)
-    ret[..., 1, 1] += cosine.view(shape)
-    ret[..., 2, 2] += cosine.view(shape)
-    sine_axis = sine_by_theta.view(shape + (1,)) * tangent_vector
+    ret[..., 0, 0] += cosine.view(batch)
+    ret[..., 1, 1] += cosine.view(batch)
+    ret[..., 2, 2] += cosine.view(batch)
+    sine_axis = sine_by_theta.view(batch + (1,)) * tangent_vector
     ret[..., 0, 1] -= sine_axis[..., 2]
     ret[..., 1, 0] += sine_axis[..., 2]
     ret[..., 0, 2] += sine_axis[..., 1]
@@ -259,16 +259,16 @@ def _jexp_impl(
         near_zero, torch.zeros_like(theta), (theta - sine) / theta3_nz
     )
 
-    shape = tangent_vector.shape[:-1]
+    batch = tangent_vector.shape[:-1]
     ret = (
         one_minus_cosine_by_theta2
-        * tangent_vector.view(shape + (3, 1))
-        @ tangent_vector.view(shape + (1, 3))
+        * tangent_vector.view(batch + (3, 1))
+        @ tangent_vector.view(batch + (1, 3))
     )
-    ret[..., 0, 0] += cosine.view(shape)
-    ret[..., 1, 1] += cosine.view(shape)
-    ret[..., 2, 2] += cosine.view(shape)
-    sine_axis = sine_by_theta.view(shape + (1,)) * tangent_vector
+    ret[..., 0, 0] += cosine.view(batch)
+    ret[..., 1, 1] += cosine.view(batch)
+    ret[..., 2, 2] += cosine.view(batch)
+    sine_axis = sine_by_theta.view(batch + (1,)) * tangent_vector
     ret[..., 0, 1] -= sine_axis[..., 2]
     ret[..., 1, 0] += sine_axis[..., 2]
     ret[..., 0, 2] += sine_axis[..., 1]
@@ -278,12 +278,12 @@ def _jexp_impl(
 
     jac = (
         theta_minus_sine_by_theta3
-        * tangent_vector.view(shape + (3, 1))
-        @ tangent_vector.view(shape + (1, 3))
+        * tangent_vector.view(batch + (3, 1))
+        @ tangent_vector.view(batch + (1, 3))
     )
     diag_jac = jac.diagonal(dim1=-1, dim2=-2)
-    diag_jac += sine_by_theta.view(shape + (1,))
-    jac_temp = one_minus_cosine_by_theta2.view(shape + (1,)) * tangent_vector
+    diag_jac += sine_by_theta.view(batch + (1,))
+    jac_temp = one_minus_cosine_by_theta2.view(batch + (1,)) * tangent_vector
     jac[..., 0, 1] += jac_temp[..., 2]
     jac[..., 1, 0] -= jac_temp[..., 2]
     jac[..., 0, 2] -= jac_temp[..., 1]
@@ -312,7 +312,7 @@ class Exp(lie_group.UnaryOperator):
         group: torch.Tensor = ctx.saved_tensors[1]
         jacs = _jexp_impl(tangent_vector)[0][0]
         dR = group.transpose(-2, -1) @ grad_output
-        shape = (
+        batch = (
             tangent_vector.shape[:-2]
             if tangent_vector.shape[-1] == 1
             else tangent_vector.shape[:-1]
@@ -324,7 +324,7 @@ class Exp(lie_group.UnaryOperator):
                 dR[..., 1, 0] - dR[..., 0, 1],
             ),
             dim=-1,
-        ).view(shape + (3, 1))
+        ).view(batch + (3, 1))
         return grad_input.view_as(tangent_vector)
 
 

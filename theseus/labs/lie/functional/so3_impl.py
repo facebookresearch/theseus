@@ -558,9 +558,9 @@ def _vee_impl(matrix: torch.Tensor) -> torch.Tensor:
     check_hat_matrix(matrix)
     return 0.5 * torch.stack(
         (
-            matrix[:, 2, 1] - matrix[:, 1, 2],
-            matrix[:, 0, 2] - matrix[:, 2, 0],
-            matrix[:, 1, 0] - matrix[:, 0, 1],
+            matrix[..., 2, 1] - matrix[..., 1, 2],
+            matrix[..., 0, 2] - matrix[..., 2, 0],
+            matrix[..., 1, 0] - matrix[..., 0, 1],
         ),
         dim=1,
     )

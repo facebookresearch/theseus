@@ -9,7 +9,7 @@ from typing import cast, List, Tuple, Optional
 from . import constants
 from . import lie_group, so3_impl as SO3
 from .check_contexts import checks_base
-from .utils import get_module
+from .utils import get_module, shape_err_msg
 
 
 NAME: str = "SE3"
@@ -24,18 +24,14 @@ def check_group_tensor(tensor: torch.Tensor):
         SO3.check_group_tensor(t_[..., :3])
 
     if tensor.shape[-2:] != (3, 4):
-        raise ValueError(
-            f"SE3 data tensors must have shape (..., 3, 4) but got shape {tensor.shape}."
-        )
+        raise ValueError(shape_err_msg("SE3 data tensors", "(..., 3, 4)", tensor.shape))
 
     checks_base(tensor, _impl)
 
 
 def check_matrix_tensor(tensor: torch.Tensor):
     if tensor.shape[-2:] != (3, 4):
-        raise ValueError(
-            f"SE3 data tensors must have shape (..., 3, 4) but got shape {tensor.shape}."
-        )
+        raise ValueError(shape_err_msg("SE3 data tensors", "(..., 3, 4)", tensor.shape))
 
 
 def check_transform_tensor(tensor: torch.Tensor):
@@ -47,8 +43,11 @@ def check_tangent_vector(tangent_vector: torch.Tensor):
     _check |= tangent_vector.shape[-1] == 6
     if not _check:
         raise ValueError(
-            f"Tangent vectors of SE3 must have shape (..., 6) or (..., 6, 1) "
-            f"but got shape {tangent_vector.shape}."
+            shape_err_msg(
+                "Tangent vectors of SE3",
+                "(..., 6) or (..., 6, 1)",
+                tangent_vector.shape,
+            )
         )
 
 
@@ -61,7 +60,7 @@ def check_hat_matrix(matrix: torch.Tensor):
 
     if matrix.shape[-2:] != (4, 4):
         raise ValueError(
-            f"Hat matrices of SE3 must have shape (..., 4, 4) but got shape {matrix.shape}."
+            shape_err_msg("Hat matrices of SE3", "(..., 4, 4)", matrix.shape)
         )
 
     checks_base(matrix, _impl)
@@ -69,22 +68,30 @@ def check_hat_matrix(matrix: torch.Tensor):
 
 def check_lift_matrix(matrix: torch.Tensor):
     if not matrix.shape[-1] == 6:
-        raise ValueError("Inconsistent shape for the matrix to lift.")
+        raise ValueError(
+            shape_err_msg("Lifted matrices of SE3", "(..., 6)", matrix.shape)
+        )
 
 
 def check_project_matrix(matrix: torch.Tensor):
     if not matrix.shape[-2:] == (3, 4):
-        raise ValueError("Inconsistent shape for the matrix to project.")
+        raise ValueError(
+            shape_err_msg("Projected matrices of SE3", "(..., 3, 4)", matrix.shape)
+        )
 
 
 def check_left_act_matrix(matrix: torch.Tensor):
     if matrix.shape[-2] != 3:
-        raise ValueError("Inconsistent shape for the matrix.")
+        raise ValueError(
+            shape_err_msg("Left acted matrices of SE3", "(..., 3, -1)", matrix.shape)
+        )
 
 
 def check_left_project_matrix(matrix: torch.Tensor):
     if matrix.shape[-2:] != (3, 4):
-        raise ValueError("Inconsistent shape for the matrix.")
+        raise ValueError(
+            shape_err_msg("Left projected matrices of SE3", "(..., 3, 4)", matrix.shape)
+        )
 
 
 # -----------------------------------------------------------------------------

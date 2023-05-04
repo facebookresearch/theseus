@@ -41,9 +41,13 @@ from .variable import Variable
 #       by `weighted_error()` and **NOT** the one returned by
 #       `weighted_jacobians_error()`.
 #
-# Finally, since we apply the weight before the robust loss, we adopt the convention
+# Since we apply the weight before the robust loss, we adopt the convention
 # that `robust_cost_fn.jacobians() == robust_cost_fn.weighted_jacobians_error()`, and
 # `robust_cost_fn.error() == robust_cost_fn.weighed_error()`.
+#
+# The flag `flatten_dims` can be used to apply the loss to each dimension of the error
+# as if it was a separate error term (for example, if one writes a regression problem
+# as a single CostFunction with each dimension being a residual term).
 class RobustCostFunction(CostFunction):
     _EPS = 1e-20
 
@@ -116,7 +120,7 @@ class RobustCostFunction(CostFunction):
         if self.flatten_dims:
             weighted_error = weighted_error.reshape(-1, 1)
             for i, wj in enumerate(weighted_jacobians):
-                weighted_jacobians[i] = wj.diagonal(dim1=1, dim2=2).reshape(-1, 1, 1)
+                weighted_jacobians[i] = wj.view(-1, 1, wj.shape[2])
         squared_norm = torch.sum(weighted_error**2, dim=1, keepdim=True)
         rescale = (
             self.loss.linearize(squared_norm, self.log_loss_radius.tensor)
@@ -129,7 +133,7 @@ class RobustCostFunction(CostFunction):
         rescaled_error = rescale * weighted_error
         if self.flatten_dims:
             return [
-                rj.reshape(-1, self.dim()).diag_embed() for rj in rescaled_jacobians
+                rj.reshape(-1, self.dim(), rj.shape[2]) for rj in rescaled_jacobians
             ], rescaled_error.reshape(-1, self.dim())
         return rescaled_jacobians, rescaled_error
 

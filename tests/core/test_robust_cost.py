@@ -138,37 +138,75 @@ def test_mask_jacobians(loss_cls):
         torch.testing.assert_close(j1, j2)
 
 
+def _data_model(a, b, x):
+    return a * x.square() + b
+
+
+def _generate_data(num_points=100, a=1, b=0.5, noise_factor=0.01):
+    data_x = torch.rand((1, num_points))
+    noise = torch.randn((1, num_points)) * noise_factor
+    return data_x, _data_model(a, b, data_x) + noise
+
+
 @pytest.mark.parametrize("batch_size", [1, 4])
 def test_flatten_dims(batch_size):
+    # This creates two objectives for a regression problem
+    # and compares their linearization
+    #   - Obj1: N 1d robust costs functions each evaluating one residual term
+    #   - Obj2: 1 Nd robust cost function that evaluates all residuals at once
+    # Data for regression problem y ~ Normal(Ax^2 + B, sigma)
     n = 10
+    data_x, data_y = _generate_data(num_points=n)
+    data_y[:, :5] = 1000  # include some extreme outliers for robust cost
+
+    # optimization variables are of type Vector with 1 degree of freedom (dof)
+    a = th.Vector(1, name="a")
+    b = th.Vector(1, name="b")
+
+    def residual_fn(optim_vars, aux_vars):
+        a, b = optim_vars
+        x, y = aux_vars
+        return y.tensor - (a.tensor * x.tensor.square() + b.tensor)
+
     w = th.ScaleCostWeight(0.5)
     log_loss_radius = th.as_variable(0.5)
 
     # First create an objective with individual cost functions per error term
     xs = [th.Vector(1, name=f"x{i}") for i in range(n)]
-    ts = [th.Vector(1, name=f"t{i}") for i in range(n)]
+    ys = [th.Vector(1, name=f"y{i}") for i in range(n)]
     obj_unrolled = th.Objective()
     for i in range(n):
         obj_unrolled.add(
             th.RobustCostFunction(
-                th.Difference(xs[i], ts[i], w, name=f"cf{i}"),
+                th.AutoDiffCostFunction(
+                    (a, b), residual_fn, 1, aux_vars=(xs[i], ys[i]), cost_weight=w
+                ),
                 th.HuberLoss,
                 log_loss_radius,
                 name=f"rcf{i}",
             )
         )
     lin_unrolled = th.DenseLinearization(obj_unrolled)
-    th_inputs = {f"x{i}": torch.ones(batch_size, 1) * (i + 1) for i in range(n)}
+    th_inputs = {f"x{i}": data_x[:, i].view(1, 1) for i in range(data_x.shape[1])}
+    th_inputs.update({f"y{i}": data_y[:, i].view(1, 1) for i in range(data_y.shape[1])})
+    th_inputs.update(
+        {
+            "a": torch.rand((batch_size, 1)),
+            "b": torch.rand((batch_size, 1)),
+        }
+    )
     obj_unrolled.update(th_inputs)
     lin_unrolled.linearize()
 
     # Now one with a single vectorized cost function, and flatten_dims=True
     xb = th.Vector(n, name="xb")
-    tb = th.Vector(n, name="tb")
+    yb = th.Vector(n, name="yb")
     obj_flattened = th.Objective()
     obj_flattened.add(
         th.RobustCostFunction(
-            th.Difference(xb, tb, w, name="cfb"),
+            th.AutoDiffCostFunction(
+                (a, b), residual_fn, n, aux_vars=(xb, yb), cost_weight=w
+            ),
             th.HuberLoss,
             log_loss_radius,
             name="rcf",
@@ -177,7 +215,10 @@ def test_flatten_dims(batch_size):
     )
     lin_flattened = th.DenseLinearization(obj_flattened)
     th_inputs = {
-        "xb": torch.cat([torch.ones(batch_size, 1) * (i + 1) for i in range(n)], dim=1)
+        "xb": data_x,
+        "yb": data_y,
+        "a": th_inputs["a"],  # reuse the previous random value
+        "b": th_inputs["b"],  # reuse the previous random value
     }
     obj_flattened.update(th_inputs)
     lin_flattened.linearize()

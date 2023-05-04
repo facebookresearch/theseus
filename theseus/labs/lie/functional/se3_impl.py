@@ -146,7 +146,7 @@ def identity(
     requires_grad: bool = False,
 ) -> torch.Tensor:
     ret = torch.tensor(_BASE_IDENTITY_SE3, dtype=dtype, device=device).repeat(
-        size + (1, 1)
+        *size, 1, 1
     )
     ret.requires_grad_(requires_grad)
     return ret
@@ -325,7 +325,7 @@ class Exp(lie_group.UnaryOperator):
                 dg[..., 1, 0] - dg[..., 0, 1],
             ),
             dim=-1,
-        ).view(size + (6, 1))
+        ).view(*size, 6, 1)
         return grad_input.view_as(tangent_vector)
 
 

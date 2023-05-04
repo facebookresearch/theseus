@@ -611,15 +611,23 @@ def _compose_impl(group0: torch.Tensor, group1: torch.Tensor) -> torch.Tensor:
 def _jcompose_impl(
     group0: torch.Tensor, group1: torch.Tensor
 ) -> Tuple[List[torch.Tensor], torch.Tensor]:
+    def _repeat(jac, size, dim):
+        return (
+            jac.repeat(*size[: dim - jac.dim()], *(1 for n in range(jac.dim())))
+            if jac.dim() < dim
+            else jac
+        )
+
     check_group_tensor(group0)
     check_group_tensor(group1)
-    jacobians = []
-    jacobians.append(group1.transpose(1, 2))
-    jacobians.append(group0.new_zeros(group0.shape[0], 3, 3))
-    jacobians[1][:, 0, 0] = 1
-    jacobians[1][:, 1, 1] = 1
-    jacobians[1][:, 2, 2] = 1
-    return jacobians, group0 @ group1
+    dim = max(group0.dim(), group1.dim())
+    size = group0.shape[:-2] if group0.dim() >= group1.dim() else group1.shape[:-2]
+    jac0 = group1.transpose(-1, -2)
+    jac1 = group0.new_zeros(*group0.shape[:-2], 3, 3)
+    jac1[..., 0, 0] = 1
+    jac1[..., 1, 1] = 1
+    jac1[..., 2, 2] = 1
+    return [_repeat(jac0, size, dim), _repeat(jac1, size, dim)], group0 @ group1
 
 
 class Compose(lie_group.BinaryOperator):
@@ -639,8 +647,8 @@ class Compose(lie_group.BinaryOperator):
     def backward(cls, ctx, grad_output):
         group0, group1 = ctx.saved_tensors
         return (
-            grad_output @ group1.transpose(1, 2),
-            group0.transpose(1, 2) @ grad_output,
+            grad_output @ group1.transpose(-1, -2),
+            group0.transpose(-1, -2) @ grad_output,
         )
 
 
@@ -654,7 +662,8 @@ _jcompose_autograd_fn = _jcompose_impl
 def _transform_from_impl(group: torch.Tensor, tensor: torch.Tensor) -> torch.Tensor:
     check_group_tensor(group)
     check_transform_tensor(tensor)
-    ret = group @ tensor.view(-1, 3, 1)
+    tensor_size = tensor.shape[:-2] if tensor.shape[-1] == 1 else tensor.shape[:-1]
+    ret = group @ tensor.view(*tensor_size, 3, 1)
     return ret.reshape(tensor.shape)
 
 

@@ -226,16 +226,14 @@ def _jexp_impl_helper(
 
     # compute translation jacobians
     near_zero = theta < constants._SO3_NEAR_ZERO_EPS[tangent_vector.dtype]
-    minus_one_by_twelve = -1 / 12.0
     d_one_minus_cosine_by_theta2 = torch.where(
         near_zero,
-        minus_one_by_twelve,
+        constants._NEAR_ZERO_D_ONE_MINUS_COSINE_BY_THETA2,
         (sine_by_theta - 2 * one_minus_cosine_by_theta2) / theta2_nz,
     )
-    minus_one_by_sixty = -1 / 60.0
     d_theta_minus_sine_by_theta3 = torch.where(
         near_zero,
-        minus_one_by_sixty,
+        constants._NEAR_ZERO_D_THETA_MINUS_SINE_BY_THETA3,
         (one_minus_cosine_by_theta2 - 3 * theta_minus_sine_by_theta3_t) / theta2_nz,
     )
 
@@ -346,13 +344,14 @@ def _log_impl_helper(group: torch.Tensor):
 
     # Compute the translation
     near_zero = theta < constants._SO3_NEAR_ZERO_EPS[group.dtype]
-    non_zero = group.new_ones(1)
     theta2 = theta**2
     sine_theta = sine * theta
     two_cosine_minus_two = 2 * cosine - 2
-    two_cosine_minus_two_nz = torch.where(near_zero, non_zero, two_cosine_minus_two)
+    two_cosine_minus_two_nz = torch.where(
+        near_zero, constants._NON_ZERO, two_cosine_minus_two
+    )
 
-    theta2_nz = torch.where(near_zero, non_zero, theta2)
+    theta2_nz = torch.where(near_zero, constants._NON_ZERO, theta2)
 
     a = torch.where(near_zero, 1 - theta2 / 12, -sine_theta / two_cosine_minus_two_nz)
     b = torch.where(
@@ -402,12 +401,11 @@ def _jlog_impl_helper(
     ret_ang = tangent_vector[..., 3:]
     size = tangent_vector.shape[:-1]
     near_zero = theta < constants._SO3_NEAR_ZERO_EPS[tangent_vector.dtype]
-    non_zero = tangent_vector.new_ones(1)
     jac = tangent_vector.new_zeros(*size, 6, 6)
     jac[..., :3, :3], (b_ret_ang,) = SO3._jlog_impl_helper(ret_ang, theta, sine, cosine)
     jac[..., 3:, 3:] = jac[..., :3, :3]
 
-    theta_nz = torch.where(near_zero, non_zero, theta)
+    theta_nz = torch.where(near_zero, constants._NON_ZERO, theta)
     theta4_nz = theta2_nz**2
     c = torch.where(
         near_zero,

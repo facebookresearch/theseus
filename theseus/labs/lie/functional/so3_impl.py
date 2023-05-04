@@ -182,9 +182,8 @@ def _exp_impl_helper(tangent_vector: torch.Tensor):
     theta2 = theta**2
     # Compute the approximations when theta ~ 0
     near_zero = theta < constants._SO3_NEAR_ZERO_EPS[tangent_vector.dtype]
-    non_zero = tangent_vector.new_ones(1)
-    theta_nz = torch.where(near_zero, non_zero, theta)
-    theta2_nz = torch.where(near_zero, non_zero, theta2)
+    theta_nz = torch.where(near_zero, constants._NON_ZERO, theta)
+    theta2_nz = torch.where(near_zero, constants._NON_ZERO, theta2)
 
     cosine = torch.where(near_zero, 8 / (4 + theta2) - 1, theta.cos())
     sine = theta.sin()
@@ -343,8 +342,7 @@ def _log_impl_helper(group: torch.Tensor):
     # theta != pi
     near_zero_or_near_pi = torch.logical_or(near_zero, near_pi)
     # Compute the approximation of theta / sin(theta) when theta is near to 0
-    non_zero = group.new_ones(1)
-    sine_nz = torch.where(near_zero_or_near_pi, non_zero, sine)
+    sine_nz = torch.where(near_zero_or_near_pi, constants._NON_ZERO, sine)
     scale = torch.where(
         near_zero_or_near_pi,
         1 + sine**2 / 6,
@@ -366,7 +364,7 @@ def _log_impl_helper(group: torch.Tensor):
     sel_rows[aux, major] -= cosine.view(-1)
     axis = sel_rows / torch.where(
         near_zero,
-        non_zero,
+        constants._NON_ZERO,
         sel_rows.norm(dim=-1),
     ).view(*size, 1)
     sign_tmp = sine_axis[aux, major].sign().view(size)
@@ -393,12 +391,13 @@ def _jlog_impl_helper(
     size = tangent_vector.shape[:-1]
 
     near_zero = theta < constants._SO3_NEAR_ZERO_EPS[tangent_vector.dtype]
-    non_zero = tangent_vector.new_ones(1)
     theta2 = theta**2
     sine_theta = sine * theta
     two_cosine_minus_two = 2 * cosine - 2
-    two_cosine_minus_two_nz = torch.where(near_zero, non_zero, two_cosine_minus_two)
-    theta2_nz = torch.where(near_zero, non_zero, theta2)
+    two_cosine_minus_two_nz = torch.where(
+        near_zero, constants._NON_ZERO, two_cosine_minus_two
+    )
+    theta2_nz = torch.where(near_zero, constants._NON_ZERO, theta2)
 
     a = torch.where(near_zero, 1 - theta2 / 12, -sine_theta / two_cosine_minus_two_nz)
     b = torch.where(
@@ -1012,7 +1011,7 @@ def _normalize_backward_helper(
     F = s_squared.view(*size, 1, 3).expand(*size, 3, 3) - s_squared.view(
         *size, 3, 1
     ).expand(*size, 3, 3)
-    F = torch.where(F == 0, grad_output.new_ones(1) * torch.inf, F)
+    F = torch.where(F == 0, constants._INF, F)
     F = F.pow(-1)
 
     u_term: torch.Tensor = u @ (F * _skew_symm(ut @ grad_u))

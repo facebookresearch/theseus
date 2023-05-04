@@ -260,7 +260,7 @@ def _jexp_impl_helper(
 
     jac[..., :3, 3:] = rotation.transpose(-1, -2) @ jac_temp_t
 
-    return jac
+    return jac, (None,)
 
 
 def _jexp_impl(
@@ -278,7 +278,7 @@ def _jexp_impl(
     theta_minus_sine_by_theta3_rot = torch.where(
         near_zero, torch.zeros_like(theta), theta_minus_sine_by_theta3_t
     )
-    jac = _jexp_impl_helper(
+    jac, _ = _jexp_impl_helper(
         tangent_vector,
         ret[..., :3],
         theta,

@@ -121,13 +121,7 @@ def rand(
 ) -> torch.Tensor:
     # Reference:
     # https://web.archive.org/web/20211105205926/http://planning.cs.uiuc.edu/node198.html
-    u = torch.rand(
-        3,
-        *size,
-        generator=generator,
-        dtype=dtype,
-        device=device,
-    )
+    u = torch.rand(3, *size, generator=generator, dtype=dtype, device=device)
     u1 = u[0]
     u2, u3 = u[1:3] * 2 * constants.PI
 
@@ -160,13 +154,7 @@ def randn(
 ) -> torch.Tensor:
     ret = _exp_autograd_fn(
         constants.PI
-        * torch.randn(
-            *size,
-            3,
-            generator=generator,
-            dtype=dtype,
-            device=device,
-        )
+        * torch.randn(*size, 3, generator=generator, dtype=dtype, device=device)
     )
     ret.requires_grad_(requires_grad)
     return ret

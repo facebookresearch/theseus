@@ -641,15 +641,16 @@ _jhat_autograd_fn = None
 # -----------------------------------------------------------------------------
 def _vee_impl(matrix: torch.Tensor) -> torch.Tensor:
     check_hat_matrix(matrix)
-    ret = matrix.new_zeros(matrix.shape[0], 6)
-    ret[:, :3] = matrix[:, :3, 3]
-    ret[:, 3:] = 0.5 * torch.stack(
+    size = matrix.shape[:-2]
+    ret = matrix.new_zeros(*size, 6)
+    ret[..., :3] = matrix[..., :3, 3]
+    ret[..., 3:] = 0.5 * torch.stack(
         (
-            matrix[:, 2, 1] - matrix[:, 1, 2],
-            matrix[:, 0, 2] - matrix[:, 2, 0],
-            matrix[:, 1, 0] - matrix[:, 0, 1],
+            matrix[..., 2, 1] - matrix[..., 1, 2],
+            matrix[..., 0, 2] - matrix[..., 2, 0],
+            matrix[..., 1, 0] - matrix[..., 0, 1],
         ),
-        dim=1,
+        dim=-1,
     )
     return ret
 
@@ -672,7 +673,8 @@ class Vee(lie_group.UnaryOperator):
     @classmethod
     def backward(cls, ctx, grad_output):
         grad_output: torch.Tensor = cast(torch.Tensor, grad_output)
-        grad_input = grad_output.new_zeros(grad_output.shape[0], 4, 4)
+        size = grad_output.shape[:-1]
+        grad_input = grad_output.new_zeros(*size, 4, 4)
         grad_input[..., :3, 3] = grad_output[..., :3]
         grad_input[..., :3, :3] = 0.5 * SO3._hat_impl(grad_output[..., 3:])
         return grad_input

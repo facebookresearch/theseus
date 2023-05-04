@@ -9,7 +9,7 @@ from typing import cast, List, Tuple, Optional
 from . import constants
 from . import lie_group
 from .check_contexts import checks_base
-from .utils import get_module, shape_err_msg
+from .utils import get_module, shape_err_msg, fill_dims
 
 
 NAME: str = "SO3"
@@ -611,14 +611,11 @@ def _compose_impl(group0: torch.Tensor, group1: torch.Tensor) -> torch.Tensor:
 def _jcompose_impl(
     group0: torch.Tensor, group1: torch.Tensor
 ) -> Tuple[List[torch.Tensor], torch.Tensor]:
-    def _view(matrix: torch.Tensor, dim: int):
-        return matrix.view(*(1 for n in range(dim - matrix.dim())), *matrix.shape)
-
     check_group_tensor(group0)
     check_group_tensor(group1)
     dim = max(group0.dim(), group1.dim())
-    group0 = _view(group0, dim)
-    group1 = _view(group1, dim)
+    group0 = fill_dims(group0, dim)
+    group1 = fill_dims(group1, dim)
     size = tuple((max(i, j) for (i, j) in zip(group0.shape[:-2], group1.shape[:-2])))
     group0 = group0.expand(*size, 3, 3)
     group1 = group1.expand(*size, 3, 3)

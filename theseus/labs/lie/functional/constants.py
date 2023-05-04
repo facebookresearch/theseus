@@ -35,6 +35,14 @@ class EPSDict:
             return self.float64_eps
 
 
+_NON_ZERO = 1.0
+
+_INF = torch.inf
+
+_NEAR_ZERO_D_ONE_MINUS_COSINE_BY_THETA2 = -1 / 12.0
+
+_NEAR_ZERO_D_THETA_MINUS_SINE_BY_THETA3 = -1 / 60.0
+
 _SO2_NORMALIZATION_EPS = EPSDict(float32_eps=1e-12, float64_eps=1e-12)
 
 _SO2_MATRIX_EPS = EPSDict(float32_eps=1e-5, float64_eps=4e-7)

@@ -160,13 +160,12 @@ def test_flatten_dims(batch_size):
     data_y[:, :5] = 1000  # include some extreme outliers for robust cost
 
     # optimization variables are of type Vector with 1 degree of freedom (dof)
-    a = th.Vector(1, name="a")
-    b = th.Vector(1, name="b")
+    ab = th.Vector(2, name="ab")
 
     def residual_fn(optim_vars, aux_vars):
-        a, b = optim_vars
+        ab = optim_vars[0]
         x, y = aux_vars
-        return y.tensor - (a.tensor * x.tensor.square() + b.tensor)
+        return y.tensor - _data_model(ab.tensor[:, :1], ab.tensor[:, 1:], x.tensor)
 
     w = th.ScaleCostWeight(0.5)
     log_loss_radius = th.as_variable(0.5)
@@ -179,7 +178,7 @@ def test_flatten_dims(batch_size):
         obj_unrolled.add(
             th.RobustCostFunction(
                 th.AutoDiffCostFunction(
-                    (a, b), residual_fn, 1, aux_vars=(xs[i], ys[i]), cost_weight=w
+                    (ab,), residual_fn, 1, aux_vars=(xs[i], ys[i]), cost_weight=w
                 ),
                 th.HuberLoss,
                 log_loss_radius,
@@ -189,12 +188,7 @@ def test_flatten_dims(batch_size):
     lin_unrolled = th.DenseLinearization(obj_unrolled)
     th_inputs = {f"x{i}": data_x[:, i].view(1, 1) for i in range(data_x.shape[1])}
     th_inputs.update({f"y{i}": data_y[:, i].view(1, 1) for i in range(data_y.shape[1])})
-    th_inputs.update(
-        {
-            "a": torch.rand((batch_size, 1)),
-            "b": torch.rand((batch_size, 1)),
-        }
-    )
+    th_inputs.update({"ab": torch.rand((batch_size, 2))})
     obj_unrolled.update(th_inputs)
     lin_unrolled.linearize()
 
@@ -205,7 +199,7 @@ def test_flatten_dims(batch_size):
     obj_flattened.add(
         th.RobustCostFunction(
             th.AutoDiffCostFunction(
-                (a, b), residual_fn, n, aux_vars=(xb, yb), cost_weight=w
+                (ab,), residual_fn, n, aux_vars=(xb, yb), cost_weight=w
             ),
             th.HuberLoss,
             log_loss_radius,
@@ -217,8 +211,7 @@ def test_flatten_dims(batch_size):
     th_inputs = {
         "xb": data_x,
         "yb": data_y,
-        "a": th_inputs["a"],  # reuse the previous random value
-        "b": th_inputs["b"],  # reuse the previous random value
+        "ab": th_inputs["ab"],  # reuse the previous random value
     }
     obj_flattened.update(th_inputs)
     lin_flattened.linearize()

@@ -159,7 +159,8 @@ def test_flatten_dims(batch_size):
     data_x, data_y = _generate_data(num_points=n)
     data_y[:, :5] = 1000  # include some extreme outliers for robust cost
 
-    # optimization variables are of type Vector with 1 degree of freedom (dof)
+    # optimization variables are of type Vector with 2 degrees of freedom (dof)
+    # one for A and one for B
     ab = th.Vector(2, name="ab")
 
     def residual_fn(optim_vars, aux_vars):
@@ -171,6 +172,7 @@ def test_flatten_dims(batch_size):
     log_loss_radius = th.as_variable(0.5)
 
     # First create an objective with individual cost functions per error term
+    # Need individual aux variables to represent data of each residual terms
     xs = [th.Vector(1, name=f"x{i}") for i in range(n)]
     ys = [th.Vector(1, name=f"y{i}") for i in range(n)]
     obj_unrolled = th.Objective()
@@ -193,6 +195,7 @@ def test_flatten_dims(batch_size):
     lin_unrolled.linearize()
 
     # Now one with a single vectorized cost function, and flatten_dims=True
+    # Residual terms call all be represented with "batched" data variables
     xb = th.Vector(n, name="xb")
     yb = th.Vector(n, name="yb")
     obj_flattened = th.Objective()

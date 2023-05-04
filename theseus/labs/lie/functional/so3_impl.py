@@ -611,23 +611,23 @@ def _compose_impl(group0: torch.Tensor, group1: torch.Tensor) -> torch.Tensor:
 def _jcompose_impl(
     group0: torch.Tensor, group1: torch.Tensor
 ) -> Tuple[List[torch.Tensor], torch.Tensor]:
-    def _repeat(jac, size, dim):
-        return (
-            jac.repeat(*size[: dim - jac.dim()], *(1 for n in range(jac.dim())))
-            if jac.dim() < dim
-            else jac
-        )
+    def _view(matrix: torch.Tensor, dim: int):
+        return matrix.view(*(1 for n in range(dim - matrix.dim())), *matrix.shape)
 
     check_group_tensor(group0)
     check_group_tensor(group1)
     dim = max(group0.dim(), group1.dim())
-    size = group0.shape[:-2] if group0.dim() >= group1.dim() else group1.shape[:-2]
+    group0 = _view(group0, dim)
+    group1 = _view(group1, dim)
+    size = tuple((max(i, j) for (i, j) in zip(group0.shape, group1.shape)))
+    group0 = group0.expand(*size)
+    group1 = group1.expand(*size)
     jac0 = group1.transpose(-1, -2)
     jac1 = group0.new_zeros(*group0.shape[:-2], 3, 3)
     jac1[..., 0, 0] = 1
     jac1[..., 1, 1] = 1
     jac1[..., 2, 2] = 1
-    return [_repeat(jac0, size, dim), _repeat(jac1, size, dim)], group0 @ group1
+    return [jac0, jac1], group0 @ group1
 
 
 class Compose(lie_group.BinaryOperator):
@@ -672,12 +672,10 @@ def _jtransform_from_impl(
 ) -> Tuple[List[torch.Tensor], torch.Tensor]:
     check_group_tensor(group)
     check_transform_tensor(tensor)
+    tensor_size = tensor.shape[:-2] if tensor.shape[-1] == 1 else tensor.shape[:-1]
     jacobian_g = -group @ _hat_autograd_fn(tensor)
-    jacobian_p = group.view(tensor.shape[:-1] + (3, 3))
-    jacobians = []
-    jacobians.append(jacobian_g)
-    jacobians.append(jacobian_p)
-    return jacobians, _transform_from_impl(group, tensor)
+    jacobian_p = group.view(*tensor_size, 3, 3)
+    return [jacobian_g, jacobian_p], _transform_from_impl(group, tensor)
 
 
 class TransformFrom(lie_group.BinaryOperator):

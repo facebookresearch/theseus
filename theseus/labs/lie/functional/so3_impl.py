@@ -384,13 +384,16 @@ def _log_impl(group: torch.Tensor) -> torch.Tensor:
     return tangent_vector
 
 
-def _jlog_impl(group: torch.Tensor) -> Tuple[List[torch.Tensor], torch.Tensor]:
-    check_group_tensor(group)
-    tangent_vector, (theta, sine, cosine) = _log_impl_helper(group)
-    size = group.shape[:-2]
+def _jlog_impl_helper(
+    tangent_vector: torch.Tensor,
+    theta: torch.Tensor,
+    sine: torch.Tensor,
+    cosine: torch.Tensor,
+):
+    size = tangent_vector.shape[:-1]
 
-    near_zero = theta < constants._SO3_NEAR_ZERO_EPS[group.dtype]
-    non_zero = group.new_ones(1)
+    near_zero = theta < constants._SO3_NEAR_ZERO_EPS[tangent_vector.dtype]
+    non_zero = tangent_vector.new_ones(1)
     theta2 = theta**2
     sine_theta = sine * theta
     two_cosine_minus_two = 2 * cosine - 2
@@ -419,6 +422,13 @@ def _jlog_impl(group: torch.Tensor) -> Tuple[List[torch.Tensor], torch.Tensor]:
     diag_jac = torch.diagonal(jac, dim1=-2, dim2=-1)
     diag_jac += a.view(*size, 1)
 
+    return jac, (None,)
+
+
+def _jlog_impl(group: torch.Tensor) -> Tuple[List[torch.Tensor], torch.Tensor]:
+    check_group_tensor(group)
+    tangent_vector, (theta, sine, cosine) = _log_impl_helper(group)
+    jac, _ = _jlog_impl_helper(tangent_vector, theta, sine, cosine)
     return [jac], tangent_vector
 
 

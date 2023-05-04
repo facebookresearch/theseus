@@ -226,13 +226,13 @@ def _jexp_impl_helper(
 
     # compute translation jacobians
     near_zero = theta < constants._SO3_NEAR_ZERO_EPS[tangent_vector.dtype]
-    minus_one_by_twelve = -tangent_vector.new_ones(1) / 12.0
+    minus_one_by_twelve = -1 / 12.0
     d_one_minus_cosine_by_theta2 = torch.where(
         near_zero,
         minus_one_by_twelve,
         (sine_by_theta - 2 * one_minus_cosine_by_theta2) / theta2_nz,
     )
-    minus_one_by_sixty = -tangent_vector.new_ones(1) / 60.0
+    minus_one_by_sixty = -1 / 60.0
     d_theta_minus_sine_by_theta3 = torch.where(
         near_zero,
         minus_one_by_sixty,

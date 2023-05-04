@@ -109,9 +109,27 @@ def check_left_project_matrix(matrix: torch.Tensor):
         )
 
 
+def get_group_size(group: torch.Tensor):
+    return group.shape[:-2]
+
+
+def get_tangent_vector_size(tangent_vector: torch.Tensor):
+    return (
+        tangent_vector.shape[:-2]
+        if tangent_vector.shape[-1] == 1
+        else tangent_vector.shape[:-1]
+    )
+
+
+def get_transform_tensor_size(transform_tensor: torch.Tensor):
+    return get_tangent_vector_size(transform_tensor)
+
+
 # -----------------------------------------------------------------------------
 # Rand
 # -----------------------------------------------------------------------------
+
+
 def rand(
     *size: int,
     generator: Optional[torch.Generator] = None,
@@ -613,6 +631,7 @@ def _jcompose_impl(
 ) -> Tuple[List[torch.Tensor], torch.Tensor]:
     check_group_tensor(group0)
     check_group_tensor(group1)
+    ret = group0 @ group1
     dim = max(group0.dim(), group1.dim())
     group0 = fill_dims(group0, dim)
     group1 = fill_dims(group1, dim)
@@ -624,7 +643,7 @@ def _jcompose_impl(
     jac1[..., 0, 0] = 1
     jac1[..., 1, 1] = 1
     jac1[..., 2, 2] = 1
-    return [jac0, jac1], group0 @ group1
+    return [jac0, jac1], ret
 
 
 class Compose(lie_group.BinaryOperator):
@@ -659,9 +678,9 @@ _jcompose_autograd_fn = _jcompose_impl
 def _transform_from_impl(group: torch.Tensor, tensor: torch.Tensor) -> torch.Tensor:
     check_group_tensor(group)
     check_transform_tensor(tensor)
-    tensor_size = tensor.shape[:-2] if tensor.shape[-1] == 1 else tensor.shape[:-1]
+    tensor_size = get_transform_tensor_size(tensor)
     ret = group @ tensor.view(*tensor_size, 3, 1)
-    return ret.reshape(tensor.shape)
+    return ret if tensor.shape[-1] == 1 else ret.squeeze(-1)
 
 
 def _jtransform_from_impl(
@@ -669,10 +688,18 @@ def _jtransform_from_impl(
 ) -> Tuple[List[torch.Tensor], torch.Tensor]:
     check_group_tensor(group)
     check_transform_tensor(tensor)
-    tensor_size = tensor.shape[:-2] if tensor.shape[-1] == 1 else tensor.shape[:-1]
+    ret = _transform_from_impl(group, tensor)
+    if tensor.shape[-1] != 1:
+        tensor = tensor.unsqueeze(-1)
+    dim = max(group.dim(), tensor.dim())
+    group = fill_dims(group, dim)
+    tensor = fill_dims(tensor, dim)
     jacobian_g = -group @ _hat_autograd_fn(tensor)
-    jacobian_p = group.view(*tensor_size, 3, 3)
-    return [jacobian_g, jacobian_p], _transform_from_impl(group, tensor)
+    jacobian_p = group
+    size = tuple((max(i, j) for (i, j) in zip(group.shape[:-2], tensor.shape[:-2])))
+    jacobian_g = jacobian_g.expand(*size, 3, 3)
+    jacobian_p = jacobian_p.expand(*size, 3, 3)
+    return [jacobian_g, jacobian_p], ret
 
 
 class TransformFrom(lie_group.BinaryOperator):
@@ -692,10 +719,16 @@ class TransformFrom(lie_group.BinaryOperator):
     def backward(cls, ctx, grad_output):
         group: torch.Tensor = ctx.saved_tensors[0]
         tensor: torch.Tensor = ctx.saved_tensors[1]
-        grad_output: torch.Tensor = grad_output.view(-1, 3, 1)
-        grad_input0 = grad_output @ tensor.view(-1, 1, 3)
-        grad_input1 = group[:, :, :3].transpose(1, 2) @ grad_output
-        return grad_input0, grad_input1.view(tensor.shape)
+        grad_output: torch.Tensor = (
+            grad_output.unsqueeze(-1) if tensor.shape[-1] != 1 else grad_output
+        )
+        tensor_size = get_transform_tensor_size(tensor)
+        grad_input0 = grad_output @ tensor.view(*tensor_size, 1, 3)
+        grad_input1 = group[..., :3].transpose(-1, -2) @ grad_output
+        return (
+            grad_input0,
+            grad_input1.squeeze(-1) if tensor.shape[-1] != 1 else grad_input1,
+        )
 
 
 _transform_from_autograd_fn = TransformFrom.apply

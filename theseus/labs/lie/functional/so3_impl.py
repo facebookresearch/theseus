@@ -619,9 +619,9 @@ def _jcompose_impl(
     dim = max(group0.dim(), group1.dim())
     group0 = _view(group0, dim)
     group1 = _view(group1, dim)
-    size = tuple((max(i, j) for (i, j) in zip(group0.shape, group1.shape)))
-    group0 = group0.expand(*size)
-    group1 = group1.expand(*size)
+    size = tuple((max(i, j) for (i, j) in zip(group0.shape[:-2], group1.shape[:-2])))
+    group0 = group0.expand(*size, 3, 3)
+    group1 = group1.expand(*size, 3, 3)
     jac0 = group1.transpose(-1, -2)
     jac1 = group0.new_zeros(*group0.shape[:-2], 3, 3)
     jac1[..., 0, 0] = 1

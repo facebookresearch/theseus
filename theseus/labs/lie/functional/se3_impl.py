@@ -337,170 +337,82 @@ _jexp_autograd_fn = _jexp_impl
 # -----------------------------------------------------------------------------
 # Logarithm Map
 # -----------------------------------------------------------------------------
+def _log_impl_helper(group: torch.Tensor):
+    check_group_tensor(group)
+    size = group.shape[:-2]
+
+    # Compute the rotation
+    ret_ang, (theta, sine, cosine) = SO3._log_impl_helper(group[..., :3])
+
+    # Compute the translation
+    near_zero = theta < constants._SO3_NEAR_ZERO_EPS[group.dtype]
+    non_zero = group.new_ones(1)
+    theta2 = theta**2
+    sine_theta = sine * theta
+    two_cosine_minus_two = 2 * cosine - 2
+    two_cosine_minus_two_nz = torch.where(near_zero, non_zero, two_cosine_minus_two)
+
+    theta2_nz = torch.where(near_zero, non_zero, theta2)
+
+    a = torch.where(near_zero, 1 - theta2 / 12, -sine_theta / two_cosine_minus_two_nz)
+    b = torch.where(
+        near_zero,
+        1.0 / 12 + theta2 / 720,
+        (sine_theta + two_cosine_minus_two) / (theta2_nz * two_cosine_minus_two_nz),
+    )
+
+    translation = group[..., 3].view(*size, 3, 1)
+    ret_lin = a.view(*size, 1) * group[..., 3]
+    ret_lin -= 0.5 * torch.cross(ret_ang, group[..., 3], dim=-1)
+    ret_ang_ext = ret_ang.view(*size, 3, 1)
+    ret_lin += b.view(*size, 1) * (
+        ret_ang_ext @ (ret_ang_ext.transpose(-1, -2) @ translation)
+    ).view(*size, 3)
+
+    return torch.cat([ret_lin, ret_ang], dim=-1), (
+        theta,
+        theta2,
+        theta2_nz,
+        sine,
+        cosine,
+        two_cosine_minus_two_nz,
+        a,
+        b,
+    )
+
+
 def _log_impl(group: torch.Tensor) -> torch.Tensor:
     check_group_tensor(group)
-    sine_axis = group.new_zeros(group.shape[0], 3)
-    sine_axis[:, 0] = 0.5 * (group[:, 2, 1] - group[:, 1, 2])
-    sine_axis[:, 1] = 0.5 * (group[:, 0, 2] - group[:, 2, 0])
-    sine_axis[:, 2] = 0.5 * (group[:, 1, 0] - group[:, 0, 1])
-    cosine = 0.5 * (group[:, 0, 0] + group[:, 1, 1] + group[:, 2, 2] - 1)
-    sine = sine_axis.norm(dim=1)
-    theta = torch.atan2(sine, cosine)
-    theta2 = theta**2
-    non_zero = torch.ones(1, dtype=group.dtype, device=group.device)
-
-    near_zero = theta < constants._SE3_NEAR_ZERO_EPS[group.dtype]
-    near_pi = 1 + cosine <= constants._SE3_NEAR_PI_EPS[group.dtype]
-
-    # Compute the rotation
-    near_zero_or_near_pi = torch.logical_or(near_zero, near_pi)
-    # Compute the approximation of theta / sin(theta) when theta is near to 0
-    sine_nz = torch.where(near_zero_or_near_pi, non_zero, sine)
-    scale = torch.where(
-        near_zero_or_near_pi,
-        1 + sine**2 / 6,
-        theta / sine_nz,
-    )
-    ret_ang = sine_axis * scale.view(-1, 1)
-
-    # theta is near pi
-    ddiag = torch.diagonal(group, dim1=1, dim2=2)
-    # Find the index of major coloumns and diagonals
-    major = torch.logical_and(
-        ddiag[:, 1] > ddiag[:, 0], ddiag[:, 1] > ddiag[:, 2]
-    ) + 2 * torch.logical_and(ddiag[:, 2] > ddiag[:, 0], ddiag[:, 2] > ddiag[:, 1])
-    aux = torch.ones(group.shape[0], dtype=torch.bool)
-    sel_rows = 0.5 * (group[aux, major, :3] + group[aux, :3, major])
-    sel_rows[aux, major] -= cosine
-    axis = sel_rows / torch.where(
-        near_zero.view(-1, 1),
-        non_zero.view(-1, 1),
-        sel_rows.norm(dim=1, keepdim=True),
-    )
-    sign_tmp = sine_axis[aux, major].sign()
-    sign = torch.where(sign_tmp != 0, sign_tmp, torch.ones_like(sign_tmp))
-    ret_ang = torch.where(
-        near_pi.view(-1, 1), axis * (theta * sign).view(-1, 1), ret_ang
-    )
-
-    # Compute the translation
-    sine_theta = sine * theta
-    two_cosine_minus_two = 2 * cosine - 2
-    two_cosine_minus_two_nz = torch.where(near_zero, non_zero, two_cosine_minus_two)
-
-    theta2_nz = torch.where(near_zero, non_zero, theta2)
-
-    a = torch.where(near_zero, 1 - theta2 / 12, -sine_theta / two_cosine_minus_two_nz)
-    b = torch.where(
-        near_zero,
-        1.0 / 12 + theta2 / 720,
-        (sine_theta + two_cosine_minus_two) / (theta2_nz * two_cosine_minus_two_nz),
-    )
-
-    translation = group[:, :, 3].view(-1, 3, 1)
-    ret_lin = a.view(-1, 1) * group[:, :, 3]
-    ret_lin -= 0.5 * torch.cross(ret_ang, group[:, :, 3], dim=1)
-    ret_ang_ext = ret_ang.view(-1, 3, 1)
-    ret_lin += b.view(-1, 1) * (
-        ret_ang_ext @ (ret_ang_ext.transpose(1, 2) @ translation)
-    ).view(-1, 3)
-
-    return torch.cat([ret_lin, ret_ang], dim=1)
+    ret, _ = _log_impl_helper(group)
+    return ret
 
 
-def _jlog_impl(group: torch.Tensor) -> Tuple[List[torch.Tensor], torch.Tensor]:
-    check_group_tensor(group)
-    sine_axis = group.new_zeros(group.shape[0], 3)
-    sine_axis[:, 0] = 0.5 * (group[:, 2, 1] - group[:, 1, 2])
-    sine_axis[:, 1] = 0.5 * (group[:, 0, 2] - group[:, 2, 0])
-    sine_axis[:, 2] = 0.5 * (group[:, 1, 0] - group[:, 0, 1])
-    cosine = 0.5 * (group[:, 0, 0] + group[:, 1, 1] + group[:, 2, 2] - 1)
-    sine = sine_axis.norm(dim=1)
-    theta = torch.atan2(sine, cosine)
-    theta2 = theta**2
-    non_zero = torch.ones(1, dtype=group.dtype, device=group.device)
-
-    near_zero = theta < constants._SE3_NEAR_ZERO_EPS[group.dtype]
-    near_pi = 1 + cosine <= constants._SE3_NEAR_PI_EPS[group.dtype]
-
-    # Compute the rotation
-    near_zero_or_near_pi = torch.logical_or(near_zero, near_pi)
-    # Compute the approximation of theta / sin(theta) when theta is near to 0
-    sine_nz = torch.where(near_zero_or_near_pi, non_zero, sine)
-    scale = torch.where(
-        near_zero_or_near_pi,
-        1 + sine**2 / 6,
-        theta / sine_nz,
-    )
-    ret_ang = sine_axis * scale.view(-1, 1)
-
-    # theta is near pi
-    ddiag = torch.diagonal(group, dim1=1, dim2=2)
-    # Find the index of major coloumns and diagonals
-    major = torch.logical_and(
-        ddiag[:, 1] > ddiag[:, 0], ddiag[:, 1] > ddiag[:, 2]
-    ) + 2 * torch.logical_and(ddiag[:, 2] > ddiag[:, 0], ddiag[:, 2] > ddiag[:, 1])
-    aux = torch.ones(group.shape[0], dtype=torch.bool)
-    sel_rows = 0.5 * (group[aux, major, :3] + group[aux, :3, major])
-    sel_rows[aux, major] -= cosine
-    axis = sel_rows / torch.where(
-        near_zero.view(-1, 1),
-        non_zero.view(-1, 1),
-        sel_rows.norm(dim=1, keepdim=True),
-    )
-    sign_tmp = sine_axis[aux, major].sign()
-    sign = torch.where(sign_tmp != 0, sign_tmp, torch.ones_like(sign_tmp))
-    ret_ang = torch.where(
-        near_pi.view(-1, 1), axis * (theta * sign).view(-1, 1), ret_ang
-    )
-
-    # Compute the translation
-    sine_theta = sine * theta
-    two_cosine_minus_two = 2 * cosine - 2
-    two_cosine_minus_two_nz = torch.where(near_zero, non_zero, two_cosine_minus_two)
-
-    theta2_nz = torch.where(near_zero, non_zero, theta2)
-
-    a = torch.where(near_zero, 1 - theta2 / 12, -sine_theta / two_cosine_minus_two_nz)
-    b = torch.where(
-        near_zero,
-        1.0 / 12 + theta2 / 720,
-        (sine_theta + two_cosine_minus_two) / (theta2_nz * two_cosine_minus_two_nz),
-    )
-
-    translation = group[:, :, 3].view(-1, 3, 1)
-    ret_lin = a.view(-1, 1) * group[:, :, 3]
-    ret_lin -= 0.5 * torch.cross(ret_ang, group[:, :, 3], dim=1)
-    ret_ang_ext = ret_ang.view(-1, 3, 1)
-    ret_lin += b.view(-1, 1) * (
-        ret_ang_ext @ (ret_ang_ext.transpose(1, 2) @ translation)
-    ).view(-1, 3)
-
-    # jacobians
-    jac = group.new_zeros(group.shape[0], 6, 6)
-
-    b_ret_ang = b.view(-1, 1) * ret_ang
-    jac[:, :3, :3] = b_ret_ang.view(-1, 3, 1) * ret_ang.view(-1, 1, 3)
-
-    half_ret_ang = 0.5 * ret_ang
-    jac[:, 0, 1] -= half_ret_ang[:, 2]
-    jac[:, 1, 0] += half_ret_ang[:, 2]
-    jac[:, 0, 2] += half_ret_ang[:, 1]
-    jac[:, 2, 0] -= half_ret_ang[:, 1]
-    jac[:, 1, 2] -= half_ret_ang[:, 0]
-    jac[:, 2, 1] += half_ret_ang[:, 0]
-
-    diag_jac_rot = torch.diagonal(jac[:, :3, :3], dim1=1, dim2=2)
-    diag_jac_rot += a.view(-1, 1)
-
-    jac[:, 3:, 3:] = jac[:, :3, :3]
+def _jlog_impl_helper(
+    tangent_vector: torch.Tensor,
+    theta: torch.Tensor,
+    theta2: torch.Tensor,
+    theta2_nz: torch.Tensor,
+    sine: torch.Tensor,
+    cosine: torch.Tensor,
+    two_cosine_minus_two_nz: torch.Tensor,
+    a: torch.Tensor,
+    b: torch.Tensor,
+):
+    ret_lin = tangent_vector[..., :3]
+    ret_ang = tangent_vector[..., 3:]
+    size = tangent_vector.shape[:-1]
+    near_zero = theta < constants._SO3_NEAR_ZERO_EPS[tangent_vector.dtype]
+    non_zero = tangent_vector.new_ones(1)
+    jac = tangent_vector.new_zeros(*size, 6, 6)
+    jac[..., :3, :3], (b_ret_ang,) = SO3._jlog_impl_helper(ret_ang, theta, sine, cosine)
+    jac[..., 3:, 3:] = jac[..., :3, :3]
 
     theta_nz = torch.where(near_zero, non_zero, theta)
     theta4_nz = theta2_nz**2
     c = torch.where(
         near_zero,
         -1 / 360.0 - theta2 / 7560.0,
-        -(2 * two_cosine_minus_two + theta * sine + theta2)
+        -(2 * two_cosine_minus_two_nz + theta * sine + theta2)
         / (theta4_nz * two_cosine_minus_two_nz),
     )
     d = torch.where(
@@ -508,25 +420,52 @@ def _jlog_impl(group: torch.Tensor) -> Tuple[List[torch.Tensor], torch.Tensor]:
         -1 / 6.0 - theta2 / 180.0,
         (theta - sine) / (theta_nz * two_cosine_minus_two_nz),
     )
-    e = (ret_ang.view(-1, 1, 3) @ ret_lin.view(-1, 3, 1)).view(-1)
+    e = (ret_ang.view(*size, 1, 3) @ ret_lin.view(*size, 3, 1)).view(*size)
 
-    ce_ret_ang = (c * e).view(-1, 1) * ret_ang
-    jac[:, :3, 3:] = ce_ret_ang.view(-1, 3, 1) * ret_ang.view(-1, 1, 3)
-    jac[:, :3, 3:] += b_ret_ang.view(-1, 3, 1) * ret_lin.view(-1, 1, 3) + ret_lin.view(
-        -1, 3, 1
-    ) * b_ret_ang.view(-1, 1, 3)
-    diag_jac_t = torch.diagonal(jac[:, :3, 3:], dim1=1, dim2=2)
-    diag_jac_t += (e * d).view(-1, 1)
+    ce_ret_ang = (c * e).view(*size, 1) * ret_ang
+    jac[..., :3, 3:] = ce_ret_ang.view(*size, 3, 1) * ret_ang.view(*size, 1, 3)
+    jac[..., :3, 3:] += b_ret_ang.view(*size, 3, 1) * ret_lin.view(
+        *size, 1, 3
+    ) + ret_lin.view(*size, 3, 1) * b_ret_ang.view(*size, 1, 3)
+    diag_jac_t = torch.diagonal(jac[..., :3, 3:], dim1=-1, dim2=-2)
+    diag_jac_t += (e * d).view(*size, 1)
 
     half_ret_lin = 0.5 * ret_lin
-    jac[:, 0, 4] -= half_ret_lin[:, 2]
-    jac[:, 1, 3] += half_ret_lin[:, 2]
-    jac[:, 0, 5] += half_ret_lin[:, 1]
-    jac[:, 2, 3] -= half_ret_lin[:, 1]
-    jac[:, 1, 5] -= half_ret_lin[:, 0]
-    jac[:, 2, 4] += half_ret_lin[:, 0]
+    jac[..., 0, 4] -= half_ret_lin[..., 2]
+    jac[..., 1, 3] += half_ret_lin[..., 2]
+    jac[..., 0, 5] += half_ret_lin[..., 1]
+    jac[..., 2, 3] -= half_ret_lin[..., 1]
+    jac[..., 1, 5] -= half_ret_lin[..., 0]
+    jac[..., 2, 4] += half_ret_lin[..., 0]
 
-    return [jac], torch.cat([ret_lin, ret_ang], dim=1)
+    return jac, (None,)
+
+
+def _jlog_impl(group: torch.Tensor) -> Tuple[List[torch.Tensor], torch.Tensor]:
+    check_group_tensor(group)
+    tangent_vector, (
+        theta,
+        theta2,
+        theta2_nz,
+        sine,
+        cosine,
+        two_cosine_minus_two_nz,
+        a,
+        b,
+    ) = _log_impl_helper(group)
+    jac, _ = _jlog_impl_helper(
+        tangent_vector,
+        theta,
+        theta2,
+        theta2_nz,
+        sine,
+        cosine,
+        two_cosine_minus_two_nz,
+        a,
+        b,
+    )
+
+    return [jac], tangent_vector
 
 
 class Log(lie_group.UnaryOperator):
@@ -546,9 +485,11 @@ class Log(lie_group.UnaryOperator):
         group: torch.Tensor = ctx.saved_tensors[1]
         jacobians = _jlog_impl(group)[0][0]
         jacobians[..., 3:] *= 0.5
-        temp = lift((jacobians.transpose(1, 2) @ grad_output.unsqueeze(-1)).squeeze(-1))
+        temp = lift(
+            (jacobians.transpose(-1, -2) @ grad_output.unsqueeze(-1)).squeeze(-1)
+        )
 
-        jac_g = torch.einsum("nij, n...jk->n...ik", group[:, :, :3], temp)
+        jac_g = torch.einsum("n...ij, n...jk->n...ik", group[..., :3], temp)
         return jac_g
 
 

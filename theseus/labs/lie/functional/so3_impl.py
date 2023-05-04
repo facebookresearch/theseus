@@ -353,7 +353,7 @@ def _log_impl_helper(group: torch.Tensor):
     ret = sine_axis * scale.view(*size, 1)
 
     # # theta ~ pi
-    ddiag = torch.diagonal(group, dim1=-2, dim2=-1)
+    ddiag = torch.diagonal(group, dim1=-1, dim2=-2)
     # Find the index of major coloumns and diagonals
     major = torch.logical_and(
         ddiag[..., 1] > ddiag[..., 0], ddiag[..., 1] > ddiag[..., 2]
@@ -407,9 +407,8 @@ def _jlog_impl_helper(
         (sine_theta + two_cosine_minus_two) / (theta2_nz * two_cosine_minus_two_nz),
     )
 
-    jac = (b.view(*size, 1) * tangent_vector).view(*size, 3, 1) * tangent_vector.view(
-        *size, 1, 3
-    )
+    b_tangent_vector = b.view(*size, 1) * tangent_vector
+    jac = b_tangent_vector.view(*size, 3, 1) * tangent_vector.view(*size, 1, 3)
 
     half_ret = 0.5 * tangent_vector
     jac[..., 0, 1] -= half_ret[..., 2]
@@ -419,10 +418,10 @@ def _jlog_impl_helper(
     jac[..., 1, 2] -= half_ret[..., 0]
     jac[..., 2, 1] += half_ret[..., 0]
 
-    diag_jac = torch.diagonal(jac, dim1=-2, dim2=-1)
+    diag_jac = torch.diagonal(jac, dim1=-1, dim2=-2)
     diag_jac += a.view(*size, 1)
 
-    return jac, (None,)
+    return jac, (b_tangent_vector,)
 
 
 def _jlog_impl(group: torch.Tensor) -> Tuple[List[torch.Tensor], torch.Tensor]:
@@ -451,7 +450,7 @@ class Log(lie_group.UnaryOperator):
         temp = _lift_autograd_fn(
             (jacobians.transpose(-2, -1) @ grad_output.unsqueeze(-1)).squeeze(-1)
         )
-        return torch.einsum("nij,n...jk->n...ik", group, temp)
+        return torch.einsum("n...ij,n...jk->n...ik", group, temp)
 
 
 # TODO: Implement analytic backward for _jlog_impl

@@ -570,11 +570,11 @@ class Inverse(lie_group.UnaryOperator):
     @classmethod
     def backward(cls, ctx, grad_output):
         group: torch.Tensor = ctx.saved_tensors[0]
-        grad_input_rot = grad_output[:, :, :3].transpose(1, 2) - group[
-            :, :, 3:
-        ] @ grad_output[:, :, 3:].transpose(1, 2)
-        grad_input_t = -group[:, :, :3] @ grad_output[:, :, 3:]
-        return torch.cat((grad_input_rot, grad_input_t), dim=2)
+        grad_input_rot = grad_output[..., :3].transpose(-1, -2) - group[
+            ..., 3:
+        ] @ grad_output[..., 3:].transpose(-1, -2)
+        grad_input_t = -group[..., :3] @ grad_output[..., 3:]
+        return torch.cat((grad_input_rot, grad_input_t), dim=-1)
 
 
 _inverse_autograd_fn = Inverse.apply

@@ -34,18 +34,13 @@ def check_matrix_tensor(tensor: torch.Tensor):
         raise ValueError(shape_err_msg("SE3 data tensors", "(..., 3, 4)", tensor.shape))
 
 
-def check_transform_tensor(tensor: torch.Tensor):
-    SO3.check_transform_tensor(tensor)
-
-
 def check_tangent_vector(tangent_vector: torch.Tensor):
-    _check = tangent_vector.shape[-2:] == (6, 1)
-    _check |= tangent_vector.shape[-1] == 6
+    _check = tangent_vector.shape[-1] == 6
     if not _check:
         raise ValueError(
             shape_err_msg(
                 "Tangent vectors of SE3",
-                "(..., 6) or (..., 6, 1)",
+                "(..., 6)",
                 tangent_vector.shape,
             )
         )
@@ -64,6 +59,19 @@ def check_hat_matrix(matrix: torch.Tensor):
         )
 
     checks_base(matrix, _impl)
+
+
+def check_transform_tensor(tensor: torch.Tensor):
+    # calling this because it just checks that the shapes are correct
+    # (both the pose (x, y, z) and the tangent vector are 3D for SE3)
+    if tensor.shape[-1] != 3:
+        raise ValueError(
+            shape_err_msg(
+                "Tensors transformed by SE3",
+                "(..., 3)",
+                tensor.shape,
+            )
+        )
 
 
 def check_lift_matrix(matrix: torch.Tensor):
@@ -92,6 +100,18 @@ def check_left_project_matrix(matrix: torch.Tensor):
         raise ValueError(
             shape_err_msg("Left projected matrices of SE3", "(..., 3, 4)", matrix.shape)
         )
+
+
+def get_group_size(group: torch.Tensor):
+    return group.shape[:-2]
+
+
+def get_tangent_vector_size(tangent_vector: torch.Tensor):
+    return tangent_vector.shape[:-1]
+
+
+def get_transform_tensor_size(transform_tensor: torch.Tensor):
+    return transform_tensor.shape[:-1]
 
 
 # -----------------------------------------------------------------------------
@@ -156,7 +176,7 @@ def identity(
 # Exponential Map
 # -----------------------------------------------------------------------------
 def _exp_impl_helper(tangent_vector: torch.Tensor):
-    size = tangent_vector.shape[:-1]
+    size = get_tangent_vector_size(tangent_vector)
     ret = tangent_vector.new_zeros(*size, 3, 4)
 
     # Compute the rotation
@@ -212,7 +232,7 @@ def _jexp_impl_helper(
     theta_minus_sine_by_theta3_t: torch.Tensor,
     theta_minus_sine_by_theta3_rot: torch.Tensor,
 ):
-    size = tangent_vector.shape[:-1]
+    size = get_tangent_vector_size(tangent_vector)
     jac = tangent_vector.new_zeros(*size, 6, 6)
 
     # compute rotation jacobians
@@ -307,11 +327,7 @@ class Exp(lie_group.UnaryOperator):
         tangent_vector: torch.Tensor = ctx.saved_tensors[0]
         group: torch.Tensor = ctx.saved_tensors[1]
         jacs = _jexp_impl(tangent_vector)[0][0]
-        size = (
-            tangent_vector.shape[:-2]
-            if tangent_vector.shape[-1] == 1
-            else tangent_vector.shape[:-1]
-        )
+        size = get_tangent_vector_size(tangent_vector)
         dg = group[..., :3].transpose(-2, -1) @ grad_output
         grad_input = jacs.transpose(-2, -1) @ torch.stack(
             (
@@ -337,7 +353,7 @@ _jexp_autograd_fn = _jexp_impl
 # -----------------------------------------------------------------------------
 def _log_impl_helper(group: torch.Tensor):
     check_group_tensor(group)
-    size = group.shape[:-2]
+    size = get_group_size(group)
 
     # Compute the rotation
     ret_ang, (theta, sine, cosine) = SO3._log_impl_helper(group[..., :3])
@@ -399,7 +415,7 @@ def _jlog_impl_helper(
 ):
     ret_lin = tangent_vector[..., :3]
     ret_ang = tangent_vector[..., 3:]
-    size = tangent_vector.shape[:-1]
+    size = get_tangent_vector_size(tangent_vector)
     near_zero = theta < constants._SO3_NEAR_ZERO_EPS[tangent_vector.dtype]
     jac = tangent_vector.new_zeros(*size, 6, 6)
     jac[..., :3, :3], (b_ret_ang,) = SO3._jlog_impl_helper(ret_ang, theta, sine, cosine)
@@ -501,7 +517,7 @@ _jlog_autograd_fn = _jlog_impl
 # -----------------------------------------------------------------------------
 def _adjoint_impl(group: torch.Tensor) -> torch.Tensor:
     check_group_tensor(group)
-    size = group.shape[:-2]
+    size = get_group_size(group)
     ret = group.new_zeros(*size, 6, 6)
     ret[..., :3, :3] = group[..., :3, :3]
     ret[..., 3:, 3:] = group[..., :3, :3]
@@ -526,7 +542,7 @@ class Adjoint(lie_group.UnaryOperator):
     @classmethod
     def backward(cls, ctx, grad_output):
         group: torch.Tensor = ctx.saved_tensors[0]
-        size = group.shape[:-2]
+        size = get_group_size(group)
         grad_input_rot = (
             grad_output[..., :3, :3]
             + grad_output[..., 3:, 3:]
@@ -584,11 +600,7 @@ _jinverse_autograd_fn = _jinverse_impl
 # -----------------------------------------------------------------------------
 def _hat_impl(tangent_vector: torch.Tensor) -> torch.Tensor:
     check_tangent_vector(tangent_vector)
-    size = (
-        tangent_vector.shape[:-2]
-        if tangent_vector.shape[-1] == 1
-        else tangent_vector.shape[:-1]
-    )
+    size = get_tangent_vector_size(tangent_vector)
     tangent_vector = tangent_vector.view(*size, 6)
     matrix = tangent_vector.new_zeros(*size, 4, 4)
     matrix[..., :3, :3] = SO3._hat_impl(tangent_vector[..., 3:])
@@ -610,13 +622,11 @@ class Hat(lie_group.UnaryOperator):
 
     @classmethod
     def setup_context(cls, ctx, inputs, outputs):
-        # inputs is (tangent_vector, )
-        ctx.save_for_backward(inputs[0])
+        pass
 
     @classmethod
     def backward(cls, ctx, grad_output):
         grad_output: torch.Tensor = cast(torch.Tensor, grad_output)
-        tangent_vector: torch.Tensor = ctx.saved_tensors[0]
         return torch.stack(
             (
                 grad_output[..., 0, 3],
@@ -627,7 +637,7 @@ class Hat(lie_group.UnaryOperator):
                 grad_output[..., 1, 0] - grad_output[..., 0, 1],
             ),
             dim=-1,
-        ).view_as(tangent_vector)
+        )
 
 
 _hat_autograd_fn = Hat.apply

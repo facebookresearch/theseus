@@ -63,7 +63,7 @@ def check_transform_tensor(tensor: torch.Tensor):
     if tensor.shape[-1] != 3:
         raise ValueError(
             shape_err_msg(
-                "Tensors transformed",
+                "Tensors transformed by SO3",
                 "(..., 3)",
                 tensor.shape,
             )
@@ -552,13 +552,11 @@ class Hat(lie_group.UnaryOperator):
 
     @classmethod
     def setup_context(cls, ctx, inputs, outputs):
-        # inputs is (tangent_vector, )
-        ctx.save_for_backward(inputs[0])
+        pass
 
     @classmethod
     def backward(cls, ctx, grad_output):
         grad_output: torch.Tensor = cast(torch.Tensor, grad_output)
-        tangent_vector: torch.Tensor = ctx.saved_tensors[0]
         return torch.stack(
             (
                 grad_output[..., 2, 1] - grad_output[..., 1, 2],
@@ -566,7 +564,7 @@ class Hat(lie_group.UnaryOperator):
                 grad_output[..., 1, 0] - grad_output[..., 0, 1],
             ),
             dim=-1,
-        ).view_as(tangent_vector)
+        )
 
 
 _hat_autograd_fn = Hat.apply

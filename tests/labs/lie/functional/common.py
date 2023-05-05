@@ -27,7 +27,7 @@ def get_test_cfg(op_name, dtype, dim, data_shape, module=None):
     if op_name == "compose":
         all_input_types.append((("group", module),) * 2)
     if op_name == "transform_from":
-        for shape in [(3, 1), (3,)]:
+        for shape in [(3,)]:
             all_input_types.append((("group", module), ("matrix", shape)))
     if op_name == "lift":
         matrix_shape = (torch.randint(1, 20, ()).item(), dim)

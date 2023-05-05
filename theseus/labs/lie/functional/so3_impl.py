@@ -626,7 +626,7 @@ def _jcompose_impl(
     group0 = group0.expand(*size, 3, 3)
     group1 = group1.expand(*size, 3, 3)
     jac0 = group1.transpose(-1, -2)
-    jac1 = group0.new_zeros(*group0.shape[:-2], 3, 3)
+    jac1 = group0.new_zeros(*size, 3, 3)
     jac1[..., 0, 0] = 1
     jac1[..., 1, 1] = 1
     jac1[..., 2, 2] = 1

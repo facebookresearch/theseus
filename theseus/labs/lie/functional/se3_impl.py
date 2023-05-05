@@ -698,9 +698,9 @@ _jvee_autograd_fn = None
 def _compose_impl(group0: torch.Tensor, group1: torch.Tensor) -> torch.Tensor:
     check_group_tensor(group0)
     check_group_tensor(group1)
-    ret_rot = group0[:, :, :3] @ group1[:, :, :3]
-    ret_t = group0[:, :, :3] @ group1[:, :, 3:] + group0[:, :, 3:]
-    return torch.cat((ret_rot, ret_t), dim=2)
+    ret_rot = group0[..., :3] @ group1[..., :3]
+    ret_t = group0[..., :3] @ group1[..., 3:] + group0[..., 3:]
+    return torch.cat((ret_rot, ret_t), dim=-1)
 
 
 def _jcompose_impl(
@@ -708,15 +708,19 @@ def _jcompose_impl(
 ) -> Tuple[List[torch.Tensor], torch.Tensor]:
     check_group_tensor(group0)
     check_group_tensor(group1)
+    ret = _compose_impl(group0, group1)
+    size = get_group_size(ret)
+    group0 = group0.expand(*size, 3, 4)
+    group1 = group1.expand(*size, 3, 4)
     jacobians = []
     jacobians.append(_adjoint_autograd_fn(_inverse_autograd_fn(group1)))
-    jacobians.append(group0.new_zeros(group0.shape[0], 6, 6))
-    jacobians[1][:, 0, 0] = 1
-    jacobians[1][:, 1, 1] = 1
-    jacobians[1][:, 2, 2] = 1
-    jacobians[1][:, 3, 3] = 1
-    jacobians[1][:, 4, 4] = 1
-    jacobians[1][:, 5, 5] = 1
+    jacobians.append(group0.new_zeros(*size, 6, 6))
+    jacobians[1][..., 0, 0] = 1
+    jacobians[1][..., 1, 1] = 1
+    jacobians[1][..., 2, 2] = 1
+    jacobians[1][..., 3, 3] = 1
+    jacobians[1][..., 4, 4] = 1
+    jacobians[1][..., 5, 5] = 1
     return jacobians, _compose_impl(group0, group1)
 
 
@@ -737,9 +741,9 @@ class Compose(lie_group.BinaryOperator):
         group0: torch.Tensor = ctx.saved_tensors[0]
         group1: torch.Tensor = ctx.saved_tensors[1]
         grad_input0 = torch.cat(
-            (grad_output @ group1.transpose(1, 2), grad_output[:, :, 3:]), dim=-1
+            (grad_output @ group1.transpose(-1, -2), grad_output[..., 3:]), dim=-1
         )
-        grad_input1 = group0[:, :, :3].transpose(1, 2) @ grad_output
+        grad_input1 = group0[..., :3].transpose(-1, -2) @ grad_output
         return grad_input0, grad_input1
 
 

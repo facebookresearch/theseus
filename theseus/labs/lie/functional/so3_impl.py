@@ -623,9 +623,7 @@ def _jcompose_impl(
     check_group_tensor(group1)
     ret = group0 @ group1
     size = get_group_size(ret)
-    group0 = group0.expand(*size, 3, 3)
-    group1 = group1.expand(*size, 3, 3)
-    jac0 = group1.transpose(-1, -2)
+    jac0 = group1.transpose(-1, -2).expand(*size, 3, 3)
     jac1 = group0.new_zeros(*size, 3, 3)
     jac1[..., 0, 0] = 1
     jac1[..., 1, 1] = 1

@@ -710,10 +710,10 @@ def _jcompose_impl(
     check_group_tensor(group1)
     ret = _compose_impl(group0, group1)
     size = get_group_size(ret)
-    group0 = group0.expand(*size, 3, 4)
-    group1 = group1.expand(*size, 3, 4)
     jacobians = []
-    jacobians.append(_adjoint_autograd_fn(_inverse_autograd_fn(group1)))
+    jacobians.append(
+        _adjoint_autograd_fn(_inverse_autograd_fn(group1.expand(*size, 3, 4)))
+    )
     jacobians.append(group0.new_zeros(*size, 6, 6))
     jacobians[1][..., 0, 0] = 1
     jacobians[1][..., 1, 1] = 1
@@ -721,7 +721,7 @@ def _jcompose_impl(
     jacobians[1][..., 3, 3] = 1
     jacobians[1][..., 4, 4] = 1
     jacobians[1][..., 5, 5] = 1
-    return jacobians, _compose_impl(group0, group1)
+    return jacobians, ret
 
 
 class Compose(lie_group.BinaryOperator):

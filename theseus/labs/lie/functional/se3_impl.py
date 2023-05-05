@@ -712,7 +712,7 @@ def _jcompose_impl(
     size = get_group_size(ret)
     jacobians = []
     jacobians.append(
-        _adjoint_autograd_fn(_inverse_autograd_fn(group1.expand(*size, 3, 4)))
+        _adjoint_autograd_fn(_inverse_autograd_fn(group1)).expand(*size, 6, 6)
     )
     jacobians.append(group0.new_zeros(*size, 6, 6))
     jacobians[1][..., 0, 0] = 1

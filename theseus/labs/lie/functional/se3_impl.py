@@ -757,8 +757,8 @@ _jcompose_autograd_fn = _jcompose_impl
 def _transform_from_impl(group: torch.Tensor, tensor: torch.Tensor) -> torch.Tensor:
     check_group_tensor(group)
     check_transform_tensor(tensor)
-    ret = group[:, :, -1:] + group[:, :, :3] @ tensor.view(-1, 3, 1)
-    return ret.reshape(tensor.shape)
+    ret = group[..., -1:] + group[..., :3] @ tensor.unsqueeze(-1)
+    return ret.squeeze(-1)
 
 
 def _jtransform_from_impl(
@@ -766,14 +766,15 @@ def _jtransform_from_impl(
 ) -> Tuple[List[torch.Tensor], torch.Tensor]:
     check_group_tensor(group)
     check_transform_tensor(tensor)
-    jacobian_g = group.new_empty(group.shape[0], 3, 6)
-    jacobian_g[:, :, :3] = group[:, :, :3]
-    jacobian_g[:, :, 3:] = -group[:, :, :3] @ SO3._hat_autograd_fn(tensor)
-    jacobian_p = group[:, :, :3].view(tensor.shape[:-1] + (3, 3))
-    jacobians = []
-    jacobians.append(jacobian_g)
-    jacobians.append(jacobian_p)
-    return jacobians, _transform_from_impl(group, tensor)
+    ret = _transform_from_impl(group, tensor)
+    size = get_transform_tensor_size(ret)
+    jacobian_g = group.new_empty(*size, 3, 6)
+    jacobian_g[..., :3] = group[..., :3]
+    jacobian_g[..., 3:] = -group[..., :3] @ SO3._hat_autograd_fn(tensor)
+    jacobian_p = group[..., :3]
+    jacobian_g = jacobian_g.expand(*size, 3, 6)
+    jacobian_p = jacobian_p.expand(*size, 3, 3)
+    return [jacobian_g, jacobian_p], ret
 
 
 class TransformFrom(lie_group.BinaryOperator):
@@ -793,12 +794,13 @@ class TransformFrom(lie_group.BinaryOperator):
     def backward(cls, ctx, grad_output):
         group: torch.Tensor = ctx.saved_tensors[0]
         tensor: torch.Tensor = ctx.saved_tensors[1]
-        grad_output: torch.Tensor = grad_output.view(-1, 3, 1)
+        grad_output: torch.Tensor = grad_output.unsqueeze(-1)
+        tensor_size = get_transform_tensor_size(tensor)
         grad_input0 = torch.cat(
-            (grad_output @ tensor.view(-1, 1, 3), grad_output), dim=-1
+            (grad_output @ tensor.view(*tensor_size, 1, 3), grad_output), dim=-1
         )
-        grad_input1 = group[:, :, :3].transpose(1, 2) @ grad_output
-        return grad_input0, grad_input1.view(tensor.shape)
+        grad_input1 = group[..., :3].transpose(-1, -2) @ grad_output
+        return grad_input0, grad_input1.squeeze(-1)
 
 
 _transform_from_autograd_fn = TransformFrom.apply

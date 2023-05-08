@@ -62,8 +62,6 @@ def check_hat_matrix(matrix: torch.Tensor):
 
 
 def check_transform_tensor(tensor: torch.Tensor):
-    # calling this because it just checks that the shapes are correct
-    # (both the pose (x, y, z) and the tangent vector are 3D for SE3)
     if tensor.shape[-1] != 3:
         raise ValueError(
             shape_err_msg(

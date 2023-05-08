@@ -26,3 +26,19 @@ def shape_err_msg(data_type: str, expected_shape: str, tensor_shape: torch.Size)
 
 def fill_dims(tensor: torch.Tensor, dim: int):
     return tensor.view(*(1 for n in range(dim - tensor.dim())), *tensor.shape)
+
+
+def permute_op_dims(dims: int, op_dims: int, group_dims: int):
+    return (
+        [i for i in range(dims - op_dims - group_dims, dims - group_dims)]
+        + [i for i in range(0, dims - op_dims - group_dims)]
+        + [i for i in range(dims - group_dims, dims)]
+    )
+
+
+def unpermute_op_dims(dims: int, op_dims: int, group_dims: int):
+    return (
+        [i for i in range(op_dims, dims - group_dims)]
+        + [i for i in range(0, op_dims)]
+        + [i for i in range(dims - group_dims, dims)]
+    )

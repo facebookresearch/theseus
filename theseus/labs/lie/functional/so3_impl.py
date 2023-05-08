@@ -15,6 +15,7 @@ from .utils import get_module, shape_err_msg
 NAME: str = "SO3"
 DIM: int = 3
 
+_DIAG_3_IDX = [0, 1, 2]
 
 _module = get_module(__name__)
 
@@ -625,9 +626,7 @@ def _jcompose_impl(
     size = get_group_size(ret)
     jac0 = group1.transpose(-1, -2).expand(*size, 3, 3).clone()
     jac1 = group0.new_zeros(*size, 3, 3)
-    jac1[..., 0, 0] = 1
-    jac1[..., 1, 1] = 1
-    jac1[..., 2, 2] = 1
+    jac1[..., _DIAG_3_IDX, _DIAG_3_IDX] = 1
     return [jac0, jac1], ret
 
 

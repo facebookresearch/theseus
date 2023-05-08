@@ -14,7 +14,7 @@ from .utils import get_module, shape_err_msg
 
 NAME: str = "SE3"
 DIM: int = 6
-
+_DIAG_6_IDX = [0, 1, 2, 3, 4, 5]
 
 _module = get_module(__name__)
 
@@ -715,12 +715,7 @@ def _jcompose_impl(
         _adjoint_autograd_fn(_inverse_autograd_fn(group1)).expand(*size, 6, 6).clone()
     )
     jacobians.append(group0.new_zeros(*size, 6, 6))
-    jacobians[1][..., 0, 0] = 1
-    jacobians[1][..., 1, 1] = 1
-    jacobians[1][..., 2, 2] = 1
-    jacobians[1][..., 3, 3] = 1
-    jacobians[1][..., 4, 4] = 1
-    jacobians[1][..., 5, 5] = 1
+    jacobians[1][..., _DIAG_6_IDX, _DIAG_6_IDX] = 1
     return jacobians, ret
 
 

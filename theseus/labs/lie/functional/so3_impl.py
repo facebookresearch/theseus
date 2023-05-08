@@ -9,7 +9,7 @@ from typing import cast, List, Tuple, Optional
 from . import constants
 from . import lie_group
 from .check_contexts import checks_base
-from .utils import get_module, shape_err_msg
+from .utils import get_module, shape_err_msg, permute_op_dims, unpermute_op_dims
 
 
 NAME: str = "SO3"
@@ -1019,11 +1019,17 @@ def _normalize_backward_helper(
     F = F.pow(-1)
 
     u_term: torch.Tensor = u @ (F * _skew_symm(ut @ grad_u))
-    u_term = torch.einsum("n...ij, n...j->n...ij", u_term, s)
+    # u_term = torch.einsum("n...ij, n...j->n...ij", u_term, s)
+    permuted_u_term_dims = permute_op_dims(u_term.dim(), 1, 1)
+    unpermuted_u_term_dims = unpermute_op_dims(u_term.dim(), 1, 1)
+    u_term = (u_term.permute(permuted_u_term_dims) * s).permute(unpermuted_u_term_dims)
     u_term = u_term @ vt
 
     v_term: torch.Tensor = (F * _skew_symm(vt @ grad_v)) @ vt
-    v_term = torch.einsum("n...i, n...ij->n...ij", s, v_term)
+    # v_term = torch.einsum("n...i, n...ij->n...ij", s, v_term)
+    permuted_v_term_dims = permute_op_dims(v_term.dim(), 1, 0)
+    unpermuted_v_term_dims = unpermute_op_dims(v_term.dim(), 1, 0)
+    v_term = (s * v_term.permute(permuted_v_term_dims)).permute(unpermuted_v_term_dims)
     v_term = u @ v_term
 
     return u_term + v_term

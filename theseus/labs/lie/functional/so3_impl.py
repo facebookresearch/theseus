@@ -623,7 +623,7 @@ def _jcompose_impl(
     check_group_tensor(group1)
     ret = group0 @ group1
     size = get_group_size(ret)
-    jac0 = group1.transpose(-1, -2).expand(*size, 3, 3)
+    jac0 = group1.transpose(-1, -2).expand(*size, 3, 3).clone()
     jac1 = group0.new_zeros(*size, 3, 3)
     jac1[..., 0, 0] = 1
     jac1[..., 1, 1] = 1
@@ -676,8 +676,8 @@ def _jtransform_from_impl(
     size = get_transform_tensor_size(ret)
     jacobian_g = -group @ _hat_autograd_fn(tensor)
     jacobian_p = group
-    jacobian_g = jacobian_g.expand(*size, 3, 3)
-    jacobian_p = jacobian_p.expand(*size, 3, 3)
+    jacobian_g = jacobian_g.expand(*size, 3, 3).clone()
+    jacobian_p = jacobian_p.expand(*size, 3, 3).clone()
     return [jacobian_g, jacobian_p], ret
 
 

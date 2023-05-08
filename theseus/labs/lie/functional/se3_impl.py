@@ -712,7 +712,7 @@ def _jcompose_impl(
     size = get_group_size(ret)
     jacobians = []
     jacobians.append(
-        _adjoint_autograd_fn(_inverse_autograd_fn(group1)).expand(*size, 6, 6)
+        _adjoint_autograd_fn(_inverse_autograd_fn(group1)).expand(*size, 6, 6).clone()
     )
     jacobians.append(group0.new_zeros(*size, 6, 6))
     jacobians[1][..., 0, 0] = 1
@@ -772,8 +772,8 @@ def _jtransform_from_impl(
     jacobian_g[..., :3] = group[..., :3]
     jacobian_g[..., 3:] = -group[..., :3] @ SO3._hat_autograd_fn(tensor)
     jacobian_p = group[..., :3]
-    jacobian_g = jacobian_g.expand(*size, 3, 6)
-    jacobian_p = jacobian_p.expand(*size, 3, 3)
+    jacobian_g = jacobian_g.expand(*size, 3, 6).clone()
+    jacobian_p = jacobian_p.expand(*size, 3, 3).clone()
     return [jacobian_g, jacobian_p], ret
 
 

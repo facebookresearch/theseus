@@ -59,8 +59,6 @@ def check_tangent_vector(tangent_vector: torch.Tensor):
 
 
 def check_transform_tensor(tensor: torch.Tensor):
-    # calling this because it just checks that the shapes are correct
-    # (both the pose (x, y, z) and the tangent vector are 3D for SO3)
     if tensor.shape[-1] != 3:
         raise ValueError(
             shape_err_msg(

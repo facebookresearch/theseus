@@ -13,6 +13,7 @@ from theseus.geometry.manifold import Manifold
 
 from .cost_function import AutoDiffCostFunction, CostFunction
 from .objective import Objective
+from .robust_cost_function import RobustCostFunction
 from .variable import Variable
 
 _CostFunctionSchema = Tuple[str, ...]
@@ -23,6 +24,11 @@ def _get_cost_function_schema(cost_function: CostFunction) -> _CostFunctionSchem
         _name = f"{obj.__module__}.{obj.__class__.__name__}"
         if isinstance(obj, AutoDiffCostFunction):
             _name += f"__{id(obj._err_fn)}"
+        if isinstance(obj, RobustCostFunction):
+            _name += (
+                f"__{_fullname(obj.cost_function)}__"
+                f"{_fullname(obj.loss)}__{obj.flatten_dims}"
+            )
         return _name
 
     def _varinfo(var) -> str:

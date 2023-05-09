@@ -910,15 +910,12 @@ def _left_act_impl(
     check_left_act_tensor(tensor)
 
     if group.ndim + dim_out > tensor.ndim:
-        tensor = tensor.view(
-            tuple(1 for n in range(group.ndim + dim_out - tensor.ndim)) + tensor.shape
-        )
+        tensor = tensor.view((1,) * (group.ndim + dim_out - tensor.ndim) + tensor.shape)
 
     permuted_dim = permute_op_dim(tensor.ndim, dim_out, 2)
+    unpermuted_dim = unpermute_op_dim(tensor.ndim, dim_out, 2)
     tensor = tensor.permute(permuted_dim)
-    ret = group @ tensor
-    unpermuted_dim = unpermute_op_dim(ret.ndim, dim_out, 2)
-    return ret.permute(unpermuted_dim)
+    return (group @ tensor).permute(unpermuted_dim)
 
 
 class LeftAct(lie_group.GradientOperator):
@@ -942,24 +939,20 @@ class LeftAct(lie_group.GradientOperator):
 
         if group.ndim + dim_out > tensor.ndim:
             tensor = tensor.view(
-                tuple(1 for n in range(group.ndim + dim_out - tensor.ndim))
-                + tensor.shape
+                (1,) * (group.ndim + dim_out - tensor.ndim) + tensor.shape
             )
 
-        permuted_tensor_dim = permute_op_dim(tensor.ndim, dim_out, 2)
-        permuted_grad_dim = permute_op_dim(grad_output.ndim, dim_out, 2)
-        unpermuted_grad_dim = unpermute_op_dim(grad_output.ndim, dim_out, 2)
+        permuted_dim = permute_op_dim(tensor.ndim, dim_out, 2)
+        unpermuted_dim = unpermute_op_dim(tensor.ndim, dim_out, 2)
         group: torch.Tensor = group
-        tensor: torch.Tensor = tensor.permute(permuted_tensor_dim)
-        grad_output: torch.Tensor = grad_output.permute(permuted_grad_dim)
-        jac_g = (grad_output @ tensor.transpose(-1, -2)).permute(unpermuted_grad_dim)
-        jac_tensor = (group.transpose(-1, -2) @ grad_output).permute(
-            unpermuted_grad_dim
-        )
+        tensor: torch.Tensor = tensor.permute(permuted_dim)
+        grad_output: torch.Tensor = grad_output.permute(permuted_dim)
+        jac_group = (grad_output @ tensor.transpose(-1, -2)).permute(unpermuted_dim)
+        jac_tensor = (group.transpose(-1, -2) @ grad_output).permute(unpermuted_dim)
         if dim_out > 0:
             dim = list(range(tensor.ndim - 2 - dim_out, tensor.ndim - 2))
-            jac_g = jac_g.sum(dim)
-        return jac_g, jac_tensor, None
+            jac_group = jac_group.sum(dim)
+        return jac_group, jac_tensor, None
 
 
 _left_act_autograd_fn = LeftAct.apply

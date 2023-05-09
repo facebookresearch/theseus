@@ -9,7 +9,13 @@ from typing import cast, List, Tuple, Optional
 from . import constants
 from . import lie_group
 from .check_contexts import checks_base
-from .utils import get_module, shape_err_msg, permute_op_dim, unpermute_op_dim
+from .utils import (
+    get_module,
+    shape_err_msg,
+    permute_op_dim,
+    unpermute_op_dim,
+    fill_dims,
+)
 
 
 NAME: str = "SO3"
@@ -910,7 +916,7 @@ def _left_act_impl(
     check_left_act_tensor(tensor)
 
     if group.ndim + dim_out > tensor.ndim:
-        tensor = tensor.view((1,) * (group.ndim + dim_out - tensor.ndim) + tensor.shape)
+        tensor = fill_dims(tensor, group.ndim + dim_out)
 
     permuted_dim = permute_op_dim(tensor.ndim, dim_out, 2)
     unpermuted_dim = unpermute_op_dim(tensor.ndim, dim_out, 2)
@@ -938,9 +944,7 @@ class LeftAct(lie_group.GradientOperator):
         dim_out: int = ctx.dim_out
 
         if group.ndim + dim_out > tensor.ndim:
-            tensor = tensor.view(
-                (1,) * (group.ndim + dim_out - tensor.ndim) + tensor.shape
-            )
+            tensor = fill_dims(tensor, group.ndim + dim_out)
 
         permuted_dim = permute_op_dim(tensor.ndim, dim_out, 2)
         unpermuted_dim = unpermute_op_dim(tensor.ndim, dim_out, 2)

@@ -295,8 +295,8 @@ class LieGroupFns:
         self.lift = UnaryOperatorFactory(module, "lift")[0]
         self.project = UnaryOperatorFactory(module, "project")[0]
         self.compose, self.jcompose = BinaryOperatorFactory(module, "compose")
-        self.left_act = BinaryOperatorFactory(module, "left_act")[0]
-        self.left_project = BinaryOperatorFactory(module, "left_project")[0]
+        self.left_act = GradientOperatorFactory(module, "left_act")[0]
+        self.left_project = GradientOperatorFactory(module, "left_project")[0]
         self.transform_from, self.jtransform_from = BinaryOperatorFactory(
             module, "transform_from"
         )
@@ -314,7 +314,7 @@ class LieGroupFns:
             self.check_lift_matrix: _CheckFnType = module.check_lift_matrix
         if hasattr(module, "check_project_matrix"):
             self.check_project_matrix: _CheckFnType = module.check_project_matrix
-        self.check_left_act_matrix: _CheckFnType = module.check_left_act_matrix
+        self.check_left_act_tensor: _CheckFnType = module.check_left_act_tensor
         self.check_left_project_matrix: _CheckFnType = module.check_left_project_matrix
         self.rand: _RandFnType = module.rand
         self.randn: _RandFnType = module.randn

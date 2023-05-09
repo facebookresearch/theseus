@@ -86,10 +86,10 @@ def check_project_matrix(matrix: torch.Tensor):
         )
 
 
-def check_left_act_matrix(matrix: torch.Tensor):
+def check_left_act_tensor(matrix: torch.Tensor):
     if matrix.shape[-2] != 3:
         raise ValueError(
-            shape_err_msg("Left acted matrices of SE3", "(..., 3, -1)", matrix.shape)
+            shape_err_msg("Left acted tensors of SE3", "(..., 3, -1)", matrix.shape)
         )
 
 
@@ -873,7 +873,7 @@ project, jproject = lie_group.UnaryOperatorFactory(_module, "project")
 # -----------------------------------------------------------------------------
 def _left_act_impl(group: torch.Tensor, matrix: torch.Tensor) -> torch.Tensor:
     check_group_tensor(group)
-    check_left_act_matrix(matrix)
+    check_left_act_tensor(matrix)
     ret = SO3._left_act_impl(group[..., :3], matrix)
     return ret
 

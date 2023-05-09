@@ -103,7 +103,7 @@ def check_unit_quaternion(quaternion: torch.Tensor):
 def check_left_act_tensor(tensor: torch.Tensor):
     if tensor.shape[-2] != 3:
         raise ValueError(
-            shape_err_msg("Left acted matrices of SO3", "(..., 3, -1)", tensor.shape)
+            shape_err_msg("Left acted tensors of SO3", "(..., 3, -1)", tensor.shape)
         )
 
 
@@ -909,10 +909,16 @@ def _left_act_impl(
     check_group_tensor(group)
     check_left_act_tensor(tensor)
 
+    if group.ndim + dim_out > tensor.ndim:
+        tensor = tensor.view(
+            tuple(1 for n in range(group.ndim + dim_out - tensor.ndim)) + tensor.shape
+        )
+
     permuted_dim = permute_op_dim(tensor.ndim, dim_out, 2)
-    unpermuted_dim = unpermute_op_dim(tensor.ndim, dim_out, 2)
-    tensor.permute(permuted_dim)
-    return (group @ tensor).permute(unpermuted_dim)
+    tensor = tensor.permute(permuted_dim)
+    ret = group @ tensor
+    unpermuted_dim = unpermute_op_dim(ret.ndim, dim_out, 2)
+    return ret.permute(unpermuted_dim)
 
 
 class LeftAct(lie_group.GradientOperator):
@@ -926,22 +932,34 @@ class LeftAct(lie_group.GradientOperator):
     @classmethod
     def setup_context(cls, ctx, inputs, outputs):
         # inputs is (group, tensor)
-        ctx.save_for_backward(inputs[0], inputs[1], inputs[2])
+        ctx.save_for_backward(inputs[0], inputs[1])
+        ctx.dim_out = inputs[2]
 
     @classmethod
     def backward(cls, ctx, grad_output):
-        group, tensor, dim_out = ctx.saved_tensors
-        permuted_dim = permute_op_dim(group.dim(), dim_out, 2)
-        unpermuted_dim = unpermute_op_dim(group.dim(), dim_out, 2)
+        group, tensor = ctx.saved_tensors
+        dim_out: int = ctx.dim_out
+
+        if group.ndim + dim_out > tensor.ndim:
+            tensor = tensor.view(
+                tuple(1 for n in range(group.ndim + dim_out - tensor.ndim))
+                + tensor.shape
+            )
+
+        permuted_tensor_dim = permute_op_dim(tensor.ndim, dim_out, 2)
+        permuted_grad_dim = permute_op_dim(grad_output.ndim, dim_out, 2)
+        unpermuted_grad_dim = unpermute_op_dim(grad_output.ndim, dim_out, 2)
         group: torch.Tensor = group
-        tensor: torch.Tensor = tensor.permute(permuted_dim)
-        grad_output: torch.Tensor = grad_output.permute(permuted_dim)
-        jac_g = (grad_output @ tensor.transpose(-1, -2)).permute(unpermuted_dim)
+        tensor: torch.Tensor = tensor.permute(permuted_tensor_dim)
+        grad_output: torch.Tensor = grad_output.permute(permuted_grad_dim)
+        jac_g = (grad_output @ tensor.transpose(-1, -2)).permute(unpermuted_grad_dim)
+        jac_tensor = (group.transpose(-1, -2) @ grad_output).permute(
+            unpermuted_grad_dim
+        )
         if dim_out > 0:
             dim = list(range(tensor.ndim - 2 - dim_out, tensor.ndim - 2))
             jac_g = jac_g.sum(dim)
-        jac_mat = (group.transpose(-1, -2) @ grad_output).permute(unpermuted_dim)
-        return jac_g, jac_mat
+        return jac_g, jac_tensor, None
 
 
 _left_act_autograd_fn = LeftAct.apply

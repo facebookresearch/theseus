@@ -28,17 +28,17 @@ def fill_dims(tensor: torch.Tensor, dim: int):
     return tensor.view(*(1 for n in range(dim - tensor.dim())), *tensor.shape)
 
 
-def permute_op_dims(dims: int, op_dims: int, group_dims: int):
+def permute_op_dim(dim: int, op_dim: int, group_dim: int):
     return (
-        [i for i in range(dims - op_dims - group_dims, dims - group_dims)]
-        + [i for i in range(0, dims - op_dims - group_dims)]
-        + [i for i in range(dims - group_dims, dims)]
+        [i for i in range(dim - op_dim - group_dim, dim - group_dim)]
+        + [i for i in range(0, dim - op_dim - group_dim)]
+        + [i for i in range(dim - group_dim, dim)]
     )
 
 
-def unpermute_op_dims(dims: int, op_dims: int, group_dims: int):
+def unpermute_op_dim(dim: int, op_dim: int, group_dim: int):
     return (
-        [i for i in range(op_dims, dims - group_dims)]
-        + [i for i in range(0, op_dims)]
-        + [i for i in range(dims - group_dims, dims)]
+        [i for i in range(op_dim, dim - group_dim)]
+        + [i for i in range(0, op_dim)]
+        + [i for i in range(dim - group_dim, dim)]
     )

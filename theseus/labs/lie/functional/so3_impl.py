@@ -9,7 +9,7 @@ from typing import cast, List, Tuple, Optional
 from . import constants
 from . import lie_group
 from .check_contexts import checks_base
-from .utils import get_module, shape_err_msg, permute_op_dims, unpermute_op_dims
+from .utils import get_module, shape_err_msg, permute_op_dim, unpermute_op_dim
 
 
 NAME: str = "SO3"
@@ -100,10 +100,10 @@ def check_unit_quaternion(quaternion: torch.Tensor):
     checks_base(quaternion, _impl)
 
 
-def check_left_act_matrix(matrix: torch.Tensor):
-    if matrix.shape[-2] != 3:
+def check_left_act_tensor(tensor: torch.Tensor):
+    if tensor.shape[-2] != 3:
         raise ValueError(
-            shape_err_msg("Left acted matrices of SO3", "(..., 3, -1)", matrix.shape)
+            shape_err_msg("Left acted matrices of SO3", "(..., 3, -1)", tensor.shape)
         )
 
 
@@ -903,34 +903,44 @@ _jproject_autograd_fn = None
 # -----------------------------------------------------------------------------
 # Left Act
 # -----------------------------------------------------------------------------
-def _left_act_impl(group: torch.Tensor, matrix: torch.Tensor) -> torch.Tensor:
+def _left_act_impl(
+    group: torch.Tensor, tensor: torch.Tensor, dim_out: int = 1
+) -> torch.Tensor:
     check_group_tensor(group)
-    check_left_act_matrix(matrix)
+    check_left_act_tensor(tensor)
 
-    return torch.einsum("nij,n...jk->n...ik", group, matrix)
+    permuted_dim = permute_op_dim(tensor.ndim, dim_out, 2)
+    unpermuted_dim = unpermute_op_dim(tensor.ndim, dim_out, 2)
+    tensor.permute(permuted_dim)
+    return (group @ tensor).permute(unpermuted_dim)
 
 
-class LeftAct(lie_group.BinaryOperator):
+class LeftAct(lie_group.GradientOperator):
     @classmethod
-    def _forward_impl(cls, group, matrix):
+    def _forward_impl(cls, group, tensor, dim_out):
         group: torch.Tensor = cast(torch.Tensor, group)
-        matrix: torch.Tensor = cast(torch.Tensor, matrix)
-        ret = _left_act_impl(group, matrix)
+        tensor: torch.Tensor = cast(torch.Tensor, tensor)
+        ret = _left_act_impl(group, tensor, dim_out)
         return ret
 
     @classmethod
     def setup_context(cls, ctx, inputs, outputs):
-        # inputs is (group, matrix)
-        ctx.save_for_backward(inputs[0], inputs[1])
+        # inputs is (group, tensor)
+        ctx.save_for_backward(inputs[0], inputs[1], inputs[2])
 
     @classmethod
     def backward(cls, ctx, grad_output):
-        group, matrix = ctx.saved_tensors
-        jac_g = torch.einsum("n...ij,n...kj->n...ik", grad_output, matrix)
-        if matrix.ndim > 3:
-            dims = list(range(1, matrix.ndim - 2))
-            jac_g = jac_g.sum(dims)
-        jac_mat = torch.einsum("nji, n...jk->n...ik", group, grad_output)
+        group, tensor, dim_out = ctx.saved_tensors
+        permuted_dim = permute_op_dim(group.dim(), dim_out, 2)
+        unpermuted_dim = unpermute_op_dim(group.dim(), dim_out, 2)
+        group: torch.Tensor = group
+        tensor: torch.Tensor = tensor.permute(permuted_dim)
+        grad_output: torch.Tensor = grad_output.permute(permuted_dim)
+        jac_g = (grad_output @ tensor.transpose(-1, -2)).permute(unpermuted_dim)
+        if dim_out > 0:
+            dim = list(range(tensor.ndim - 2 - dim_out, tensor.ndim - 2))
+            jac_g = jac_g.sum(dim)
+        jac_mat = (group.transpose(-1, -2) @ grad_output).permute(unpermuted_dim)
         return jac_g, jac_mat
 
 
@@ -964,8 +974,8 @@ class LeftProject(lie_group.BinaryOperator):
         grad_output_lifted = _lift_autograd_fn(grad_output)
         jac_g = -torch.einsum("n...ij,n...jk->n...ik", matrix, grad_output_lifted)
         if matrix.ndim > 3:
-            dims = list(range(1, matrix.ndim - 2))
-            jac_g = jac_g.sum(dims)
+            dim = list(range(1, matrix.ndim - 2))
+            jac_g = jac_g.sum(dim)
         jac_mat = torch.einsum("nij, n...jk->n...ik", group, grad_output_lifted)
         return jac_g, jac_mat
 
@@ -1020,16 +1030,16 @@ def _normalize_backward_helper(
 
     u_term: torch.Tensor = u @ (F * _skew_symm(ut @ grad_u))
     # u_term = torch.einsum("n...ij, n...j->n...ij", u_term, s)
-    permuted_u_term_dims = permute_op_dims(u_term.dim(), 1, 1)
-    unpermuted_u_term_dims = unpermute_op_dims(u_term.dim(), 1, 1)
-    u_term = (u_term.permute(permuted_u_term_dims) * s).permute(unpermuted_u_term_dims)
+    permuted_u_term_dim = permute_op_dim(u_term.dim(), 1, 1)
+    unpermuted_u_term_dim = unpermute_op_dim(u_term.dim(), 1, 1)
+    u_term = (u_term.permute(permuted_u_term_dim) * s).permute(unpermuted_u_term_dim)
     u_term = u_term @ vt
 
     v_term: torch.Tensor = (F * _skew_symm(vt @ grad_v)) @ vt
     # v_term = torch.einsum("n...i, n...ij->n...ij", s, v_term)
-    permuted_v_term_dims = permute_op_dims(v_term.dim(), 1, 0)
-    unpermuted_v_term_dims = unpermute_op_dims(v_term.dim(), 1, 0)
-    v_term = (s * v_term.permute(permuted_v_term_dims)).permute(unpermuted_v_term_dims)
+    permuted_v_term_dim = permute_op_dim(v_term.dim(), 1, 0)
+    unpermuted_v_term_dim = unpermute_op_dim(v_term.dim(), 1, 0)
+    v_term = (s * v_term.permute(permuted_v_term_dim)).permute(unpermuted_v_term_dim)
     v_term = u @ v_term
 
     return u_term + v_term

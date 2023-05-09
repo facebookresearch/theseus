@@ -27,13 +27,15 @@ def JInverseImplFactory(module):
 
 
 def LeftProjectImplFactory(module):
-    def _left_project_impl(group: torch.Tensor, matrix: torch.Tensor) -> torch.Tensor:
+    def _left_project_impl(
+        group: torch.Tensor, tensor: torch.Tensor, dim_out: int = 1
+    ) -> torch.Tensor:
         module.check_group_tensor(group)
-        module.check_left_project_matrix(matrix)
+        module.check_left_project_matrix(tensor)
         group_inverse = module._inverse_autograd_fn(group)
 
         return module._project_autograd_fn(
-            module._left_act_autograd_fn(group_inverse, matrix)
+            module._left_act_autograd_fn(group_inverse, tensor, dim_out)
         )
 
     return _left_project_impl
@@ -208,6 +210,76 @@ class _IdentityFnType(Protocol):
         requires_grad: bool = False,
     ) -> torch.Tensor:
         pass
+
+
+class GradientOperator(torch.autograd.Function):
+    generate_vmap_rule = True
+
+    @classmethod
+    @abc.abstractmethod
+    def _forward_impl(cls, group, tensor, dim_out):
+        pass
+
+    @classmethod
+    def forward(cls, *args):
+        assert len(args) in [3, 4]
+        if len(args) == 3:  # torch >= 2.0, args is (group, tensor, dim_out)
+            output = cls._forward_impl(args[0], args[1], args[2])
+        else:  # args is (ctx, group, tensor, dim_out)
+            output = cls._forward_impl(args[1], args[2], args[3])
+            cls.setup_context(args[0], (args[1], args[2]), args[3], output)
+        return output
+
+    @classmethod
+    def setup_context(cls, ctx, inputs, outputs):
+        pass
+
+
+class GradientOperatorOpFnType(Protocol):
+    def __call__(
+        self,
+        group: torch.Tensor,
+        tensor: torch.Tensor,
+        dim_out: int = 1,
+    ) -> torch.Tensor:
+        pass
+
+
+class GradientOperatorJOpFnType(Protocol):
+    def __call__(
+        self,
+        group: torch.Tensor,
+        tensor: torch.Tensor,
+        dim_out: int = 1,
+    ) -> Tuple[List[torch.Tensor], torch.Tensor]:
+        pass
+
+
+def GradientOperatorFactory(
+    module, op_name
+) -> Tuple[GradientOperatorOpFnType, GradientOperatorJOpFnType]:
+    # Get autograd.Function wrapper of op and its jacobian
+    op_autograd_fn = getattr(module, "_" + op_name + "_autograd_fn")
+    jop_autograd_fn = getattr(module, "_j" + op_name + "_autograd_fn")
+
+    def op(
+        group: torch.Tensor,
+        tensor: torch.Tensor,
+        dim_out: int = 1,
+    ) -> torch.Tensor:
+        return op_autograd_fn(group, tensor, dim_out)
+
+    def jop(
+        group: torch.Tensor,
+        tensor: torch.Tensor,
+        dim_out: int = 1,
+    ) -> Tuple[List[torch.Tensor], torch.Tensor]:
+        _check_jacobians_supported(
+            jop_autograd_fn, module.NAME, op_name, is_kwarg=False
+        )
+        return jop_autograd_fn(group, tensor, dim_out)
+
+    return op, jop
 
 
 # Namespace to facilitate type-checking downstream

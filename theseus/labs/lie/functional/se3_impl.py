@@ -619,10 +619,6 @@ class Hat(lie_group.UnaryOperator):
         return ret
 
     @classmethod
-    def setup_context(cls, ctx, inputs, outputs):
-        pass
-
-    @classmethod
     def backward(cls, ctx, grad_output):
         grad_output: torch.Tensor = cast(torch.Tensor, grad_output)
         return torch.stack(
@@ -671,10 +667,6 @@ class Vee(lie_group.UnaryOperator):
         tangent_vector: torch.Tensor = cast(torch.Tensor, tangent_vector)
         ret = _vee_impl(tangent_vector)
         return ret
-
-    @classmethod
-    def setup_context(cls, ctx, inputs, outputs):
-        pass
 
     @classmethod
     def backward(cls, ctx, grad_output):
@@ -824,10 +816,6 @@ class Lift(lie_group.UnaryOperator):
         return ret
 
     @classmethod
-    def setup_context(cls, ctx, inputs, outputs):
-        pass
-
-    @classmethod
     def backward(cls, ctx, grad_output):
         grad_output: torch.Tensor = cast(torch.Tensor, grad_output)
         return project(grad_output)
@@ -867,10 +855,6 @@ class Project(lie_group.UnaryOperator):
         matrix: torch.Tensor = cast(torch.Tensor, matrix)
         ret = _project_impl(matrix)
         return ret
-
-    @classmethod
-    def setup_context(cls, ctx, inputs, outputs):
-        pass
 
     @classmethod
     def backward(cls, ctx, grad_output):

@@ -550,10 +550,6 @@ class Hat(lie_group.UnaryOperator):
         return ret
 
     @classmethod
-    def setup_context(cls, ctx, inputs, outputs):
-        pass
-
-    @classmethod
     def backward(cls, ctx, grad_output):
         grad_output: torch.Tensor = cast(torch.Tensor, grad_output)
         return torch.stack(

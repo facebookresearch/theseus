@@ -871,42 +871,52 @@ project, jproject = lie_group.UnaryOperatorFactory(_module, "project")
 # -----------------------------------------------------------------------------
 # Left Act
 # -----------------------------------------------------------------------------
-def _left_act_impl(group: torch.Tensor, matrix: torch.Tensor) -> torch.Tensor:
+def _left_act_impl(
+    group: torch.Tensor, tensor: torch.Tensor, dim_out: int = 1
+) -> torch.Tensor:
     check_group_tensor(group)
-    check_left_act_tensor(matrix)
-    ret = SO3._left_act_impl(group[..., :3], matrix)
+    check_left_act_tensor(tensor)
+    ret = SO3._left_act_impl(group[..., :3], tensor, dim_out)
     return ret
 
 
-def _left_act_backward_helper(group, matrix, grad_output) -> torch.Tensor:
-    jac_rot = torch.einsum("n...ij,n...kj->n...ik", grad_output, matrix)
-    if matrix.ndim > 3:
-        dims = list(range(1, matrix.ndim - 2))
-        jac_rot = jac_rot.sum(dims)
-    return torch.cat((jac_rot, jac_rot.new_zeros(jac_rot.shape[0], 3, 1)), dim=-1)
+def _left_act_backward_helper(
+    group: torch.Tensor, tensor: torch.Tensor, dim_out: int, grad_output: torch.Tensor
+):
+    jac_rot, jac_tensor, _ = SO3._left_act_backward_helper(
+        group[..., :3], tensor, dim_out, grad_output
+    )
+    return (
+        torch.cat((jac_rot, jac_rot.new_zeros(*jac_rot.shape[:-2], 3, 1)), dim=-1),
+        jac_tensor,
+        None,
+    )
 
 
-class LeftAct(lie_group.BinaryOperator):
+class LeftAct(lie_group.GradientOperator):
     @classmethod
-    def _forward_impl(cls, group, matrix):
+    def _forward_impl(cls, group, tensor, dim_out):
         group: torch.Tensor = cast(torch.Tensor, group)
-        matrix: torch.Tensor = cast(torch.Tensor, matrix)
-        ret = _left_act_impl(group, matrix)
+        tensor: torch.Tensor = cast(torch.Tensor, tensor)
+        ret = _left_act_impl(group, tensor, dim_out)
         return ret
 
     @classmethod
     def setup_context(cls, ctx, inputs, outputs):
         ctx.save_for_backward(inputs[0], inputs[1])
+        ctx.dim_out = inputs[2]
 
     @classmethod
     def backward(cls, ctx, grad_output):
-        group, matrix = ctx.saved_tensors
-        jac_g = _left_act_backward_helper(group, matrix, grad_output)
-        jac_mat = torch.einsum("nji, n...jk->n...ik", group[:, :, :3], grad_output)
-        return jac_g, jac_mat
+        group, tensor = ctx.saved_tensors
+        dim_out: int = ctx.dim_out
+        return _left_act_backward_helper(group, tensor, dim_out, grad_output)
 
 
-_left_act_autograd_fn = LeftAct.apply
+def _left_act_autograd_fn(group: torch.Tensor, tensor: torch.Tensor, dim_out: int = 1):
+    return LeftAct.apply(group, tensor, dim_out)
+
+
 _jleft_act_autograd_fn = None
 
 left_act, jleft_act = lie_group.BinaryOperatorFactory(_module, "left_act")

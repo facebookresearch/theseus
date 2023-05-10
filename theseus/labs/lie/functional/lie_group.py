@@ -217,7 +217,7 @@ class GradientOperator(torch.autograd.Function):
 
     @classmethod
     @abc.abstractmethod
-    def _forward_impl(cls, group: torch.Tensor, tensor: torch.Tensor, dim_out: int = 1):
+    def _forward_impl(cls, group, tensor, dim_out):
         pass
 
     @classmethod

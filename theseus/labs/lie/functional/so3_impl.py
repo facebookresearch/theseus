@@ -116,7 +116,7 @@ def check_left_act_tensor(tensor: torch.Tensor):
 def check_left_project_tensor(matrix: torch.Tensor):
     if matrix.shape[-2:] != (3, 3):
         raise ValueError(
-            shape_err_msg("Left projected matrices of SO3", "(..., 3, 3)", matrix.shape)
+            shape_err_msg("Left projected tensors of SO3", "(..., 3, 3)", matrix.shape)
         )
 
 

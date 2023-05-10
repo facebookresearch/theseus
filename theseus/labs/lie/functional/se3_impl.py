@@ -82,7 +82,7 @@ def check_lift_matrix(matrix: torch.Tensor):
 def check_project_matrix(matrix: torch.Tensor):
     if not matrix.shape[-2:] == (3, 4):
         raise ValueError(
-            shape_err_msg("Projected matrices of SE3", "(..., 3, 4)", matrix.shape)
+            shape_err_msg("Projected tensors of SE3", "(..., 3, 4)", matrix.shape)
         )
 
 

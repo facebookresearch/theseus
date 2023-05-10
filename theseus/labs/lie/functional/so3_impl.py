@@ -961,12 +961,13 @@ class LeftAct(lie_group.GradientOperator):
     def backward(cls, ctx, grad_output):
         group, tensor = ctx.saved_tensors
         dim_out: int = ctx.dim_out
-        return _left_act_backward_helper(
-            group.transpose(-1, -2), tensor, dim_out, grad_output
-        )
+        return _left_act_backward_helper(group, tensor, dim_out, grad_output)
 
 
-_left_act_autograd_fn = LeftAct.apply
+def _left_act_autograd_fn(group: torch.Tensor, tensor: torch.Tensor, dim_out: int = 1):
+    return LeftAct.apply(group, tensor, dim_out)
+
+
 _jleft_act_autograd_fn = None
 
 
@@ -997,12 +998,17 @@ class LeftProject(lie_group.GradientOperator):
         dim_out: int = ctx.dim_out
         grad_output_lifted = _lift_autograd_fn(grad_output)
         jac_group, jac_tensor, _ = _left_act_backward_helper(
-            group, tensor, dim_out, grad_output_lifted
+            group.transpose(-1, -2), tensor, dim_out, grad_output_lifted
         )
         return jac_group.transpose(-1, -2), jac_tensor, None
 
 
-_left_project_autograd_fn = LeftProject.apply
+def _left_project_autograd_fn(
+    group: torch.Tensor, tensor: torch.Tensor, dim_out: int = 1
+):
+    return LeftProject.apply(group, tensor, dim_out)
+
+
 _jleft_project_autograd_fn = _jleft_project_impl
 
 

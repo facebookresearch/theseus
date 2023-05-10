@@ -22,3 +22,7 @@ def get_cls_module(cls):
 
 def shape_err_msg(data_type: str, expected_shape: str, tensor_shape: torch.Size) -> str:
     return f"{data_type} must have shape {expected_shape} but got shape {tensor_shape}."
+
+
+def fill_dims(tensor: torch.Tensor, dim: int):
+    return tensor.view(*(1 for n in range(dim - tensor.dim())), *tensor.shape)

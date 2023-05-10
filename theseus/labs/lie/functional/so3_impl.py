@@ -924,6 +924,25 @@ def _left_act_impl(
     return (group @ tensor).permute(unpermuted_dim)
 
 
+def _left_act_backward_helper(
+    group: torch.Tensor, tensor: torch.Tensor, dim_out: int, grad_output: torch.Tensor
+):
+    if group.ndim + dim_out > tensor.ndim:
+        tensor = fill_dims(tensor, group.ndim + dim_out)
+
+    permuted_dim = permute_op_dim(tensor.ndim, dim_out, 2)
+    unpermuted_dim = unpermute_op_dim(tensor.ndim, dim_out, 2)
+    group = group
+    tensor = tensor.permute(permuted_dim)
+    grad_output = grad_output.permute(permuted_dim)
+    jac_group = (grad_output @ tensor.transpose(-1, -2)).permute(unpermuted_dim)
+    jac_tensor = (group.transpose(-1, -2) @ grad_output).permute(unpermuted_dim)
+    if dim_out > 0:
+        dim = list(range(tensor.ndim - 2 - dim_out, tensor.ndim - 2))
+        jac_group = jac_group.sum(dim)
+    return jac_group, jac_tensor, None
+
+
 class LeftAct(lie_group.GradientOperator):
     @classmethod
     def _forward_impl(cls, group, tensor, dim_out):
@@ -942,21 +961,9 @@ class LeftAct(lie_group.GradientOperator):
     def backward(cls, ctx, grad_output):
         group, tensor = ctx.saved_tensors
         dim_out: int = ctx.dim_out
-
-        if group.ndim + dim_out > tensor.ndim:
-            tensor = fill_dims(tensor, group.ndim + dim_out)
-
-        permuted_dim = permute_op_dim(tensor.ndim, dim_out, 2)
-        unpermuted_dim = unpermute_op_dim(tensor.ndim, dim_out, 2)
-        group: torch.Tensor = group
-        tensor: torch.Tensor = tensor.permute(permuted_dim)
-        grad_output: torch.Tensor = grad_output.permute(permuted_dim)
-        jac_group = (grad_output @ tensor.transpose(-1, -2)).permute(unpermuted_dim)
-        jac_tensor = (group.transpose(-1, -2) @ grad_output).permute(unpermuted_dim)
-        if dim_out > 0:
-            dim = list(range(tensor.ndim - 2 - dim_out, tensor.ndim - 2))
-            jac_group = jac_group.sum(dim)
-        return jac_group, jac_tensor, None
+        return _left_act_backward_helper(
+            group.transpose(-1, -2), tensor, dim_out, grad_output
+        )
 
 
 _left_act_autograd_fn = LeftAct.apply
@@ -970,29 +977,29 @@ _left_project_impl = lie_group.LeftProjectImplFactory(_module)
 _jleft_project_impl = None
 
 
-class LeftProject(lie_group.BinaryOperator):
+class LeftProject(lie_group.GradientOperator):
     @classmethod
-    def _forward_impl(cls, group, matrix):
-        group: torch.Tensor = cast(torch.Tensor, group)
-        matrix: torch.Tensor = cast(torch.Tensor, matrix)
-        ret = _left_project_impl(group, matrix)
+    def _forward_impl(cls, group, tensor, dim_out: int = 1):
+        group = cast(torch.Tensor, group)
+        tensor = cast(torch.Tensor, tensor)
+        ret = _left_project_impl(group, tensor, dim_out)
         return ret
 
     @classmethod
     def setup_context(cls, ctx, inputs, outputs):
         # inputs is (group, matrix)
         ctx.save_for_backward(inputs[0], inputs[1])
+        ctx.dim_out = inputs[2]
 
     @classmethod
     def backward(cls, ctx, grad_output):
-        group, matrix = ctx.saved_tensors
+        group, tensor = ctx.saved_tensors
+        dim_out: int = ctx.dim_out
         grad_output_lifted = _lift_autograd_fn(grad_output)
-        jac_g = -torch.einsum("n...ij,n...jk->n...ik", matrix, grad_output_lifted)
-        if matrix.ndim > 3:
-            dim = list(range(1, matrix.ndim - 2))
-            jac_g = jac_g.sum(dim)
-        jac_mat = torch.einsum("nij, n...jk->n...ik", group, grad_output_lifted)
-        return jac_g, jac_mat
+        jac_group, jac_tensor, _ = _left_act_backward_helper(
+            group, tensor, dim_out, grad_output_lifted
+        )
+        return jac_group.transpose(-1, -2), jac_tensor, None
 
 
 _left_project_autograd_fn = LeftProject.apply

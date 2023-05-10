@@ -934,7 +934,6 @@ def _left_act_backward_helper(
 
     permuted_dim = permute_op_dim(tensor.ndim, dim_out, 2)
     unpermuted_dim = unpermute_op_dim(tensor.ndim, dim_out, 2)
-    group = group
     tensor = tensor.permute(permuted_dim)
     grad_output = grad_output.permute(permuted_dim)
     jac_group = (grad_output @ tensor.transpose(-1, -2)).permute(unpermuted_dim)

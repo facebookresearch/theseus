@@ -30,15 +30,15 @@ def fill_dims(tensor: torch.Tensor, dim: int) -> torch.Tensor:
 
 def permute_op_dim(dim: int, op_dim: int, group_dim: int):
     return (
-        [i for i in range(dim - op_dim - group_dim, dim - group_dim)]
-        + [i for i in range(0, dim - op_dim - group_dim)]
-        + [i for i in range(dim - group_dim, dim)]
+        [*range(dim - op_dim - group_dim, dim - group_dim)]
+        + [*range(0, dim - op_dim - group_dim)]
+        + [*range(dim - group_dim, dim)]
     )
 
 
 def unpermute_op_dim(dim: int, op_dim: int, group_dim: int):
     return (
-        [i for i in range(op_dim, dim - group_dim)]
-        + [i for i in range(0, op_dim)]
-        + [i for i in range(dim - group_dim, dim)]
+        [*range(op_dim, dim - group_dim)]
+        + [*range(0, op_dim)]
+        + [*range(dim - group_dim, dim)]
     )

@@ -227,7 +227,7 @@ class GradientOperator(torch.autograd.Function):
             output = cls._forward_impl(args[0], args[1], args[2])
         else:  # args is (ctx, group, tensor, dim_out)
             output = cls._forward_impl(args[1], args[2], args[3])
-            cls.setup_context(args[0], (args[1], args[2]), args[3], output)
+            cls.setup_context(args[0], (args[1], args[2], args[3]), output)
         return output
 
     @classmethod

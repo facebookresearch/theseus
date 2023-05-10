@@ -1071,14 +1071,16 @@ def _normalize_backward_helper(
     F = F.pow(-1)
 
     u_term: torch.Tensor = u @ (F * _skew_symm(ut @ grad_u))
-    # u_term = torch.einsum("n...ij, n...j->n...ij", u_term, s)
+    # The next 3 lines are equivalent to u_term = torch.einsum("n...ij, n...j->n...ij", u_term, s).
+    # This implementation is compatible for vectorize=True in torch.autograd.functional.jacobian.
     permuted_u_term_dim = permute_op_dim(u_term.dim(), 1, 1)
     unpermuted_u_term_dim = unpermute_op_dim(u_term.dim(), 1, 1)
     u_term = (u_term.permute(permuted_u_term_dim) * s).permute(unpermuted_u_term_dim)
     u_term = u_term @ vt
 
     v_term: torch.Tensor = (F * _skew_symm(vt @ grad_v)) @ vt
-    # v_term = torch.einsum("n...i, n...ij->n...ij", s, v_term)
+    # The next 3 lines are equivalent to v_term = torch.einsum("n...i, n...ij->n...ij", s, v_term).
+    # This implementation is compatible for vectorize=True in torch.autograd.functional.jacobian.
     permuted_v_term_dim = permute_op_dim(v_term.dim(), 1, 0)
     unpermuted_v_term_dim = unpermute_op_dim(v_term.dim(), 1, 0)
     v_term = (s * v_term.permute(permuted_v_term_dim)).permute(unpermuted_v_term_dim)

@@ -31,7 +31,7 @@ def LeftProjectImplFactory(module):
         group: torch.Tensor, tensor: torch.Tensor, dim_out: Optional[int] = None
     ) -> torch.Tensor:
         module.check_group_tensor(group)
-        module.check_left_project_matrix(tensor)
+        module.check_left_project_tensor(tensor)
         group_inverse = module._inverse_autograd_fn(group)
 
         return module._project_autograd_fn(
@@ -315,7 +315,7 @@ class LieGroupFns:
         if hasattr(module, "check_project_matrix"):
             self.check_project_matrix: _CheckFnType = module.check_project_matrix
         self.check_left_act_tensor: _CheckFnType = module.check_left_act_tensor
-        self.check_left_project_matrix: _CheckFnType = module.check_left_project_matrix
+        self.check_left_project_tensor: _CheckFnType = module.check_left_project_tensor
         self.rand: _RandFnType = module.rand
         self.randn: _RandFnType = module.randn
         self.identity: _IdentityFnType = module.identity

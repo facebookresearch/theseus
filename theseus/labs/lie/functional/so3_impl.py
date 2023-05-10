@@ -910,10 +910,12 @@ _jproject_autograd_fn = None
 # Left Act
 # -----------------------------------------------------------------------------
 def _left_act_impl(
-    group: torch.Tensor, tensor: torch.Tensor, dim_out: int = 1
+    group: torch.Tensor, tensor: torch.Tensor, dim_out: Optional[int] = None
 ) -> torch.Tensor:
     check_group_tensor(group)
     check_left_act_tensor(tensor)
+
+    dim_out = tensor.ndim - group.ndim if dim_out is None else dim_out
 
     if group.ndim + dim_out > tensor.ndim:
         tensor = fill_dims(tensor, group.ndim + dim_out)
@@ -960,11 +962,14 @@ class LeftAct(lie_group.GradientOperator):
     @classmethod
     def backward(cls, ctx, grad_output):
         group, tensor = ctx.saved_tensors
-        dim_out: int = ctx.dim_out
+        dim_out = ctx.dim_out
+        dim_out: int = tensor.ndim - group.ndim if dim_out is None else dim_out
         return _left_act_backward_helper(group, tensor, dim_out, grad_output)
 
 
-def _left_act_autograd_fn(group: torch.Tensor, tensor: torch.Tensor, dim_out: int = 1):
+def _left_act_autograd_fn(
+    group: torch.Tensor, tensor: torch.Tensor, dim_out: Optional[int] = None
+):
     return LeftAct.apply(group, tensor, dim_out)
 
 
@@ -992,7 +997,7 @@ def _left_project_backward_helper(
 
 class LeftProject(lie_group.GradientOperator):
     @classmethod
-    def _forward_impl(cls, group, tensor, dim_out: int = 1):
+    def _forward_impl(cls, group, tensor, dim_out):
         group = cast(torch.Tensor, group)
         tensor = cast(torch.Tensor, tensor)
         ret = _left_project_impl(group, tensor, dim_out)
@@ -1007,13 +1012,14 @@ class LeftProject(lie_group.GradientOperator):
     @classmethod
     def backward(cls, ctx, grad_output):
         group, tensor = ctx.saved_tensors
-        dim_out: int = ctx.dim_out
+        dim_out = ctx.dim_out
+        dim_out: int = tensor.ndim - group.ndim if dim_out is None else dim_out
         grad_output_lifted = _lift_autograd_fn(grad_output)
         return _left_project_backward_helper(group, tensor, dim_out, grad_output_lifted)
 
 
 def _left_project_autograd_fn(
-    group: torch.Tensor, tensor: torch.Tensor, dim_out: int = 1
+    group: torch.Tensor, tensor: torch.Tensor, dim_out: Optional[int] = None
 ):
     return LeftProject.apply(group, tensor, dim_out)
 

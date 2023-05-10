@@ -872,10 +872,11 @@ project, jproject = lie_group.UnaryOperatorFactory(_module, "project")
 # Left Act
 # -----------------------------------------------------------------------------
 def _left_act_impl(
-    group: torch.Tensor, tensor: torch.Tensor, dim_out: int = 1
+    group: torch.Tensor, tensor: torch.Tensor, dim_out: Optional[int] = None
 ) -> torch.Tensor:
     check_group_tensor(group)
     check_left_act_tensor(tensor)
+    dim_out = tensor.ndim - group.ndim if dim_out is None else dim_out
     ret = SO3._left_act_impl(group[..., :3], tensor, dim_out)
     return ret
 
@@ -909,11 +910,14 @@ class LeftAct(lie_group.GradientOperator):
     @classmethod
     def backward(cls, ctx, grad_output):
         group, tensor = ctx.saved_tensors
-        dim_out: int = ctx.dim_out
+        dim_out = ctx.dim_out
+        dim_out: int = tensor.ndim - group.ndim if dim_out is None else dim_out
         return _left_act_backward_helper(group, tensor, dim_out, grad_output)
 
 
-def _left_act_autograd_fn(group: torch.Tensor, tensor: torch.Tensor, dim_out: int = 1):
+def _left_act_autograd_fn(
+    group: torch.Tensor, tensor: torch.Tensor, dim_out: Optional[int] = None
+):
     return LeftAct.apply(group, tensor, dim_out)
 
 
@@ -962,12 +966,13 @@ class LeftProject(lie_group.GradientOperator):
     def backward(cls, ctx, grad_output):
         group, tensor = ctx.saved_tensors
         dim_out: int = ctx.dim_out
+        dim_out: int = tensor.ndim - group.ndim if dim_out is None else dim_out
         grad_output_lifted = lift(grad_output)
         return _left_project_backward_helper(group, tensor, dim_out, grad_output_lifted)
 
 
 def _left_project_autograd_fn(
-    group: torch.Tensor, tensor: torch.Tensor, dim_out: int = 1
+    group: torch.Tensor, tensor: torch.Tensor, dim_out: Optional[int] = None
 ):
     return LeftProject.apply(group, tensor, dim_out)
 

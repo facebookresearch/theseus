@@ -104,21 +104,8 @@ def run_test_op(op_name, batch_size, dtype, rng, dim, data_shape, module):
 # check that func(jac_autograd) is close to func(jac_custom), for each func in
 # the list
 def check_lie_group_function(module, op_name: str, atol: float, inputs, funcs=None):
-    if op_name == "left_act":
-        left_act_impl = getattr(module, f"_{op_name}_impl")
-        left_act = getattr(module, f"_{op_name}_autograd_fn")
-
-        dim_out = inputs[1].ndim - inputs[0].ndim
-
-        def op(group: torch.Tensor, tensor: torch.Tensor):
-            return left_act(group, tensor, dim_out)
-
-        def op_impl(group: torch.Tensor, tensor: torch.Tensor):
-            return left_act_impl(group, tensor, dim_out)
-
-    else:
-        op_impl = getattr(module, f"_{op_name}_impl")
-        op = getattr(module, f"_{op_name}_autograd_fn")
+    op_impl = getattr(module, f"_{op_name}_impl")
+    op = getattr(module, f"_{op_name}_autograd_fn")
 
     jacs_impl = torch.autograd.functional.jacobian(op_impl, inputs)
     jacs = torch.autograd.functional.jacobian(op, inputs)

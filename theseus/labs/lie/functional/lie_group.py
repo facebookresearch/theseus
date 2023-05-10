@@ -28,7 +28,7 @@ def JInverseImplFactory(module):
 
 def LeftProjectImplFactory(module):
     def _left_project_impl(
-        group: torch.Tensor, tensor: torch.Tensor, dim_out: int = 1
+        group: torch.Tensor, tensor: torch.Tensor, dim_out: Optional[int] = None
     ) -> torch.Tensor:
         module.check_group_tensor(group)
         module.check_left_project_matrix(tensor)
@@ -240,7 +240,7 @@ class GradientOperatorOpFnType(Protocol):
         self,
         group: torch.Tensor,
         tensor: torch.Tensor,
-        dim_out: int = 1,
+        dim_out: Optional[int] = None,
     ) -> torch.Tensor:
         pass
 
@@ -250,7 +250,7 @@ class GradientOperatorJOpFnType(Protocol):
         self,
         group: torch.Tensor,
         tensor: torch.Tensor,
-        dim_out: int = 1,
+        dim_out: Optional[int] = None,
     ) -> Tuple[List[torch.Tensor], torch.Tensor]:
         pass
 
@@ -265,14 +265,14 @@ def GradientOperatorFactory(
     def op(
         group: torch.Tensor,
         tensor: torch.Tensor,
-        dim_out: int = 1,
+        dim_out: Optional[int] = None,
     ) -> torch.Tensor:
         return op_autograd_fn(group, tensor, dim_out)
 
     def jop(
         group: torch.Tensor,
         tensor: torch.Tensor,
-        dim_out: int = 1,
+        dim_out: Optional[int] = None,
     ) -> Tuple[List[torch.Tensor], torch.Tensor]:
         _check_jacobians_supported(
             jop_autograd_fn, module.NAME, op_name, is_kwarg=False

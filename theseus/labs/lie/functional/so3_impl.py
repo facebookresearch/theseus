@@ -64,17 +64,6 @@ def check_tangent_vector(tangent_vector: torch.Tensor):
         )
 
 
-def check_transform_tensor(tensor: torch.Tensor):
-    if tensor.shape[-1] != 3:
-        raise ValueError(
-            shape_err_msg(
-                "Tensors transformed by SO3",
-                "(..., 3)",
-                tensor.shape,
-            )
-        )
-
-
 def check_hat_tensor(tensor: torch.Tensor):
     def _impl(t_: torch.Tensor):
         if (t_.transpose(-1, -2) + t_).abs().max().item() > constants._SO3_HAT_EPS[
@@ -88,6 +77,31 @@ def check_hat_tensor(tensor: torch.Tensor):
         )
 
     checks_base(tensor, _impl)
+
+
+def check_transform_tensor(tensor: torch.Tensor):
+    if tensor.shape[-1] != 3:
+        raise ValueError(
+            shape_err_msg(
+                "Tensors transformed by SO3",
+                "(..., 3)",
+                tensor.shape,
+            )
+        )
+
+
+def check_lift_tensor(tensor: torch.Tensor):
+    if not tensor.shape[-1] == 3:
+        raise ValueError(
+            shape_err_msg("Lifted tensors of SO3", "(..., 3)", tensor.shape)
+        )
+
+
+def check_project_tensor(tensor: torch.Tensor):
+    if not tensor.shape[-2:] == (3, 3):
+        raise ValueError(
+            shape_err_msg("Projected tensors of SO3", "(..., 3, 3)", tensor.shape)
+        )
 
 
 def check_unit_quaternion(quaternion: torch.Tensor):
@@ -833,9 +847,7 @@ _jquaternion_to_rotation_autograd_fn = _jquaternion_to_rotation_impl
 # Lift
 # -----------------------------------------------------------------------------
 def _lift_impl(tensor: torch.Tensor) -> torch.Tensor:
-    if tensor.shape[-1] != 3:
-        raise ValueError("Inconsistent shape for the tensor to lift.")
-
+    check_lift_tensor(tensor)
     ret = tensor.new_zeros(tensor.shape[:-1] + (3, 3))
     ret[..., 0, 1] = -tensor[..., 2]
     ret[..., 0, 2] = tensor[..., 1]
@@ -872,9 +884,7 @@ _jlift_autograd_fn = None
 # Project
 # -----------------------------------------------------------------------------
 def _project_impl(tensor: torch.Tensor) -> torch.Tensor:
-    if tensor.shape[-2:] != (3, 3):
-        raise ValueError("Inconsistent shape for the tensor to project.")
-
+    check_project_tensor(tensor)
     return torch.stack(
         (
             tensor[..., 2, 1] - tensor[..., 1, 2],

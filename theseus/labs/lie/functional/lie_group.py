@@ -310,10 +310,8 @@ class LieGroupFns:
         self.check_hat_tensor: _CheckFnType = module.check_hat_tensor
         if hasattr(module, "check_unit_quaternion"):
             self.check_unit_quaternion: _CheckFnType = module.check_unit_quaternion
-        if hasattr(module, "check_lift_tensor"):
-            self.check_lift_tensor: _CheckFnType = module.check_lift_tensor
-        if hasattr(module, "check_project_tensor"):
-            self.check_project_tensor: _CheckFnType = module.check_project_tensor
+        self.check_lift_tensor: _CheckFnType = module.check_lift_tensor
+        self.check_project_tensor: _CheckFnType = module.check_project_tensor
         self.check_left_act_tensor: _CheckFnType = module.check_left_act_tensor
         self.check_left_project_tensor: _CheckFnType = module.check_left_project_tensor
         self.rand: _RandFnType = module.rand

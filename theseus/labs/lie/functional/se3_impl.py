@@ -929,37 +929,50 @@ _left_project_impl = lie_group.LeftProjectImplFactory(_module)
 _jleft_project_impl = None
 
 
-class LeftProject(lie_group.BinaryOperator):
+def _left_project_backward_helper(
+    group: torch.Tensor,
+    tensor: torch.Tensor,
+    dim_out: int,
+    grad_output_lifted: torch.Tensor,
+):
+    jac_rot, jac_tensor, _ = SO3._left_project_backward_helper(
+        group[..., :3], tensor, dim_out, grad_output_lifted
+    )
+    return (
+        torch.cat((jac_rot, jac_rot.new_zeros(*jac_rot.shape[:-2], 3, 1)), dim=-1),
+        jac_tensor,
+        None,
+    )
+
+
+class LeftProject(lie_group.GradientOperator):
     @classmethod
-    def _forward_impl(cls, group, matrix):
+    def _forward_impl(cls, group, tensor, dim_out):
         group: torch.Tensor = cast(torch.Tensor, group)
-        matrix: torch.Tensor = cast(torch.Tensor, matrix)
-        ret = _left_project_impl(group, matrix)
+        tensor: torch.Tensor = cast(torch.Tensor, tensor)
+        ret = _left_project_impl(group, tensor, dim_out)
         return ret
 
     @classmethod
     def setup_context(cls, ctx, inputs, outputs):
         ctx.save_for_backward(inputs[0], inputs[1])
+        ctx.dim_out = inputs[2]
 
     @classmethod
     def backward(cls, ctx, grad_output):
-        group, matrix = ctx.saved_tensors
+        group, tensor = ctx.saved_tensors
+        dim_out: int = ctx.dim_out
         grad_output_lifted = lift(grad_output)
-        jac_rot = torch.einsum("n...ij,n...kj->n...ik", matrix, grad_output_lifted)
-        if matrix.ndim > 3:
-            dims = list(range(1, matrix.ndim - 2))
-            jac_rot = jac_rot.sum(dims)
-        jac_g = torch.cat((jac_rot, jac_rot.new_zeros(jac_rot.shape[0], 3, 1)), dim=-1)
-        jac_mat = torch.einsum(
-            "nij, n...jk->n...ik", group[:, :, :3], grad_output_lifted
-        )
-        return jac_g, jac_mat
+        return _left_project_backward_helper(group, tensor, dim_out, grad_output_lifted)
 
 
-_left_project_autograd_fn = LeftProject.apply
+def _left_project_autograd_fn(
+    group: torch.Tensor, tensor: torch.Tensor, dim_out: int = 1
+):
+    return LeftProject.apply(group, tensor, dim_out)
+
+
 _jleft_project_autograd_fn = _jleft_project_impl
-
-left_project, jleft_project = lie_group.BinaryOperatorFactory(_module, "left_project")
 
 
 # -----------------------------------------------------------------------------

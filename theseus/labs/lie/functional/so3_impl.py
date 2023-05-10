@@ -978,6 +978,18 @@ _left_project_impl = lie_group.LeftProjectImplFactory(_module)
 _jleft_project_impl = None
 
 
+def _left_project_backward_helper(
+    group: torch.Tensor,
+    tensor: torch.Tensor,
+    dim_out: int,
+    grad_output_lifted: torch.Tensor,
+):
+    jac_group, jac_tensor, _ = _left_act_backward_helper(
+        group.transpose(-1, -2), tensor, dim_out, grad_output_lifted
+    )
+    return jac_group.transpose(-1, -2), jac_tensor, None
+
+
 class LeftProject(lie_group.GradientOperator):
     @classmethod
     def _forward_impl(cls, group, tensor, dim_out: int = 1):
@@ -997,10 +1009,7 @@ class LeftProject(lie_group.GradientOperator):
         group, tensor = ctx.saved_tensors
         dim_out: int = ctx.dim_out
         grad_output_lifted = _lift_autograd_fn(grad_output)
-        jac_group, jac_tensor, _ = _left_act_backward_helper(
-            group.transpose(-1, -2), tensor, dim_out, grad_output_lifted
-        )
-        return jac_group.transpose(-1, -2), jac_tensor, None
+        return _left_project_backward_helper(group, tensor, dim_out, grad_output_lifted)
 
 
 def _left_project_autograd_fn(

@@ -462,10 +462,10 @@ class Log(lie_group.UnaryOperator):
     def backward(cls, ctx, grad_output):
         group: torch.Tensor = ctx.saved_tensors[1]
         jacobians = 0.5 * _jlog_impl(group)[0][0]
-        temp = _lift_autograd_fn(
+        temp: torch.Tensor = _lift_autograd_fn(
             (jacobians.transpose(-2, -1) @ grad_output.unsqueeze(-1)).squeeze(-1)
         )
-        return torch.einsum("n...ij,n...jk->n...ik", group, temp)
+        return group @ temp
 
 
 # TODO: Implement analytic backward for _jlog_impl

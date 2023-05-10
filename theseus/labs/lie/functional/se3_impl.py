@@ -497,12 +497,10 @@ class Log(lie_group.UnaryOperator):
         group: torch.Tensor = ctx.saved_tensors[1]
         jacobians = _jlog_impl(group)[0][0]
         jacobians[..., 3:] *= 0.5
-        temp = lift(
+        temp: torch.Tensor = lift(
             (jacobians.transpose(-1, -2) @ grad_output.unsqueeze(-1)).squeeze(-1)
         )
-
-        jac_g = torch.einsum("n...ij, n...jk->n...ik", group[..., :3], temp)
-        return jac_g
+        return group[..., :3] @ temp
 
 
 # TODO: Implement analytic backward for _jlog_impl

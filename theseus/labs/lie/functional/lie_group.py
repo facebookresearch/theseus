@@ -27,13 +27,15 @@ def JInverseImplFactory(module):
 
 
 def LeftProjectImplFactory(module):
-    def _left_project_impl(group: torch.Tensor, matrix: torch.Tensor) -> torch.Tensor:
+    def _left_project_impl(
+        group: torch.Tensor, tensor: torch.Tensor, dim_out: Optional[int] = None
+    ) -> torch.Tensor:
         module.check_group_tensor(group)
-        module.check_left_project_matrix(matrix)
+        module.check_left_project_tensor(tensor)
         group_inverse = module._inverse_autograd_fn(group)
 
         return module._project_autograd_fn(
-            module._left_act_autograd_fn(group_inverse, matrix)
+            module._left_act_autograd_fn(group_inverse, tensor, dim_out)
         )
 
     return _left_project_impl
@@ -210,6 +212,76 @@ class _IdentityFnType(Protocol):
         pass
 
 
+class GradientOperator(torch.autograd.Function):
+    generate_vmap_rule = True
+
+    @classmethod
+    @abc.abstractmethod
+    def _forward_impl(cls, group, tensor, dim_out):
+        pass
+
+    @classmethod
+    def forward(cls, *args):
+        assert len(args) in [3, 4]
+        if len(args) == 3:  # torch >= 2.0, args is (group, tensor, dim_out)
+            output = cls._forward_impl(args[0], args[1], args[2])
+        else:  # args is (ctx, group, tensor, dim_out)
+            output = cls._forward_impl(args[1], args[2], args[3])
+            cls.setup_context(args[0], (args[1], args[2], args[3]), output)
+        return output
+
+    @classmethod
+    def setup_context(cls, ctx, inputs, outputs):
+        pass
+
+
+class GradientOperatorOpFnType(Protocol):
+    def __call__(
+        self,
+        group: torch.Tensor,
+        tensor: torch.Tensor,
+        dim_out: Optional[int] = None,
+    ) -> torch.Tensor:
+        pass
+
+
+class GradientOperatorJOpFnType(Protocol):
+    def __call__(
+        self,
+        group: torch.Tensor,
+        tensor: torch.Tensor,
+        dim_out: Optional[int] = None,
+    ) -> Tuple[List[torch.Tensor], torch.Tensor]:
+        pass
+
+
+def GradientOperatorFactory(
+    module, op_name
+) -> Tuple[GradientOperatorOpFnType, GradientOperatorJOpFnType]:
+    # Get autograd.Function wrapper of op and its jacobian
+    op_autograd_fn = getattr(module, "_" + op_name + "_autograd_fn")
+    jop_autograd_fn = getattr(module, "_j" + op_name + "_autograd_fn")
+
+    def op(
+        group: torch.Tensor,
+        tensor: torch.Tensor,
+        dim_out: Optional[int] = None,
+    ) -> torch.Tensor:
+        return op_autograd_fn(group, tensor, dim_out)
+
+    def jop(
+        group: torch.Tensor,
+        tensor: torch.Tensor,
+        dim_out: Optional[int] = None,
+    ) -> Tuple[List[torch.Tensor], torch.Tensor]:
+        _check_jacobians_supported(
+            jop_autograd_fn, module.NAME, op_name, is_kwarg=False
+        )
+        return jop_autograd_fn(group, tensor, dim_out)
+
+    return op, jop
+
+
 # Namespace to facilitate type-checking downstream
 class LieGroupFns:
     def __init__(self, module):
@@ -223,8 +295,8 @@ class LieGroupFns:
         self.lift = UnaryOperatorFactory(module, "lift")[0]
         self.project = UnaryOperatorFactory(module, "project")[0]
         self.compose, self.jcompose = BinaryOperatorFactory(module, "compose")
-        self.left_act = BinaryOperatorFactory(module, "left_act")[0]
-        self.left_project = BinaryOperatorFactory(module, "left_project")[0]
+        self.left_act = GradientOperatorFactory(module, "left_act")[0]
+        self.left_project = GradientOperatorFactory(module, "left_project")[0]
         self.transform_from, self.jtransform_from = BinaryOperatorFactory(
             module, "transform_from"
         )
@@ -242,8 +314,8 @@ class LieGroupFns:
             self.check_lift_matrix: _CheckFnType = module.check_lift_matrix
         if hasattr(module, "check_project_matrix"):
             self.check_project_matrix: _CheckFnType = module.check_project_matrix
-        self.check_left_act_matrix: _CheckFnType = module.check_left_act_matrix
-        self.check_left_project_matrix: _CheckFnType = module.check_left_project_matrix
+        self.check_left_act_tensor: _CheckFnType = module.check_left_act_tensor
+        self.check_left_project_tensor: _CheckFnType = module.check_left_project_tensor
         self.rand: _RandFnType = module.rand
         self.randn: _RandFnType = module.randn
         self.identity: _IdentityFnType = module.identity

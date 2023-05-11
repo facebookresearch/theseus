@@ -107,8 +107,8 @@ def check_lie_group_function(module, op_name: str, atol: float, inputs, funcs=No
     op_impl = getattr(module, f"_{op_name}_impl")
     op = getattr(module, f"_{op_name}_autograd_fn")
 
-    jacs_impl = torch.autograd.functional.jacobian(op_impl, inputs)
-    jacs = torch.autograd.functional.jacobian(op, inputs)
+    jacs_impl = torch.autograd.functional.jacobian(op_impl, inputs, vectorize=True)
+    jacs = torch.autograd.functional.jacobian(op, inputs, vectorize=True)
 
     if funcs is None:
         for jac_impl, jac in zip(jacs_impl, jacs):

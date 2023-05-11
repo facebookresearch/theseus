@@ -24,5 +24,21 @@ def shape_err_msg(data_type: str, expected_shape: str, tensor_shape: torch.Size)
     return f"{data_type} must have shape {expected_shape} but got shape {tensor_shape}."
 
 
-def fill_dims(tensor: torch.Tensor, dim: int):
-    return tensor.view(*(1 for n in range(dim - tensor.dim())), *tensor.shape)
+def fill_dims(tensor: torch.Tensor, dim: int) -> torch.Tensor:
+    return tensor.view((1,) * (dim - tensor.ndim) + tensor.shape)
+
+
+def permute_op_dim(dim: int, op_dim: int, group_dim: int):
+    return (
+        [*range(dim - op_dim - group_dim, dim - group_dim)]
+        + [*range(0, dim - op_dim - group_dim)]
+        + [*range(dim - group_dim, dim)]
+    )
+
+
+def unpermute_op_dim(dim: int, op_dim: int, group_dim: int):
+    return (
+        [*range(op_dim, dim - group_dim)]
+        + [*range(0, op_dim)]
+        + [*range(dim - group_dim, dim)]
+    )

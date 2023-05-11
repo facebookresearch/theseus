@@ -9,7 +9,13 @@ from typing import cast, List, Tuple, Optional
 from . import constants
 from . import lie_group
 from .check_contexts import checks_base
-from .utils import get_module, shape_err_msg
+from .utils import (
+    get_module,
+    shape_err_msg,
+    permute_op_dim,
+    unpermute_op_dim,
+    fill_dims,
+)
 
 
 NAME: str = "SO3"
@@ -100,17 +106,17 @@ def check_unit_quaternion(quaternion: torch.Tensor):
     checks_base(quaternion, _impl)
 
 
-def check_left_act_matrix(matrix: torch.Tensor):
-    if matrix.shape[-2] != 3:
+def check_left_act_tensor(tensor: torch.Tensor):
+    if tensor.shape[-2] != 3:
         raise ValueError(
-            shape_err_msg("Left acted matrices of SO3", "(..., 3, -1)", matrix.shape)
+            shape_err_msg("Left acted tensors of SO3", "(..., 3, -1)", tensor.shape)
         )
 
 
-def check_left_project_matrix(matrix: torch.Tensor):
+def check_left_project_tensor(matrix: torch.Tensor):
     if matrix.shape[-2:] != (3, 3):
         raise ValueError(
-            shape_err_msg("Left projected matrices of SO3", "(..., 3, 3)", matrix.shape)
+            shape_err_msg("Left projected tensors of SO3", "(..., 3, 3)", matrix.shape)
         )
 
 
@@ -456,10 +462,10 @@ class Log(lie_group.UnaryOperator):
     def backward(cls, ctx, grad_output):
         group: torch.Tensor = ctx.saved_tensors[1]
         jacobians = 0.5 * _jlog_impl(group)[0][0]
-        temp = _lift_autograd_fn(
+        temp: torch.Tensor = _lift_autograd_fn(
             (jacobians.transpose(-2, -1) @ grad_output.unsqueeze(-1)).squeeze(-1)
         )
-        return torch.einsum("n...ij,n...jk->n...ik", group, temp)
+        return group @ temp
 
 
 # TODO: Implement analytic backward for _jlog_impl
@@ -903,38 +909,69 @@ _jproject_autograd_fn = None
 # -----------------------------------------------------------------------------
 # Left Act
 # -----------------------------------------------------------------------------
-def _left_act_impl(group: torch.Tensor, matrix: torch.Tensor) -> torch.Tensor:
+def _left_act_impl(
+    group: torch.Tensor, tensor: torch.Tensor, dim_out: Optional[int] = None
+) -> torch.Tensor:
     check_group_tensor(group)
-    check_left_act_matrix(matrix)
+    check_left_act_tensor(tensor)
 
-    return torch.einsum("nij,n...jk->n...ik", group, matrix)
+    dim_out = tensor.ndim - group.ndim if dim_out is None else dim_out
+
+    if group.ndim + dim_out > tensor.ndim:
+        tensor = fill_dims(tensor, group.ndim + dim_out)
+
+    permuted_dim = permute_op_dim(tensor.ndim, dim_out, 2)
+    unpermuted_dim = unpermute_op_dim(tensor.ndim, dim_out, 2)
+    tensor = tensor.permute(permuted_dim)
+    return (group @ tensor).permute(unpermuted_dim)
 
 
-class LeftAct(lie_group.BinaryOperator):
+def _left_act_backward_helper(
+    group: torch.Tensor, tensor: torch.Tensor, dim_out: int, grad_output: torch.Tensor
+):
+    if group.ndim + dim_out > tensor.ndim:
+        tensor = fill_dims(tensor, group.ndim + dim_out)
+
+    permuted_dim = permute_op_dim(tensor.ndim, dim_out, 2)
+    unpermuted_dim = unpermute_op_dim(tensor.ndim, dim_out, 2)
+    tensor = tensor.permute(permuted_dim)
+    grad_output = grad_output.permute(permuted_dim)
+    jac_group = (grad_output @ tensor.transpose(-1, -2)).permute(unpermuted_dim)
+    jac_tensor = (group.transpose(-1, -2) @ grad_output).permute(unpermuted_dim)
+    if dim_out > 0:
+        dim = list(range(tensor.ndim - 2 - dim_out, tensor.ndim - 2))
+        jac_group = jac_group.sum(dim)
+    return jac_group, jac_tensor, None
+
+
+class LeftAct(lie_group.GradientOperator):
     @classmethod
-    def _forward_impl(cls, group, matrix):
+    def _forward_impl(cls, group, tensor, dim_out):
         group: torch.Tensor = cast(torch.Tensor, group)
-        matrix: torch.Tensor = cast(torch.Tensor, matrix)
-        ret = _left_act_impl(group, matrix)
+        tensor: torch.Tensor = cast(torch.Tensor, tensor)
+        ret = _left_act_impl(group, tensor, dim_out)
         return ret
 
     @classmethod
     def setup_context(cls, ctx, inputs, outputs):
-        # inputs is (group, matrix)
+        # inputs is (group, tensor)
         ctx.save_for_backward(inputs[0], inputs[1])
+        ctx.dim_out = inputs[2]
 
     @classmethod
     def backward(cls, ctx, grad_output):
-        group, matrix = ctx.saved_tensors
-        jac_g = torch.einsum("n...ij,n...kj->n...ik", grad_output, matrix)
-        if matrix.ndim > 3:
-            dims = list(range(1, matrix.ndim - 2))
-            jac_g = jac_g.sum(dims)
-        jac_mat = torch.einsum("nji, n...jk->n...ik", group, grad_output)
-        return jac_g, jac_mat
+        group, tensor = ctx.saved_tensors
+        dim_out = ctx.dim_out
+        dim_out: int = tensor.ndim - group.ndim if dim_out is None else dim_out
+        return _left_act_backward_helper(group, tensor, dim_out, grad_output)
 
 
-_left_act_autograd_fn = LeftAct.apply
+def _left_act_autograd_fn(
+    group: torch.Tensor, tensor: torch.Tensor, dim_out: Optional[int] = None
+):
+    return LeftAct.apply(group, tensor, dim_out)
+
+
 _jleft_act_autograd_fn = None
 
 
@@ -945,32 +982,47 @@ _left_project_impl = lie_group.LeftProjectImplFactory(_module)
 _jleft_project_impl = None
 
 
-class LeftProject(lie_group.BinaryOperator):
+def _left_project_backward_helper(
+    group: torch.Tensor,
+    tensor: torch.Tensor,
+    dim_out: int,
+    grad_output_lifted: torch.Tensor,
+):
+    jac_group, jac_tensor, _ = _left_act_backward_helper(
+        group.transpose(-1, -2), tensor, dim_out, grad_output_lifted
+    )
+    return jac_group.transpose(-1, -2), jac_tensor, None
+
+
+class LeftProject(lie_group.GradientOperator):
     @classmethod
-    def _forward_impl(cls, group, matrix):
-        group: torch.Tensor = cast(torch.Tensor, group)
-        matrix: torch.Tensor = cast(torch.Tensor, matrix)
-        ret = _left_project_impl(group, matrix)
+    def _forward_impl(cls, group, tensor, dim_out):
+        group = cast(torch.Tensor, group)
+        tensor = cast(torch.Tensor, tensor)
+        ret = _left_project_impl(group, tensor, dim_out)
         return ret
 
     @classmethod
     def setup_context(cls, ctx, inputs, outputs):
         # inputs is (group, matrix)
         ctx.save_for_backward(inputs[0], inputs[1])
+        ctx.dim_out = inputs[2]
 
     @classmethod
     def backward(cls, ctx, grad_output):
-        group, matrix = ctx.saved_tensors
+        group, tensor = ctx.saved_tensors
+        dim_out = ctx.dim_out
+        dim_out: int = tensor.ndim - group.ndim if dim_out is None else dim_out
         grad_output_lifted = _lift_autograd_fn(grad_output)
-        jac_g = -torch.einsum("n...ij,n...jk->n...ik", matrix, grad_output_lifted)
-        if matrix.ndim > 3:
-            dims = list(range(1, matrix.ndim - 2))
-            jac_g = jac_g.sum(dims)
-        jac_mat = torch.einsum("nij, n...jk->n...ik", group, grad_output_lifted)
-        return jac_g, jac_mat
+        return _left_project_backward_helper(group, tensor, dim_out, grad_output_lifted)
 
 
-_left_project_autograd_fn = LeftProject.apply
+def _left_project_autograd_fn(
+    group: torch.Tensor, tensor: torch.Tensor, dim_out: Optional[int] = None
+):
+    return LeftProject.apply(group, tensor, dim_out)
+
+
 _jleft_project_autograd_fn = _jleft_project_impl
 
 
@@ -1019,11 +1071,19 @@ def _normalize_backward_helper(
     F = F.pow(-1)
 
     u_term: torch.Tensor = u @ (F * _skew_symm(ut @ grad_u))
-    u_term = torch.einsum("n...ij, n...j->n...ij", u_term, s)
+    # The next 3 lines are equivalent to u_term = torch.einsum("n...ij, n...j->n...ij", u_term, s).
+    # This implementation is compatible for vectorize=True in torch.autograd.functional.jacobian.
+    permuted_u_term_dim = permute_op_dim(u_term.dim(), 1, 1)
+    unpermuted_u_term_dim = unpermute_op_dim(u_term.dim(), 1, 1)
+    u_term = (u_term.permute(permuted_u_term_dim) * s).permute(unpermuted_u_term_dim)
     u_term = u_term @ vt
 
     v_term: torch.Tensor = (F * _skew_symm(vt @ grad_v)) @ vt
-    v_term = torch.einsum("n...i, n...ij->n...ij", s, v_term)
+    # The next 3 lines are equivalent to v_term = torch.einsum("n...i, n...ij->n...ij", s, v_term).
+    # This implementation is compatible for vectorize=True in torch.autograd.functional.jacobian.
+    permuted_v_term_dim = permute_op_dim(v_term.dim(), 1, 0)
+    unpermuted_v_term_dim = unpermute_op_dim(v_term.dim(), 1, 0)
+    v_term = (s * v_term.permute(permuted_v_term_dim)).permute(unpermuted_v_term_dim)
     v_term = u @ v_term
 
     return u_term + v_term

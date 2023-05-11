@@ -277,7 +277,7 @@ jobs:
 
   py310_precommit:
     docker:
-      - image: cimg/python:3.10
+      - image: cimg/python:3.10.6
     steps:
       - checkout
       - <<: *install_suitesparse

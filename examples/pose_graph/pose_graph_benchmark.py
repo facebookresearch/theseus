@@ -60,7 +60,7 @@ def main(cfg):
     objective.add(pose_prior)
 
     objective.to(dtype)
-    optimizer = th.GaussNewton(
+    optimizer = th.LevenbergMarquardt(
         objective,
         max_iterations=10,
         step_size=1,

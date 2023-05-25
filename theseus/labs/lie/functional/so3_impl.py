@@ -47,7 +47,7 @@ def check_group_tensor(tensor: torch.Tensor):
     checks_base(tensor, _impl)
 
 
-def check_matrix_tensor(tensor: torch.Tensor):
+def check_group_shape(tensor: torch.Tensor):
     if tensor.shape[-2:] != (3, 3):
         raise ValueError(shape_err_msg("SO3 data tensors", "(..., 3, 3)", tensor.shape))
 
@@ -64,6 +64,21 @@ def check_tangent_vector(tangent_vector: torch.Tensor):
         )
 
 
+def check_hat_tensor(tensor: torch.Tensor):
+    def _impl(t_: torch.Tensor):
+        if (t_.transpose(-1, -2) + t_).abs().max().item() > constants._SO3_HAT_EPS[
+            t_.dtype
+        ]:
+            raise ValueError("Hat tensors of SO3 can only be skew-symmetric.")
+
+    if tensor.shape[-2:] != (3, 3):
+        raise ValueError(
+            shape_err_msg("Hat tensors of SO3", "(..., 3, 3)", tensor.shape)
+        )
+
+    checks_base(tensor, _impl)
+
+
 def check_transform_tensor(tensor: torch.Tensor):
     if tensor.shape[-1] != 3:
         raise ValueError(
@@ -75,19 +90,18 @@ def check_transform_tensor(tensor: torch.Tensor):
         )
 
 
-def check_hat_matrix(matrix: torch.Tensor):
-    def _impl(t_: torch.Tensor):
-        if (t_.transpose(-1, -2) + t_).abs().max().item() > constants._SO3_HAT_EPS[
-            t_.dtype
-        ]:
-            raise ValueError("Hat matrices of SO3 can only be skew-symmetric.")
-
-    if matrix.shape[-2:] != (3, 3):
+def check_lift_tensor(tensor: torch.Tensor):
+    if not tensor.shape[-1] == 3:
         raise ValueError(
-            shape_err_msg("Hat matrices of SO3", "(..., 3, 3)", matrix.shape)
+            shape_err_msg("Lifted tensors of SO3", "(..., 3)", tensor.shape)
         )
 
-    checks_base(matrix, _impl)
+
+def check_project_tensor(tensor: torch.Tensor):
+    if not tensor.shape[-2:] == (3, 3):
+        raise ValueError(
+            shape_err_msg("Projected tensors of SO3", "(..., 3, 3)", tensor.shape)
+        )
 
 
 def check_unit_quaternion(quaternion: torch.Tensor):
@@ -113,10 +127,10 @@ def check_left_act_tensor(tensor: torch.Tensor):
         )
 
 
-def check_left_project_tensor(matrix: torch.Tensor):
-    if matrix.shape[-2:] != (3, 3):
+def check_left_project_tensor(tensor: torch.Tensor):
+    if tensor.shape[-2:] != (3, 3):
         raise ValueError(
-            shape_err_msg("Left projected tensors of SO3", "(..., 3, 3)", matrix.shape)
+            shape_err_msg("Left projected tensors of SO3", "(..., 3, 3)", tensor.shape)
         )
 
 
@@ -533,15 +547,15 @@ def _hat_impl(tangent_vector: torch.Tensor) -> torch.Tensor:
     check_tangent_vector(tangent_vector)
     tangent_vector = tangent_vector.squeeze(-1)
     size = get_tangent_vector_size(tangent_vector)
-    matrix = tangent_vector.new_zeros(*size, 3, 3)
-    matrix[..., 0, 1] = -tangent_vector[..., 2]
-    matrix[..., 0, 2] = tangent_vector[..., 1]
-    matrix[..., 1, 2] = -tangent_vector[..., 0]
-    matrix[..., 1, 0] = tangent_vector[..., 2]
-    matrix[..., 2, 0] = -tangent_vector[..., 1]
-    matrix[..., 2, 1] = tangent_vector[..., 0]
+    tensor = tangent_vector.new_zeros(*size, 3, 3)
+    tensor[..., 0, 1] = -tangent_vector[..., 2]
+    tensor[..., 0, 2] = tangent_vector[..., 1]
+    tensor[..., 1, 2] = -tangent_vector[..., 0]
+    tensor[..., 1, 0] = tangent_vector[..., 2]
+    tensor[..., 2, 0] = -tangent_vector[..., 1]
+    tensor[..., 2, 1] = tangent_vector[..., 0]
 
-    return matrix
+    return tensor
 
 
 # NOTE: No jacobian is defined for the hat operator
@@ -575,13 +589,13 @@ _jhat_autograd_fn = None
 # -----------------------------------------------------------------------------
 # Vee
 # -----------------------------------------------------------------------------
-def _vee_impl(matrix: torch.Tensor) -> torch.Tensor:
-    check_hat_matrix(matrix)
+def _vee_impl(tensor: torch.Tensor) -> torch.Tensor:
+    check_hat_tensor(tensor)
     return 0.5 * torch.stack(
         (
-            matrix[..., 2, 1] - matrix[..., 1, 2],
-            matrix[..., 0, 2] - matrix[..., 2, 0],
-            matrix[..., 1, 0] - matrix[..., 0, 1],
+            tensor[..., 2, 1] - tensor[..., 1, 2],
+            tensor[..., 0, 2] - tensor[..., 2, 0],
+            tensor[..., 1, 0] - tensor[..., 0, 1],
         ),
         dim=-1,
     )
@@ -832,17 +846,15 @@ _jquaternion_to_rotation_autograd_fn = _jquaternion_to_rotation_impl
 # -----------------------------------------------------------------------------
 # Lift
 # -----------------------------------------------------------------------------
-def _lift_impl(matrix: torch.Tensor) -> torch.Tensor:
-    if matrix.shape[-1] != 3:
-        raise ValueError("Inconsistent shape for the matrix to lift.")
-
-    ret = matrix.new_zeros(matrix.shape[:-1] + (3, 3))
-    ret[..., 0, 1] = -matrix[..., 2]
-    ret[..., 0, 2] = matrix[..., 1]
-    ret[..., 1, 2] = -matrix[..., 0]
-    ret[..., 1, 0] = matrix[..., 2]
-    ret[..., 2, 0] = -matrix[..., 1]
-    ret[..., 2, 1] = matrix[..., 0]
+def _lift_impl(tensor: torch.Tensor) -> torch.Tensor:
+    check_lift_tensor(tensor)
+    ret = tensor.new_zeros(tensor.shape[:-1] + (3, 3))
+    ret[..., 0, 1] = -tensor[..., 2]
+    ret[..., 0, 2] = tensor[..., 1]
+    ret[..., 1, 2] = -tensor[..., 0]
+    ret[..., 1, 0] = tensor[..., 2]
+    ret[..., 2, 0] = -tensor[..., 1]
+    ret[..., 2, 1] = tensor[..., 0]
 
     return ret
 
@@ -853,9 +865,9 @@ _jlift_impl = None
 
 class Lift(lie_group.UnaryOperator):
     @classmethod
-    def _forward_impl(cls, matrix):
-        matrix: torch.Tensor = cast(torch.Tensor, matrix)
-        ret = _lift_impl(matrix)
+    def _forward_impl(cls, tensor):
+        tensor: torch.Tensor = cast(torch.Tensor, tensor)
+        ret = _lift_impl(tensor)
         return ret
 
     @classmethod
@@ -871,15 +883,13 @@ _jlift_autograd_fn = None
 # -----------------------------------------------------------------------------
 # Project
 # -----------------------------------------------------------------------------
-def _project_impl(matrix: torch.Tensor) -> torch.Tensor:
-    if matrix.shape[-2:] != (3, 3):
-        raise ValueError("Inconsistent shape for the matrix to project.")
-
+def _project_impl(tensor: torch.Tensor) -> torch.Tensor:
+    check_project_tensor(tensor)
     return torch.stack(
         (
-            matrix[..., 2, 1] - matrix[..., 1, 2],
-            matrix[..., 0, 2] - matrix[..., 2, 0],
-            matrix[..., 1, 0] - matrix[..., 0, 1],
+            tensor[..., 2, 1] - tensor[..., 1, 2],
+            tensor[..., 0, 2] - tensor[..., 2, 0],
+            tensor[..., 1, 0] - tensor[..., 0, 1],
         ),
         dim=-1,
     )
@@ -891,9 +901,9 @@ _jproject_impl = None
 
 class Project(lie_group.UnaryOperator):
     @classmethod
-    def _forward_impl(cls, matrix):
-        matrix: torch.Tensor = cast(torch.Tensor, matrix)
-        ret = _project_impl(matrix)
+    def _forward_impl(cls, tensor):
+        tensor: torch.Tensor = cast(torch.Tensor, tensor)
+        ret = _project_impl(tensor)
         return ret
 
     @classmethod
@@ -1004,7 +1014,7 @@ class LeftProject(lie_group.GradientOperator):
 
     @classmethod
     def setup_context(cls, ctx, inputs, outputs):
-        # inputs is (group, matrix)
+        # inputs is (group, tensor)
         ctx.save_for_backward(inputs[0], inputs[1])
         ctx.dim_out = inputs[2]
 
@@ -1029,10 +1039,10 @@ _jleft_project_autograd_fn = _jleft_project_impl
 # -----------------------------------------------------------------------------
 # Normalize
 # -----------------------------------------------------------------------------
-def _normalize_impl_helper(matrix: torch.Tensor):
-    check_matrix_tensor(matrix)
-    size = matrix.shape[:-2]
-    u, s, v = torch.svd(matrix)
+def _normalize_impl_helper(tensor: torch.Tensor):
+    check_group_shape(tensor)
+    size = tensor.shape[:-2]
+    u, s, v = torch.svd(tensor)
     sign = torch.det(u @ v).view(*size, 1, 1)
     vt = torch.cat(
         (v[..., :2], torch.where(sign > 0, v[..., 2:], -v[..., 2:])), dim=-1
@@ -1040,8 +1050,8 @@ def _normalize_impl_helper(matrix: torch.Tensor):
     return u @ vt, {"u": u, "s": s, "v": v, "sign": sign}
 
 
-def _normalize_impl(matrix: torch.Tensor) -> torch.Tensor:
-    return _normalize_impl_helper(matrix)[0]
+def _normalize_impl(tensor: torch.Tensor) -> torch.Tensor:
+    return _normalize_impl_helper(tensor)[0]
 
 
 def _normalize_backward_helper(
@@ -1051,8 +1061,8 @@ def _normalize_backward_helper(
     sign: torch.Tensor,
     grad_output: torch.Tensor,
 ) -> torch.Tensor:
-    def _skew_symm(matrix: torch.Tensor) -> torch.Tensor:
-        return matrix - matrix.transpose(-1, -2)
+    def _skew_symm(tensor: torch.Tensor) -> torch.Tensor:
+        return tensor - tensor.transpose(-1, -2)
 
     size = u.shape[:-2]
     ut = u.transpose(-1, -2)
@@ -1091,9 +1101,9 @@ def _normalize_backward_helper(
 
 class Normalize(lie_group.UnaryOperator):
     @classmethod
-    def _forward_impl(cls, matrix):
-        matrix: torch.Tensor = matrix
-        output, svd_info = _normalize_impl_helper(matrix)
+    def _forward_impl(cls, tensor):
+        tensor: torch.Tensor = tensor
+        output, svd_info = _normalize_impl_helper(tensor)
         return output, svd_info
 
     @staticmethod
@@ -1110,8 +1120,8 @@ class Normalize(lie_group.UnaryOperator):
         return _normalize_backward_helper(u, s, v, sign, grad_output), None
 
 
-def _normalize_autograd_fn(matrix: torch.Tensor):
-    return Normalize.apply(matrix)[0]
+def _normalize_autograd_fn(tensor: torch.Tensor):
+    return Normalize.apply(tensor)[0]
 
 
 _jnormalize_autograd_fn = None

@@ -90,7 +90,8 @@ def sample_inputs(input_types, batch_size, dtype, rng):
 
 # Run the test for a Lie group operator
 def run_test_op(op_name, batch_size, dtype, rng, dim, data_shape, module):
-    if not isinstance(batch_size, int) and op_name == "log":
+    is_multi_batch = not isinstance(batch_size, int)
+    if is_multi_batch and op_name == "log":
         return  # requires a proper multi-batch support test for left_act
 
     all_input_types, atol = get_test_cfg(op_name, dtype, dim, data_shape, module=module)
@@ -102,19 +103,36 @@ def run_test_op(op_name, batch_size, dtype, rng, dim, data_shape, module):
             else None
         )
 
-        # check analytic backward for the operator
-        check_lie_group_function(module, op_name, atol, inputs, funcs=funcs)
+        # checks:
+        #   - analytic backward for the operator
+        #   - multi-batch output consistent with single-batch output
+        check_lie_group_function(
+            module,
+            op_name,
+            atol,
+            inputs,
+            funcs=funcs,
+            batch_size=batch_size if is_multi_batch else None,
+        )
 
 
-# Checks if the jacobian computed by default torch autograd is close to the one
-# provided with custom backward
+# Checks:
+#
+#   1) if the jacobian computed by default torch autograd is close to the one
+#      provided with custom backward
+#   2) if the output of op and jop is consistent with flattening all batch dims
+#      to a single dim.
 # funcs is a list of callable that modifiies the jacobian. If provided we also
 # check that func(jac_autograd) is close to func(jac_custom), for each func in
 # the list
-def check_lie_group_function(module, op_name: str, atol: float, inputs, funcs=None):
+def check_lie_group_function(
+    module, op_name: str, atol: float, inputs, funcs=None, batch_size=None
+):
     op_impl = getattr(module, f"_{op_name}_impl")
     op = getattr(module, f"_{op_name}_autograd_fn")
+    jop = getattr(module, f"_j{op_name}_autograd_fn")
 
+    # Check jacobians
     jacs_impl = torch.autograd.functional.jacobian(op_impl, inputs, vectorize=True)
     jacs = torch.autograd.functional.jacobian(op, inputs, vectorize=True)
 
@@ -129,6 +147,21 @@ def check_lie_group_function(module, op_name: str, atol: float, inputs, funcs=No
                 torch.testing.assert_close(
                     func(jac_impl), func(jac), atol=atol, rtol=atol
                 )
+
+    # Check multi-batch consistency
+    if batch_size is None:
+        return
+    lb = len(batch_size)
+    flattened_inputs = [x.reshape(-1, *x.shape[lb:]) for x in inputs]
+    out = op(*inputs)
+    flattened_out = op(*flattened_inputs)
+    if jop is None:
+        return
+    jout = jop(*inputs)[0]
+    flattened_jout = jop(*flattened_inputs)[0]
+    torch.testing.assert_close(out, flattened_out.reshape(*batch_size, *out.shape[lb:]))
+    for j, jf in zip(jout, flattened_jout):
+        torch.testing.assert_close(j, jf.reshape(*batch_size, *j.shape[lb:]))
 
 
 def left_project_func(module, group):

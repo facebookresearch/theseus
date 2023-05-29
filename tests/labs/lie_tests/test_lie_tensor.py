@@ -2,6 +2,7 @@
 #
 # This source code is licensed under the MIT license found in the
 # LICENSE file in the root directory of this source tree.
+import lie
 import pytest
 import torch
 
@@ -18,8 +19,6 @@ def rng():
 
 # Converts the functional sampled inputs to the class-based inputs
 def _get_lie_tensor_inputs(input_types, sampled_inputs, ltype):
-    import theseus.labs.lie as lie
-
     def _get_typed_tensor(idx):
         is_group = input_types[idx][0] == "group"
         return (
@@ -56,9 +55,9 @@ def _get_lie_tensor_inputs(input_types, sampled_inputs, ltype):
 @pytest.mark.parametrize("ltype_str", ["se3", "so3"])
 @pytest.mark.parametrize("batch_size", [5])
 def test_op(op_name, ltype_str, batch_size, rng):
-    import theseus.labs.lie as lie
-    import theseus.labs.lie.functional.se3_impl as se3_impl
-    import theseus.labs.lie.functional.so3_impl as so3_impl
+    import lie
+    import lie.functional.se3_impl as se3_impl
+    import lie.functional.so3_impl as so3_impl
 
     ltype = {"se3": lie.SE3, "so3": lie.SO3}[ltype_str]
 
@@ -129,7 +128,7 @@ def test_op(op_name, ltype_str, batch_size, rng):
 
 @run_if_labs()
 def test_backward_works():
-    import theseus.labs.lie as lie
+    import lie
 
     # Run optimization to check that the compute graph is not broken
     g1 = lie.SE3.rand(1, requires_grad=True)

@@ -1,7 +1,7 @@
 import torch
 
-import theseus.labs.lie as lie
-import theseus.labs.lie.functional as lieF
+import lie
+import lie.functional as lieF
 
 batch_size = 5
 

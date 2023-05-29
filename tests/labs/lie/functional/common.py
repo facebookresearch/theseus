@@ -6,7 +6,7 @@
 import torch
 
 
-BATCH_SIZES_TO_TEST = [1, 20]
+BATCH_SIZES_TO_TEST = [1, 20, (1, 2), tuple()]
 TEST_EPS = 5e-7
 
 
@@ -56,26 +56,31 @@ def get_test_cfg(op_name, dtype, dim, data_shape, module=None):
 
 # Sample inputs with the desired types.
 # Input type is one of:
-#   ("tangent", dim)  # torch.rand(batch_size, dim)
-#   ("group", module) # e.g., module.rand(batch_size)
+#   ("tangent", dim)  # torch.rand(*batch_size, dim)
+#   ("group", module) # e.g., module.rand(*batch_size)
 #   ("quat", dim)     # sampled like tangent but normalized
-#   ("matrix", shape) # torch.rand((batch_size,) + shape)
-def sample_inputs(input_types, batch_size, dtype, rng, module=None):
+#   ("matrix", shape) # torch.rand((*batch_size,) + shape)
+#
+# `batch_size` can be a tuple.
+def sample_inputs(input_types, batch_size, dtype, rng):
+    if isinstance(batch_size, int):
+        batch_size = (batch_size,)
+
     def _sample(input_type):
         type_str, param = input_type
 
         def _quat_sample():
-            q = torch.rand(batch_size, param, dtype=dtype, generator=rng)
-            return q / torch.norm(q, dim=1, keepdim=True)
+            q = torch.rand(*batch_size, param, dtype=dtype, generator=rng)
+            return q / torch.norm(q, dim=-1, keepdim=True)
 
         sample_fns = {
             "tangent": lambda: torch.rand(
-                batch_size, param, dtype=dtype, generator=rng
+                *batch_size, param, dtype=dtype, generator=rng
             ),
-            "group": lambda: param.rand(batch_size, generator=rng, dtype=dtype),
+            "group": lambda: param.rand(*batch_size, generator=rng, dtype=dtype),
             "quat": lambda: _quat_sample(),
             "matrix": lambda: torch.rand(
-                (batch_size,) + param, generator=rng, dtype=dtype
+                (*batch_size,) + param, generator=rng, dtype=dtype
             ),
         }
         return sample_fns[type_str]()
@@ -85,6 +90,9 @@ def sample_inputs(input_types, batch_size, dtype, rng, module=None):
 
 # Run the test for a Lie group operator
 def run_test_op(op_name, batch_size, dtype, rng, dim, data_shape, module):
+    if not isinstance(batch_size, int) and op_name == "log":
+        return  # requires a proper multi-batch support test for left_act
+
     all_input_types, atol = get_test_cfg(op_name, dtype, dim, data_shape, module=module)
     for input_types in all_input_types:
         inputs = sample_inputs(input_types, batch_size, dtype, rng)

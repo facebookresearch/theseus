@@ -2,9 +2,9 @@
 #
 # This source code is licensed under the MIT license found in the
 # LICENSE file in the root directory of this source tree.
+from typing import Sequence, Union
 
 import pytest
-
 import torch
 
 from tests.decorators import run_if_labs
@@ -49,12 +49,15 @@ def test_op(op_name, batch_size, dtype):
 @run_if_labs()
 @pytest.mark.parametrize("batch_size", BATCH_SIZES_TO_TEST)
 @pytest.mark.parametrize("dtype", [torch.float32, torch.float64])
-def test_vee(batch_size: int, dtype: torch.dtype):
+def test_vee(batch_size: Union[int, Sequence[int]], dtype: torch.dtype):
     import theseus.labs.lie.functional.se3_impl as SE3
+
+    if isinstance(batch_size, int):
+        batch_size = (batch_size,)
 
     rng = torch.Generator()
     rng.manual_seed(0)
-    tangent_vector = torch.rand(batch_size, 6, dtype=dtype, generator=rng)
+    tangent_vector = torch.rand(*batch_size, 6, dtype=dtype, generator=rng)
     matrix = SE3._hat_autograd_fn(tangent_vector)
 
     # check analytic backward for the operator

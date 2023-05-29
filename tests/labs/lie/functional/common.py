@@ -88,7 +88,10 @@ def sample_inputs(input_types, batch_size, dtype, rng):
     return tuple(_sample(type_str) for type_str in input_types)
 
 
-# Run the test for a Lie group operator
+# Run some unit tests for a Lie group operator:
+# checks:
+#   - jacobian of default torch autograd consistent with custom backward implementation
+#   - multi-batch output consistent with single-batch output
 def run_test_op(op_name, batch_size, dtype, rng, dim, data_shape, module):
     is_multi_batch = not isinstance(batch_size, int)
     if is_multi_batch and op_name == "log":
@@ -103,9 +106,6 @@ def run_test_op(op_name, batch_size, dtype, rng, dim, data_shape, module):
             else None
         )
 
-        # checks:
-        #   - analytic backward for the operator
-        #   - multi-batch output consistent with single-batch output
         check_lie_group_function(
             module,
             op_name,
@@ -242,3 +242,37 @@ def check_jacrev_binary(group_fns, batch_size, name):
     for i in range(2):
         jac_analytic = jlog[0] @ jtest[i] if name == "compose" else jtest[i]
         torch.testing.assert_close(jacs_vmap[i], jac_analytic)
+
+
+def check_compose_broadcasting(group_fns, data_size, bs1, bs2, dtype, rng):
+    g1 = group_fns.rand(*bs1, generator=rng, dtype=dtype)
+    g2 = group_fns.rand(*bs2, generator=rng, dtype=dtype)
+
+    # The following code does broadcasting manually, then we check that
+    # manual broadcast output is the same as the automatic broadcasting
+    m = max(len(bs1), len(bs2))
+
+    def _full_dim(bs):
+        return bs if (len(bs) == m) else (1,) * (m - len(bs)) + bs
+
+    bs1_full = _full_dim(bs1)
+    bs2_full = _full_dim(bs2)
+    # This is the full broadcasted batch dimension
+    bs_expand = tuple(max(a, b) for a, b in zip(bs1_full, bs2_full))
+
+    # flatten to a single batch dimension
+    def _expand_flat(g):
+        return g.clone().expand(bs_expand + data_size).reshape(-1, *data_size)
+
+    g1_expand_flat = _expand_flat(g1)
+    g2_expand_flat = _expand_flat(g2)
+
+    # Here is where the comparison happens
+    out = group_fns.compose(g1, g2)
+    out_expand_flat = group_fns.compose(g1_expand_flat, g2_expand_flat)
+    torch.testing.assert_close(out, out_expand_flat.reshape(bs_expand + data_size))
+
+    jout = group_fns.jcompose(g1, g2)[0]
+    jout_expand_flat = group_fns.jcompose(g1_expand_flat, g2_expand_flat)[0]
+    for j1, j2 in zip(jout, jout_expand_flat):
+        torch.testing.assert_close(j1, j2.reshape(bs_expand + j1.shape[-2:]))

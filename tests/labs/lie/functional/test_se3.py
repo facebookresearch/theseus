@@ -11,6 +11,7 @@ from tests.decorators import run_if_labs
 from .common import (
     BATCH_SIZES_TO_TEST,
     TEST_EPS,
+    check_compose_broadcasting,
     check_lie_group_function,
     check_jacrev_binary,
     check_jacrev_unary,
@@ -89,3 +90,15 @@ def test_jacrev_binary(batch_size, name):
     import theseus.labs.lie.functional as lieF
 
     check_jacrev_binary(lieF.SE3, batch_size, name)
+
+
+@run_if_labs()
+def test_compose_broadcasting():
+    from theseus.labs.lie.functional import SE3
+
+    rng = torch.Generator()
+    rng.manual_seed(0)
+    batch_sizes = [(1,), (2,), (1, 2), (2, 1), (2, 2), (2, 2, 2), tuple()]
+    for bs1 in batch_sizes:
+        for bs2 in batch_sizes:
+            check_compose_broadcasting(SE3, (3, 4), bs1, bs2, torch.float64, rng)

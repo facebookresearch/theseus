@@ -207,7 +207,7 @@ def check_jacrev_unary(group_fns, dim, batch_size, name):
 # name can be "compose" or "transform_from".
 # Requires torch >= 2.0
 # Compares the output of vmap(jacrev(log(fn(x)))) to jfn(x).
-# For "inv" the output of vmap has to be left-projected,
+# For all group inputs, the output of vmap has to be left-projected,
 # to make get a Riemannian jacobian.
 def check_jacrev_binary(group_fns, batch_size, name):
     assert name in ["compose", "transform_from"]

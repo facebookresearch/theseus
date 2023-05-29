@@ -244,12 +244,7 @@ def check_jacrev_binary(group_fns, batch_size, name):
         torch.testing.assert_close(jacs_vmap[i], jac_analytic)
 
 
-def check_compose_broadcasting(group_fns, data_size, bs1, bs2, dtype, rng):
-    g1 = group_fns.rand(*bs1, generator=rng, dtype=dtype)
-    g2 = group_fns.rand(*bs2, generator=rng, dtype=dtype)
-
-    # The following code does broadcasting manually, then we check that
-    # manual broadcast output is the same as the automatic broadcasting
+def _get_broadcast_size(bs1, bs2):
     m = max(len(bs1), len(bs2))
 
     def _full_dim(bs):
@@ -257,22 +252,38 @@ def check_compose_broadcasting(group_fns, data_size, bs1, bs2, dtype, rng):
 
     bs1_full = _full_dim(bs1)
     bs2_full = _full_dim(bs2)
-    # This is the full broadcasted batch dimension
-    bs_expand = tuple(max(a, b) for a, b in zip(bs1_full, bs2_full))
 
-    # flatten to a single batch dimension
-    def _expand_flat(g):
-        return g.clone().expand(bs_expand + data_size).reshape(-1, *data_size)
+    return tuple(max(a, b) for a, b in zip(bs1_full, bs2_full))
 
-    g1_expand_flat = _expand_flat(g1)
-    g2_expand_flat = _expand_flat(g2)
 
-    # Here is where the comparison happens
-    out = group_fns.compose(g1, g2)
-    out_expand_flat = group_fns.compose(g1_expand_flat, g2_expand_flat)
-    torch.testing.assert_close(out, out_expand_flat.reshape(bs_expand + data_size))
+# flatten to a single batch dimension
+def _expand_flat(tensor, broadcast_size, group_size):
+    return tensor.clone().expand(broadcast_size + group_size).reshape(-1, *group_size)
 
-    jout = group_fns.jcompose(g1, g2)[0]
-    jout_expand_flat = group_fns.jcompose(g1_expand_flat, g2_expand_flat)[0]
+
+def check_binary_op_broadcasting(group_fns, op_name, group_size, bs1, bs2, dtype, rng):
+    assert op_name in ["compose", "transform_from"]
+    g1 = group_fns.rand(*bs1, generator=rng, dtype=dtype)
+    if op_name == "compose":
+        t2 = group_fns.rand(*bs2, generator=rng, dtype=dtype)
+        t2_size = group_size
+    else:
+        t2 = torch.randn(*bs2, 3, generator=rng, dtype=dtype)
+        t2_size = (3,)
+
+    # The following code does broadcasting manually, then we check that
+    # manual broadcast output is the same as the automatic broadcasting
+    broadcast_size = _get_broadcast_size(bs1, bs2)
+    t1_expand_flat = _expand_flat(g1, broadcast_size, group_size)
+    t2_expand_flat = _expand_flat(t2, broadcast_size, t2_size)
+
+    fn = getattr(group_fns, op_name)
+    jfn = getattr(group_fns, f"j{op_name}")
+    out = fn(g1, t2)
+    out_expand_flat = fn(t1_expand_flat, t2_expand_flat)
+    torch.testing.assert_close(out, out_expand_flat.reshape(broadcast_size + t2_size))
+
+    jout = jfn(g1, t2)[0]
+    jout_expand_flat = jfn(t1_expand_flat, t2_expand_flat)[0]
     for j1, j2 in zip(jout, jout_expand_flat):
-        torch.testing.assert_close(j1, j2.reshape(bs_expand + j1.shape[-2:]))
+        torch.testing.assert_close(j1, j2.reshape(broadcast_size + j1.shape[-2:]))

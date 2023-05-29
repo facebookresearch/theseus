@@ -726,8 +726,6 @@ _jtransform_from_autograd_fn = _jtransform_from_impl
 # Unit Quaternion to Rotation Matrix
 # -----------------------------------------------------------------------------
 def _quaternion_to_rotation_impl(quaternion: torch.Tensor) -> torch.Tensor:
-    if quaternion.ndim == 1:
-        quaternion = quaternion.unsqueeze(0)
     check_unit_quaternion(quaternion)
 
     quaternion = quaternion / torch.norm(quaternion, dim=-1, keepdim=True)

@@ -154,7 +154,7 @@ baspacho_extension = maybe_create_baspacho_extension(compile_cuda_support)
 if baspacho_extension is not None:
     ext_modules.append(baspacho_extension)
 
-excluded_packages = []
+excluded_packages = ["lie", "lie.*", "tests", "tests.*"]
 package_name = "theseus-ai-nightly" if is_nightly else "theseus-ai"
 if not os.environ.get("INCLUDE_THESEUS_LABS") and not is_nightly:
     excluded_packages.append("theseus.labs")

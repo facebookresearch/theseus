@@ -41,7 +41,7 @@ from .common import (
 @pytest.mark.parametrize("batch_size", BATCH_SIZES_TO_TEST)
 @pytest.mark.parametrize("dtype", [torch.float32, torch.float64])
 def test_op(op_name, batch_size, dtype):
-    import theseus.labs.lie.functional.so3_impl as so3
+    import lie.functional.so3_impl as so3
 
     rng = torch.Generator()
     rng.manual_seed(0)
@@ -52,7 +52,7 @@ def test_op(op_name, batch_size, dtype):
 @pytest.mark.parametrize("batch_size", BATCH_SIZES_TO_TEST)
 @pytest.mark.parametrize("dtype", [torch.float32, torch.float64])
 def test_vee(batch_size: Union[int, Sequence[int]], dtype: torch.dtype):
-    import theseus.labs.lie.functional.so3_impl as so3
+    import lie.functional.so3_impl as so3
 
     if isinstance(batch_size, int):
         batch_size = (batch_size,)
@@ -75,7 +75,7 @@ def test_vee(batch_size: Union[int, Sequence[int]], dtype: torch.dtype):
 @pytest.mark.parametrize("batch_size", [1, 10, 100])
 @pytest.mark.parametrize("name", ["exp", "inv"])
 def test_jacrev_unary(batch_size, name):
-    import theseus.labs.lie.functional as lieF
+    import lie.functional as lieF
 
     check_jacrev_unary(lieF.SO3, 3, batch_size, name)
 
@@ -87,7 +87,7 @@ def test_jacrev_binary(batch_size, name):
     if not hasattr(torch, "vmap"):
         return
 
-    import theseus.labs.lie.functional as lieF
+    import lie.functional as lieF
 
     check_jacrev_binary(lieF.SO3, batch_size, name)
 
@@ -95,7 +95,10 @@ def test_jacrev_binary(batch_size, name):
 @run_if_labs()
 @pytest.mark.parametrize("name", ["compose", "transform_from"])
 def test_binary_op_broadcasting(name):
-    from theseus.labs.lie.functional import SO3
+    import lie.functional as lieF
+
+    print(lieF.__file__)
+    from lie.functional import SO3
 
     rng = torch.Generator()
     rng.manual_seed(0)

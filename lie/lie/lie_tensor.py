@@ -11,8 +11,8 @@ import torch
 from torch.utils._pytree import tree_flatten, tree_map_only
 from torch.types import Number
 
-from theseus.labs.lie.functional.constants import DeviceType
-from theseus.labs.lie.functional.lie_group import UnaryOperatorOpFnType
+from .functional.constants import DeviceType
+from .functional.lie_group import UnaryOperatorOpFnType
 from .types import (
     ltype as _ltype,
     Device,

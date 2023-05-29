@@ -132,7 +132,14 @@ def left_project_func(module, group):
     return func
 
 
+# This function checks that vmap(jacrevc) works for the `group_fns.name`, where
+# name can be "exp" or "inv".
+# Requires torch >= 2.0
+# Compares the output of vmap(jacrev(log(fn(x)))) to jfn(x).
+# For "inv" the output of vmap has to be left-projected,
+# to make get a Riemannian jacobian.
 def check_jacrev_unary(group_fns, dim, batch_size, name):
+    assert name in ["exp", "inv"]
     if not hasattr(torch, "vmap"):
         return
 
@@ -155,7 +162,14 @@ def check_jacrev_unary(group_fns, dim, batch_size, name):
     torch.testing.assert_close(jac_vmap, jac_analytic)
 
 
+# This function checks that vmap(jacrevc) works for the `group_fns.name`, where
+# name can be "compose" or "transform_from".
+# Requires torch >= 2.0
+# Compares the output of vmap(jacrev(log(fn(x)))) to jfn(x).
+# For "inv" the output of vmap has to be left-projected,
+# to make get a Riemannian jacobian.
 def check_jacrev_binary(group_fns, batch_size, name):
+    assert name in ["compose", "transform_from"]
     if not hasattr(torch, "vmap"):
         return
 

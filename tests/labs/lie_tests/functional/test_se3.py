@@ -7,7 +7,7 @@ from typing import Sequence, Union
 import pytest
 import torch
 
-from tests.decorators import run_if_labs
+from tests.theseus_tests.decorators import run_if_labs
 from .common import (
     BATCH_SIZES_TO_TEST,
     TEST_EPS,

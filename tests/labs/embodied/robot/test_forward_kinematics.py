@@ -6,10 +6,10 @@
 import pytest
 import os
 import torch
-from tests.decorators import run_if_labs
+from tests.theseus_tests.decorators import run_if_labs
 
 
-URDF_REL_PATH = "../../../embodied/kinematics/data/panda_no_gripper.urdf"
+URDF_REL_PATH = "../../../theseus_tests/embodied/kinematics/data/panda_no_gripper.urdf"
 urdf_path = os.path.join(os.path.dirname(__file__), URDF_REL_PATH)
 
 

@@ -6,7 +6,7 @@ import lie
 import pytest
 import torch
 
-from tests.decorators import run_if_labs
+from tests.theseus_tests.decorators import run_if_labs
 from .functional.common import get_test_cfg, sample_inputs
 
 

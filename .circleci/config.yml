@@ -213,7 +213,7 @@ run_other_unit_tests: &run_other_unit_tests
       working_directory: ~/project
       command: |
         pip install -e ".[dev]"
-        python -m pytest tests -m "not cudaext" -s --ignore=tests/geometry/ --ignore=tests/optimizer --ignore-glob=tests/test_theseus_layer.py --ignore=tests/labs/lie
+        python -m pytest tests -m "not cudaext" -s --ignore=tests/theseus_tests/geometry/ --ignore=tests/optimizer --ignore-glob=tests/theseus_tests/test_theseus_layer.py --ignore=tests/lie_tests
 
 run_gpu_tests: &run_gpu_tests
   - run:

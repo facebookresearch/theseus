@@ -76,7 +76,7 @@ def test_operations_mypy_cast():
             "Updating mypy is not working for me. Will fix this eventually."
         )
         return
-    result = mypy.api.run(["tests/geometry/point_types_mypy_check.py"])
+    result = mypy.api.run(["tests/theseus_tests/geometry/point_types_mypy_check.py"])
     assert result[2] == 0
 
 

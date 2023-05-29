@@ -195,7 +195,7 @@ run_optimizer_tests: &run_optimizer_tests
       working_directory: ~/project
       command: |
         BASPACHO_ROOT_DIR=~/baspacho pip install -e ".[dev]"
-        # python -m pytest tests/theseus_tests/optimizer -m "not cudaext"
+        python -m pytest tests/theseus_tests/optimizer -m "not cudaext"
         python -m pytest tests/theseus_tests/test_theseus_layer.py -m "not cudaext"
 
 run_lie_group_tests: &run_lie_group_tests

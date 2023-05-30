@@ -2,6 +2,7 @@
 #
 # This source code is licensed under the MIT license found in the
 # LICENSE file in the root directory of this source tree.
+from functools import reduce
 
 import torch
 
@@ -94,14 +95,12 @@ def sample_inputs(input_types, batch_size, dtype, rng):
 #   - multi-batch output consistent with single-batch output
 def run_test_op(op_name, batch_size, dtype, rng, dim, data_shape, module):
     is_multi_batch = not isinstance(batch_size, int)
-    if is_multi_batch and op_name == "log":
-        return  # requires a proper multi-batch support test for left_act
-
+    bs = len(batch_size) if is_multi_batch else 1
     all_input_types, atol = get_test_cfg(op_name, dtype, dim, data_shape, module=module)
     for input_types in all_input_types:
         inputs = sample_inputs(input_types, batch_size, dtype, rng)
         funcs = (
-            tuple(left_project_func(module, x) for x in inputs)
+            tuple(left_project_func(module, x, bs) for x in inputs)
             if op_name == "log"
             else None
         )
@@ -164,11 +163,24 @@ def check_lie_group_function(
         torch.testing.assert_close(j, jf.reshape(*batch_size, *j.shape[lb:]))
 
 
-def left_project_func(module, group):
-    sels = range(group.shape[0])
-
+def left_project_func(module, group, batch_dim):
     def func(matrix: torch.Tensor):
-        return module._left_project_autograd_fn(group, matrix[sels, ..., sels, :, :])
+        assert matrix.ndim == 2 * batch_dim + 3  # shape should be (*BD, f, *BD, g1, g2)
+        g = group.clone()
+        # Convert to single-batch-dim sparse gradient format
+        batch_size = matrix.shape[:batch_dim]
+        if batch_dim > 0:
+            d = reduce(lambda x, y: x * y, batch_size)
+            matrix = matrix.reshape(d, -1, d, *group.shape[-2:])
+            sels = range(matrix.shape[0])
+            matrix = matrix[sels, ..., sels, :, :]
+            g = group.reshape(d, *group.shape[-2:])
+        # Compute projected gradient matrix
+        ret = module._left_project_autograd_fn(g, matrix)
+        # Revert to multi-batch format if necessary
+        if batch_dim > 0:
+            ret = ret.reshape(*batch_size, *ret.shape[-2:])
+        return ret
 
     return func
 

@@ -112,8 +112,8 @@ if is_nightly:
 else:
     with open(Path("theseus") / "_version.py", "r") as f:
         for line in f:
-            if "__THESEUS_VERSION__" in line:
-                version = line.split()[1].strip('"')
+            if "__version__ = " in line:
+                version = line.split("__version__ = ")[1].rstrip().strip('"')
 
 with open("README.md", "r") as fh:
     long_description = fh.read()

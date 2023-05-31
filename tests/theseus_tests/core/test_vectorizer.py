@@ -206,7 +206,7 @@ def _check_vectorized_wrappers(vectorization, objective):
         for cost_fn in objective.cost_functions.values():
             if cost_fn is w.cost_fn:
                 w_jac, w_err = cost_fn.weighted_jacobians_error()
-                assert w._cached_error.allclose(w_err)
+                torch.testing.assert_close(w._cached_error, w_err)
                 for jac, exp_jac in zip(w._cached_jacobians, w_jac):
                     torch.testing.assert_close(jac, exp_jac, atol=1e-6, rtol=1e-6)
 
@@ -403,3 +403,6 @@ def test_masked_jacobians_called(monkeypatch):
 
     _solve_fn_for_masked_jacobians(128, 2, 16, th.ScaleCostWeight, True, "cpu")
     assert called[0]
+
+
+test_vectorized_error()

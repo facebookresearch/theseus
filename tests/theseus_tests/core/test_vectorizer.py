@@ -403,6 +403,3 @@ def test_masked_jacobians_called(monkeypatch):
 
     _solve_fn_for_masked_jacobians(128, 2, 16, th.ScaleCostWeight, True, "cpu")
     assert called[0]
-
-
-test_vectorized_error()

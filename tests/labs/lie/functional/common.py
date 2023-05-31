@@ -7,7 +7,7 @@ from functools import reduce
 import torch
 
 
-BATCH_SIZES_TO_TEST = [1, 20, (1, 2), tuple()]
+BATCH_SIZES_TO_TEST = [1, 20, (1, 2), (3, 4, 5), tuple()]
 TEST_EPS = 5e-7
 
 

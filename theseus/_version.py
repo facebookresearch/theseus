@@ -11,7 +11,7 @@ def get_version() -> str:
             " in future releases.",
             FutureWarning,
         )
-    return "0.2.0.dev0"
+    return "0.2.0.dev0"  # __THESEUS_VERSION__
 
 
 __version__ = get_version()

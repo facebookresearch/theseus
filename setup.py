@@ -110,10 +110,10 @@ if nightly_date_str is not None:
 if is_nightly:
     version = nightly_date_str
 else:
-    with open(Path("theseus") / "__init__.py", "r") as f:
+    with open(Path("theseus") / "_version.py", "r") as f:
         for line in f:
-            if "__version__" in line:
-                version = line.split("__version__ = ")[1].rstrip().strip('"')
+            if "__THESEUS_VERSION__" in line:
+                version = line.split()[1].strip('"')
 
 with open("README.md", "r") as fh:
     long_description = fh.read()

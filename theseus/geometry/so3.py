@@ -115,18 +115,11 @@ class SO3(LieGroup):
         with torch.no_grad():
             if tensor.ndim != 3 or tensor.shape[1:] != (3, 3):
                 raise ValueError("SO3 data tensors can only be 3x3 matrices.")
-
-            MATRIX_EPS = theseus.constants._SO3_MATRIX_EPS[tensor.dtype]
-            if tensor.dtype != torch.float64:
-                tensor = tensor.double()
-
-            _check = (
-                torch.matmul(tensor, tensor.transpose(1, 2))
-                - torch.eye(3, 3, dtype=tensor.dtype, device=tensor.device)
-            ).abs().max().item() < MATRIX_EPS
-            _check &= (torch.linalg.det(tensor) - 1).abs().max().item() < MATRIX_EPS
-
-        return _check
+            try:
+                SO3_base.check_group_tensor(tensor)
+            except ValueError:
+                return False
+        return True
 
     @staticmethod
     def _unit_quaternion_check(quaternion: torch.Tensor):
@@ -135,15 +128,7 @@ class SO3(LieGroup):
 
         checks_enabled, silent_unchecks = _LieGroupCheckContext.get_context()
         if checks_enabled:
-            QUANTERNION_EPS = theseus.constants._SO3_QUATERNION_EPS[quaternion.dtype]
-
-            if quaternion.dtype != torch.float64:
-                quaternion = quaternion.double()
-
-            if (
-                torch.linalg.norm(quaternion, dim=1) - 1
-            ).abs().max().item() >= QUANTERNION_EPS:
-                raise ValueError("Not unit quaternions.")
+            SO3_base.check_unit_quaternion(quaternion)
         elif not silent_unchecks:
             warnings.warn(
                 "Lie group checks are disabled, so the validness of unit quaternions is not "
@@ -158,10 +143,7 @@ class SO3(LieGroup):
 
         checks_enabled, silent_unchecks = _LieGroupCheckContext.get_context()
         if checks_enabled:
-            if (
-                matrix.transpose(1, 2) + matrix
-            ).abs().max().item() > theseus.constants._SO3_HAT_EPS[matrix.dtype]:
-                raise ValueError("Hat matrices of SO(3) can only be skew-symmetric.")
+            SO3_base.check_hat_tensor(matrix)
         elif not silent_unchecks:
             warnings.warn(
                 "Lie group checks are disabled, so the skew-symmetry of hat matrices is "
@@ -174,13 +156,13 @@ class SO3(LieGroup):
         tangent_vector: torch.Tensor, jacobians: Optional[List[torch.Tensor]] = None
     ) -> "SO3":
         if tangent_vector.ndim != 2 or tangent_vector.shape[1] != 3:
-            raise ValueError("Tangent vectors of SO3 should be 3-D vectors.")
+            raise ValueError("Tangent vectors of SO3 should be batched 3-D vectors.")
         return SO3(tensor=SO3_base.exp(tangent_vector, jacobians=jacobians))
 
     @staticmethod
     def normalize(tensor: torch.Tensor) -> torch.Tensor:
         if tensor.ndim != 3 or tensor.shape[1:] != (3, 3):
-            raise ValueError("SO3 data tensors can only be 3x3 matrices.")
+            raise ValueError("SO3 data tensors can only be batched 3x3 matrices.")
         return SO3_base.normalize(tensor)
 
     def _log_map_impl(
@@ -289,23 +271,10 @@ class SO3(LieGroup):
         jacobians: Optional[List[torch.Tensor]] = None,
     ) -> Point3:
         self._rotate_shape_check(point)
-        batch_size = max(self.shape[0], point.shape[0])
-        if isinstance(point, torch.Tensor):
-            p = point.view(-1, 3, 1)
-        else:
-            p = point.tensor.view(-1, 3, 1)
-
-        ret = Point3(tensor=(self.tensor @ p).view(-1, 3))
-        if jacobians is not None:
-            self._check_jacobians_list(jacobians)
-            # Right jacobians for SO(3) are computed
-            Jrot = -self.tensor @ SO3.hat(p.squeeze(-1))
-            # Jacobians for point
-            Jpnt = self.to_matrix().expand(batch_size, 3, 3)
-
-            jacobians.extend([Jrot, Jpnt])
-
-        return ret
+        p = point if isinstance(point, torch.Tensor) else point.tensor
+        return Point3(
+            tensor=SO3_base.transform_from(self.tensor, p, jacobians=jacobians)
+        )
 
     def unrotate(
         self,

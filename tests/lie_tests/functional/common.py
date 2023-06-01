@@ -299,3 +299,25 @@ def check_binary_op_broadcasting(group_fns, op_name, group_size, bs1, bs2, dtype
     jout_expand_flat = jfn(t1_expand_flat, t2_expand_flat)[0]
     for j1, j2 in zip(jout, jout_expand_flat):
         torch.testing.assert_close(j1, j2.reshape(broadcast_size + j1.shape[-2:]))
+
+
+def check_left_project_broadcasting(
+    lie_group_fns, batch_sizes, out_dims, group_size, rng
+):
+    for bs1 in batch_sizes:
+        for bs2 in batch_sizes:
+            for out_dim in out_dims:
+                g = lie_group_fns.rand(
+                    *bs1, generator=rng, dtype=torch.double, requires_grad=True
+                )
+                t = torch.randn(
+                    *bs2,
+                    *tuple(range(1, out_dim + 1)),
+                    *group_size,
+                    generator=rng,
+                    dtype=torch.double,
+                    requires_grad=True,
+                )
+                torch.autograd.gradcheck(
+                    lie_group_fns.left_project, (g, t, out_dim), raise_exception=True
+                )

@@ -12,6 +12,7 @@ from .common import (
     BATCH_SIZES_TO_TEST,
     TEST_EPS,
     check_binary_op_broadcasting,
+    check_left_project_broadcasting,
     check_lie_group_function,
     check_jacrev_binary,
     check_jacrev_unary,
@@ -108,3 +109,13 @@ def test_binary_op_broadcasting(name):
             check_binary_op_broadcasting(
                 SO3, name, (3, 3), bs1, bs2, torch.float64, rng
             )
+
+
+@run_if_labs()
+def test_left_project_broadcasting():
+    from lie.functional import SE3
+
+    rng = torch.Generator()
+    rng.manual_seed(0)
+    batch_sizes = [tuple(), (1, 2), (1, 1, 2), (2, 1), (2, 2), (2, 2, 2)]
+    check_left_project_broadcasting(SE3, batch_sizes, [0, 1, 2], (3, 4), rng)

@@ -7,7 +7,6 @@ from typing import Sequence, Union
 import pytest
 import torch
 
-from tests.theseus_tests.decorators import run_if_labs
 from .common import (
     BATCH_SIZES_TO_TEST,
     TEST_EPS,
@@ -20,7 +19,6 @@ from .common import (
 )
 
 
-@run_if_labs()
 @pytest.mark.parametrize(
     "op_name",
     [
@@ -48,7 +46,6 @@ def test_op(op_name, batch_size, dtype):
     run_test_op(op_name, batch_size, dtype, rng, 6, (3, 4), SE3)
 
 
-@run_if_labs()
 @pytest.mark.parametrize("batch_size", BATCH_SIZES_TO_TEST)
 @pytest.mark.parametrize("dtype", [torch.float32, torch.float64])
 def test_vee(batch_size: Union[int, Sequence[int]], dtype: torch.dtype):
@@ -72,7 +69,6 @@ def test_vee(batch_size: Union[int, Sequence[int]], dtype: torch.dtype):
     )
 
 
-@run_if_labs()
 @pytest.mark.parametrize("batch_size", [1, 10, 100])
 @pytest.mark.parametrize("name", ["exp", "inv"])
 def test_jacrev_unary(batch_size, name):
@@ -81,7 +77,6 @@ def test_jacrev_unary(batch_size, name):
     check_jacrev_unary(lieF.SE3, 6, batch_size, name)
 
 
-@run_if_labs()
 @pytest.mark.parametrize("batch_size", [1, 10, 100])
 @pytest.mark.parametrize("name", ["compose", "transform_from"])
 def test_jacrev_binary(batch_size, name):
@@ -93,7 +88,6 @@ def test_jacrev_binary(batch_size, name):
     check_jacrev_binary(lieF.SE3, batch_size, name)
 
 
-@run_if_labs()
 @pytest.mark.parametrize("name", ["compose", "transform_from"])
 def test_binary_op_broadcasting(name):
     from lie.functional import SE3
@@ -108,7 +102,6 @@ def test_binary_op_broadcasting(name):
             )
 
 
-@run_if_labs()
 def test_left_project_broadcasting():
     from lie.functional import SE3
 

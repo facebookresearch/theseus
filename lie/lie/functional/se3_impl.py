@@ -6,8 +6,8 @@
 import torch
 from typing import cast, List, Tuple, Optional
 
-from . import constants
-from . import lie_group, so3_impl as SO3
+from lie.options import _TORCHLIE_GLOBAL_OPTIONS as LIE_OPTS
+from . import constants, lie_group, so3_impl as SO3
 from .check_contexts import checks_base
 from .utils import get_module, shape_err_msg
 
@@ -48,7 +48,7 @@ def check_tangent_vector(tangent_vector: torch.Tensor):
 
 def check_hat_tensor(tensor: torch.Tensor):
     def _impl(t_: torch.Tensor):
-        if t_[..., -1].abs().max() > constants._SE3_NEAR_ZERO_EPS[t_.dtype]:
+        if t_[..., -1].abs().max() > LIE_OPTS.get_eps("se3", "near_zero", t_.dtype):
             raise ValueError("The last row for hat tensors of SE3 must be zero")
 
         SO3.check_hat_tensor(t_[..., :3, :3])
@@ -192,7 +192,7 @@ def _exp_impl_helper(tangent_vector: torch.Tensor):
     # Compute the translation
     tangent_vector_lin = tangent_vector[..., :3].view(*size, 3, 1)
     tangent_vector_ang = tangent_vector[..., 3:].view(*size, 3, 1)
-    near_zero = theta < constants._SO3_NEAR_ZERO_EPS[tangent_vector.dtype]
+    near_zero = theta < LIE_OPTS.get_eps("so3", "near_zero", tangent_vector.dtype)
     theta3_nz = theta_nz * theta2_nz
     theta_minus_sine_by_theta3_t = torch.where(
         near_zero, 1.0 / 6 - theta2 / 120, (theta - sine) / theta3_nz
@@ -243,7 +243,7 @@ def _jexp_impl_helper(
     jac[..., 3:, 3:] = jac[..., :3, :3]
 
     # compute translation jacobians
-    near_zero = theta < constants._SO3_NEAR_ZERO_EPS[tangent_vector.dtype]
+    near_zero = theta < LIE_OPTS.get_eps("so3", "near_zero", tangent_vector.dtype)
     d_one_minus_cosine_by_theta2 = torch.where(
         near_zero,
         constants._NEAR_ZERO_D_ONE_MINUS_COSINE_BY_THETA2,
@@ -290,7 +290,7 @@ def _jexp_impl(
         one_minus_cosine_by_theta2,
         theta_minus_sine_by_theta3_t,
     ) = _exp_impl_helper(tangent_vector)
-    near_zero = theta < constants._SO3_NEAR_ZERO_EPS[tangent_vector.dtype]
+    near_zero = theta < LIE_OPTS.get_eps("so3", "near_zero", tangent_vector.dtype)
     theta_minus_sine_by_theta3_rot = torch.where(
         near_zero, torch.zeros_like(theta), theta_minus_sine_by_theta3_t
     )
@@ -357,7 +357,7 @@ def _log_impl_helper(group: torch.Tensor):
     ret_ang, (theta, sine, cosine) = SO3._log_impl_helper(group[..., :3])
 
     # Compute the translation
-    near_zero = theta < constants._SO3_NEAR_ZERO_EPS[group.dtype]
+    near_zero = theta < LIE_OPTS.get_eps("so3", "near_zero", group.dtype)
     theta2 = theta**2
     sine_theta = sine * theta
     two_cosine_minus_two = 2 * cosine - 2
@@ -414,7 +414,7 @@ def _jlog_impl_helper(
     ret_lin = tangent_vector[..., :3]
     ret_ang = tangent_vector[..., 3:]
     size = get_tangent_vector_size(tangent_vector)
-    near_zero = theta < constants._SO3_NEAR_ZERO_EPS[tangent_vector.dtype]
+    near_zero = theta < LIE_OPTS.get_eps("so3", "near_zero", tangent_vector.dtype)
     jac = tangent_vector.new_zeros(*size, 6, 6)
     jac[..., :3, :3], (b_ret_ang,) = SO3._jlog_impl_helper(ret_ang, theta, sine, cosine)
     jac[..., 3:, 3:] = jac[..., :3, :3]

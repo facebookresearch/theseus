@@ -18,27 +18,17 @@ def _CHECK_DTYPE_SUPPORTED(dtype):
 
 @dataclass
 class _TorchLieOptions:
-    so2_norm_eps_float32: float = 1e-12
-    so2_matrix_eps_float32: float = 1e-5
-    se2_near_zero_eps_float32: float = 3e-2
     so3_near_pi_eps_float32: float = 1e-2
     so3_near_zero_eps_float32: float = 1e-2
     so3_matrix_eps_float32: float = 4e-4
     so3_quat_eps_float32: float = 2e-4
     so3_hat_eps_float32: float = 5e-6
-    se3_near_pi_eps_float32: float = 1e-2
-    se3_near_zero_eps_float32: float = 1e-2
     se3_hat_eps_float32: float = 5e-6
-    so2_norm_eps_float64: float = 1e-12
-    so2_matrix_eps_float64: float = 4e-7
-    se2_near_zero_eps_float64: float = 1e-6
     so3_near_pi_eps_float64: float = 1e-7
     so3_near_zero_eps_float64: float = 5e-3
     so3_matrix_eps_float64: float = 1e-6
     so3_quat_eps_float64: float = 5e-7
     so3_hat_eps_float64: float = 5e-7
-    se3_near_pi_eps_float64: float = 1e-7
-    se3_near_zero_eps_float64: float = 5e-3
     se3_hat_eps_float64: float = 5e-7
 
     def get_eps(self, ltype: str, attr: str, dtype: torch.dtype) -> float:

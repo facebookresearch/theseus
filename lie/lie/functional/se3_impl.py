@@ -357,7 +357,7 @@ def _log_impl_helper(group: torch.Tensor):
     ret_ang, (theta, sine, cosine) = SO3._log_impl_helper(group[..., :3])
 
     # Compute the translation
-    near_zero = theta < LIE_OPTS.get_eps("se3", "near_zero", group.dtype)
+    near_zero = theta < LIE_OPTS.get_eps("so3", "near_zero", group.dtype)
     theta2 = theta**2
     sine_theta = sine * theta
     two_cosine_minus_two = 2 * cosine - 2

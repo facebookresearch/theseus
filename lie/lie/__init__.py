@@ -2,7 +2,7 @@
 #
 # This source code is licensed under the MIT license found in the
 # LICENSE file in the root directory of this source tree.
-__version__ = "0.0.1.dev3"
+__version__ = "0.0.1.dev5"
 
 from .types import ltype, SE3, SO3
 from .lie_tensor import (  # usort: skip
@@ -24,4 +24,4 @@ from .lie_tensor import (  # usort: skip
     log,
     transform_from,
 )
-from .options import set_global_options
+from .options import reset_global_options, set_global_options

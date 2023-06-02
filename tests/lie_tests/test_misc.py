@@ -5,7 +5,7 @@
 import pytest
 import torch
 
-from lie import set_global_options
+from lie import reset_global_options, set_global_options
 from lie.functional import SE3, SO3, enable_checks
 
 
@@ -43,3 +43,5 @@ def test_global_options(dtype):
             SO3.check_unit_quaternion(fake_hat_input)
         set_global_options({f"so3_quat_eps_{dtype}": 1000.0})
         SO3.check_unit_quaternion(fake_hat_input)
+
+    reset_global_options()

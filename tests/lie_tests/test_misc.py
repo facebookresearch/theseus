@@ -23,17 +23,23 @@ def test_global_options(dtype):
 
     assert not torch.allclose(r2, r3)
     with enable_checks():
-        t = torch.randn(4, 4, dtype=getattr(torch, dtype))
+        fake_hat_input = torch.randn(4, 4, dtype=getattr(torch, dtype))
         with pytest.raises(ValueError):
-            SE3.check_hat_tensor(t)
+            SE3.check_hat_tensor(fake_hat_input)
         set_global_options({f"so3_hat_eps_{dtype}": 1000.0})
         set_global_options({f"se3_hat_eps_{dtype}": 1000.0})
-        SE3.check_hat_tensor(t)
+        SE3.check_hat_tensor(fake_hat_input)
+
+        fake_so3_matrix = torch.randn(3, 3, dtype=getattr(torch, dtype))
+        with pytest.raises(ValueError):
+            SO3.check_group_tensor(fake_so3_matrix)
+        set_global_options({f"so3_matrix_eps_{dtype}": 1000.0})
+        SO3.check_group_tensor(fake_so3_matrix)
 
     with enable_checks():
         set_global_options({f"so3_quat_eps_{dtype}": 0.0})
-        t = torch.randn(4, dtype=getattr(torch, dtype))
+        fake_hat_input = torch.randn(4, dtype=getattr(torch, dtype))
         with pytest.raises(ValueError):
-            SO3.check_unit_quaternion(t)
+            SO3.check_unit_quaternion(fake_hat_input)
         set_global_options({f"so3_quat_eps_{dtype}": 1000.0})
-        SO3.check_unit_quaternion(t)
+        SO3.check_unit_quaternion(fake_hat_input)

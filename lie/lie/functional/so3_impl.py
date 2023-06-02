@@ -28,7 +28,7 @@ _module = get_module(__name__)
 
 def check_group_tensor(tensor: torch.Tensor):
     def _impl(t_):
-        MATRIX_EPS = constants._SO3_MATRIX_EPS[t_.dtype]
+        MATRIX_EPS = LIE_OPTS.get_eps("so3", "matrix", t_.dtype)
         if t_.dtype != torch.float64:
             t_ = t_.double()
 

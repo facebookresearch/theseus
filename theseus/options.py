@@ -19,8 +19,14 @@ def _CHECK_DTYPE_SUPPORTED(dtype):
 
 @dataclass
 class _TheseusGlobalOptions:
+    so2_norm_eps_float32: float = 0
+    so2_matrix_eps_float32: float = 0
+    se2_near_zero_eps_float32: float = 0
     so3_near_pi_eps_float32: float = 0
     so3_near_zero_eps_float32: float = 0
+    so2_norm_eps_float64: float = 0
+    so2_matrix_eps_float64: float = 0
+    se2_near_zero_eps_float64: float = 0
     so3_near_pi_eps_float64: float = 0
     so3_near_zero_eps_float64: float = 0
 
@@ -33,8 +39,15 @@ class _TheseusGlobalOptions:
         return getattr(self, attr_name)
 
     def reset(self) -> None:
+        self.so2_norm_eps_float32 = 1e-12
+        self.so2_matrix_eps_float32 = 1e-5
+        self.se2_near_zero_eps_float32 = 3e-2
         self.so3_near_pi_eps_float32 = 1e-2
         self.so3_near_zero_eps_float32 = 1e-2
+
+        self.so2_norm_eps_float32 = 1e-12
+        self.so2_matrix_eps_float64 = 4e-7
+        self.se2_near_zero_eps_float64 = 1e-6
         self.so3_near_pi_eps_float64 = 1e-7
         self.so3_near_zero_eps_float64 = 5e-3
 

@@ -22,23 +22,4 @@ def _CHECK_DTYPE_SUPPORTED(dtype):
         )
 
 
-class EPSDict:
-    def __init__(self, float32_eps, float64_eps):
-        self.float32_eps = float32_eps
-        self.float64_eps = float64_eps
-
-    def __getitem__(self, dtype):
-        _CHECK_DTYPE_SUPPORTED(dtype)
-        if dtype is torch.float32:
-            return self.float32_eps
-        else:
-            return self.float64_eps
-
-
-_SO2_NORMALIZATION_EPS = EPSDict(float32_eps=1e-12, float64_eps=1e-12)
-
-_SO2_MATRIX_EPS = EPSDict(float32_eps=1e-5, float64_eps=4e-7)
-
-_SE2_NEAR_ZERO_EPS = EPSDict(float32_eps=3e-2, float64_eps=1e-6)
-
 DeviceType = Optional[Union[str, torch.device]]

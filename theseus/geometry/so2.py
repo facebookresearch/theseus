@@ -9,6 +9,7 @@ from typing import List, Optional, Tuple, Union, cast
 import torch
 
 import theseus.constants
+from theseus.options import _THESEUS_GLOBAL_OPTIONS
 
 from .lie_group import LieGroup
 from .lie_group_check import _LieGroupCheckContext
@@ -126,7 +127,7 @@ class SO2(LieGroup):
             if tensor.ndim != 2 or tensor.shape[1] != 2:
                 raise ValueError("SO2 data tensors can only be 2D vectors.")
 
-            MATRIX_EPS = theseus.constants._SO2_MATRIX_EPS[tensor.dtype]
+            MATRIX_EPS = _THESEUS_GLOBAL_OPTIONS.get_eps("so2", "matrix", tensor.dtype)
             if tensor.dtype != torch.float64:
                 tensor = tensor.double()
 
@@ -182,7 +183,9 @@ class SO2(LieGroup):
             raise ValueError("SO2 data tensors can only be 2D vectors.")
 
         data_norm = torch.norm(tensor, dim=1, keepdim=True)
-        near_zero = data_norm < theseus.constants._SO2_NORMALIZATION_EPS[tensor.dtype]
+        near_zero = data_norm < _THESEUS_GLOBAL_OPTIONS.get_eps(
+            "so2", "norm", tensor.dtype
+        )
         data_norm_nz = torch.where(
             near_zero,
             torch.tensor(1.0, dtype=tensor.dtype, device=tensor.device),

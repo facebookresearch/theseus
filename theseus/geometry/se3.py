@@ -34,12 +34,6 @@ class SE3(LieGroup):
         if x_y_z_quaternion is not None:
             self.update_from_x_y_z_quaternion(x_y_z_quaternion=x_y_z_quaternion)
 
-        self._resolve_eps()
-
-    def _resolve_eps(self):
-        self._NEAR_ZERO_EPS = theseus.constants._SE3_NEAR_ZERO_EPS[self.tensor.dtype]
-        self._NEAR_PI_EPS = theseus.constants._SE3_NEAR_PI_EPS[self.tensor.dtype]
-
     @staticmethod
     def rand(
         *size: int,
@@ -305,7 +299,6 @@ class SE3(LieGroup):
     # calls to() on the internal tensors
     def to(self, *args, **kwargs):
         super().to(*args, **kwargs)
-        self._resolve_eps()
 
 
 rand_se3 = SE3.rand

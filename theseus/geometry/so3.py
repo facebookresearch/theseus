@@ -10,6 +10,7 @@ import torch
 from lie.functional import SO3 as SO3_base
 
 import theseus.constants
+from theseus.options import _THESEUS_GLOBAL_OPTIONS
 from .lie_group import LieGroup
 from .lie_group_check import _LieGroupCheckContext
 from .point_types import Point3
@@ -31,12 +32,6 @@ class SO3(LieGroup):
         super().__init__(tensor=tensor, name=name, dtype=dtype, strict=strict)
         if quaternion is not None:
             self.update_from_unit_quaternion(quaternion)
-
-        self._resolve_eps()
-
-    def _resolve_eps(self):
-        self._NEAR_ZERO_EPS = theseus.constants._SO3_NEAR_ZERO_EPS[self.tensor.dtype]
-        self._NEAR_PI_EPS = theseus.constants._SO3_NEAR_PI_EPS[self.tensor.dtype]
 
     @staticmethod
     def rand(
@@ -189,8 +184,8 @@ class SO3(LieGroup):
         sine_axis[:, 2] = 0.5 * (self[:, 1, 0] - self[:, 0, 1])
         w = 0.5 * (1 + self[:, 0, 0] + self[:, 1, 1] + self[:, 2, 2]).clamp(0, 4).sqrt()
 
-        near_zero = w > 1 - self._NEAR_ZERO_EPS
-        near_pi = w <= self._NEAR_PI_EPS
+        near_zero = w > 1 - _THESEUS_GLOBAL_OPTIONS.get_eps("so3", "near_zero", w.dtype)
+        near_pi = w <= _THESEUS_GLOBAL_OPTIONS.get_eps("so3", "near_pi", w.dtype)
         non_zero = self.tensor.new_ones([1])
 
         ret = self.tensor.new_zeros(self.shape[0], 4)

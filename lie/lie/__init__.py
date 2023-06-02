@@ -24,3 +24,4 @@ from .lie_tensor import (  # usort: skip
     log,
     transform_from,
 )
+from .options import set_global_options

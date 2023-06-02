@@ -48,7 +48,7 @@ def check_tangent_vector(tangent_vector: torch.Tensor):
 
 def check_hat_tensor(tensor: torch.Tensor):
     def _impl(t_: torch.Tensor):
-        if t_[..., -1].abs().max() > LIE_OPTS.get_eps("se3", "near_zero", t_.dtype):
+        if t_[..., -1].abs().max() > LIE_OPTS.get_eps("se3", "hat", t_.dtype):
             raise ValueError("The last row for hat tensors of SE3 must be zero")
 
         SO3.check_hat_tensor(t_[..., :3, :3])
@@ -357,7 +357,7 @@ def _log_impl_helper(group: torch.Tensor):
     ret_ang, (theta, sine, cosine) = SO3._log_impl_helper(group[..., :3])
 
     # Compute the translation
-    near_zero = theta < LIE_OPTS.get_eps("so3", "near_zero", group.dtype)
+    near_zero = theta < LIE_OPTS.get_eps("se3", "near_zero", group.dtype)
     theta2 = theta**2
     sine_theta = sine * theta
     two_cosine_minus_two = 2 * cosine - 2

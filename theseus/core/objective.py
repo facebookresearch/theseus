@@ -657,7 +657,9 @@ class Objective:
                 of all cost functions, weights, and variables, the same
                 connectivity structure, and error metric.
         """
-        new_objective = Objective(dtype=self.dtype)
+        new_objective = Objective(
+            dtype=self.dtype, error_metric_fn=self._error_metric_fn
+        )
 
         # First copy all individual cost weights
         old_to_new_cost_weight_map: Dict[CostWeight, CostWeight] = {}

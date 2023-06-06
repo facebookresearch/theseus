@@ -453,13 +453,6 @@ class Objective:
                 "This cost function is not in the objective, nothing to be done."
             )
 
-    # gets the name associated with a cost function object (or None if not present)
-    def get_cost_function_name(self, cost_function: CostFunction) -> Optional[str]:
-        for name in self.cost_functions:
-            if id(cost_function) == id(cost_function):
-                return name
-        return None
-
     @staticmethod
     def _get_functions_connected_to_var(
         variable: Union[str, Variable],

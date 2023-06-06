@@ -59,6 +59,7 @@ def masked_jacobians(
 # `error` and `jacobians`, respectively.
 class CostFunction(TheseusFunction, abc.ABC):
     """A cost function in a differentiable optimization problem."""
+
     def __init__(
         self,
         cost_weight: CostWeight,

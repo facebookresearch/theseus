@@ -14,6 +14,7 @@ from typing import (
     Optional,
     Protocol,
     Sequence,
+    Tuple,
     Union,
 )
 
@@ -522,7 +523,7 @@ class Objective:
             err_dim += cost_function.dim()
         return err_dim
 
-    def size(self) -> tuple[int, int]:
+    def size(self) -> Tuple[int, int]:
         """Returns the number of cost functions and variables in the objective.
 
         Returns:
@@ -752,9 +753,9 @@ class Objective:
             check_batch_size_consistency(self.all_variables)
 
         Any variables not included in the input tensors dictionary will retain their
-        current tensors. 
-        
-        After updating, the objective will modify its batch size 
+        current tensors.
+
+        After updating, the objective will modify its batch size
         property according to the resulting tensors. Therefore, all variable tensors
         must have a consistent batch size (either 1 or the same value as the others),
         after the update is completed. Note that this includes variables not referenced
@@ -766,15 +767,15 @@ class Objective:
                 given name is registered in the objective, its tensor will be replaced
                 with the one in the dictionary (possibly permanently, depending on the
                 value of ``also_update``). Defaults to ``None``, in which case nothing
-                will be updated. In both cases, the objective will resolve the 
+                will be updated. In both cases, the objective will resolve the
                 batch size with whatever tensors are stored after updating.
             batch_ignore_mask (torch.Tensor, optional): an optional tensor of shape
-                (batch_size,) of boolean type. Any ``True`` values indicate that 
-                this batch index should remain unchanged in all variables. 
+                (batch_size,) of boolean type. Any ``True`` values indicate that
+                this batch index should remain unchanged in all variables.
                 Defaults to ``None``.
 
         Raises:
-            ValueError: if tensors with inconsistent batch dimension are given. 
+            ValueError: if tensors with inconsistent batch dimension are given.
         """
         input_tensors = input_tensors or {}
         for var_name, tensor in input_tensors.items():
@@ -887,23 +888,23 @@ class Objective:
 
             for var in ordering:
                 var.retract(delta[var_idx])
-            
+
         This function assumes that ``delta`` is constructed as follows:
 
         .. code-block::
 
             delta = torch.cat([delta_v1, delta_v2, ..., delta_vn], dim=-1)
-       
-        For an ordering ``[v1 v2 ... vn]``, and where 
+
+        For an ordering ``[v1 v2 ... vn]``, and where
         ``delta_vi.shape = (batch_size, vi.dof())``
 
         Args:
-            delta (torch.Tensor): the tensor to use for retract operation. 
+            delta (torch.Tensor): the tensor to use for retract operation.
             ordering (Iterable[Manifold]): an ordered iterator of variables to retract.
                 The order must be consistent with ``delta`` as explained above.
             ignore_mask (torch.Tensor, optional): An ignore mask for batch indices as
                 in :meth:`update() <theseus.Objective.update>`. Defaults to ``None``.
-            force_update (bool, optional): if ``True``, disregards the ``ignore_mask``. 
+            force_update (bool, optional): if ``True``, disregards the ``ignore_mask``.
                 Defaults to ``False``.
         """
         self._retract_method(

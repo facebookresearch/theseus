@@ -39,7 +39,28 @@ def error_squared_norm_fn(error_vector: torch.Tensor) -> torch.Tensor:
 
 # If dtype is None, uses torch.get_default_dtype()
 class Objective:
-    """An objective function to optimize."""
+    """An objective function to optimize.
+
+    Defines the structure of an optimization problem in Theseus by aggregating
+    :class:`cost functions <theseus.CostFunction>` into a single objective.
+    The cost functions that comprise the final
+    objective function are specified via the :meth:`add() <theseus.Objective.add>`
+    method. Cost functions are responsible for registering their optimization and
+    auxiliary variables, which are automatically added to the objective's list of
+    variables when a cost function is added.
+    Importantly, optimization variables must be instances of :class:`Manifold`
+    subclasses, while auxiliary variables can be instances of
+    any :class:`Variable` class.
+
+    Args:
+        dtype (optional[torch.dtype]): the data type to use for all variables. If
+            ``None`` is passed, then uses ``torch.get_default_dtype()``.
+        error_metric_fn (optional[callable]): a reference to a Python function used to
+            aggregate cost functions into a single objective. Defaults to using the
+            sum of squared costs. If given, it must receive a single tensor as input.
+            The objective will use it to pass the batched concatenated error vector,
+            will all cost function errors concatenated.
+    """
 
     def __init__(
         self,
@@ -183,18 +204,34 @@ class Objective:
             # add to list of functions connected to this variable
             self_var_to_fn_map[variable].append(function)
 
-    # Adds a cost function to the objective
-    # Also adds its optimization variables if they haven't been previously added
-    # Throws an error if a new variable has the same name of a previously added
-    # variable that is not the same object.
-    # Does the same for the cost function's auxiliary variables
-    # Then does the same with the cost weight's auxiliary variables
-    #
-    # For now, cost weight "optimization variables" are **NOT** added to the
-    # set of objective's variables, they are kept in a separate container.
-    # Update method will check if any of these are not registered as
-    # cost function variables, and throw a warning.
     def add(self, cost_function: CostFunction):
+        """Adds a cost function to the objective.
+
+        When a cost function is added, this method goes over its list of registered
+        optimization and auxiliary variables, and adds any of them to the objective's
+        list of variables, as long as a variable with th4 same name hasn't been added
+        before. If any of the cost function's variables has the same as that of
+        a variable previously added to the objective, the method
+        checks that they are referring to the same :class:`theseus.Variable`. If this
+        is not the case, an error will be triggered. In other words, the objective
+        expects to have a unique mapping between variable names and objects.
+
+        The same procedure is followed for the cost function's weight.
+
+        Args:
+            cost_function (:class:`theseus.CostFunction`): the cost function to be
+                added to the objective.
+
+        .. warning::
+
+            If a cost weight registers optimization variables that are not used in any
+            :class:`theseus.CostFunction <CostFunction>` objects, these will **NOT**
+            be added to the set of the objective's optimization variables; they will be
+            kept in a separate container. The :meth:`update` method will check for this,
+            and throw a warning whenever this happens. Also note that Theseus
+            always considers cost weights as constants, even if their value depends on
+            variables declared as optimization variables.
+        """
         # adds the cost function if not already present
         if cost_function.name in self.cost_functions:
             if cost_function is not self.cost_functions[cost_function.name]:
@@ -269,28 +306,78 @@ class Objective:
                 if self.has_optim_var(aux_name):
                     raise ValueError(dual_var_err_msg)
 
-    # returns a reference to the cost function with the given name
     def get_cost_function(self, name: str) -> CostFunction:
+        """Returns a reference to the cost function with the given name.
+
+        Args:
+            name (str): the name of the cost function to retrieve.
+
+        Returns:
+            CostFunction: the :class:`theseus.CostFunction` with the given name, if
+            present. Otherwise ``None``.
+        """
         return self.cost_functions.get(name, None)
 
-    # checks if the cost function with the given name is in the objective
     def has_cost_function(self, name: str) -> bool:
+        """Checks if a cost function with the given name is in the objective.
+
+        Args:
+            name (str): the name of the cost function.
+
+        Returns:
+            bool: ``True`` if a function exists with the given name,
+                ``False`` otherwise.
+        """
         return name in self.cost_functions
 
-    # checks if the optimization variable with the given name is in the objective
     def has_optim_var(self, name: str) -> bool:
+        """Checks if an optimization variable is used in the objective.
+
+        Args:
+            name (str): the name of the optimization variable.
+
+        Returns:
+            bool: ``True`` if an optimization variable with the given name exists in the
+                objective (i.e., it's currently associated to at least one cost
+                function in the objective). ``False`` otherwise.
+        """
         return name in self.optim_vars
 
-    # returns a reference to the optimization variable with the given name
     def get_optim_var(self, name: str) -> Manifold:
+        """Returns a reference to the optimization variable with the given name.
+
+        Args:
+            name (str): the name of the optimization variable to retrieve.
+
+        Returns:
+            Manifold: the :class:`theseus.Manifold` with the given name, if
+            present. Otherwise ``None``.
+        """
         return self.optim_vars.get(name, None)
 
-    # checks if the aux. variable with the given name is in the objective
     def has_aux_var(self, name: str) -> bool:
+        """Checks if an auxiliary variable is used in the objective.
+
+        Args:
+            name (str): the name of the auxiliary variable.
+
+        Returns:
+            bool: ``True`` if an auxiliary variable with the given name exists in the
+                objective (i.e., it's currently associated to at least one cost
+                function or cost weight in the objective). ``False`` otherwise.
+        """
         return name in self.aux_vars
 
-    # returns a reference to the aux. variable with the given name
     def get_aux_var(self, name: str) -> Variable:
+        """Returns a reference to the auxiliary variable with the given name.
+
+        Args:
+            name (str): the name of the auxiliary variable to retrieve.
+
+        Returns:
+            Variable: the :class:`theseus.Variable` with the given name, if
+            present. Otherwise ``None``.
+        """
         return self.aux_vars.get(name, None)
 
     @property
@@ -323,12 +410,17 @@ class Objective:
                 del self_var_to_fn_map[variable]
                 del self_vars_of_this_type[variable.name]
 
-    # Removes a cost function from the objective given its name
-    # Also removes any of its variables that are no longer associated to other
-    # functions (either cost functions, or cost weights).
-    # Does the same for the cost weight, but only if the weight is not associated to
-    # any other cost function
     def erase(self, name: str):
+        """Removes a cost function from the objective given its name
+
+        Also removes any of its variables that are no longer associated to other
+        functions (either cost functions, or cost weights).
+        Does the same for the cost weight variables, but only if the weight is
+        not associated to any other cost function.
+
+        Args:
+            name (str): the name of the cost function to erase.
+        """
         self.current_version += 1
         if name in self.cost_functions:
             cost_function = self.cost_functions[name]
@@ -390,6 +482,16 @@ class Objective:
     def get_functions_connected_to_optim_var(
         self, variable: Union[Manifold, str]
     ) -> List[TheseusFunction]:
+        """Gets a list of functions that depend on a given optimization variable.
+
+        Args:
+            variable (Union[Manifold, str]): the variable to query for. Can be an
+                instance of :class:`theseus.Manifold` or a string, specifying the name.
+
+        Returns:
+            List[TheseusFunction]: all cost functions that depend on the optimization
+                variable.
+        """
         return Objective._get_functions_connected_to_var(
             variable,
             self.optim_vars,  # type: ignore
@@ -400,31 +502,64 @@ class Objective:
     def get_functions_connected_to_aux_var(
         self, aux_var: Union[Variable, str]
     ) -> List[TheseusFunction]:
+        """Gets a list of functions that depend on a given auxiliary variable.
+
+        Args:
+            variable (Union[Variable, str]): the variable to query for. Can be an
+                instance of :class:`theseus.Variable` or a string, specifying the name.
+
+        Returns:
+            List[TheseusFunction]: all cost functions that depend on the auxiliary
+                variable.
+        """
         return Objective._get_functions_connected_to_var(
             aux_var, self.aux_vars, self.functions_for_aux_vars, "Auxiliary Variable"
         )
 
-    # sum of cost function dimensions
     def dim(self) -> int:
+        """Returns the dimension of the error vector.
+
+        The dimension is equal to the sum of all cost functions' error dimensions.
+
+        Returns:
+            int: the error dimension.
+        """
         err_dim = 0
         for cost_function in self.cost_functions.values():
             err_dim += cost_function.dim()
         return err_dim
 
-    # number of (cost functions, variables)
-    def size(self) -> tuple:
+    def size(self) -> tuple[int, int]:
+        """Returns the number of cost functions and variables in the objective.
+
+        Returns:
+            tuple[int, int]: the number of cost functions and optimization variables
+                in the objective, in that order.
+        """
         return len(self.cost_functions), len(self.optim_vars)
 
-    # number of cost functions
     def size_cost_functions(self) -> int:
+        """Returns the number of cost functions in the objective.
+
+        Returns:
+            int: the number of cost functions in the objective.
+        """
         return len(self.cost_functions)
 
-    # number of variables
     def size_variables(self) -> int:
+        """Returns the number of optimization variables in the objective.
+
+        Returns:
+            int: the number of optimization variables in the objective.
+        """
         return len(self.optim_vars)
 
-    # number of auxiliary variables
     def size_aux_vars(self) -> int:
+        """Returns the number of auxiliary variables in the objective.
+
+        Returns:
+            int: the number of auxiliary variables in the objective.
+        """
         return len(self.aux_vars)
 
     def error(
@@ -432,6 +567,26 @@ class Objective:
         input_tensors: Optional[Dict[str, torch.Tensor]] = None,
         also_update: bool = False,
     ) -> torch.Tensor:
+        """Evaluates the error vector.
+
+        Args:
+            input_tensors (Dict[str, torch.Tensor], optional): if given, it must be a
+                dictionary mapping variable names to tensors; if a variable with the
+                given name is registered in the objective, its tensor will be replaced
+                with the one in the dictionary (possibly permanently, depending on the
+                value of ``also_update``). Defaults to ``None``, in which case the error
+                is evaluated using the current tensors stored in all registered
+                variables.
+            also_update (bool, optional): if ``True``, and ``input_tensors`` is given,
+                the modified variables are permanently updated with the given tensors.
+                Defaults to ``False``, in which case the variables are reverted to the
+                previous tensors after the error is evaluated.
+
+        Returns:
+            torch.Tensor: a tensor of shape (batch_size x error_dim), with the
+                concatenation of all cost functions error vectors. The order corresponds
+                to the order in which cost functions were added to the objective.
+        """
         old_tensors = {}
         if input_tensors is not None:
             if not also_update:
@@ -465,6 +620,25 @@ class Objective:
         input_tensors: Optional[Dict[str, torch.Tensor]] = None,
         also_update: bool = False,
     ) -> torch.Tensor:
+        """Aggregates all cost function errors into a (batched) scalar objective.
+
+        Args:
+            input_tensors (Dict[str, torch.Tensor], optional): if given, it must be a
+                dictionary mapping variable names to tensors; if a variable with the
+                given name is registered in the objective, its tensor will be replaced
+                with the one in the dictionary (possibly permanently, depending on the
+                value of ``also_update``). Defaults to ``None``, in which case the error
+                is evaluated using the current tensors stored in all registered
+                variables.
+            also_update (bool, optional): if ``True``, and ``input_tensors`` is given,
+                the modified variables are permanently updated with the given tensors.
+                Defaults to ``False``, in which case the variables are reverted to the
+                previous tensors after the error is evaluated.
+
+        Returns:
+            torch.Tensor: a tensor of shape (batch_size,) with the scalar value of
+                the objective function.
+        """
         return self._error_metric_fn(
             self.error(input_tensors=input_tensors, also_update=also_update)
         )
@@ -483,6 +657,13 @@ class Objective:
         return self.error_metric(input_tensors=input_tensors, also_update=also_update)
 
     def copy(self) -> "Objective":
+        """Creates a new copy of this objective.
+
+        Returns:
+            Objective: another instance of :class:`theseus.Objective` with copies
+                of all cost functions, weights, and variables, the same
+                connectivity structure, and error metric.
+        """
         new_objective = Objective(dtype=self.dtype)
 
         # First copy all individual cost weights
@@ -565,6 +746,41 @@ class Objective:
         batch_ignore_mask: Optional[torch.Tensor] = None,
         _update_vectorization: bool = True,
     ):
+        """Updates all variables with the given input tensor dictionary.
+
+        The behavior of this method can be summarized by the following pseudocode:
+
+        .. code-block::
+
+            for name, tensor in input_tensors.items():
+                var = self.get_var_with_name(name).update(tensor)
+            check_batch_size_consistency(self.all_variables)
+
+        Any variables not included in the input tensors dictionary will retain their
+        current tensors. 
+        
+        After updating, the objective will modify its batch size 
+        property according to the resulting tensors. Therefore, all variable tensors
+        must have a consistent batch size (either 1 or the same value as the others),
+        after the update is completed. Note that this includes variables not referenced
+        in the ``input_tensors`` dictionary.
+
+        Args:
+            input_tensors (Dict[str, torch.Tensor], optional): if given, it must be a
+                dictionary mapping variable names to tensors; if a variable with the
+                given name is registered in the objective, its tensor will be replaced
+                with the one in the dictionary (possibly permanently, depending on the
+                value of ``also_update``). Defaults to ``None``, in which case nothing
+                will be updated. In both cases, the objective will resolve the 
+                batch size with whatever tensors are stored after updating.
+            batch_ignore_mask (torch.Tensor, optional): an optional tensor of shape
+                (batch_size,) of boolean type. Any ``True`` values indicate that 
+                this batch index should remain unchanged in all variables. 
+                Defaults to ``None``.
+
+        Raises:
+            ValueError: if tensors with inconsistent batch dimension are given. 
+        """
         input_tensors = input_tensors or {}
         for var_name, tensor in input_tensors.items():
             if tensor.ndim < 2:
@@ -635,8 +851,8 @@ class Objective:
         # No vectorization is used, just serve from cost functions
         return iter(cf for cf in self.cost_functions.values())
 
-    # Applies to() with given args to all tensors in the objective
     def to(self, *args, **kwargs):
+        """Applies torch.Tensor.to() to all cost functions in the objective."""
         for cost_function in self.cost_functions.values():
             cost_function.to(*args, **kwargs)
         device, dtype, *_ = torch._C._nn._parse_to(*args, **kwargs)
@@ -661,12 +877,6 @@ class Objective:
                 var.update(new_var.tensor, batch_ignore_mask=ignore_mask)
             var_idx += var.dof()
 
-    # Retracts an ordered sequence of variables according to the
-    # corresponding `delta` tangent vectors.
-    # This function assumes that delta is constructed as follows:
-    #    For ordering = [v1 v2 ... vn]
-    #    delta = torch.cat([delta_v1, delta_v2, ..., delta_vn], dim=-1)
-    # where delta_vi.shape = (batch_size, vi.dof)
     def retract_vars_sequence(
         self,
         delta: torch.Tensor,
@@ -674,6 +884,33 @@ class Objective:
         ignore_mask: Optional[torch.Tensor] = None,
         force_update: bool = False,
     ):
+        """Retracts an ordered sequence of variables.
+
+        The behavior of this method can be summarized by the following pseudocode:
+
+        .. code-block::
+
+            for var in ordering:
+                var.retract(delta[var_idx])
+            
+        This function assumes that ``delta`` is constructed as follows:
+
+        .. code-block::
+
+            delta = torch.cat([delta_v1, delta_v2, ..., delta_vn], dim=-1)
+       
+        For an ordering ``[v1 v2 ... vn]``, and where 
+        ``delta_vi.shape = (batch_size, vi.dof())``
+
+        Args:
+            delta (torch.Tensor): the tensor to use for retract operation. 
+            ordering (Iterable[Manifold]): an ordered iterator of variables to retract.
+                The order must be consistent with ``delta`` as explained above.
+            ignore_mask (torch.Tensor, optional): An ignore mask for batch indices as
+                in :meth:`update() <theseus.Objective.update>`. Defaults to ``None``.
+            force_update (bool, optional): if ``True``, disregards the ``ignore_mask``. 
+                Defaults to ``False``.
+        """
         self._retract_method(
             delta, ordering, ignore_mask=ignore_mask, force_update=force_update
         )

@@ -158,9 +158,9 @@ for PYTHON_VERSION in 3.10; do
     # Copy the wheel to host
     CP_STR="cp"$(echo ${PYTHON_VERSION} | sed 's/[.]//g')
     DOCKER_WHL="theseus/dist/${WHL_NAME}-${TH_VERSION}-${CP_STR}-${CP_STR}-linux_x86_64.whl"
-    if [[ ${CUDA_VERSION} == "11.6" ]]
+    if [[ ${CUDA_VERSION} == "11.7" ]]
     then
-        PLUS_CU_TAG=""  # 11.6 will be the pypi version, so don't add +cu116
+        PLUS_CU_TAG=""  # 11.7 will be the pypi version, so don't add +cu117
     else
         PLUS_CU_TAG="+${DEVICE_TAG}"
     fi

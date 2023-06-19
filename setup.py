@@ -144,7 +144,7 @@ if compile_cuda_support:
                 str(root_dir / "theseus" / "extlib" / "cusolver_sp_defs.cpp"),
             ],
             include_dirs=[str(root_dir)],
-            libraries=["cusolver"],
+            libraries=["cusolver", "cusparse"],
         ),
     ]
 else:

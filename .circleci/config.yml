@@ -195,8 +195,8 @@ run_optimizer_tests: &run_optimizer_tests
       working_directory: ~/project
       command: |
         BASPACHO_ROOT_DIR=~/baspacho pip install -e ".[dev]"
-        python -m pytest tests/optimizer -m "not cudaext"
-        python -m pytest tests/test_theseus_layer.py -m "not cudaext"
+        python -m pytest tests/theseus_tests/optimizer -m "not cudaext"
+        python -m pytest tests/theseus_tests/test_theseus_layer.py -m "not cudaext"
 
 run_lie_group_tests: &run_lie_group_tests
   - run:
@@ -204,8 +204,8 @@ run_lie_group_tests: &run_lie_group_tests
       working_directory: ~/project
       command: |
         pip install -e ".[dev]"
-        python -m pytest tests/geometry -m "not cudaext" 
-        python -m pytest tests/labs/lie -m "not cudaext" 
+        python -m pytest tests/theseus_tests/geometry -m "not cudaext" 
+        python -m pytest tests/lie_tests -m "not cudaext" 
 
 run_other_unit_tests: &run_other_unit_tests
   - run:
@@ -213,16 +213,16 @@ run_other_unit_tests: &run_other_unit_tests
       working_directory: ~/project
       command: |
         pip install -e ".[dev]"
-        python -m pytest tests -m "not cudaext" -s --ignore=tests/geometry/ --ignore=tests/optimizer --ignore-glob=tests/test_theseus_layer.py --ignore=tests/labs/lie
+        python -m pytest tests -m "not cudaext" -s --ignore=tests/theseus_tests/geometry/ --ignore=tests/optimizer --ignore-glob=tests/theseus_tests/test_theseus_layer.py --ignore=tests/lie_tests
 
 run_gpu_tests: &run_gpu_tests
   - run:
       name: Running tests
       working_directory: ~/project
       command: |
-        pytest -s tests/test_theseus_layer.py
-        pytest -s tests -m "cudaext"
-        pytest -s tests/test_pgo_benchmark.py -s
+        pytest -s tests/theseus_tests/test_theseus_layer.py
+        pytest -s tests/theseus_tests/ -m "cudaext"
+        pytest -s tests/theseus_tests/test_pgo_benchmark.py -s
 
 build_cuda11_wheel: &build_cuda11_wheel
   - run:
@@ -243,8 +243,8 @@ run_tests_from_wheel: &run_tests_from_wheel
       command: |
           mv theseus theseus_tmp
           source ~/conda/bin/activate theseus
-          python -m pytest tests/test_theseus_layer.py
-          pytest -s tests -m "cudaext"
+          python -m pytest tests/theseus_tests/test_theseus_layer.py
+          pytest -s tests/theseus_tests/ -m "cudaext"
 
 
 # -------------------------------------------------------------------------------------

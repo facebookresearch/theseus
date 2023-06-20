@@ -6,10 +6,10 @@
 import pytest
 import os
 import torch
-from tests.decorators import run_if_labs
+from tests.theseus_tests.decorators import run_if_labs
 
 
-URDF_REL_PATH = "../../../embodied/kinematics/data/panda_no_gripper.urdf"
+URDF_REL_PATH = "../../../theseus_tests/embodied/kinematics/data/panda_no_gripper.urdf"
 urdf_path = os.path.join(os.path.dirname(__file__), URDF_REL_PATH)
 
 
@@ -17,7 +17,7 @@ urdf_path = os.path.join(os.path.dirname(__file__), URDF_REL_PATH)
 @pytest.mark.parametrize("batch_size", [1, 20, 40])
 @pytest.mark.parametrize("dtype", [torch.float32, torch.float64])
 def test_backward(batch_size: int, dtype: torch.dtype):
-    from theseus.labs.lie.functional.constants import TEST_EPS
+    from lie.functional.constants import TEST_EPS
     from theseus.labs.embodied.robot.forward_kinematics import Robot
     from theseus.labs.embodied.robot.forward_kinematics import (
         get_forward_kinematics,
@@ -57,7 +57,7 @@ def test_backward(batch_size: int, dtype: torch.dtype):
 @pytest.mark.parametrize("batch_size", [1, 20, 40])
 @pytest.mark.parametrize("dtype", [torch.float32, torch.float64])
 def test_jacobian(batch_size: int, dtype: torch.dtype):
-    from theseus.labs.lie.functional import SE3
+    from lie.functional import SE3
     from theseus.labs.embodied.robot.forward_kinematics import Robot
     from theseus.labs.embodied.robot.forward_kinematics import get_forward_kinematics
 

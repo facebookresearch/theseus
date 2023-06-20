@@ -54,7 +54,7 @@ def ForwardKinematicsFactory(robot: Robot, link_names: Optional[List[str]] = Non
         poses = _forward_kinematics_helper(angles)
         return tuple(poses[id] for id in link_ids)
 
-    def _jforward_kinematics_helper(
+    def _forward_kinematics_backward_helper(
         poses: List[Optional[torch.Tensor]],
     ) -> torch.Tensor:
         jposes = poses[0].new_zeros(poses[0].shape[0], 6, robot.dof)
@@ -68,22 +68,6 @@ def ForwardKinematicsFactory(robot: Robot, link_names: Optional[List[str]] = Non
 
         return jposes
 
-    def _jforward_kinematics_impl(angles: torch.Tensor):
-        poses = _forward_kinematics_helper(angles)
-        jposes = _jforward_kinematics_helper(poses)
-
-        rets = tuple(poses[id] for id in link_ids)
-        jacs: List[torch.Tensor] = []
-
-        for link_id in link_ids:
-            pose = poses[link_id]
-            jac = jposes.new_zeros(angles.shape[0], 6, robot.dof)
-            sel = robot.links[link_id].ancestor_non_fixed_joint_ids
-            jac[:, :, sel] = SE3.adj(SE3.inv(pose)) @ jposes[:, :, sel]
-            jacs.append(jac)
-
-        return jacs, rets
-
     class ForwardKinematics(torch.autograd.Function):
         @classmethod
         def forward(cls, ctx, angles):
@@ -96,7 +80,9 @@ def ForwardKinematicsFactory(robot: Robot, link_names: Optional[List[str]] = Non
         @classmethod
         def backward(cls, ctx, *grad_outputs):
             if not hasattr(ctx, "jposes"):
-                ctx.jposes: torch.Tensor = _jforward_kinematics_helper(ctx.poses)
+                ctx.jposes: torch.Tensor = _forward_kinematics_backward_helper(
+                    ctx.poses
+                )
             rets: tuple(torch.Tensor) = ctx.rets
             grad_pose = grad_outputs[0].new_zeros(
                 grad_outputs[0].shape[0], 6, robot.dof
@@ -123,15 +109,45 @@ def ForwardKinematicsFactory(robot: Robot, link_names: Optional[List[str]] = Non
     return (
         ForwardKinematics,
         _forward_kinematics_impl,
-        _jforward_kinematics_impl,
         _forward_kinematics_helper,
-        _jforward_kinematics_helper,
+        _forward_kinematics_backward_helper,
+        link_ids,
+        joint_ids,
+        pose_ids,
     )
 
 
 def get_forward_kinematics(robot: Robot, link_names: Optional[List[str]] = None):
-    ForwardKinematics, _, jforward_kinematics, _, _ = ForwardKinematicsFactory(
-        robot, link_names
+    (
+        ForwardKinematics,
+        _,
+        _,
+        backward_helper,
+        link_ids,
+        _,
+        pose_ids,
+    ) = ForwardKinematicsFactory(robot, link_names)
+
+    full_link_names = [link.name for link in robot.get_links()]
+    FullForwardKinematics, _, _, backward_helper, _, _, _ = ForwardKinematicsFactory(
+        robot, full_link_names
     )
     forward_kinematics = ForwardKinematics.apply
+
+    def jforward_kinematics(angles: torch.Tensor):
+        poses: torch.Tensor = FullForwardKinematics.apply(angles)
+        jposes: torch.Tensor = backward_helper(poses)
+
+        rets = tuple(poses[id] for id in link_ids)
+        jacs: List[torch.Tensor] = []
+
+        for link_id in link_ids:
+            pose = poses[link_id]
+            jac = jposes.new_zeros(angles.shape[0], 6, robot.dof)
+            sel = robot.links[link_id].ancestor_non_fixed_joint_ids
+            jac[:, :, sel] = SE3.adj(SE3.inv(pose)) @ jposes[:, :, sel]
+            jacs.append(jac)
+
+        return jacs, rets
+
     return forward_kinematics, jforward_kinematics

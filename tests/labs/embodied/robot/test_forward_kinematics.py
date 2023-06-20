@@ -26,7 +26,7 @@ def test_backward(batch_size: int, dtype: torch.dtype):
 
     robot = Robot.from_urdf_file(urdf_path, dtype)
     selected_links = ["panda_link2", "panda_link5", "panda_virtual_ee_link"]
-    _, fkin_impl, _, _, _ = ForwardKinematicsFactory(robot, selected_links)
+    _, fkin_impl, _, _, _, _, _ = ForwardKinematicsFactory(robot, selected_links)
     fkin, _ = get_forward_kinematics(robot, selected_links)
 
     rng = torch.Generator()

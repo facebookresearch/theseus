@@ -2,15 +2,16 @@
 #
 # This source code is licensed under the MIT license found in the
 # LICENSE file in the root directory of this source tree.
+from typing import Sequence, Union
 
 import pytest
-
 import torch
 
 from tests.decorators import run_if_labs
 from .common import (
     BATCH_SIZES_TO_TEST,
     TEST_EPS,
+    check_binary_op_broadcasting,
     check_lie_group_function,
     check_jacrev_binary,
     check_jacrev_unary,
@@ -49,12 +50,15 @@ def test_op(op_name, batch_size, dtype):
 @run_if_labs()
 @pytest.mark.parametrize("batch_size", BATCH_SIZES_TO_TEST)
 @pytest.mark.parametrize("dtype", [torch.float32, torch.float64])
-def test_vee(batch_size: int, dtype: torch.dtype):
+def test_vee(batch_size: Union[int, Sequence[int]], dtype: torch.dtype):
     import theseus.labs.lie.functional.se3_impl as SE3
+
+    if isinstance(batch_size, int):
+        batch_size = (batch_size,)
 
     rng = torch.Generator()
     rng.manual_seed(0)
-    tangent_vector = torch.rand(batch_size, 6, dtype=dtype, generator=rng)
+    tangent_vector = torch.rand(*batch_size, 6, dtype=dtype, generator=rng)
     matrix = SE3._hat_autograd_fn(tangent_vector)
 
     # check analytic backward for the operator
@@ -86,3 +90,18 @@ def test_jacrev_binary(batch_size, name):
     import theseus.labs.lie.functional as lieF
 
     check_jacrev_binary(lieF.SE3, batch_size, name)
+
+
+@run_if_labs()
+@pytest.mark.parametrize("name", ["compose", "transform_from"])
+def test_binary_op_broadcasting(name):
+    from theseus.labs.lie.functional import SE3
+
+    rng = torch.Generator()
+    rng.manual_seed(0)
+    batch_sizes = [(1,), (2,), (1, 2), (2, 1), (2, 2), (2, 2, 2), tuple()]
+    for bs1 in batch_sizes:
+        for bs2 in batch_sizes:
+            check_binary_op_broadcasting(
+                SE3, name, (3, 4), bs1, bs2, torch.float64, rng
+            )

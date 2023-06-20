@@ -432,7 +432,9 @@ def _jlog_impl_helper(
         -1 / 6.0 - theta2 / 180.0,
         (theta - sine) / (theta_nz * two_cosine_minus_two_nz),
     )
-    e = (ret_ang.view(*size, 1, 3) @ ret_lin.view(*size, 3, 1)).view(*size)
+
+    e = ret_ang.view(*size, 1, 3) @ ret_lin.view(*size, 3, 1)
+    e = e.view(*size) if len(size) > 0 else e.squeeze()
 
     ce_ret_ang = (c * e).view(*size, 1) * ret_ang
     jac[..., :3, 3:] = ce_ret_ang.view(*size, 3, 1) * ret_ang.view(*size, 1, 3)

@@ -583,7 +583,7 @@ class SE3(LieGroup):
             # Right jacobians for SE3 are computed
             Jg = torch.zeros(batch_size, 3, 6, dtype=self.dtype, device=self.device)
             Jg[:, :, :3] = self[:, :, :3]
-            Jg[:, :, 3:] = -self[:, :, :3] @ SO3.hat(p.squeeze(-1))
+            Jg[:, :, 3:] = -self[:, :, :3] @ SO3.hat(p)
             # Jacobians for point
             Jpnt = Jg[:, :, :3]
 

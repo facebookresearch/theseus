@@ -158,10 +158,10 @@ class Robot(abc.ABC):
                 # non-fixed joints should have already been processed
                 if not isinstance(joint, FixedJoint):
                     raise ValueError(f"{joint.name} is expected to a fixed joint.")
-                # fixed joint ids are greather than these of non-fixed ones
+                # fixed joint ids are greater than these of non-fixed ones
                 update_kinematics_tree(joint)
 
-        # cache ancester non-fixed joints to ease FK computation
+        # cache ancestor non-fixed joints to ease FK computation
         def cache_ancestor_non_fixed_joint_ids():
             for link in robot.links:
                 if link.parent_joint is not None:

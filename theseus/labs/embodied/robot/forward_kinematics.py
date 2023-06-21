@@ -117,7 +117,7 @@ def ForwardKinematicsFactory(robot: Robot, link_names: Optional[List[str]] = Non
     )
 
 
-def get_forward_kinematics(robot: Robot, link_names: Optional[List[str]] = None):
+def get_forward_kinematics_fns(robot: Robot, link_names: Optional[List[str]] = None):
     (
         ForwardKinematics,
         _,
@@ -130,9 +130,7 @@ def get_forward_kinematics(robot: Robot, link_names: Optional[List[str]] = None)
 
     links = robot.get_links()
     selected_link_names = [links[id].name for id in pose_ids]
-    SelectedForwardKinematics, _, _, _, _, _, _ = ForwardKinematicsFactory(
-        robot, selected_link_names
-    )
+    SelectedForwardKinematics, *_ = ForwardKinematicsFactory(robot, selected_link_names)
     forward_kinematics = ForwardKinematics.apply
 
     def forward_kinematics_spatial_jacobian(angles: torch.Tensor):

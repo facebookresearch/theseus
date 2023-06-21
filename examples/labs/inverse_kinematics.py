@@ -30,13 +30,20 @@ selected_links = ["panda_virtual_ee_link"]
 fk, jfk_b, jfk_s = get_forward_kinematics_fns(robot, selected_links)
 
 
-def update_rule(jfk, theta, flipped):
+def compute_delta_theta(jfk, theta, targeted_pose, use_body_jacobian):
+    # If jfk is body jacobian, delta_theta is computed by
+    #          pose * exp(jfk * delta_theta) = targeted_pose,
+    # which has a closed-form solution:
+    # .  delta_theta = jfk.pinverse() * log(pose^-1 * targeted_pose)
+    # Otherwise, if jfk is spatial jacobian, delta_theta is computed by
+    #          exp(jfk * delta_theta) * pose = targeted_pose
     jac, poses = jfk(theta)
+    pose_inv = SE3_Func.inv(poses[-1])
     error = (
         SE3_Func.log(
-            SE3_Func.compose(SE3_Func.inv(poses[-1]), targeted_pose)
-            if flipped
-            else SE3_Func.compose(targeted_pose, SE3_Func.inv(poses[-1]))
+            SE3_Func.compose(pose_inv, targeted_pose)
+            if use_body_jacobian
+            else SE3_Func.compose(targeted_pose, pose_inv)
         )
         .view(-1, 6, 1)
         .view(-1, 6, 1)
@@ -51,7 +58,7 @@ targeted_theta = torch.rand(100, robot.dof, dtype=dtype)
 targeted_pose: torch.Tensor = fk(targeted_theta)[0]
 theta_opt = torch.zeros_like(targeted_theta)
 for iter in range(50):
-    delta_theta, error = update_rule(jfk_b, theta_opt, True)
+    delta_theta, error = compute_delta_theta(jfk_b, theta_opt, targeted_pose, True)
     print(error)
     if error < 1e-4:
         break
@@ -64,7 +71,7 @@ targeted_theta = torch.rand(10, robot.dof, dtype=dtype)
 targeted_pose = fk(targeted_theta)[0]
 theta_opt = torch.zeros_like(targeted_theta)
 for iter in range(50):
-    delta_theta, error = update_rule(jfk_s, theta_opt, False)
+    delta_theta, error = compute_delta_theta(jfk_s, theta_opt, targeted_pose, False)
     print(error)
     if error < 1e-4:
         break

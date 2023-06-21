@@ -3,7 +3,7 @@ Core Module
 
 Objective
 ---------
-An objective function to optimize. 
+An objective function to optimize (see :class:`theseus.Objective`). 
 
 Cost Function
 -------------
@@ -25,4 +25,14 @@ Reference
     :nosignatures:
 
     theseus.Objective
+        :no-undoc-members:
+        :nosignatures:
+    theseus.Objective.add
+    theseus.Objective.error
+    theseus.Objective.error_metric    
+    theseus.Objective.update
+    theseus.Objective.retract_vars_sequence
+    theseus.CostFunction
+        :no-undoc-members:
+        :nosignatures:
     theseus.Variable

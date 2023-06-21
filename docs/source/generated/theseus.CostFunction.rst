@@ -1,9 +1,9 @@
-﻿theseus.Variable
-================
+﻿theseus.CostFunction
+====================
 
 .. currentmodule:: theseus
 
-.. autoclass:: Variable
+.. autoclass:: CostFunction
 
    
    .. automethod:: __init__

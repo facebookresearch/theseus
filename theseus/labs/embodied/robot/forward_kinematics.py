@@ -135,7 +135,7 @@ def get_forward_kinematics(robot: Robot, link_names: Optional[List[str]] = None)
     )
     forward_kinematics = ForwardKinematics.apply
 
-    def jforward_kinematics(angles: torch.Tensor):
+    def forward_kinematics_body_jacobian(angles: torch.Tensor):
         selected_poses: torch.Tensor = SelectedForwardKinematics.apply(angles)
         poses = [None] * robot.num_links
         for id, pose in zip(pose_ids, selected_poses):
@@ -154,4 +154,27 @@ def get_forward_kinematics(robot: Robot, link_names: Optional[List[str]] = None)
 
         return jacs, rets
 
-    return forward_kinematics, jforward_kinematics
+    def forward_kinematics_spatial_jacobian(angles: torch.Tensor):
+        selected_poses: torch.Tensor = SelectedForwardKinematics.apply(angles)
+        poses = [None] * robot.num_links
+        for id, pose in zip(pose_ids, selected_poses):
+            poses[id] = pose
+        jposes: torch.Tensor = backward_helper(poses)
+
+        rets = tuple(poses[id] for id in link_ids)
+        jacs: List[torch.Tensor] = []
+
+        for link_id in link_ids:
+            pose = poses[link_id]
+            jac = jposes.new_zeros(angles.shape[0], 6, robot.dof)
+            sel = robot.links[link_id].ancestor_non_fixed_joint_ids
+            jac[:, :, sel] = jposes[:, :, sel]
+            jacs.append(jac)
+
+        return jacs, rets
+
+    return (
+        forward_kinematics,
+        forward_kinematics_body_jacobian,
+        forward_kinematics_spatial_jacobian,
+    )

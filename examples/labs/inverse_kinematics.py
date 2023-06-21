@@ -23,16 +23,32 @@ urdf_path = os.path.join(os.path.dirname(__file__), URDF_REL_PATH)
 
 robot = Robot.from_urdf_file(urdf_path, dtype)
 selected_links = ["panda_virtual_ee_link"]
-fk, jfk = get_forward_kinematics(robot, selected_links)
+fk, jfk_b, jfk_s = get_forward_kinematics(robot, selected_links)
 
+print("---------------------------------------------------")
+print("Body Jacobian")
+print("---------------------------------------------------")
 theta = torch.rand(10, robot.dof, dtype=dtype)
 targeted_poses_ee: torch.Tensor = fk(theta)[0]
-
 theta = torch.zeros_like(theta)
-
 for iter in range(50):
-    poses_ee: torch.Tensor = fk(theta)[0]
-    error = SE3.log(SE3.compose(SE3.inv(poses_ee), targeted_poses_ee)).view(-1, 6, 1)
+    jac_b, poses = jfk_b(theta)
+    error = SE3.log(SE3.compose(SE3.inv(poses[-1]), targeted_poses_ee)).view(-1, 6, 1)
     print(error.norm())
-    jac_w: torch.Tensor = jfk(theta)[0][-1]
-    theta = theta + 0.5 * (jac_w.pinverse() @ error).view(-1, robot.dof)
+    if error.norm() < 1e-4:
+        break
+    theta = theta + 0.5 * (jac_b[-1].pinverse() @ error).view(-1, robot.dof)
+
+print("---------------------------------------------------")
+print("Spatial")
+print("---------------------------------------------------")
+theta = torch.rand(10, robot.dof, dtype=dtype)
+targeted_poses_ee = fk(theta)[0]
+theta = torch.zeros_like(theta)
+for iter in range(50):
+    jac_s, poses = jfk_s(theta)
+    error = SE3.log(SE3.compose(targeted_poses_ee, SE3.inv(poses[-1]))).view(-1, 6, 1)
+    print(error.norm())
+    if error.norm() < 1e-4:
+        break
+    theta = theta + 0.25 * (jac_s[-1].pinverse() @ error).view(-1, robot.dof)

@@ -27,7 +27,7 @@ def test_backward(batch_size: int, dtype: torch.dtype):
     robot = Robot.from_urdf_file(urdf_path, dtype)
     selected_links = ["panda_link2", "panda_link5", "panda_virtual_ee_link"]
     _, fkin_impl, _, _, _, _, _ = ForwardKinematicsFactory(robot, selected_links)
-    fkin, _ = get_forward_kinematics(robot, selected_links)
+    fkin, _, _ = get_forward_kinematics(robot, selected_links)
 
     rng = torch.Generator()
     rng.manual_seed(0)
@@ -63,13 +63,13 @@ def test_jacobian(batch_size: int, dtype: torch.dtype):
 
     robot = Robot.from_urdf_file(urdf_path, dtype)
     selected_links = ["panda_link2", "panda_link5", "panda_virtual_ee_link"]
-    fkin, jfkin = get_forward_kinematics(robot, selected_links)
+    fkin, jfkin_b, _ = get_forward_kinematics(robot, selected_links)
 
     rng = torch.Generator()
     rng.manual_seed(0)
     angles = torch.rand(batch_size, robot.dof, generator=rng, dtype=dtype)
 
-    jacs_actual, poses = jfkin(angles)
+    jacs_actual, poses = jfkin_b(angles)
 
     sels = range(batch_size)
     jacs_dense = torch.autograd.functional.jacobian(fkin, angles, vectorize=True)

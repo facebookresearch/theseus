@@ -22,39 +22,4 @@ def _CHECK_DTYPE_SUPPORTED(dtype):
         )
 
 
-class EPSDict:
-    def __init__(self, float32_eps, float64_eps):
-        self.float32_eps = float32_eps
-        self.float64_eps = float64_eps
-
-    def __getitem__(self, dtype):
-        _CHECK_DTYPE_SUPPORTED(dtype)
-        if dtype is torch.float32:
-            return self.float32_eps
-        else:
-            return self.float64_eps
-
-
-_SO2_NORMALIZATION_EPS = EPSDict(float32_eps=1e-12, float64_eps=1e-12)
-
-_SO2_MATRIX_EPS = EPSDict(float32_eps=1e-5, float64_eps=4e-7)
-
-_SE2_NEAR_ZERO_EPS = EPSDict(float32_eps=3e-2, float64_eps=1e-6)
-
-_SO3_NEAR_PI_EPS = EPSDict(float32_eps=1e-2, float64_eps=1e-7)
-
-_SO3_NEAR_ZERO_EPS = EPSDict(float32_eps=1e-2, float64_eps=5e-3)
-
-_SO3_MATRIX_EPS = EPSDict(float32_eps=4e-4, float64_eps=1e-6)
-
-_SO3_QUATERNION_EPS = EPSDict(float32_eps=2e-4, float64_eps=5e-7)
-
-_SO3_HAT_EPS = EPSDict(float32_eps=5e-6, float64_eps=5e-7)
-
-_SE3_NEAR_PI_EPS = EPSDict(float32_eps=1e-2, float64_eps=1e-7)
-
-_SE3_NEAR_ZERO_EPS = EPSDict(float32_eps=1e-2, float64_eps=5e-3)
-
-_SE3_HAT_EPS = EPSDict(float32_eps=5e-6, float64_eps=5e-7)
-
 DeviceType = Optional[Union[str, torch.device]]

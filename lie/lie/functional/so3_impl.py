@@ -6,8 +6,8 @@
 import torch
 from typing import cast, List, Tuple, Optional
 
-from . import constants
-from . import lie_group
+from lie.options import _TORCHLIE_GLOBAL_OPTIONS as LIE_OPTS
+from . import constants, lie_group
 from .check_contexts import checks_base
 from .utils import (
     get_module,
@@ -28,7 +28,7 @@ _module = get_module(__name__)
 
 def check_group_tensor(tensor: torch.Tensor):
     def _impl(t_):
-        MATRIX_EPS = constants._SO3_MATRIX_EPS[t_.dtype]
+        MATRIX_EPS = LIE_OPTS.get_eps("so3", "matrix", t_.dtype)
         if t_.dtype != torch.float64:
             t_ = t_.double()
 
@@ -66,9 +66,9 @@ def check_tangent_vector(tangent_vector: torch.Tensor):
 
 def check_hat_tensor(tensor: torch.Tensor):
     def _impl(t_: torch.Tensor):
-        if (t_.transpose(-1, -2) + t_).abs().max().item() > constants._SO3_HAT_EPS[
-            t_.dtype
-        ]:
+        if (t_.transpose(-1, -2) + t_).abs().max().item() > LIE_OPTS.get_eps(
+            "so3", "hat", t_.dtype
+        ):
             raise ValueError("Hat tensors of SO3 can only be skew-symmetric.")
 
     if tensor.shape[-2:] != (3, 3):
@@ -106,7 +106,7 @@ def check_project_tensor(tensor: torch.Tensor):
 
 def check_unit_quaternion(quaternion: torch.Tensor):
     def _impl(t_: torch.Tensor):
-        QUANTERNION_EPS = constants._SO3_QUATERNION_EPS[t_.dtype]
+        QUANTERNION_EPS = LIE_OPTS.get_eps("so3", "quat", t_.dtype)
 
         if t_.dtype != torch.float64:
             t_ = t_.double()
@@ -220,7 +220,7 @@ def _exp_impl_helper(tangent_vector: torch.Tensor):
     theta = torch.linalg.norm(tangent_vector, dim=-1, keepdim=True).unsqueeze(-1)
     theta2 = theta**2
     # Compute the approximations when theta ~ 0
-    near_zero = theta < constants._SO3_NEAR_ZERO_EPS[tangent_vector.dtype]
+    near_zero = theta < LIE_OPTS.get_eps("so3", "near_zero", tangent_vector.dtype)
     theta_nz = torch.where(near_zero, constants._NON_ZERO, theta)
     theta2_nz = torch.where(near_zero, constants._NON_ZERO, theta2)
 
@@ -304,7 +304,7 @@ def _jexp_impl(
         one_minus_cosine_by_theta2,
     ) = _exp_impl_helper(tangent_vector)
 
-    near_zero = theta < constants._SO3_NEAR_ZERO_EPS[tangent_vector.dtype]
+    near_zero = theta < LIE_OPTS.get_eps("so3", "near_zero", tangent_vector.dtype)
     theta3_nz = theta_nz * theta2_nz
     theta_minus_sine_by_theta3 = torch.where(
         near_zero, torch.zeros_like(theta), (theta - sine) / theta3_nz
@@ -367,9 +367,8 @@ def _log_impl_helper(group: torch.Tensor):
     sine = sine_axis.norm(dim=-1)
     theta = torch.atan2(sine, cosine)
 
-    near_zero = theta < constants._SO3_NEAR_ZERO_EPS[group.dtype]
-
-    near_pi = 1 + cosine <= constants._SO3_NEAR_PI_EPS[group.dtype]
+    near_zero = theta < LIE_OPTS.get_eps("so3", "near_zero", group.dtype)
+    near_pi = 1 + cosine <= LIE_OPTS.get_eps("so3", "near_pi", group.dtype)
     # theta != pi
     near_zero_or_near_pi = torch.logical_or(near_zero, near_pi)
     # Compute the approximation of theta / sin(theta) when theta is near to 0
@@ -420,7 +419,7 @@ def _jlog_impl_helper(
     cosine: torch.Tensor,
 ):
     size = get_tangent_vector_size(tangent_vector)
-    near_zero = theta < constants._SO3_NEAR_ZERO_EPS[tangent_vector.dtype]
+    near_zero = theta < LIE_OPTS.get_eps("so3", "near_zero", tangent_vector.dtype)
     theta2 = theta**2
     sine_theta = sine * theta
     two_cosine_minus_two = 2 * cosine - 2

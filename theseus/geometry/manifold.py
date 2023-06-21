@@ -36,13 +36,17 @@ class Manifold(Variable, abc.ABC):
         name: Optional[str] = None,
         dtype: Optional[torch.dtype] = None,
         strict: bool = False,
+        disable_checks: bool = False,
     ):
         # If nothing specified, use torch's default dtype
         # else tensor.dtype takes precedence
         if tensor is None and dtype is None:
             dtype = torch.get_default_dtype()
         if tensor is not None:
-            checks_enabled, silent_unchecks = _LieGroupCheckContext.get_context()
+            if disable_checks:
+                checks_enabled, silent_unchecks = False, False
+            else:
+                checks_enabled, silent_unchecks = _LieGroupCheckContext.get_context()
             if checks_enabled:
                 tensor = self._check_tensor(tensor, strict)
             elif not silent_unchecks:

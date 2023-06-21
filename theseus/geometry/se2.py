@@ -26,12 +26,19 @@ class SE2(LieGroup):
         name: Optional[str] = None,
         dtype: Optional[torch.dtype] = None,
         strict: bool = False,
+        disable_checks: bool = False,
     ):
         if x_y_theta is not None and tensor is not None:
             raise ValueError("Please provide only one of x_y_theta or tensor.")
         if x_y_theta is not None:
             dtype = x_y_theta.dtype
-        super().__init__(tensor=tensor, name=name, dtype=dtype, strict=strict)
+        super().__init__(
+            tensor=tensor,
+            name=name,
+            dtype=dtype,
+            strict=strict,
+            disable_checks=disable_checks,
+        )
         if x_y_theta is not None:
             self.update_from_x_y_theta(x_y_theta)
 

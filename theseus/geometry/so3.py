@@ -24,12 +24,19 @@ class SO3(LieGroup):
         name: Optional[str] = None,
         dtype: Optional[torch.dtype] = None,
         strict: bool = False,
+        disable_checks: bool = False,
     ):
         if quaternion is not None and tensor is not None:
             raise ValueError("Please provide only one of quaternion or tensor.")
         if quaternion is not None:
             dtype = quaternion.dtype
-        super().__init__(tensor=tensor, name=name, dtype=dtype, strict=strict)
+        super().__init__(
+            tensor=tensor,
+            name=name,
+            dtype=dtype,
+            strict=strict,
+            disable_checks=disable_checks,
+        )
         if quaternion is not None:
             self.update_from_unit_quaternion(quaternion)
 
@@ -50,7 +57,7 @@ class SO3(LieGroup):
             device=device,
             requires_grad=requires_grad,
         )
-        return SO3(tensor=tensor)
+        return SO3(tensor=tensor, disable_checks=True)
 
     @staticmethod
     def randn(
@@ -69,7 +76,7 @@ class SO3(LieGroup):
             device=device,
             requires_grad=requires_grad,
         )
-        return SO3(tensor=tensor)
+        return SO3(tensor=tensor, disable_checks=True)
 
     @staticmethod
     def _init_tensor() -> torch.Tensor:  # type: ignore
@@ -152,7 +159,10 @@ class SO3(LieGroup):
     ) -> "SO3":
         if tangent_vector.ndim != 2 or tangent_vector.shape[1] != 3:
             raise ValueError("Tangent vectors of SO3 should be batched 3-D vectors.")
-        return SO3(tensor=SO3_base.exp(tangent_vector, jacobians=jacobians))
+        return SO3(
+            tensor=SO3_base.exp(tangent_vector, jacobians=jacobians),
+            disable_checks=True,
+        )
 
     @staticmethod
     def normalize(tensor: torch.Tensor) -> torch.Tensor:
@@ -166,12 +176,14 @@ class SO3(LieGroup):
         return SO3_base.log(self.tensor, jacobians=jacobians)
 
     def _compose_impl(self, so3_2: LieGroup) -> "SO3":
-        return SO3(tensor=SO3_base.compose(self.tensor, so3_2.tensor))
+        return SO3(
+            tensor=SO3_base.compose(self.tensor, so3_2.tensor), disable_checks=True
+        )
 
     def _inverse_impl(self, get_jacobian: bool = False) -> "SO3":
         # if self.tensor is a valid SO(3), then self.tensor.transpose(1, 2)
         # must be valid as well
-        return SO3(tensor=self.tensor.transpose(1, 2).clone(), strict=False)
+        return SO3(tensor=self.tensor.transpose(1, 2).clone(), disable_checks=True)
 
     def to_matrix(self) -> torch.Tensor:
         return self.tensor.clone()
@@ -250,11 +262,13 @@ class SO3(LieGroup):
     def unit_quaternion_to_SO3(quaternion: torch.Tensor) -> "SO3":
         if quaternion.ndim == 1:
             quaternion = quaternion.unsqueeze(0)
-        return SO3(tensor=SO3_base.quaternion_to_rotation(quaternion))
+        return SO3(
+            tensor=SO3_base.quaternion_to_rotation(quaternion), disable_checks=True
+        )
 
     def _copy_impl(self, new_name: Optional[str] = None) -> "SO3":
         # if self.tensor is a valid SO(3), so is the copy
-        return SO3(tensor=self.tensor.clone(), name=new_name, strict=False)
+        return SO3(tensor=self.tensor.clone(), name=new_name, disable_checks=True)
 
     # only added to avoid casting downstream
     def copy(self, new_name: Optional[str] = None) -> "SO3":

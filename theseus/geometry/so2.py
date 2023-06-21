@@ -24,12 +24,19 @@ class SO2(LieGroup):
         name: Optional[str] = None,
         dtype: Optional[torch.dtype] = None,
         strict: bool = False,
+        disable_checks: bool = False,
     ):
         if theta is not None and tensor is not None:
             raise ValueError("Please provide only one of theta or tensor.")
         if theta is not None:
             dtype = theta.dtype
-        super().__init__(tensor=tensor, name=name, dtype=dtype, strict=strict)
+        super().__init__(
+            tensor=tensor,
+            name=name,
+            dtype=dtype,
+            strict=strict,
+            disable_checks=disable_checks,
+        )
         if theta is not None:
             if theta.ndim == 1:
                 theta = theta.unsqueeze(1)

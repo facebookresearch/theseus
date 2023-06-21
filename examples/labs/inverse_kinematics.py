@@ -29,6 +29,21 @@ robot = Robot.from_urdf_file(urdf_path, dtype)
 selected_links = ["panda_virtual_ee_link"]
 fk, jfk_b, jfk_s = get_forward_kinematics_fns(robot, selected_links)
 
+
+def update_rule(jfk, theta, flipped):
+    jac, poses = jfk(theta)
+    error = (
+        SE3_Func.log(
+            SE3_Func.compose(SE3_Func.inv(poses[-1]), targeted_pose)
+            if flipped
+            else SE3_Func.compose(targeted_pose, SE3_Func.inv(poses[-1]))
+        )
+        .view(-1, 6, 1)
+        .view(-1, 6, 1)
+    )
+    return (jac[-1].pinverse() @ error).view(-1, robot.dof), error.norm().item()
+
+
 print("---------------------------------------------------")
 print("Body Jacobian")
 print("---------------------------------------------------")
@@ -36,14 +51,11 @@ targeted_theta = torch.rand(100, robot.dof, dtype=dtype)
 targeted_pose: torch.Tensor = fk(targeted_theta)[0]
 theta_opt = torch.zeros_like(targeted_theta)
 for iter in range(50):
-    jac_b, poses = jfk_b(theta_opt)
-    error = SE3_Func.log(SE3_Func.compose(SE3_Func.inv(poses[-1]), targeted_pose)).view(
-        -1, 6, 1
-    )
-    print(error.norm())
-    if error.norm() < 1e-4:
+    delta_theta, error = update_rule(jfk_b, theta_opt, True)
+    print(error)
+    if error < 1e-4:
         break
-    theta_opt = theta_opt + 0.5 * (jac_b[-1].pinverse() @ error).view(-1, robot.dof)
+    theta_opt = theta_opt + 0.5 * delta_theta
 
 print("---------------------------------------------------")
 print("Spatial Jacobian")
@@ -52,14 +64,11 @@ targeted_theta = torch.rand(10, robot.dof, dtype=dtype)
 targeted_pose = fk(targeted_theta)[0]
 theta_opt = torch.zeros_like(targeted_theta)
 for iter in range(50):
-    jac_s, poses = jfk_s(theta_opt)
-    error = SE3_Func.log(SE3_Func.compose(targeted_pose, SE3_Func.inv(poses[-1]))).view(
-        -1, 6, 1
-    )
-    print(error.norm())
-    if error.norm() < 1e-4:
+    delta_theta, error = update_rule(jfk_s, theta_opt, False)
+    print(error)
+    if error < 1e-4:
         break
-    theta_opt = theta_opt + 0.2 * (jac_s[-1].pinverse() @ error).view(-1, robot.dof)
+    theta_opt = theta_opt + 0.2 * delta_theta
 
 
 print("---------------------------------------------------")

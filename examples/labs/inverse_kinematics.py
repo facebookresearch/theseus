@@ -30,13 +30,13 @@ selected_links = ["panda_virtual_ee_link"]
 fk, jfk_b, jfk_s = get_forward_kinematics_fns(robot, selected_links)
 
 
+# If jfk is body jacobian, delta_theta is computed by
+#          pose * exp(jfk * delta_theta) = targeted_pose,
+# which has a closed-form solution:
+# .  delta_theta = jfk.pinverse() * log(pose^-1 * targeted_pose)
+# Otherwise, if jfk is spatial jacobian, delta_theta is computed by
+#          exp(jfk * delta_theta) * pose = targeted_pose
 def compute_delta_theta(jfk, theta, targeted_pose, use_body_jacobian):
-    # If jfk is body jacobian, delta_theta is computed by
-    #          pose * exp(jfk * delta_theta) = targeted_pose,
-    # which has a closed-form solution:
-    # .  delta_theta = jfk.pinverse() * log(pose^-1 * targeted_pose)
-    # Otherwise, if jfk is spatial jacobian, delta_theta is computed by
-    #          exp(jfk * delta_theta) * pose = targeted_pose
     jac, poses = jfk(theta)
     pose_inv = SE3_Func.inv(poses[-1])
     error = (
@@ -83,6 +83,9 @@ print("Theseus Optimizer")
 print("---------------------------------------------------")
 
 
+# IK can also be solved as an optimization problem:
+#      min \|log(pose^-1 * targeted_pose)\|^2
+# as the following
 def targeted_pose_error(optim_vars, aux_vars):
     (theta,) = optim_vars
     (targeted_pose,) = aux_vars

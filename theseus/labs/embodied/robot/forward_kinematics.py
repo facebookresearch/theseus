@@ -128,14 +128,18 @@ def get_forward_kinematics(robot: Robot, link_names: Optional[List[str]] = None)
         pose_ids,
     ) = ForwardKinematicsFactory(robot, link_names)
 
-    full_link_names = [link.name for link in robot.get_links()]
-    FullForwardKinematics, _, _, backward_helper, _, _, _ = ForwardKinematicsFactory(
-        robot, full_link_names
+    links = robot.get_links()
+    selected_link_names = [links[id].name for id in pose_ids]
+    SelectedForwardKinematics, _, _, _, _, _, _ = ForwardKinematicsFactory(
+        robot, selected_link_names
     )
     forward_kinematics = ForwardKinematics.apply
 
     def jforward_kinematics(angles: torch.Tensor):
-        poses: torch.Tensor = FullForwardKinematics.apply(angles)
+        selected_poses: torch.Tensor = SelectedForwardKinematics.apply(angles)
+        poses = [None] * robot.num_links
+        for id, pose in zip(pose_ids, selected_poses):
+            poses[id] = pose
         jposes: torch.Tensor = backward_helper(poses)
 
         rets = tuple(poses[id] for id in link_ids)

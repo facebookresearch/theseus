@@ -35,4 +35,4 @@ for iter in range(50):
     error = SE3.log(SE3.compose(SE3.inv(poses_ee), targeted_poses_ee)).view(-1, 6, 1)
     print(error.norm())
     jac_w: torch.Tensor = jfk(theta)[0][-1]
-    theta = theta + 0.2 * (jac_w.pinverse() @ error).view(-1, robot.dof)
+    theta = theta + 0.5 * (jac_w.pinverse() @ error).view(-1, robot.dof)

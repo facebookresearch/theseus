@@ -135,25 +135,6 @@ def get_forward_kinematics(robot: Robot, link_names: Optional[List[str]] = None)
     )
     forward_kinematics = ForwardKinematics.apply
 
-    def forward_kinematics_body_jacobian(angles: torch.Tensor):
-        selected_poses: torch.Tensor = SelectedForwardKinematics.apply(angles)
-        poses = [None] * robot.num_links
-        for id, pose in zip(pose_ids, selected_poses):
-            poses[id] = pose
-        jposes: torch.Tensor = backward_helper(poses)
-
-        rets = tuple(poses[id] for id in link_ids)
-        jacs: List[torch.Tensor] = []
-
-        for link_id in link_ids:
-            pose = poses[link_id]
-            jac = jposes.new_zeros(angles.shape[0], 6, robot.dof)
-            sel = robot.links[link_id].ancestor_non_fixed_joint_ids
-            jac[:, :, sel] = SE3.adj(SE3.inv(pose)) @ jposes[:, :, sel]
-            jacs.append(jac)
-
-        return jacs, rets
-
     def forward_kinematics_spatial_jacobian(angles: torch.Tensor):
         selected_poses: torch.Tensor = SelectedForwardKinematics.apply(angles)
         poses = [None] * robot.num_links
@@ -162,16 +143,25 @@ def get_forward_kinematics(robot: Robot, link_names: Optional[List[str]] = None)
         jposes: torch.Tensor = backward_helper(poses)
 
         rets = tuple(poses[id] for id in link_ids)
-        jacs: List[torch.Tensor] = []
+        jacs_s: List[torch.Tensor] = []
 
         for link_id in link_ids:
             pose = poses[link_id]
-            jac = jposes.new_zeros(angles.shape[0], 6, robot.dof)
+            jac_s = jposes.new_zeros(angles.shape[0], 6, robot.dof)
             sel = robot.links[link_id].ancestor_non_fixed_joint_ids
-            jac[:, :, sel] = jposes[:, :, sel]
-            jacs.append(jac)
+            jac_s[:, :, sel] = jposes[:, :, sel]
+            jacs_s.append(jac_s)
 
-        return jacs, rets
+        return jacs_s, rets
+
+    def forward_kinematics_body_jacobian(angles: torch.Tensor):
+        jacs_s, rets = forward_kinematics_spatial_jacobian(angles)
+        jacs_b: List[torch.Tensor] = []
+
+        for jac_s, pose in zip(jacs_s, rets):
+            jacs_b.append(SE3.adj(SE3.inv(pose)) @ jac_s)
+
+        return jacs_b, rets
 
     return (
         forward_kinematics,

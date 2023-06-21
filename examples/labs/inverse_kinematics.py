@@ -28,27 +28,27 @@ fk, jfk_b, jfk_s = get_forward_kinematics(robot, selected_links)
 print("---------------------------------------------------")
 print("Body Jacobian")
 print("---------------------------------------------------")
-theta = torch.rand(10, robot.dof, dtype=dtype)
-targeted_poses_ee: torch.Tensor = fk(theta)[0]
-theta = torch.zeros_like(theta)
+targeted_theta = torch.rand(10, robot.dof, dtype=dtype)
+targeted_poses_ee: torch.Tensor = fk(targeted_theta)[0]
+theta_opt = torch.zeros_like(targeted_theta)
 for iter in range(50):
-    jac_b, poses = jfk_b(theta)
+    jac_b, poses = jfk_b(theta_opt)
     error = SE3.log(SE3.compose(SE3.inv(poses[-1]), targeted_poses_ee)).view(-1, 6, 1)
     print(error.norm())
     if error.norm() < 1e-4:
         break
-    theta = theta + 0.5 * (jac_b[-1].pinverse() @ error).view(-1, robot.dof)
+    theta_opt = theta_opt + 0.5 * (jac_b[-1].pinverse() @ error).view(-1, robot.dof)
 
 print("---------------------------------------------------")
 print("Spatial")
 print("---------------------------------------------------")
-theta = torch.rand(10, robot.dof, dtype=dtype)
-targeted_poses_ee = fk(theta)[0]
-theta = torch.zeros_like(theta)
+targeted_theta = torch.rand(10, robot.dof, dtype=dtype)
+targeted_poses_ee = fk(targeted_theta)[0]
+theta_opt = torch.zeros_like(targeted_theta)
 for iter in range(50):
-    jac_s, poses = jfk_s(theta)
+    jac_s, poses = jfk_s(theta_opt)
     error = SE3.log(SE3.compose(targeted_poses_ee, SE3.inv(poses[-1]))).view(-1, 6, 1)
     print(error.norm())
     if error.norm() < 1e-4:
         break
-    theta = theta + 0.25 * (jac_s[-1].pinverse() @ error).view(-1, robot.dof)
+    theta_opt = theta_opt + 0.25 * (jac_s[-1].pinverse() @ error).view(-1, robot.dof)

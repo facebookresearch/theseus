@@ -6,7 +6,6 @@ import lie
 import pytest
 import torch
 
-from tests.theseus_tests.decorators import run_if_labs
 from .functional.common import get_test_cfg, sample_inputs
 
 
@@ -34,7 +33,6 @@ def _get_lie_tensor_inputs(input_types, sampled_inputs, ltype):
     return (x, y)
 
 
-@run_if_labs()
 @pytest.mark.parametrize(
     "op_name",
     [
@@ -126,7 +124,6 @@ def test_op(op_name, ltype_str, batch_size, rng):
             torch.testing.assert_close([jac1, out], [jac_c, out_c])
 
 
-@run_if_labs()
 def test_backward_works():
     import lie
 

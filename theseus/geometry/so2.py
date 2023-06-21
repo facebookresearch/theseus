@@ -23,7 +23,7 @@ class SO2(LieGroup):
         tensor: Optional[torch.Tensor] = None,
         name: Optional[str] = None,
         dtype: Optional[torch.dtype] = None,
-        strict: bool = False,
+        strict_checks: bool = False,
         disable_checks: bool = False,
     ):
         if theta is not None and tensor is not None:
@@ -34,7 +34,7 @@ class SO2(LieGroup):
             tensor=tensor,
             name=name,
             dtype=dtype,
-            strict=strict,
+            strict_checks=strict_checks,
             disable_checks=disable_checks,
         )
         if theta is not None:
@@ -227,11 +227,11 @@ class SO2(LieGroup):
         cos_2, sin_2 = so2_2.to_cos_sin()
         new_cos = cos_1 * cos_2 - sin_1 * sin_2
         new_sin = sin_1 * cos_2 + cos_1 * sin_2
-        return SO2(tensor=torch.stack([new_cos, new_sin], dim=1), strict=False)
+        return SO2(tensor=torch.stack([new_cos, new_sin], dim=1), strict_checks=False)
 
     def _inverse_impl(self, get_jacobian: bool = False) -> "SO2":
         cosine, sine = self.to_cos_sin()
-        return SO2(tensor=torch.stack([cosine, -sine], dim=1), strict=False)
+        return SO2(tensor=torch.stack([cosine, -sine], dim=1), strict_checks=False)
 
     def _rotate_shape_check(self, point: Union[Point2, torch.Tensor]):
         err_msg = (

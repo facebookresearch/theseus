@@ -28,7 +28,7 @@ class LieGroup(Manifold):
         tensor: Optional[torch.Tensor] = None,
         name: Optional[str] = None,
         dtype: torch.dtype = torch.float,
-        strict: bool = False,
+        strict_checks: bool = False,
         disable_checks: bool = False,
     ):
         super().__init__(
@@ -36,7 +36,7 @@ class LieGroup(Manifold):
             tensor=tensor,
             name=name,
             dtype=dtype,
-            strict=strict,
+            strict_checks=strict_checks,
             disable_checks=disable_checks,
         )
 

@@ -35,7 +35,7 @@ class Manifold(Variable, abc.ABC):
         tensor: Optional[torch.Tensor] = None,
         name: Optional[str] = None,
         dtype: Optional[torch.dtype] = None,
-        strict: bool = False,
+        strict_checks: bool = False,
         disable_checks: bool = False,
     ):
         # If nothing specified, use torch's default dtype
@@ -48,7 +48,7 @@ class Manifold(Variable, abc.ABC):
             else:
                 checks_enabled, silent_unchecks = _LieGroupCheckContext.get_context()
             if checks_enabled:
-                tensor = self._check_tensor(tensor, strict)
+                tensor = self._check_tensor(tensor, strict_checks)
             elif not silent_unchecks:
                 warnings.warn(
                     f"Manifold consistency checks are disabled "

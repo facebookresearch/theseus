@@ -23,7 +23,7 @@ class SO3(LieGroup):
         tensor: Optional[torch.Tensor] = None,
         name: Optional[str] = None,
         dtype: Optional[torch.dtype] = None,
-        strict: bool = False,
+        strict_checks: bool = False,
         disable_checks: bool = False,
     ):
         if quaternion is not None and tensor is not None:
@@ -34,7 +34,7 @@ class SO3(LieGroup):
             tensor=tensor,
             name=name,
             dtype=dtype,
-            strict=strict,
+            strict_checks=strict_checks,
             disable_checks=disable_checks,
         )
         if quaternion is not None:

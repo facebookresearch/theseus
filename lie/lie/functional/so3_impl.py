@@ -672,19 +672,19 @@ _jcompose_autograd_fn = _jcompose_impl
 # -----------------------------------------------------------------------------
 # Transform From
 # -----------------------------------------------------------------------------
-def _transform_from_impl(group: torch.Tensor, tensor: torch.Tensor) -> torch.Tensor:
+def _transform_impl(group: torch.Tensor, tensor: torch.Tensor) -> torch.Tensor:
     check_group_tensor(group)
     check_transform_tensor(tensor)
     ret = group @ tensor.unsqueeze(-1)
     return ret.squeeze(-1)
 
 
-def _jtransform_from_impl(
+def _jtransform_impl(
     group: torch.Tensor, tensor: torch.Tensor
 ) -> Tuple[List[torch.Tensor], torch.Tensor]:
     check_group_tensor(group)
     check_transform_tensor(tensor)
-    ret = _transform_from_impl(group, tensor)
+    ret = _transform_impl(group, tensor)
     size = get_transform_tensor_size(ret)
     jacobian_g = -group @ _hat_autograd_fn(tensor)
     jacobian_p = group
@@ -698,7 +698,7 @@ class TransformFrom(lie_group.BinaryOperator):
     def _forward_impl(cls, group, tensor):
         group: torch.Tensor = cast(torch.Tensor, group)
         tensor: torch.Tensor = cast(torch.Tensor, tensor)
-        ret = _transform_from_impl(group, tensor)
+        ret = _transform_impl(group, tensor)
         return ret
 
     @classmethod
@@ -717,8 +717,8 @@ class TransformFrom(lie_group.BinaryOperator):
         return grad_input0, grad_input1.squeeze(-1)
 
 
-_transform_from_autograd_fn = TransformFrom.apply
-_jtransform_from_autograd_fn = _jtransform_from_impl
+_transform_autograd_fn = TransformFrom.apply
+_jtransform_autograd_fn = _jtransform_impl
 
 
 # -----------------------------------------------------------------------------

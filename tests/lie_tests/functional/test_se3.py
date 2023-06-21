@@ -31,7 +31,7 @@ from .common import (
         "inverse",
         "hat",
         "compose",
-        "transform_from",
+        "transform",
         "lift",
         "project",
         "left_act",
@@ -75,7 +75,7 @@ def test_jacrev_unary(batch_size, name):
 
 
 @pytest.mark.parametrize("batch_size", [1, 10, 100])
-@pytest.mark.parametrize("name", ["compose", "transform_from"])
+@pytest.mark.parametrize("name", ["compose", "transform"])
 def test_jacrev_binary(batch_size, name):
     if not hasattr(torch, "vmap"):
         return
@@ -83,7 +83,7 @@ def test_jacrev_binary(batch_size, name):
     check_jacrev_binary(SE3, batch_size, name)
 
 
-@pytest.mark.parametrize("name", ["compose", "transform_from"])
+@pytest.mark.parametrize("name", ["compose", "transform"])
 def test_binary_op_broadcasting(name):
     rng = torch.Generator()
     rng.manual_seed(0)

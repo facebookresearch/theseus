@@ -22,7 +22,7 @@ def ForwardKinematicsFactory(robot: Robot, link_names: Optional[List[str]] = Non
     for link in links:
         ancestor_links += [anc for anc in link.ancestor_links]
         joint_ids += link.ancestor_non_fixed_joint_ids
-    pose_ids = sorted(list(set([anc.id for anc in ancestor_links] + link_ids)))
+    related_link_ids = sorted(list(set([anc.id for anc in ancestor_links] + link_ids)))
     joint_ids = sorted(list(set(joint_ids)))
 
     def _forward_kinematics_helper(angles: torch.Tensor):
@@ -37,7 +37,7 @@ def ForwardKinematicsFactory(robot: Robot, link_names: Optional[List[str]] = Non
         poses[0][:, 1, 1] = 1
         poses[0][:, 2, 2] = 1
 
-        for id in pose_ids[1:]:
+        for id in related_link_ids[1:]:
             curr: Link = robot.links[id]
             joint: Joint = robot.links[id].parent_joint
             prev: Link = joint.parent_link
@@ -59,7 +59,7 @@ def ForwardKinematicsFactory(robot: Robot, link_names: Optional[List[str]] = Non
     ) -> torch.Tensor:
         jposes = poses[0].new_zeros(poses[0].shape[0], 6, robot.dof)
 
-        for id in pose_ids[1:]:
+        for id in related_link_ids[1:]:
             link: Link = robot.links[id]
             joint: Joint = link.parent_joint
             if joint.id >= robot.dof:
@@ -69,21 +69,26 @@ def ForwardKinematicsFactory(robot: Robot, link_names: Optional[List[str]] = Non
         return jposes
 
     class ForwardKinematics(torch.autograd.Function):
-        @classmethod
-        def forward(cls, ctx, angles):
-            poses = _forward_kinematics_helper(angles)
-            ctx.poses = poses
-            rets = tuple(poses[id] for id in link_ids)
-            ctx.rets = rets
-            return rets
+        generate_vmap_rule = True
 
-        @classmethod
-        def backward(cls, ctx, *grad_outputs):
+        @staticmethod
+        def forward(angles):
+            poses = _forward_kinematics_helper(angles)
+            rets = tuple(poses[id] for id in link_ids)
+            return *rets, poses
+
+        @staticmethod
+        def setup_context(ctx, inputs, output):
+            ctx.save_for_backward(*output[:-1])
+            ctx.poses = output[-1]
+
+        @staticmethod
+        def backward(ctx, *grad_outputs):
+            rets: tuple(torch.Tensor) = ctx.saved_tensors
             if not hasattr(ctx, "jposes"):
                 ctx.jposes: torch.Tensor = _forward_kinematics_backward_helper(
                     ctx.poses
                 )
-            rets: tuple(torch.Tensor) = ctx.rets
             grad_pose = grad_outputs[0].new_zeros(
                 grad_outputs[0].shape[0], 6, robot.dof
             )
@@ -113,7 +118,7 @@ def ForwardKinematicsFactory(robot: Robot, link_names: Optional[List[str]] = Non
         _forward_kinematics_backward_helper,
         link_ids,
         joint_ids,
-        pose_ids,
+        related_link_ids,
     )
 
 
@@ -125,18 +130,21 @@ def get_forward_kinematics_fns(robot: Robot, link_names: Optional[List[str]] = N
         backward_helper,
         link_ids,
         _,
-        pose_ids,
+        related_link_ids,
     ) = ForwardKinematicsFactory(robot, link_names)
 
     links = robot.get_links()
-    selected_link_names = [links[id].name for id in pose_ids]
+    selected_link_names = [links[id].name for id in related_link_ids]
     SelectedForwardKinematics, *_ = ForwardKinematicsFactory(robot, selected_link_names)
-    forward_kinematics = ForwardKinematics.apply
+
+    def forward_kinematics(angles: torch.Tensor):
+        output = ForwardKinematics.apply(angles)
+        return output[:-1]
 
     def forward_kinematics_spatial_jacobian(angles: torch.Tensor):
         selected_poses: torch.Tensor = SelectedForwardKinematics.apply(angles)
         poses = [None] * robot.num_links
-        for id, pose in zip(pose_ids, selected_poses):
+        for id, pose in zip(related_link_ids, selected_poses):
             poses[id] = pose
         jposes: torch.Tensor = backward_helper(poses)
 

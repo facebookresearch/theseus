@@ -32,7 +32,7 @@ fk, jfk_b, jfk_s = get_forward_kinematics_fns(robot, selected_links)
 print("---------------------------------------------------")
 print("Body Jacobian")
 print("---------------------------------------------------")
-targeted_theta = torch.rand(10, robot.dof, dtype=dtype)
+targeted_theta = torch.rand(100, robot.dof, dtype=dtype)
 targeted_pose: torch.Tensor = fk(targeted_theta)[0]
 theta_opt = torch.zeros_like(targeted_theta)
 for iter in range(50):
@@ -85,7 +85,7 @@ cost_function = th.AutoDiffCostFunction(
     aux_vars=aux_vars,
     name="targeted_pose_error",
     cost_weight=th.ScaleCostWeight(torch.ones([1], dtype=dtype)),
-    autograd_mode="dense",
+    autograd_mode="vmap",
 )
 objective = th.Objective(dtype=dtype)
 objective.add(cost_function)

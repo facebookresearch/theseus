@@ -5,15 +5,6 @@ version: 2.1
 # Executors
 # -------------------------------------------------------------------------------------
 executors:
-  gpu_cuda10:
-    environment:
-      CUDA_VERSION: "10.2"
-      CUDA_HOME: "/usr/local/cuda"
-      PYTHONUNBUFFERED: 1
-    machine:
-      image: ubuntu-2004:202107-02
-    resource_class: gpu.nvidia.small.multi # NVIDIA Tesla T4 2 GPU 4 vCPUs 15 GB RAM
-
   gpu_cuda11:
     environment:
       CUDA_VERSION: "11.4"
@@ -103,35 +94,20 @@ setup_environment_310: &setup_environment_310
         pip install --progress-bar off --upgrade pip
         pip install --progress-bar off --upgrade setuptools
 
-install_torch_cuda10: &install_torch_cuda10
-  - run:
-      name: Install Torch for cuda10
-      working_directory: ~/project
-      command: |
-        pip install --progress-bar off torch==1.12.1+cu102 torchvision==0.13.1+cu102 torchaudio==0.12.1+cu102 -f https://download.pytorch.org/whl/cu102/torch_stable.html
-        python -c 'import torch; print("Torch version:", torch.__version__); assert torch.cuda.is_available()'
-
 install_torch_cuda11: &install_torch_cuda11
   - run:
       name: Install Torch for cuda11
       working_directory: ~/project
       command: |
-        pip install --progress-bar off torch==1.13.0 torchvision==0.14.0 torchaudio==0.13.0 --extra-index-url https://download.pytorch.org/whl/cu117
+        pip install --progress-bar off torch torchvision torchaudio --extra-index-url https://download.pytorch.org/whl/cu117
         python -c 'import torch; print("Torch version:", torch.__version__); assert torch.cuda.is_available()'
-
-install_functorch_021: &install_functorch_021
-  - run:
-      name: Install Functorch
-      working_directory: ~/project
-      command: |
-        pip install functorch==0.2.1
 
 install_torch: &install_torch
   - run:
       name: Install Torch
       working_directory: ~/project
       command: |
-        pip install torch==1.13.0
+        pip install torch
 
 install_recent_cmake_2004: &install_recent_cmake_2004
   - run:
@@ -230,7 +206,7 @@ build_cuda11_wheel: &build_cuda11_wheel
       working_directory: /home/circleci
       command: |
         THESEUS_GIT_COMMIT=$(git --git-dir project/.git log --format="%H" -n 1)
-        THESEUS_VERSION=$(grep -Eo  "[0-9].[0-9].[0-9][.0-9a-z]*" project/theseus/__init__.py)
+        THESEUS_VERSION=$(grep -Eo  "[0-9].[0-9].[0-9][.0-9a-z]*" project/theseus/_version.py | tail -n 1)
         ./project/build_scripts/build_wheel.sh . ${THESEUS_GIT_COMMIT} 11.6 ${THESEUS_VERSION}
         source ~/conda/bin/activate theseus
         pip install $(ls */*.whl)
@@ -379,21 +355,6 @@ jobs:
       - <<: *run_other_unit_tests
 
 # ------- GPU only jobs -------
-  unittests_gpu17_cuda10:
-    executor: gpu_cuda10
-    steps:
-      - checkout
-      - <<: *update_and_install_python
-      - <<: *install_suitesparse
-      - <<: *setup_cuda10_libs
-      - <<: *setup_environment
-      - <<: *install_torch_cuda10
-      - <<: *install_functorch_021
-      - <<: *install_recent_cmake_2004
-      - <<: *build_baspacho_cuda
-      - <<: *setup_project
-      - <<: *run_gpu_tests
-
   unittests_gpu17_cuda11:
     executor: gpu_cuda11
     steps:
@@ -426,7 +387,6 @@ workflows:
   version: 2
   build:
     jobs:
-      - unittests_gpu17_cuda10
       - unittests_gpu17_cuda11
       - test_cuda11_wheel
       - py38_precommit

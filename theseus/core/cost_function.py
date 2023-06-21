@@ -11,7 +11,11 @@ from typing import Callable, List, Optional, Sequence, Tuple, Union, cast
 
 import torch
 import torch.autograd.functional as autogradF
-from functorch import jacrev, vmap
+
+try:
+    from torch.func import jacrev, vmap
+except ModuleNotFoundError:
+    from functorch import jacrev, vmap  # type: ignore
 from typing_extensions import Protocol
 
 from theseus.geometry import Manifold

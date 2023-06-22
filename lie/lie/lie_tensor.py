@@ -30,13 +30,13 @@ class _LieAsEuclideanContext:
 
     @classmethod
     def get_context(cls):
-        if not hasattr(cls.contexts, "as_eucledian"):
-            cls.contexts.as_eucledian = False
-        return cls.contexts.as_eucledian
+        if not hasattr(cls.contexts, "as_euclidean"):
+            cls.contexts.as_euclidean = False
+        return cls.contexts.as_euclidean
 
     @classmethod
-    def set_context(cls, as_eucledian: bool):
-        cls.contexts.as_eucledian = as_eucledian
+    def set_context(cls, as_euclidean: bool):
+        cls.contexts.as_euclidean = as_euclidean
 
 
 class as_euclidean:

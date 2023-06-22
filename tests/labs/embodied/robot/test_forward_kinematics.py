@@ -20,21 +20,21 @@ def test_backward(batch_size: int, dtype: torch.dtype):
     from lie.functional.constants import TEST_EPS
     from theseus.labs.embodied.robot.forward_kinematics import Robot
     from theseus.labs.embodied.robot.forward_kinematics import (
-        get_forward_kinematics,
+        get_forward_kinematics_fns,
         ForwardKinematicsFactory,
     )
 
     robot = Robot.from_urdf_file(urdf_path, dtype)
     selected_links = ["panda_link2", "panda_link5", "panda_virtual_ee_link"]
-    _, fkin_impl, _, _, _ = ForwardKinematicsFactory(robot, selected_links)
-    fkin, _ = get_forward_kinematics(robot, selected_links)
+    _, fk_impl, *_ = ForwardKinematicsFactory(robot, selected_links)
+    fk, *_ = get_forward_kinematics_fns(robot, selected_links)
 
     rng = torch.Generator()
     rng.manual_seed(0)
     angles = torch.rand(batch_size, robot.dof, generator=rng, dtype=dtype)
 
-    jacs_impl = torch.autograd.functional.jacobian(fkin_impl, angles, vectorize=True)
-    jacs = torch.autograd.functional.jacobian(fkin, angles, vectorize=True)
+    jacs_impl = torch.autograd.functional.jacobian(fk_impl, angles, vectorize=True)
+    jacs = torch.autograd.functional.jacobian(fk, angles, vectorize=True)
 
     for jac, jac_impl in zip(jacs, jacs_impl):
         torch.testing.assert_close(
@@ -42,7 +42,7 @@ def test_backward(batch_size: int, dtype: torch.dtype):
         )
 
     grads = []
-    for func in [fkin, fkin_impl]:
+    for func in [fk, fk_impl]:
         temp = angles.clone()
         temp.requires_grad = True
         loss = torch.tensor(0, dtype=dtype)
@@ -59,20 +59,22 @@ def test_backward(batch_size: int, dtype: torch.dtype):
 def test_jacobian(batch_size: int, dtype: torch.dtype):
     from lie.functional import SE3
     from theseus.labs.embodied.robot.forward_kinematics import Robot
-    from theseus.labs.embodied.robot.forward_kinematics import get_forward_kinematics
+    from theseus.labs.embodied.robot.forward_kinematics import (
+        get_forward_kinematics_fns,
+    )
 
     robot = Robot.from_urdf_file(urdf_path, dtype)
     selected_links = ["panda_link2", "panda_link5", "panda_virtual_ee_link"]
-    fkin, jfkin = get_forward_kinematics(robot, selected_links)
+    fk, jfk_b, _ = get_forward_kinematics_fns(robot, selected_links)
 
     rng = torch.Generator()
     rng.manual_seed(0)
     angles = torch.rand(batch_size, robot.dof, generator=rng, dtype=dtype)
 
-    jacs_actual, poses = jfkin(angles)
+    jacs_actual, poses = jfk_b(angles)
 
     sels = range(batch_size)
-    jacs_dense = torch.autograd.functional.jacobian(fkin, angles, vectorize=True)
+    jacs_dense = torch.autograd.functional.jacobian(fk, angles, vectorize=True)
     jacs_expected = []
     for pose, jac_dense in zip(poses, jacs_dense):
         jac_dense = jac_dense[sels, :, :, sels].transpose(-1, 1).transpose(-1, -2)

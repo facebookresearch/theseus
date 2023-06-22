@@ -25,13 +25,20 @@ class SE2(LieGroup):
         tensor: Optional[torch.Tensor] = None,
         name: Optional[str] = None,
         dtype: Optional[torch.dtype] = None,
-        strict: bool = False,
+        strict_checks: bool = False,
+        disable_checks: bool = False,
     ):
         if x_y_theta is not None and tensor is not None:
             raise ValueError("Please provide only one of x_y_theta or tensor.")
         if x_y_theta is not None:
             dtype = x_y_theta.dtype
-        super().__init__(tensor=tensor, name=name, dtype=dtype, strict=strict)
+        super().__init__(
+            tensor=tensor,
+            name=name,
+            dtype=dtype,
+            strict_checks=strict_checks,
+            disable_checks=disable_checks,
+        )
         if x_y_theta is not None:
             self.update_from_x_y_theta(x_y_theta)
 
@@ -316,7 +323,7 @@ class SE2(LieGroup):
         )
         return SE2(
             tensor=torch.cat([new_translation.tensor, new_rotation.tensor], dim=1),
-            strict=False,
+            disable_checks=True,
         )
 
     def _inverse_impl(self) -> "SE2":

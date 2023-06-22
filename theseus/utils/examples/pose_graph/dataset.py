@@ -370,7 +370,7 @@ class PoseGraphDataset:
                 for edge in self.edges:
                     measurement = edge.relative_pose.tensor[n : n + 1]
                     quat = th.SO3(
-                        tensor=measurement[:, :, :3], strict=False
+                        tensor=measurement[:, :, :3], strict_checks=False
                     ).to_quaternion()
                     tran = measurement[:, :, 3]
                     measurement = torch.cat([tran, quat], dim=1).view(-1).numpy()
@@ -386,7 +386,9 @@ class PoseGraphDataset:
                     file.write(line)
                 for i, pose in enumerate(self.poses):
                     pose_n = pose[n : n + 1]
-                    quat = th.SO3(tensor=pose_n[:, :, :3], strict=False).to_quaternion()
+                    quat = th.SO3(
+                        tensor=pose_n[:, :, :3], strict_checks=False
+                    ).to_quaternion()
                     tran = pose_n[:, :, 3]
                     pose_data = torch.cat([tran, quat], dim=1).view(-1).numpy()
                     line = (

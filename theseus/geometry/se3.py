@@ -24,13 +24,20 @@ class SE3(LieGroup):
         tensor: Optional[torch.Tensor] = None,
         name: Optional[str] = None,
         dtype: Optional[torch.dtype] = None,
-        strict: bool = False,
+        strict_checks: bool = False,
+        disable_checks: bool = False,
     ):
         if x_y_z_quaternion is not None and tensor is not None:
             raise ValueError("Please provide only one of x_y_z_quaternion or tensor.")
         if x_y_z_quaternion is not None:
             dtype = x_y_z_quaternion.dtype
-        super().__init__(tensor=tensor, name=name, dtype=dtype, strict=strict)
+        super().__init__(
+            tensor=tensor,
+            name=name,
+            dtype=dtype,
+            strict_checks=strict_checks,
+            disable_checks=disable_checks,
+        )
         if x_y_z_quaternion is not None:
             self.update_from_x_y_z_quaternion(x_y_z_quaternion=x_y_z_quaternion)
 
@@ -51,7 +58,7 @@ class SE3(LieGroup):
             device=device,
             requires_grad=requires_grad,
         )
-        return SE3(tensor=tensor)
+        return SE3(tensor=tensor, disable_checks=True)
 
     @staticmethod
     def randn(
@@ -70,7 +77,7 @@ class SE3(LieGroup):
             device=device,
             requires_grad=requires_grad,
         )
-        return SE3(tensor=tensor)
+        return SE3(tensor=tensor, disable_checks=True)
 
     @staticmethod
     def _init_tensor() -> torch.Tensor:  # type: ignore
@@ -157,7 +164,10 @@ class SE3(LieGroup):
     ) -> "SE3":
         if tangent_vector.ndim != 2 or tangent_vector.shape[1] != 6:
             raise ValueError("Tangent vectors of SE3 can only be 6D vectors.")
-        return SE3(tensor=SE3_base.exp(tangent_vector, jacobians=jacobians))
+        return SE3(
+            tensor=SE3_base.exp(tangent_vector, jacobians=jacobians),
+            disable_checks=True,
+        )
 
     @staticmethod
     def normalize(tensor: torch.Tensor) -> torch.Tensor:
@@ -171,10 +181,12 @@ class SE3(LieGroup):
         return SE3_base.log(self.tensor, jacobians=jacobians)
 
     def _compose_impl(self, se3_2: LieGroup) -> "SE3":
-        return SE3(tensor=SE3_base.compose(self.tensor, se3_2.tensor))
+        return SE3(
+            tensor=SE3_base.compose(self.tensor, se3_2.tensor), strict_checks=False
+        )
 
     def _inverse_impl(self, get_jacobian: bool = False) -> "SE3":
-        return SE3(tensor=SE3_base.inv(self.tensor))
+        return SE3(tensor=SE3_base.inv(self.tensor), disable_checks=True)
 
     def to_matrix(self) -> torch.Tensor:
         ret = self.tensor.new_zeros(self.shape[0], 4, 4)
@@ -210,7 +222,7 @@ class SE3(LieGroup):
 
     def _copy_impl(self, new_name: Optional[str] = None) -> "SE3":
         # if self.tensor is a valid SE3, so is the copy
-        return SE3(tensor=self.tensor.clone(), name=new_name, strict=False)
+        return SE3(tensor=self.tensor.clone(), name=new_name, disable_checks=True)
 
     # only added to avoid casting downstream
     def copy(self, new_name: Optional[str] = None) -> "SE3":
@@ -284,13 +296,13 @@ class SE3(LieGroup):
     def to_x_y_z_quaternion(self) -> torch.Tensor:
         ret = self.tensor.new_zeros(self.shape[0], 7)
         ret[:, :3] = self.tensor[:, :, 3]
-        with no_lie_group_check(silent=True):
-            ret[:, 3:] = SO3(tensor=self.tensor[:, :, :3]).to_quaternion()
+        ret[:, 3:] = SO3(
+            tensor=self.tensor[:, :, :3], disable_checks=True
+        ).to_quaternion()
         return ret
 
     def rotation(self) -> SO3:
-        with no_lie_group_check(silent=True):
-            return SO3(tensor=self.tensor[:, :, :3])
+        return SO3(tensor=self.tensor[:, :, :3], disable_checks=True)
 
     def translation(self) -> Point3:
         with no_lie_group_check(silent=True):

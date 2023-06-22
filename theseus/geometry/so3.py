@@ -177,7 +177,7 @@ class SO3(LieGroup):
 
     def _compose_impl(self, so3_2: LieGroup) -> "SO3":
         return SO3(
-            tensor=SO3_base.compose(self.tensor, so3_2.tensor), disable_checks=True
+            tensor=SO3_base.compose(self.tensor, so3_2.tensor), strict_checks=False
         )
 
     def _inverse_impl(self, get_jacobian: bool = False) -> "SO3":

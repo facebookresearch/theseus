@@ -182,7 +182,7 @@ class SE3(LieGroup):
 
     def _compose_impl(self, se3_2: LieGroup) -> "SE3":
         return SE3(
-            tensor=SE3_base.compose(self.tensor, se3_2.tensor), disable_checks=True
+            tensor=SE3_base.compose(self.tensor, se3_2.tensor), strict_checks=False
         )
 
     def _inverse_impl(self, get_jacobian: bool = False) -> "SE3":

@@ -323,7 +323,7 @@ class SE2(LieGroup):
         )
         return SE2(
             tensor=torch.cat([new_translation.tensor, new_rotation.tensor], dim=1),
-            strict_checks=False,
+            disable_checks=True,
         )
 
     def _inverse_impl(self) -> "SE2":

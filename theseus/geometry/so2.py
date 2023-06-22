@@ -227,11 +227,11 @@ class SO2(LieGroup):
         cos_2, sin_2 = so2_2.to_cos_sin()
         new_cos = cos_1 * cos_2 - sin_1 * sin_2
         new_sin = sin_1 * cos_2 + cos_1 * sin_2
-        return SO2(tensor=torch.stack([new_cos, new_sin], dim=1), strict_checks=False)
+        return SO2(tensor=torch.stack([new_cos, new_sin], dim=1), disable_checks=True)
 
     def _inverse_impl(self, get_jacobian: bool = False) -> "SO2":
         cosine, sine = self.to_cos_sin()
-        return SO2(tensor=torch.stack([cosine, -sine], dim=1), strict_checks=False)
+        return SO2(tensor=torch.stack([cosine, -sine], dim=1), disable_checks=True)
 
     def _rotate_shape_check(self, point: Union[Point2, torch.Tensor]):
         err_msg = (

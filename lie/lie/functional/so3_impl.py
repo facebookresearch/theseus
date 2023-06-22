@@ -382,7 +382,7 @@ def _log_impl_helper(group: torch.Tensor):
 
     # # theta ~ pi
     ddiag = torch.diagonal(group, dim1=-1, dim2=-2)
-    # Find the index of major coloumns and diagonals
+    # Find the index of major columns and diagonals
     major = torch.logical_and(
         ddiag[..., 1] > ddiag[..., 0], ddiag[..., 1] > ddiag[..., 2]
     ) + 2 * torch.logical_and(
@@ -419,18 +419,18 @@ def _jlog_impl_helper(
     cosine: torch.Tensor,
 ):
     size = get_tangent_vector_size(tangent_vector)
-    near_zero = theta < LIE_OPTS.get_eps("so3", "near_zero", tangent_vector.dtype)
+    d_near_zero = theta < LIE_OPTS.get_eps("so3", "d_near_zero", tangent_vector.dtype)
     theta2 = theta**2
     sine_theta = sine * theta
     two_cosine_minus_two = 2 * cosine - 2
     two_cosine_minus_two_nz = torch.where(
-        near_zero, constants._NON_ZERO, two_cosine_minus_two
+        d_near_zero, constants._NON_ZERO, two_cosine_minus_two
     )
-    theta2_nz = torch.where(near_zero, constants._NON_ZERO, theta2)
+    theta2_nz = torch.where(d_near_zero, constants._NON_ZERO, theta2)
 
-    a = torch.where(near_zero, 1 - theta2 / 12, -sine_theta / two_cosine_minus_two_nz)
+    a = torch.where(d_near_zero, 1 - theta2 / 12, -sine_theta / two_cosine_minus_two_nz)
     b = torch.where(
-        near_zero,
+        d_near_zero,
         1.0 / 12 + theta2 / 720,
         (sine_theta + two_cosine_minus_two) / (theta2_nz * two_cosine_minus_two_nz),
     )

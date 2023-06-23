@@ -1,7 +1,7 @@
 import torch
 
-import lie
-import lie.functional as lieF
+import torchlie as lie
+import torchlie.functional as lieF
 
 batch_size = 5
 

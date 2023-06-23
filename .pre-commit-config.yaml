@@ -10,12 +10,13 @@ repos:
       - id: flake8
 
   - repo: https://github.com/pre-commit/mirrors-mypy
-    rev: v1.3.0
+    rev: v1.4.0
     hooks:
       - id: mypy
         additional_dependencies: [torch, tokenize-rt==3.2.0, types-PyYAML, types-mock]
-        args: [--no-strict-optional, --ignore-missing-imports]
+        args: [--no-strict-optional, --ignore-missing-imports, --implicit-reexport]
         exclude: setup.py
+        exclude: examples/.*
 
   - repo: https://github.com/pycqa/isort
     rev: 5.12.0

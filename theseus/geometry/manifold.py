@@ -44,7 +44,7 @@ class Manifold(Variable, abc.ABC):
             dtype = torch.get_default_dtype()
         if tensor is not None:
             if disable_checks:
-                checks_enabled, silent_unchecks = False, False
+                checks_enabled, silent_unchecks = False, True
             else:
                 checks_enabled, silent_unchecks = _LieGroupCheckContext.get_context()
             if checks_enabled:

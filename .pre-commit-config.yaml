@@ -1,8 +1,12 @@
+exclude: "setup.py|torchlie/setup.py|examples|tests"
+
 repos:
   - repo: https://github.com/psf/black
     rev: 23.3.0
     hooks:
       - id: black
+        files: 'theseus'
+        files: 'examples'
 
   - repo: https://github.com/pycqa/flake8
     rev: 6.0.0
@@ -15,10 +19,6 @@ repos:
       - id: mypy
         additional_dependencies: [torch, tokenize-rt==3.2.0, types-PyYAML, types-mock]
         args: [--no-strict-optional, --ignore-missing-imports, --implicit-reexport, --explicit-package-bases]
-        exclude: ^setup.py
-        exclude: torchlie/setup.py
-        exclude: examples
-        exclude: tests
 
   - repo: https://github.com/pycqa/isort
     rev: 5.12.0

@@ -8,7 +8,7 @@ import warnings
 from typing import List, Optional
 import torch
 
-from lie.functional import SO3
+from torchlie.functional import SO3
 from theseus.constants import DeviceType
 
 

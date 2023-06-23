@@ -5,7 +5,7 @@
 from typing import Any, Dict
 from dataclasses import dataclass
 
-import lie.options
+import torchlie.options
 import torch
 
 
@@ -71,4 +71,4 @@ def set_global_options(options: Dict[str, Any]) -> None:
         if not hasattr(_THESEUS_GLOBAL_OPTIONS, k):
             raise ValueError(f"{k} is not a valid global option for theseus.")
         setattr(_THESEUS_GLOBAL_OPTIONS, k, v)
-    lie.options.set_global_options(torchlie_options)
+    torchlie.options.set_global_options(torchlie_options)

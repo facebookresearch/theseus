@@ -7,7 +7,7 @@ import warnings
 from typing import List, Optional, Union, cast
 
 import torch
-from lie.functional import SO3 as SO3_base
+from torchlie.functional import SO3 as SO3_base
 
 import theseus.constants
 from theseus.options import _THESEUS_GLOBAL_OPTIONS

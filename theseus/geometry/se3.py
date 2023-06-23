@@ -7,7 +7,7 @@ import warnings
 from typing import List, Optional, Union, cast
 
 import torch
-from lie.functional import SE3 as SE3_base
+from torchlie.functional import SE3 as SE3_base
 
 import theseus.constants
 

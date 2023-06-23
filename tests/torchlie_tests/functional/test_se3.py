@@ -7,9 +7,8 @@ from typing import Sequence, Union
 import pytest
 import torch
 
-from lie.functional import SO3
-import lie.functional.so3_impl as so3_impl
-
+import torchlie.functional.se3_impl as se3_impl
+from torchlie.functional import SE3
 
 from .common import (
     BATCH_SIZES_TO_TEST,
@@ -33,7 +32,6 @@ from .common import (
         "hat",
         "compose",
         "transform_from",
-        "quaternion_to_rotation",
         "lift",
         "project",
         "left_act",
@@ -46,7 +44,7 @@ from .common import (
 def test_op(op_name, batch_size, dtype):
     rng = torch.Generator()
     rng.manual_seed(0)
-    run_test_op(op_name, batch_size, dtype, rng, 3, (3, 3), so3_impl)
+    run_test_op(op_name, batch_size, dtype, rng, 6, (3, 4), se3_impl)
 
 
 @pytest.mark.parametrize("batch_size", BATCH_SIZES_TO_TEST)
@@ -54,16 +52,17 @@ def test_op(op_name, batch_size, dtype):
 def test_vee(batch_size: Union[int, Sequence[int]], dtype: torch.dtype):
     if isinstance(batch_size, int):
         batch_size = (batch_size,)
+
     rng = torch.Generator()
     rng.manual_seed(0)
-    tangent_vector = torch.rand(*batch_size, 3, dtype=dtype, generator=rng)
-    matrix = so3_impl._hat_autograd_fn(tangent_vector)
+    tangent_vector = torch.rand(*batch_size, 6, dtype=dtype, generator=rng)
+    matrix = se3_impl._hat_autograd_fn(tangent_vector)
 
     # check analytic backward for the operator
-    check_lie_group_function(so3_impl, "vee", TEST_EPS, (matrix,))
+    check_lie_group_function(se3_impl, "vee", TEST_EPS, (matrix,))
 
     # check the correctness of hat and vee
-    actual_tangent_vector = so3_impl._vee_autograd_fn(matrix)
+    actual_tangent_vector = se3_impl._vee_autograd_fn(matrix)
     torch.testing.assert_close(
         actual_tangent_vector, tangent_vector, atol=TEST_EPS, rtol=TEST_EPS
     )
@@ -72,7 +71,7 @@ def test_vee(batch_size: Union[int, Sequence[int]], dtype: torch.dtype):
 @pytest.mark.parametrize("batch_size", [1, 10, 100])
 @pytest.mark.parametrize("name", ["exp", "inv"])
 def test_jacrev_unary(batch_size, name):
-    check_jacrev_unary(SO3, 3, batch_size, name)
+    check_jacrev_unary(SE3, 6, batch_size, name)
 
 
 @pytest.mark.parametrize("batch_size", [1, 10, 100])
@@ -81,7 +80,7 @@ def test_jacrev_binary(batch_size, name):
     if not hasattr(torch, "vmap"):
         return
 
-    check_jacrev_binary(SO3, batch_size, name)
+    check_jacrev_binary(SE3, batch_size, name)
 
 
 @pytest.mark.parametrize("name", ["compose", "transform_from"])
@@ -92,7 +91,7 @@ def test_binary_op_broadcasting(name):
     for bs1 in batch_sizes:
         for bs2 in batch_sizes:
             check_binary_op_broadcasting(
-                SO3, name, (3, 3), bs1, bs2, torch.float64, rng
+                SE3, name, (3, 4), bs1, bs2, torch.float64, rng
             )
 
 
@@ -100,4 +99,4 @@ def test_left_project_broadcasting():
     rng = torch.Generator()
     rng.manual_seed(0)
     batch_sizes = [tuple(), (1, 2), (1, 1, 2), (2, 1), (2, 2), (2, 2, 2)]
-    check_left_project_broadcasting(SO3, batch_sizes, [0, 1, 2], (3, 3), rng)
+    check_left_project_broadcasting(SE3, batch_sizes, [0, 1, 2], (3, 4), rng)

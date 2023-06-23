@@ -5,8 +5,8 @@
 import pytest
 import torch
 
-from lie import reset_global_options, set_global_options
-from lie.functional import SE3, SO3, enable_checks
+from torchlie import reset_global_options, set_global_options
+from torchlie.functional import SE3, SO3, enable_checks
 
 
 @pytest.mark.parametrize("dtype", ["float32", "float64"])

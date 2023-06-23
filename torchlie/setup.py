@@ -6,7 +6,7 @@
 import setuptools
 from pathlib import Path
 
-lie_path = Path("lie")
+lie_path = Path("torchlie")
 with open(lie_path / "__init__.py", "r") as f:
     for line in f:
         if "__version__" in line:
@@ -25,7 +25,7 @@ setuptools.setup(
     long_description_content_type="text/markdown",
     url="https://github.com/facebookresearch/theseus/lie",
     keywords="lie groups, differentiable optimization",
-    packages=["lie", "lie.functional"],
+    packages=["torchlie", "torchlie.functional"],
     classifiers=[
         "Programming Language :: Python :: 3",
         "License :: OSI Approved :: MIT License",

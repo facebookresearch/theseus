@@ -2,9 +2,11 @@
 #
 # This source code is licensed under the MIT license found in the
 # LICENSE file in the root directory of this source tree.
-import lie
 import pytest
 import torch
+import torchlie as lie
+import torchlie.functional.se3_impl as se3_impl
+import torchlie.functional.so3_impl as so3_impl
 
 from .functional.common import get_test_cfg, sample_inputs
 
@@ -53,10 +55,6 @@ def _get_lie_tensor_inputs(input_types, sampled_inputs, ltype):
 @pytest.mark.parametrize("ltype_str", ["se3", "so3"])
 @pytest.mark.parametrize("batch_size", [5])
 def test_op(op_name, ltype_str, batch_size, rng):
-    import lie
-    import lie.functional.se3_impl as se3_impl
-    import lie.functional.so3_impl as so3_impl
-
     ltype = {"se3": lie.SE3, "so3": lie.SO3}[ltype_str]
 
     def _get_impl(ltype):
@@ -125,8 +123,6 @@ def test_op(op_name, ltype_str, batch_size, rng):
 
 
 def test_backward_works():
-    import lie
-
     # Run optimization to check that the compute graph is not broken
     g1 = lie.SE3.rand(1, requires_grad=True)
     g2 = lie.SE3.rand(1)

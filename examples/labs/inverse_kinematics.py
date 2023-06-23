@@ -9,7 +9,9 @@
 # -------------------------------------------------------------------------- #
 # In this example we show how to do inverse kinematics to achieve a target
 # pose for a specific end effector of a robot described in a URDF file.
-# We show two ways to accomplish this: <ADD NAME OF THE TWO METHODS BELOW>.
+# We show two ways to accomplish this:
+# 1) solve IK with body/spatial jacobian
+# 2) solve IK as NLS optimization
 import os
 
 import torch
@@ -25,7 +27,7 @@ dtype = torch.float64
 
 # First we load the URDF file describing the robot and create a `Robot` object to
 # represent it in Python. The `Robot` class can be used to build a kinematics tree
-# of the robot.  <COMPLETE WITH OTHER THINGS THIS CLASS DOES, IF ANY>
+# of the robot.
 URDF_REL_PATH = (
     "../../tests/theseus_tests/embodied/kinematics/data/panda_no_gripper.urdf"
 )
@@ -38,15 +40,15 @@ robot = Robot.from_urdf_file(urdf_path, dtype)
 # the selected links, in that order. The return types of these functions are as
 # follows:
 #
-# - fk: <ADD DESCRIPTION>
-# - jfk_b: <ADD DESCRIPTION>
-# - jfk_s: <ADD DESCRIPTION>. (If return type is the same as jfk_b, just say this).
+# - fk: return poses of selected links
+# - jfk_b: return body jacobians and poses of selected links
+# - jfk_s: return spatial jacobians and poses of selected links
 fk, jfk_b, jfk_s = get_forward_kinematics_fns(robot, ["panda_virtual_ee_link"])
 
 
-# *********************************************
-# ** INVERSE KINEMATICS WITH METHOD XXXXXXXXX
-# *********************************************
+# ********************************************************
+# ** INVERSE KINEMATICS WITH Body/Spatial Jacobian
+# ********************************************************
 
 
 # If jfk is body jacobian, delta_theta is computed by
@@ -77,13 +79,15 @@ def compute_delta_theta(jfk, theta, targeted_pose, use_body_jacobian):
 # solutions, so, while we are able to recover the target poses after a few iterations,
 # there is no guarantee that we can recover the joint angles used to generate these
 # poses in the first place.
-def run_ik_using_XYZ_method(batch_size, step_size, use_body_jacobian):
+def run_ik_using_body_or_spatial_jacobian(
+    jfk, batch_size, step_size, use_body_jacobian
+):
     target_theta = torch.rand(batch_size, robot.dof, dtype=dtype)
     target_pose: torch.Tensor = fk(target_theta)[0]
     theta_opt = torch.zeros_like(target_theta)
     for _ in range(50):
         delta_theta, error = compute_delta_theta(
-            jfk_b, theta_opt, target_pose, use_body_jacobian
+            jfk, theta_opt, target_pose, use_body_jacobian
         )
         print(error)
         if error < 1e-4:
@@ -92,18 +96,18 @@ def run_ik_using_XYZ_method(batch_size, step_size, use_body_jacobian):
 
 
 print("---------------------------------------------------")
-print("Body Jacobian")
+print("Use Body Jacobian")
 print("---------------------------------------------------")
-run_ik_using_XYZ_method(100, 0.5, use_body_jacobian=True)
+run_ik_using_body_or_spatial_jacobian(jfk_b, 100, 0.5, use_body_jacobian=True)
 
 print("---------------------------------------------------")
-print("Spatial Jacobian")
+print("Use Spatial Jacobian")
 print("---------------------------------------------------")
-run_ik_using_XYZ_method(10, 0.2, use_body_jacobian=True)
+run_ik_using_body_or_spatial_jacobian(jfk_s, 100, 0.2, use_body_jacobian=False)
 
 
 # *********************************************
-# ** INVERSE KINEMATICS AS LS OPTIMIZATION
+# ** INVERSE KINEMATICS AS NLS OPTIMIZATION
 # *********************************************
 print("---------------------------------------------------")
 print("Theseus Optimizer")

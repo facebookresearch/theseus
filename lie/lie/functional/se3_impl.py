@@ -414,21 +414,21 @@ def _jlog_impl_helper(
     ret_lin = tangent_vector[..., :3]
     ret_ang = tangent_vector[..., 3:]
     size = get_tangent_vector_size(tangent_vector)
-    near_zero = theta < LIE_OPTS.get_eps("so3", "near_zero", tangent_vector.dtype)
+    d_near_zero = theta < LIE_OPTS.get_eps("so3", "d_near_zero", tangent_vector.dtype)
     jac = tangent_vector.new_zeros(*size, 6, 6)
     jac[..., :3, :3], (b_ret_ang,) = SO3._jlog_impl_helper(ret_ang, theta, sine, cosine)
     jac[..., 3:, 3:] = jac[..., :3, :3]
 
-    theta_nz = torch.where(near_zero, constants._NON_ZERO, theta)
+    theta_nz = torch.where(d_near_zero, constants._NON_ZERO, theta)
     theta4_nz = theta2_nz**2
     c = torch.where(
-        near_zero,
+        d_near_zero,
         -1 / 360.0 - theta2 / 7560.0,
         -(2 * two_cosine_minus_two_nz + theta * sine + theta2)
         / (theta4_nz * two_cosine_minus_two_nz),
     )
     d = torch.where(
-        near_zero,
+        d_near_zero,
         -1 / 6.0 - theta2 / 180.0,
         (theta - sine) / (theta_nz * two_cosine_minus_two_nz),
     )

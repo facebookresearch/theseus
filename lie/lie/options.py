@@ -42,12 +42,14 @@ class _TorchLieOptions:
     def reset(self) -> None:
         self.so3_near_pi_eps_float32 = 1e-2
         self.so3_near_zero_eps_float32 = 1e-2
+        self.so3_d_near_zero_eps_float32 = 2e-1
         self.so3_matrix_eps_float32 = 4e-4
         self.so3_quat_eps_float32 = 2e-4
         self.so3_hat_eps_float32 = 5e-6
         self.se3_hat_eps_float32 = 5e-6
         self.so3_near_pi_eps_float64 = 1e-7
         self.so3_near_zero_eps_float64 = 5e-3
+        self.so3_d_near_zero_eps_float64 = 1e-2
         self.so3_matrix_eps_float64 = 1e-6
         self.so3_quat_eps_float64 = 5e-7
         self.so3_hat_eps_float64 = 5e-7

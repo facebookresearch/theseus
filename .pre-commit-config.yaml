@@ -17,12 +17,12 @@ repos:
         args: [--no-strict-optional, --ignore-missing-imports, --implicit-reexport, --explicit-package-bases]
         exclude: ^setup.py
         exclude: torchlie/setup.py
-        exclude: examples/.*
-        exclude: tests/*
+        exclude: examples
+        exclude: tests
 
   - repo: https://github.com/pycqa/isort
     rev: 5.12.0
     hooks:
       - id: isort
-        files: 'theseus/.*'
-        files: 'examples/.*'
+        files: 'theseus'
+        files: 'examples'

@@ -14,7 +14,7 @@ repos:
     hooks:
       - id: mypy
         additional_dependencies: [torch, tokenize-rt==3.2.0, types-PyYAML, types-mock]
-        args: [--no-strict-optional, --ignore-missing-imports, --implicit-reexport]
+        args: [--no-strict-optional, --ignore-missing-imports, --implicit-reexport, --explicit-package-bases]
         exclude: setup.py
         exclude: examples/.*
 

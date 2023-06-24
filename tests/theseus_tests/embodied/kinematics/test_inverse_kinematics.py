@@ -14,12 +14,7 @@ NUM_DOFS = 7
 EE_NAME = "panda_virtual_ee_link"
 HOME_POSE = torch.Tensor([-0.1394, -0.0205, -0.0520, -2.0691, 0.0506, 2.0029, -0.9168])
 ERR_SCALING = torch.Tensor([1.0, 1.0, 1.0, 5.0, 5.0, 5.0])
-
-
-@pytest.fixture
-def robot_model():
-    urdf_path = os.path.join(os.path.dirname(__file__), "data/panda_no_gripper.urdf")
-    return th.eb.UrdfRobotModel(urdf_path)
+URDF_PATH = os.path.join(os.path.dirname(__file__), "data/panda_no_gripper.urdf")
 
 
 @pytest.fixture(params=[1, 3])
@@ -54,15 +49,17 @@ def ee_pose_target(batch_size):
 
 
 @pytest.mark.parametrize("is_grad_enabled", [True, False])
-def test_ik_optimization(robot_model, batch_size, ee_pose_target, is_grad_enabled):
+def test_ik_optimization(batch_size, ee_pose_target, is_grad_enabled):
     """Sets up inverse kinematics as an optimization problem that uses forward kinematics"""
+
+    robot_model = th.eb.UrdfRobotModel(URDF_PATH, link_names=[EE_NAME])
 
     # Define cost (distance between desired and current ee pose)
     def ee_pose_err_fn(optim_vars, aux_vars):
         (theta,) = optim_vars
         (ee_pose_target,) = aux_vars
 
-        ee_pose = robot_model.forward_kinematics(theta)[EE_NAME]
+        ee_pose = robot_model.forward_kinematics(theta)[0]
         pose_err = ee_pose_target.local(ee_pose)
 
         return pose_err
@@ -83,7 +80,7 @@ def test_ik_optimization(robot_model, batch_size, ee_pose_target, is_grad_enable
     objective.add(cost_function)
     optimizer = th.LevenbergMarquardt(
         objective,
-        max_iterations=15,
+        max_iterations=25,
         step_size=0.5,
     )
     theseus_optim = th.TheseusLayer(optimizer)
@@ -106,4 +103,6 @@ def test_ik_optimization(robot_model, batch_size, ee_pose_target, is_grad_enable
         )
 
     # Check result
-    assert torch.allclose(info.best_err, torch.zeros(batch_size), atol=1e-2)
+    torch.testing.assert_close(
+        torch.zeros(batch_size), info.best_err, atol=1e-3, rtol=1e-3
+    )

@@ -12,8 +12,8 @@ import torch
 
 import theseus as th
 
-URDF_REL_PATH = "data/panda_no_gripper.urdf"
 DATA_REL_PATH = "data/panda_fk_dataset.json"
+URDF_PATH = os.path.join(os.path.dirname(__file__), "data/panda_no_gripper.urdf")
 
 
 class VectorType(Enum):
@@ -22,12 +22,6 @@ class VectorType(Enum):
 
 
 device = "cuda:0" if torch.cuda.is_available() else "cpu"
-
-
-@pytest.fixture
-def robot_model():
-    urdf_path = os.path.join(os.path.dirname(__file__), URDF_REL_PATH)
-    return th.eb.UrdfRobotModel(urdf_path, device=device)
 
 
 @pytest.fixture(params=[VectorType.TORCH_TENSOR, VectorType.TH_VECTOR])
@@ -60,14 +54,15 @@ def dataset(request):
     }
 
 
-def test_forward_kinematics_seq(robot_model, dataset):
+def test_forward_kinematics_seq(dataset):
     ee_name = dataset["ee_name"]
+    robot_model = th.eb.UrdfRobotModel(URDF_PATH, device=device, link_names=[ee_name])
 
     for joint_state, ee_pose_target in zip(
         dataset["joint_states"], dataset["ee_poses"]
     ):
         ee_se3_target = th.SE3(x_y_z_quaternion=ee_pose_target)
-        ee_se3_computed = robot_model.forward_kinematics(joint_state)[ee_name]
+        ee_se3_computed = robot_model.forward_kinematics(joint_state.view(1, -1))[0]
 
         assert torch.allclose(
             ee_se3_target.local(ee_se3_computed),
@@ -77,11 +72,12 @@ def test_forward_kinematics_seq(robot_model, dataset):
         )
 
 
-def test_forward_kinematics_batched(robot_model, dataset):
+def test_forward_kinematics_batched(dataset):
     ee_name = dataset["ee_name"]
+    robot_model = th.eb.UrdfRobotModel(URDF_PATH, device=device, link_names=[ee_name])
 
     ee_se3_target = th.SE3(x_y_z_quaternion=dataset["ee_poses"])
-    ee_se3_computed = robot_model.forward_kinematics(dataset["joint_states"])[ee_name]
+    ee_se3_computed = robot_model.forward_kinematics(dataset["joint_states"])[0]
 
     assert torch.allclose(
         ee_se3_target.local(ee_se3_computed),
@@ -92,8 +88,9 @@ def test_forward_kinematics_batched(robot_model, dataset):
 
 
 @pytest.fixture
-def autograd_jacobians(robot_model, dataset):
+def autograd_jacobians(dataset):
     ee_name = dataset["ee_name"]
+    robot_model = th.eb.UrdfRobotModel(URDF_PATH, device=device, link_names=[ee_name])
 
     jacobians = []
     for joint_state, ee_pose_target in zip(
@@ -103,7 +100,7 @@ def autograd_jacobians(robot_model, dataset):
 
         # Compute autograd manipulator jacobian
         def fk_func(x):
-            ee_se3_output = robot_model.forward_kinematics(x)[ee_name]
+            ee_se3_output = robot_model.forward_kinematics(x)[0]
             delta_pose_ee_frame = ee_se3_target.local(ee_se3_output)
 
             adjoint_matrix = ee_se3_target.adjoint()
@@ -113,7 +110,7 @@ def autograd_jacobians(robot_model, dataset):
             return delta_pose_base_frame
 
         jacobian_autograd = torch.autograd.functional.jacobian(
-            fk_func, joint_state
+            fk_func, joint_state.view(-1, 7)
         ).squeeze()
 
         jacobians.append(jacobian_autograd)
@@ -122,14 +119,17 @@ def autograd_jacobians(robot_model, dataset):
 
 
 @pytest.mark.parametrize("batch_size", [1, 3])
-def test_jacobian(robot_model, dataset, autograd_jacobians, batch_size):
+def test_jacobian(dataset, autograd_jacobians, batch_size):
     ee_name = dataset["ee_name"]
-    joint_state = dataset["joint_states"][0:batch_size, ...]
+    robot_model = th.eb.UrdfRobotModel(URDF_PATH, device=device, link_names=[ee_name])
+    joint_state = dataset["joint_states"][0:batch_size, ...].view(batch_size, -1)
 
     # Compute analytical manipulator jacobian
-    jac_fk = dict.fromkeys([ee_name])
-    robot_model.forward_kinematics(joint_state, jacobians=jac_fk)
-    jacobian_analytical = jac_fk[ee_name]
+    jacobians = []
+    robot_model.forward_kinematics(
+        joint_state, jacobians=jacobians, use_body_jacobians=False
+    )
+    jacobian_analytical = jacobians[0]
 
     assert torch.allclose(
         autograd_jacobians[0:batch_size, ...], jacobian_analytical, atol=1e-6, rtol=1e-3

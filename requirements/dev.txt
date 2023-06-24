@@ -3,7 +3,6 @@ flake8>=3.8.4
 mypy>=0.981
 pre-commit>=2.9.2
 isort>=5.6.4
-differentiable-robot-model>=0.2.3
 types-PyYAML==5.4.3
 mock>=4.0.3
 types-mock>=4.0.8

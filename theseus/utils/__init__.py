@@ -5,10 +5,10 @@
 
 from .sparse_matrix_utils import (
     mat_vec,
-    random_sparse_matrix,
     random_sparse_binary_matrix,
-    sparse_mv,
+    random_sparse_matrix,
     sparse_mtv,
+    sparse_mv,
     split_into_param_sizes,
     tmat_vec,
 )

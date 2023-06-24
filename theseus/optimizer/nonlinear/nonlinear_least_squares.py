@@ -13,16 +13,17 @@ from theseus.core import Objective
 from theseus.core.objective import error_squared_norm_fn
 from theseus.optimizer import Linearization, OptimizerInfo
 from theseus.optimizer.linear import (
-    LinearSolver,
     CholeskyDenseSolver,
+    LinearSolver,
     LUCudaSparseSolver,
 )
+
 from .nonlinear_optimizer import (
     BackwardMode,
+    EndIterCallbackType,
     NonlinearOptimizer,
     NonlinearOptimizerInfo,
     NonlinearOptimizerStatus,
-    EndIterCallbackType,
 )
 
 

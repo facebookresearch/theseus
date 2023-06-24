@@ -3,20 +3,21 @@
 # This source code is licensed under the MIT license found in the
 # LICENSE file in the root directory of this source tree.
 
+from typing import List, Optional, Tuple, cast
+
 import torch
-from typing import cast, List, Tuple, Optional
 
 from torchlie.options import _TORCHLIE_GLOBAL_OPTIONS as LIE_OPTS
+
 from . import constants, lie_group
 from .check_contexts import checks_base
 from .utils import (
-    get_module,
-    shape_err_msg,
-    permute_op_dim,
-    unpermute_op_dim,
     fill_dims,
+    get_module,
+    permute_op_dim,
+    shape_err_msg,
+    unpermute_op_dim,
 )
-
 
 NAME: str = "SO3"
 DIM: int = 3

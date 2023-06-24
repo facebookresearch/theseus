@@ -9,7 +9,7 @@ import numpy as np
 import torch
 
 from theseus.core import Objective
-from theseus.utils.sparse_matrix_utils import sparse_mv, sparse_mtv
+from theseus.utils.sparse_matrix_utils import sparse_mtv, sparse_mv
 
 from .linear_system import SparseStructure
 from .linearization import Linearization

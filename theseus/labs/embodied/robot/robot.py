@@ -4,13 +4,15 @@
 # LICENSE file in the root directory of this source tree.
 
 import abc
-from typing import List, Dict, Optional
-import urdf_parser_py.urdf as urdf
-import torch
+from typing import Dict, List, Optional
 
-from torchlie.functional import SE3
+import torch
+import urdf_parser_py.urdf as urdf
+
 from theseus.constants import DeviceType
-from .joint import Joint, FixedJoint, RevoluteJoint, PrismaticJoint, Link
+from torchlie.functional import SE3
+
+from .joint import FixedJoint, Joint, Link, PrismaticJoint, RevoluteJoint
 
 
 class Robot(abc.ABC):

@@ -10,6 +10,7 @@ import torch
 import torch.nn as nn
 from torch.autograd.function import once_differentiable
 
+from theseus.constants import __FROM_THESEUS_LAYER_TOKEN__, DeviceType
 from theseus.core import (
     CostFunction,
     CostWeight,
@@ -18,7 +19,6 @@ from theseus.core import (
     Variable,
     Vectorize,
 )
-from theseus.constants import __FROM_THESEUS_LAYER_TOKEN__, DeviceType
 from theseus.geometry import LieGroup, Manifold
 from theseus.optimizer import Optimizer, OptimizerInfo
 from theseus.optimizer.linear import LinearSolver

@@ -9,7 +9,7 @@ from typing import List, Optional, Union, cast
 import torch
 
 import theseus.constants
-from theseus.options import _THESEUS_GLOBAL_PARAMS
+from theseus.global_params import _THESEUS_GLOBAL_PARAMS
 from torchlie.functional import SO3 as SO3_base
 
 from .lie_group import LieGroup

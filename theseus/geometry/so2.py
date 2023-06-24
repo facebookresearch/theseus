@@ -9,7 +9,7 @@ from typing import List, Optional, Tuple, Union, cast
 import torch
 
 import theseus.constants
-from theseus.options import _THESEUS_GLOBAL_PARAMS
+from theseus.global_params import _THESEUS_GLOBAL_PARAMS
 
 from .lie_group import LieGroup
 from .lie_group_check import _LieGroupCheckContext

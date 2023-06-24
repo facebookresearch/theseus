@@ -7,7 +7,7 @@ from typing import Any, Dict
 
 import torch
 
-import torchlie.options
+import torchlie
 
 
 def _CHECK_DTYPE_SUPPORTED(dtype):
@@ -72,4 +72,4 @@ def set_global_params(options: Dict[str, Any]) -> None:
         if not hasattr(_THESEUS_GLOBAL_PARAMS, k):
             raise ValueError(f"{k} is not a valid global option for theseus.")
         setattr(_THESEUS_GLOBAL_PARAMS, k, v)
-    torchlie.options.set_global_params(torchlie_options)
+    torchlie.set_global_params(torchlie_options)

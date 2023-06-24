@@ -5,6 +5,7 @@
 from ._version import __version__
 
 from .constants import DeviceType as DeviceType
+from .global_params import set_global_params  # usort: skip
 
 from .core import (  # usort: skip
     AutoDiffCostFunction,

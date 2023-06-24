@@ -9,7 +9,7 @@ import torch
 
 import theseus.constants
 from theseus.geometry.lie_group_check import no_lie_group_check
-from theseus.options import _THESEUS_GLOBAL_PARAMS
+from theseus.global_params import _THESEUS_GLOBAL_PARAMS
 
 from .lie_group import LieGroup
 from .point_types import Point2

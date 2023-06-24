@@ -7,7 +7,7 @@ from typing import List, Optional, Tuple, cast
 
 import torch
 
-from torchlie.options import _TORCHLIE_GLOBAL_PARAMS as LIE_PARAMS
+from torchlie.global_params import _TORCHLIE_GLOBAL_PARAMS as LIE_PARAMS
 
 from . import constants, lie_group
 from . import so3_impl as SO3

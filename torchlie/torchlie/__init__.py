@@ -23,5 +23,5 @@ from .lie_tensor import (  # usort: skip
     log,
     transform_from,
 )
-from .options import reset_global_options, set_global_options
+from .options import reset_global_params, set_global_params
 from .types import SE3, SO3, ltype

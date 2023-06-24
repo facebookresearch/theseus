@@ -9,7 +9,7 @@ import torch
 
 import theseus.constants
 from theseus.geometry.lie_group_check import no_lie_group_check
-from theseus.options import _THESEUS_GLOBAL_OPTIONS
+from theseus.options import _THESEUS_GLOBAL_PARAMS
 
 from .lie_group import LieGroup
 from .point_types import Point2
@@ -170,7 +170,7 @@ class SE2(LieGroup):
         cosine, sine = rotation.to_cos_sin()
 
         # Compute the approximations when theta is near to 0
-        small_theta = theta.abs() < _THESEUS_GLOBAL_OPTIONS.get_eps(
+        small_theta = theta.abs() < _THESEUS_GLOBAL_PARAMS.get_eps(
             "se2", "near_zero", theta.dtype
         )
         non_zero = torch.ones(1, dtype=self.dtype, device=self.device)
@@ -241,7 +241,7 @@ class SE2(LieGroup):
         cosine, sine = rotation.to_cos_sin()
 
         # Compute the approximations when theta is near to 0
-        small_theta = theta.abs() < _THESEUS_GLOBAL_OPTIONS.get_eps(
+        small_theta = theta.abs() < _THESEUS_GLOBAL_PARAMS.get_eps(
             "se2", "near_zero", tangent_vector.dtype
         )
         non_zero = torch.ones(

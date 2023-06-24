@@ -5,7 +5,7 @@
 import pytest
 import torch
 
-from torchlie import reset_global_options, set_global_options
+from torchlie import reset_global_params, set_global_params
 from torchlie.functional import SE3, SO3, enable_checks
 
 
@@ -15,10 +15,10 @@ def test_global_options(dtype):
     rng.manual_seed(0)
     g = SE3.rand(1, generator=rng, dtype=getattr(torch, dtype))
     r1 = SE3.log(g)
-    set_global_options({f"so3_near_zero_eps_{dtype}": 100.0})
+    set_global_params({f"so3_near_zero_eps_{dtype}": 100.0})
     r2 = SE3.log(g)
     assert not torch.allclose(r1, r2)
-    set_global_options({f"so3_near_pi_eps_{dtype}": 100.0})
+    set_global_params({f"so3_near_pi_eps_{dtype}": 100.0})
     r3 = SE3.log(g)
 
     assert not torch.allclose(r2, r3)
@@ -26,22 +26,22 @@ def test_global_options(dtype):
         fake_hat_input = torch.randn(4, 4, dtype=getattr(torch, dtype))
         with pytest.raises(ValueError):
             SE3.check_hat_tensor(fake_hat_input)
-        set_global_options({f"so3_hat_eps_{dtype}": 1000.0})
-        set_global_options({f"se3_hat_eps_{dtype}": 1000.0})
+        set_global_params({f"so3_hat_eps_{dtype}": 1000.0})
+        set_global_params({f"se3_hat_eps_{dtype}": 1000.0})
         SE3.check_hat_tensor(fake_hat_input)
 
         fake_so3_matrix = torch.randn(3, 3, dtype=getattr(torch, dtype))
         with pytest.raises(ValueError):
             SO3.check_group_tensor(fake_so3_matrix)
-        set_global_options({f"so3_matrix_eps_{dtype}": 1000.0})
+        set_global_params({f"so3_matrix_eps_{dtype}": 1000.0})
         SO3.check_group_tensor(fake_so3_matrix)
 
     with enable_checks():
-        set_global_options({f"so3_quat_eps_{dtype}": 0.0})
+        set_global_params({f"so3_quat_eps_{dtype}": 0.0})
         fake_hat_input = torch.randn(4, dtype=getattr(torch, dtype))
         with pytest.raises(ValueError):
             SO3.check_unit_quaternion(fake_hat_input)
-        set_global_options({f"so3_quat_eps_{dtype}": 1000.0})
+        set_global_params({f"so3_quat_eps_{dtype}": 1000.0})
         SO3.check_unit_quaternion(fake_hat_input)
 
-    reset_global_options()
+    reset_global_params()

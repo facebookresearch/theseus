@@ -9,7 +9,7 @@ from typing import List, Optional, Union, cast
 import torch
 
 import theseus.constants
-from theseus.options import _THESEUS_GLOBAL_OPTIONS
+from theseus.options import _THESEUS_GLOBAL_PARAMS
 from torchlie.functional import SO3 as SO3_base
 
 from .lie_group import LieGroup
@@ -197,8 +197,8 @@ class SO3(LieGroup):
         sine_axis[:, 2] = 0.5 * (self[:, 1, 0] - self[:, 0, 1])
         w = 0.5 * (1 + self[:, 0, 0] + self[:, 1, 1] + self[:, 2, 2]).clamp(0, 4).sqrt()
 
-        near_zero = w > 1 - _THESEUS_GLOBAL_OPTIONS.get_eps("so3", "near_zero", w.dtype)
-        near_pi = w <= _THESEUS_GLOBAL_OPTIONS.get_eps("so3", "near_pi", w.dtype)
+        near_zero = w > 1 - _THESEUS_GLOBAL_PARAMS.get_eps("so3", "near_zero", w.dtype)
+        near_pi = w <= _THESEUS_GLOBAL_PARAMS.get_eps("so3", "near_pi", w.dtype)
         non_zero = self.tensor.new_ones([1])
 
         ret = self.tensor.new_zeros(self.shape[0], 4)

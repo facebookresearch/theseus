@@ -19,7 +19,7 @@ def _CHECK_DTYPE_SUPPORTED(dtype):
 
 
 @dataclass
-class _TheseusGlobalOptions:
+class _TheseusGlobalParams:
     so2_norm_eps_float32: float = 0
     so2_matrix_eps_float32: float = 0
     se2_near_zero_eps_float32: float = 0
@@ -53,13 +53,13 @@ class _TheseusGlobalOptions:
         self.so3_near_zero_eps_float64 = 5e-3
 
 
-_THESEUS_GLOBAL_OPTIONS = _TheseusGlobalOptions()
+_THESEUS_GLOBAL_PARAMS = _TheseusGlobalParams()
 
 
 _TORCHLIE_PREFIX = "torchlie."
 
 
-def set_global_options(options: Dict[str, Any]) -> None:
+def set_global_params(options: Dict[str, Any]) -> None:
     torchlie_options = {
         k.lstrip(_TORCHLIE_PREFIX): v
         for k, v in options.items()
@@ -69,7 +69,7 @@ def set_global_options(options: Dict[str, Any]) -> None:
         k: v for k, v in options.items() if _TORCHLIE_PREFIX not in options
     }
     for k, v in theseus_options.items():
-        if not hasattr(_THESEUS_GLOBAL_OPTIONS, k):
+        if not hasattr(_THESEUS_GLOBAL_PARAMS, k):
             raise ValueError(f"{k} is not a valid global option for theseus.")
-        setattr(_THESEUS_GLOBAL_OPTIONS, k, v)
-    torchlie.options.set_global_options(torchlie_options)
+        setattr(_THESEUS_GLOBAL_PARAMS, k, v)
+    torchlie.options.set_global_params(torchlie_options)

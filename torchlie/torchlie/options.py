@@ -17,7 +17,7 @@ def _CHECK_DTYPE_SUPPORTED(dtype):
 
 
 @dataclass
-class _TorchLieOptions:
+class _TorchLieGlobalParams:
     so3_near_pi_eps_float32: float = 0
     so3_near_zero_eps_float32: float = 0
     so3_matrix_eps_float32: float = 0
@@ -56,15 +56,15 @@ class _TorchLieOptions:
         self.se3_hat_eps_float64 = 5e-7
 
 
-_TORCHLIE_GLOBAL_OPTIONS = _TorchLieOptions()
+_TORCHLIE_GLOBAL_PARAMS = _TorchLieGlobalParams()
 
 
-def set_global_options(options: Dict[str, Any]) -> None:
+def set_global_params(options: Dict[str, Any]) -> None:
     for k, v in options.items():
-        if not hasattr(_TORCHLIE_GLOBAL_OPTIONS, k):
+        if not hasattr(_TORCHLIE_GLOBAL_PARAMS, k):
             raise ValueError(f"{k} is not a valid global option for torchlie.")
-        setattr(_TORCHLIE_GLOBAL_OPTIONS, k, v)
+        setattr(_TORCHLIE_GLOBAL_PARAMS, k, v)
 
 
-def reset_global_options() -> None:
-    _TORCHLIE_GLOBAL_OPTIONS.reset()
+def reset_global_params() -> None:
+    _TORCHLIE_GLOBAL_PARAMS.reset()

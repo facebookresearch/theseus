@@ -2,8 +2,9 @@
 #
 # This source code is licensed under the MIT license found in the
 # LICENSE file in the root directory of this source tree.
-__version__ = "0.0.1.rc1"
+__version__ = "0.0.1.rc2"
 
+from .global_params import reset_global_params, set_global_params
 from .lie_tensor import (  # usort: skip
     LieTensor,
     adj,
@@ -23,5 +24,4 @@ from .lie_tensor import (  # usort: skip
     log,
     transform_from,
 )
-from .global_params import reset_global_params, set_global_params
 from .types import SE3, SO3, ltype

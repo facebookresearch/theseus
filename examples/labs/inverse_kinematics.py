@@ -17,7 +17,7 @@ import os
 import torch
 
 import theseus as th
-from lie.functional import SE3 as SE3_Func
+from torchlie.functional import SE3 as SE3_Func
 from theseus.labs.embodied.robot.forward_kinematics import (
     Robot,
     get_forward_kinematics_fns,

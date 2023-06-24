@@ -6,24 +6,22 @@
 import pytest
 import os
 import torch
-from tests.theseus_tests.decorators import run_if_labs
 
+from theseus.embodied.kinematics.robot.forward_kinematics import (
+    Robot,
+    get_forward_kinematics_fns,
+    ForwardKinematicsFactory,
+)
+from torchlie.functional import SE3
+from torchlie.functional.constants import TEST_EPS
 
 URDF_REL_PATH = "../../../theseus_tests/embodied/kinematics/data/panda_no_gripper.urdf"
 urdf_path = os.path.join(os.path.dirname(__file__), URDF_REL_PATH)
 
 
-@run_if_labs()
 @pytest.mark.parametrize("batch_size", [1, 20, 40])
 @pytest.mark.parametrize("dtype", [torch.float32, torch.float64])
 def test_backward(batch_size: int, dtype: torch.dtype):
-    from torchlie.functional.constants import TEST_EPS
-    from theseus.labs.embodied.robot.forward_kinematics import Robot
-    from theseus.labs.embodied.robot.forward_kinematics import (
-        get_forward_kinematics_fns,
-        ForwardKinematicsFactory,
-    )
-
     robot = Robot.from_urdf_file(urdf_path, dtype)
     selected_links = ["panda_link2", "panda_link5", "panda_virtual_ee_link"]
     _, fk_impl, *_ = ForwardKinematicsFactory(robot, selected_links)
@@ -53,16 +51,9 @@ def test_backward(batch_size: int, dtype: torch.dtype):
     torch.testing.assert_close(actual=grads[0], expected=grads[1], atol=1e-6, rtol=1e-5)
 
 
-@run_if_labs()
 @pytest.mark.parametrize("batch_size", [1, 20, 40])
 @pytest.mark.parametrize("dtype", [torch.float32, torch.float64])
 def test_jacobian(batch_size: int, dtype: torch.dtype):
-    from torchlie.functional import SE3
-    from theseus.labs.embodied.robot.forward_kinematics import Robot
-    from theseus.labs.embodied.robot.forward_kinematics import (
-        get_forward_kinematics_fns,
-    )
-
     robot = Robot.from_urdf_file(urdf_path, dtype)
     selected_links = ["panda_link2", "panda_link5", "panda_virtual_ee_link"]
     fk, jfk_b, _ = get_forward_kinematics_fns(robot, selected_links)

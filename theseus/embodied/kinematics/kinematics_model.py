@@ -10,7 +10,8 @@ import torch
 
 from theseus.constants import DeviceType
 from theseus.geometry import SE3, LieGroup, Point2, Vector
-from theseus.labs.embodied.robot import Robot, get_forward_kinematics_fns
+
+from .robot import Robot, get_forward_kinematics_fns
 
 RobotModelInput = Union[torch.Tensor, Vector]
 

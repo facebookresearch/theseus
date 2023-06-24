@@ -59,7 +59,7 @@ def test_ik_optimization(batch_size, ee_pose_target, is_grad_enabled):
         (theta,) = optim_vars
         (ee_pose_target,) = aux_vars
 
-        ee_pose = robot_model.forward_kinematics(theta)[0]
+        ee_pose = robot_model.forward_kinematics(theta)[EE_NAME]
         pose_err = ee_pose_target.local(ee_pose)
 
         return pose_err

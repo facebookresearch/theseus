@@ -62,7 +62,9 @@ def test_forward_kinematics_seq(dataset):
         dataset["joint_states"], dataset["ee_poses"]
     ):
         ee_se3_target = th.SE3(x_y_z_quaternion=ee_pose_target)
-        ee_se3_computed = robot_model.forward_kinematics(joint_state.view(1, -1))[0]
+        ee_se3_computed = robot_model.forward_kinematics(joint_state.view(1, -1))[
+            ee_name
+        ]
 
         assert torch.allclose(
             ee_se3_target.local(ee_se3_computed),
@@ -77,7 +79,7 @@ def test_forward_kinematics_batched(dataset):
     robot_model = th.eb.UrdfRobotModel(URDF_PATH, device=device, link_names=[ee_name])
 
     ee_se3_target = th.SE3(x_y_z_quaternion=dataset["ee_poses"])
-    ee_se3_computed = robot_model.forward_kinematics(dataset["joint_states"])[0]
+    ee_se3_computed = robot_model.forward_kinematics(dataset["joint_states"])[ee_name]
 
     assert torch.allclose(
         ee_se3_target.local(ee_se3_computed),
@@ -100,7 +102,7 @@ def autograd_jacobians(dataset):
 
         # Compute autograd manipulator jacobian
         def fk_func(x):
-            ee_se3_output = robot_model.forward_kinematics(x)[0]
+            ee_se3_output = robot_model.forward_kinematics(x)[ee_name]
             delta_pose_ee_frame = ee_se3_target.local(ee_se3_output)
 
             adjoint_matrix = ee_se3_target.adjoint()
@@ -125,11 +127,11 @@ def test_jacobian(dataset, autograd_jacobians, batch_size):
     joint_state = dataset["joint_states"][0:batch_size, ...].view(batch_size, -1)
 
     # Compute analytical manipulator jacobian
-    jacobians = []
+    jacobians = {}
     robot_model.forward_kinematics(
         joint_state, jacobians=jacobians, use_body_jacobians=False
     )
-    jacobian_analytical = jacobians[0]
+    jacobian_analytical = jacobians[ee_name]
 
     assert torch.allclose(
         autograd_jacobians[0:batch_size, ...], jacobian_analytical, atol=1e-6, rtol=1e-3

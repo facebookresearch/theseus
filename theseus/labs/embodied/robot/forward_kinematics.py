@@ -7,7 +7,7 @@ import torch
 
 from typing import List, Optional
 
-from lie.functional import SE3
+from torchlie.functional import SE3
 from .robot import Robot, Joint, Link
 
 # TODO: Add support for joints with DOF>1

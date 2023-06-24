@@ -6,7 +6,7 @@
 import torch
 from typing import cast, List, Tuple, Optional
 
-from lie.options import _TORCHLIE_GLOBAL_OPTIONS as LIE_OPTS
+from torchlie.options import _TORCHLIE_GLOBAL_OPTIONS as LIE_OPTS
 from . import constants, lie_group
 from .check_contexts import checks_base
 from .utils import (

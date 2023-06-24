@@ -4,7 +4,6 @@
 # LICENSE file in the root directory of this source tree.
 __version__ = "0.0.1.rc1"
 
-from .types import ltype, SE3, SO3
 from .lie_tensor import (  # usort: skip
     LieTensor,
     adj,
@@ -25,3 +24,4 @@ from .lie_tensor import (  # usort: skip
     transform_from,
 )
 from .options import reset_global_options, set_global_options
+from .types import SE3, SO3, ltype

@@ -3,10 +3,12 @@
 # This source code is licensed under the MIT license found in the
 # LICENSE file in the root directory of this source tree.
 from enum import Enum
-from typing import Any, Callable, List, Optional, Protocol, Tuple, Union, TYPE_CHECKING
+from typing import TYPE_CHECKING, Any, Callable, List, Optional, Protocol, Tuple, Union
 
 import torch
-from .functional import SE3 as _se3_impl, SO3 as _so3_impl
+
+from .functional import SE3 as _se3_impl
+from .functional import SO3 as _so3_impl
 from .functional.constants import DeviceType
 from .functional.lie_group import LieGroupFns
 

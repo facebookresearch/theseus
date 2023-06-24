@@ -3,23 +3,23 @@
 # This source code is licensed under the MIT license found in the
 # LICENSE file in the root directory of this source tree.
 
-from typing import Optional, Union, List, Dict
+from typing import Dict, List, Optional, Union
 
 import numpy as np
 import torch
 from torch.distributions import Normal
 
-from theseus.third_party.lml import LML
 from theseus.core.objective import Objective
 from theseus.optimizer import OptimizerInfo
 from theseus.optimizer.variable_ordering import VariableOrdering
+from theseus.third_party.lml import LML
 
 from .nonlinear_optimizer import (
-    NonlinearOptimizer,
     BackwardMode,
+    EndIterCallbackType,
+    NonlinearOptimizer,
     NonlinearOptimizerInfo,
     NonlinearOptimizerStatus,
-    EndIterCallbackType,
 )
 
 

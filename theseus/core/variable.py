@@ -7,6 +7,7 @@ from itertools import count
 from typing import Any, List, Optional, Sequence, Union
 
 import torch
+
 from theseus.constants import DeviceType
 
 

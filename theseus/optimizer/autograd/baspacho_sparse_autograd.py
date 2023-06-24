@@ -2,12 +2,14 @@
 #
 # This source code is licensed under the MIT license found in the
 # LICENSE file in the root directory of this source tree.
-from typing import Any, Tuple, Optional
+from typing import Any, Optional, Tuple
+
 import torch
 
-from .common import compute_A_grad
-from ..linear_system import SparseStructure
 from theseus.utils.sparse_matrix_utils import mat_vec, tmat_vec
+
+from ..linear_system import SparseStructure
+from .common import compute_A_grad
 
 _BaspachoSolveFunctionBwdReturnType = Tuple[
     torch.Tensor, torch.Tensor, None, None, None, None, None, None, None

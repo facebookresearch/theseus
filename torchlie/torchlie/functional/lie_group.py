@@ -3,9 +3,10 @@
 # This source code is licensed under the MIT license found in the
 # LICENSE file in the root directory of this source tree.
 import abc
-from typing import Any, Callable, List, Tuple, Optional, Protocol
+from typing import Any, Callable, List, Optional, Protocol, Tuple
 
 import torch
+
 from .constants import DeviceType
 from .utils import check_jacobians_list
 

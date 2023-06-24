@@ -21,14 +21,12 @@
 # OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION
 # WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 
-import torch
-from torch.autograd import Function, Variable, grad
-from torch.nn import Module
-
 import numpy as np
 import numpy.random as npr
-
+import torch
 from semantic_version import Version
+from torch.autograd import Function, Variable, grad
+from torch.nn import Module
 
 version = Version(".".join(torch.__version__.split(".")[:3]))
 old_torch = version < Version("0.4.0")
@@ -182,6 +180,7 @@ class LML_Function(Function):
 
 if __name__ == "__main__":
     import sys
+
     from IPython.core import ultratb
 
     sys.excepthook = ultratb.FormattedTB(

@@ -7,9 +7,9 @@ import warnings
 from typing import List, Optional, Union, cast
 
 import torch
-from torchlie.functional import SE3 as SE3_base
 
 import theseus.constants
+from torchlie.functional import SE3 as SE3_base
 
 from .lie_group import LieGroup
 from .lie_group_check import _LieGroupCheckContext, no_lie_group_check

@@ -3,12 +3,13 @@
 # This source code is licensed under the MIT license found in the
 # LICENSE file in the root directory of this source tree.
 
-import torch
-
 from typing import List, Optional
 
+import torch
+
 from torchlie.functional import SE3
-from .robot import Robot, Joint, Link
+
+from .robot import Joint, Link, Robot
 
 # TODO: Add support for joints with DOF>1
 

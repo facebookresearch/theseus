@@ -8,7 +8,7 @@ import math
 import warnings
 from dataclasses import dataclass
 from enum import Enum
-from typing import Dict, Optional, Tuple, Union, Callable, NoReturn
+from typing import Callable, Dict, NoReturn, Optional, Tuple, Union
 
 import numpy as np
 import torch

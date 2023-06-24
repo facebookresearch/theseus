@@ -13,7 +13,6 @@ from theseus.optimizer.linear import LinearSolver
 
 from .nonlinear_least_squares import NonlinearLeastSquares
 
-
 # See Nocedal and Wright, Numerical Optimization, Chapter 4
 # https://www.csie.ntu.edu.tw/~r97002/temp/num_optimization.pdf
 

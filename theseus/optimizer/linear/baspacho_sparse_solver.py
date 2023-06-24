@@ -5,7 +5,9 @@
 
 from typing import Any, Dict, Optional, Type, Union
 
+import numpy as np
 import torch
+from scipy.sparse import csr_matrix
 
 from theseus.constants import DeviceType
 from theseus.core import Objective
@@ -14,8 +16,6 @@ from theseus.optimizer.autograd import BaspachoSolveFunction
 
 from .linear_solver import LinearSolver
 from .utils import convert_to_alpha_beta_damping_tensors
-from scipy.sparse import csr_matrix
-import numpy as np
 
 # assuming the want to use cuda if supported and available
 DEFAULT_DEVICE = "cuda" if torch.cuda.is_available() else "cpu"

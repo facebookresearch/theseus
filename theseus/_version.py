@@ -4,8 +4,8 @@
 # LICENSE file in the root directory of this source tree.
 import warnings
 
-from torch import __version__ as _torch_version
 from semantic_version import Version
+from torch import __version__ as _torch_version
 
 if Version(_torch_version) < Version("2.0.0"):
     warnings.warn(

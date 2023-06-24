@@ -8,6 +8,7 @@ from typing import List, Optional, Tuple, Union, cast
 import torch
 
 from theseus.constants import DeviceType
+
 from .vector import Vector
 
 

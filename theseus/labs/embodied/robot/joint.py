@@ -6,10 +6,11 @@
 import abc
 import warnings
 from typing import List, Optional
+
 import torch
 
-from torchlie.functional import SO3
 from theseus.constants import DeviceType
+from torchlie.functional import SO3
 
 
 class Link(abc.ABC):

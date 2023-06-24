@@ -8,21 +8,21 @@ from typing import Any, Callable, List, Optional, Tuple
 from typing import cast as type_cast
 
 import torch
-from torch.utils._pytree import tree_flatten, tree_map_only
 from torch.types import Number
+from torch.utils._pytree import tree_flatten, tree_map_only
 
 from .functional.constants import DeviceType
 from .functional.lie_group import UnaryOperatorOpFnType
 from .types import (
-    ltype as _ltype,
-    Device,
     SE3,
     SO3,
+    Device,
     TensorType,
     _IdentityFnType,
     _JFnReturnType,
     _RandFnType,
 )
+from .types import ltype as _ltype
 
 
 class _LieAsEuclideanContext:

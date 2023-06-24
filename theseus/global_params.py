@@ -2,12 +2,14 @@
 #
 # This source code is licensed under the MIT license found in the
 # LICENSE file in the root directory of this source tree.
-from dataclasses import dataclass
+from dataclasses import dataclass, fields
 from typing import Any, Dict
 
 import torch
 
-import torchlie
+from torchlie.global_params import _TORCHLIE_GLOBAL_PARAMS as _LIE_GP
+
+_LIE_GP_FIELD_NAMES = set([f.name for f in fields(_LIE_GP)])
 
 
 def _CHECK_DTYPE_SUPPORTED(dtype):
@@ -23,55 +25,47 @@ class _TheseusGlobalParams:
     so2_norm_eps_float32: float = 0
     so2_matrix_eps_float32: float = 0
     se2_near_zero_eps_float32: float = 0
-    so3_near_pi_eps_float32: float = 0
-    so3_near_zero_eps_float32: float = 0
     so2_norm_eps_float64: float = 0
     so2_matrix_eps_float64: float = 0
     se2_near_zero_eps_float64: float = 0
-    so3_near_pi_eps_float64: float = 0
-    so3_near_zero_eps_float64: float = 0
 
     def __init__(self):
         self.reset()
 
     def get_eps(self, ltype: str, attr: str, dtype: torch.dtype) -> float:
-        _CHECK_DTYPE_SUPPORTED(dtype)
-        attr_name = f"{ltype}_{attr}_eps_{str(dtype)[6:]}"
-        return getattr(self, attr_name)
+        try:
+            return _LIE_GP.get_eps(ltype, attr, dtype)
+        except AttributeError:
+            _CHECK_DTYPE_SUPPORTED(dtype)
+            attr_name = f"{ltype}_{attr}_eps_{str(dtype)[6:]}"
+            return getattr(self, attr_name)
 
     def reset(self) -> None:
         self.so2_norm_eps_float32 = 1e-12
         self.so2_matrix_eps_float32 = 1e-5
         self.se2_near_zero_eps_float32 = 3e-2
-        self.so3_near_pi_eps_float32 = 1e-2
-        self.so3_near_zero_eps_float32 = 1e-2
 
         self.so2_norm_eps_float32 = 1e-12
         self.so2_matrix_eps_float64 = 4e-7
         self.se2_near_zero_eps_float64 = 1e-6
-        self.so3_near_pi_eps_float64 = 1e-7
-        self.so3_near_zero_eps_float64 = 5e-3
 
 
 _THESEUS_GLOBAL_PARAMS = _TheseusGlobalParams()
 
 
-_TORCHLIE_PREFIX = "torchlie."
-
-
 def set_global_params(options: Dict[str, Any]) -> None:
-    torchlie_options = {
-        k.lstrip(_TORCHLIE_PREFIX): v
-        for k, v in options.items()
-        if _TORCHLIE_PREFIX in k
-    }
-    theseus_options = {
-        k: v for k, v in options.items() if _TORCHLIE_PREFIX not in options
-    }
-    for k, v in theseus_options.items():
+    torchlie_params_found = []
+    for k in options:
+        if k in _LIE_GP_FIELD_NAMES:
+            torchlie_params_found.append(k)
+    if torchlie_params_found:
+        raise RuntimeError(
+            f"Theseus uses torchlie for configuring 3D Lie group tolerances, "
+            f"but you attempted to use theseus.set_global_params() for the "
+            f"following ones:\n    {torchlie_params_found}.\n"
+            f"Please use torchlie.set_global_params() to set these tolerances."
+        )
+    for k, v in options.items():
         if not hasattr(_THESEUS_GLOBAL_PARAMS, k):
             raise ValueError(f"{k} is not a valid global option for theseus.")
         setattr(_THESEUS_GLOBAL_PARAMS, k, v)
-    # This line passes if type checked with mypy, but not when running pre-commit hooks
-    # Life is too short to waste on figuring out how to make pre-commit happy
-    torchlie.set_global_params(torchlie_options)  # type: ignore

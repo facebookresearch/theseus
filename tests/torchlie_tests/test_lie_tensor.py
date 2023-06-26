@@ -45,6 +45,7 @@ def _get_lie_tensor_inputs(input_types, sampled_inputs, ltype):
         "project",
         "compose",
         "transform",
+        "untransform",
         "left_act",
         "left_project",
         "log",
@@ -108,7 +109,7 @@ def test_op(op_name, ltype_str, batch_size, rng):
         out_c = _to_functional_fmt(getattr(c, op_name)(*c_inputs))
         torch.testing.assert_close(out, out_c)
 
-    if op_name in ["exp", "compose", "log", "inv", "transform"]:
+    if op_name in ["exp", "compose", "log", "inv", "transform", "untransform"]:
         fn_holder_object = ltype if op_name == "exp" else lie
         jac1, out = _to_functional_fmt(
             getattr(fn_holder_object, f"j{op_name}")(*lie_tensor_inputs)

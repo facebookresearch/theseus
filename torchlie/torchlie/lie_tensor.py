@@ -286,6 +286,9 @@ class LieTensor(_LieTensorBase):
     def transform(self, point: torch.Tensor) -> torch.Tensor:
         return self.ltype._fn_lib.transform(self._t, point)
 
+    def untransform(self, point: torch.Tensor) -> torch.Tensor:
+        return self.ltype._fn_lib.untransform(self._t, point)
+
     def left_act(self, matrix: torch.Tensor) -> torch.Tensor:
         return self.ltype._fn_lib.left_act(self._t, matrix)
 
@@ -324,6 +327,11 @@ class LieTensor(_LieTensorBase):
     def jtransform(self, point: torch.Tensor) -> _JFnReturnType:
         jacs: List[torch.Tensor] = []
         op_res = self.ltype._fn_lib.transform(self._t, point, jacobians=jacs)
+        return jacs, op_res
+
+    def juntransform(self, point: torch.Tensor) -> _JFnReturnType:
+        jacs: List[torch.Tensor] = []
+        op_res = self.ltype._fn_lib.untransform(self._t, point, jacobians=jacs)
         return jacs, op_res
 
     def _no_jop(self, input0: TensorType) -> _JFnReturnType:
@@ -567,6 +575,10 @@ def transform(group1: LieTensor, tensor: torch.Tensor) -> torch.Tensor:
     return group1.transform(tensor)
 
 
+def untransform(group1: LieTensor, tensor: torch.Tensor) -> torch.Tensor:
+    return group1.untransform(tensor)
+
+
 def left_act(group: LieTensor, matrix: torch.Tensor) -> torch.Tensor:
     return group.left_act(matrix)
 
@@ -589,6 +601,10 @@ def jcompose(group1: LieTensor, group2: LieTensor) -> _JFnReturnType:
 
 def jtransform(group1: LieTensor, tensor: torch.Tensor) -> _JFnReturnType:
     return group1.jtransform(tensor)
+
+
+def juntransform(group1: LieTensor, tensor: torch.Tensor) -> _JFnReturnType:
+    return group1.juntransform(tensor)
 
 
 def retract(group: LieTensor, delta: TensorType) -> LieTensor:

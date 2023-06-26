@@ -6,8 +6,8 @@
 import setuptools
 from pathlib import Path
 
-lie_path = Path("torchkin")
-with open(lie_path / "__init__.py", "r") as f:
+torchkin_path = Path("torchkin")
+with open(torchkin_path / "__init__.py", "r") as f:
     for line in f:
         if "__version__" in line:
             version = line.split("__version__ = ")[1].rstrip().strip('"')

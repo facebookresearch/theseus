@@ -9,7 +9,7 @@ from typing import List, Optional
 
 import torch
 
-from theseus.constants import DeviceType
+from torchlie.functional.constants import DeviceType
 from torchlie.functional import SO3
 
 

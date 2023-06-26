@@ -7,7 +7,7 @@ import pytest
 import os
 import torch
 
-from theseus.embodied.kinematics.robot.forward_kinematics import (
+from torchkin.forward_kinematics import (
     Robot,
     get_forward_kinematics_fns,
     ForwardKinematicsFactory,
@@ -15,7 +15,7 @@ from theseus.embodied.kinematics.robot.forward_kinematics import (
 from torchlie.functional import SE3
 from torchlie.functional.constants import TEST_EPS
 
-URDF_REL_PATH = "../../../theseus_tests/embodied/kinematics/data/panda_no_gripper.urdf"
+URDF_REL_PATH = "data/panda_no_gripper.urdf"
 urdf_path = os.path.join(os.path.dirname(__file__), URDF_REL_PATH)
 
 

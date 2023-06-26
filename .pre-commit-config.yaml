@@ -1,17 +1,17 @@
-exclude: "setup.py|torchlie/setup.py"
+exclude: "setup.py|torchlie/setup.py|torchkin/setup.py"
 
 repos:
   - repo: https://github.com/psf/black
     rev: 23.3.0
     hooks:
       - id: black
-        files: "^theseus|^examples|^tests|^torchlie"
+        files: "^theseus|^examples|^tests|^torchlie|^torchkin"
 
   - repo: https://github.com/pycqa/flake8
     rev: 6.0.0
     hooks:
       - id: flake8
-        files: "^theseus|^torchlie"
+        files: "^theseus|^torchlie|^torchkin"
 
   - repo: https://github.com/pre-commit/mirrors-mypy
     rev: v1.4.0
@@ -19,10 +19,10 @@ repos:
       - id: mypy
         additional_dependencies: [torch, tokenize-rt==3.2.0, types-PyYAML, types-mock]
         args: [--no-strict-optional, --ignore-missing-imports, --implicit-reexport, --explicit-package-bases]
-        files: "^theseus|^torchlie"
+        files: "^theseus|^torchlie|^torchkin"
 
   - repo: https://github.com/pycqa/isort
     rev: 5.12.0
     hooks:
       - id: isort
-        files: "^theseus|^examples|^torchlie"
+        files: "^theseus|^examples|^torchlie|^torchkin"

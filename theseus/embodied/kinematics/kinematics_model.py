@@ -61,17 +61,6 @@ class UrdfRobotModel(KinematicsModel):
         )
         self.link_names = link_names
 
-    def _postprocess_quaternion(self, quat):
-        # Convert quaternion convention (DRM uses xyzw, Theseus uses wxyz)
-        quat_converted = torch.cat([quat[..., 3:], quat[..., :3]], dim=-1)
-
-        # Normalize quaternions
-        quat_normalized = quat_converted / torch.linalg.norm(
-            quat_converted, dim=-1, keepdim=True
-        )
-
-        return quat_normalized
-
     def forward_kinematics(  # type: ignore
         self,
         joint_states: RobotModelInput,

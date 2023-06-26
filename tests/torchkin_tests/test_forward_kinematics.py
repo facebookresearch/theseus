@@ -15,7 +15,7 @@ from torchkin.forward_kinematics import (
 from torchlie.functional import SE3
 from torchlie.functional.constants import TEST_EPS
 
-URDF_REL_PATH = "data/panda_no_gripper.urdf"
+URDF_REL_PATH = "panda_no_gripper.urdf"
 urdf_path = os.path.join(os.path.dirname(__file__), URDF_REL_PATH)
 
 

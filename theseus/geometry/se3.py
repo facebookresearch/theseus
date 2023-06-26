@@ -261,34 +261,8 @@ class SE3(LieGroup):
         jacobians: Optional[List[torch.Tensor]] = None,
     ) -> Point3:
         self._transform_shape_check(point)
-        batch_size = max(self.shape[0], point.shape[0])
-        if isinstance(point, torch.Tensor):
-            p = point.view(-1, 3, 1)
-        else:
-            p = point.tensor.view(-1, 3, 1)
-
-        temp = p - self[:, :, 3:]
-        ret = Point3(tensor=(self[:, :, :3].transpose(1, 2) @ temp).view(-1, 3))
-
-        if jacobians is not None:
-            self._check_jacobians_list(jacobians)
-            # Right jacobians for SE3 are computed
-            Jg = torch.zeros(batch_size, 3, 6, dtype=self.dtype, device=self.device)
-            Jg[:, 0, 0] = -1
-            Jg[:, 1, 1] = -1
-            Jg[:, 2, 2] = -1
-            Jg[:, 0, 4] = -ret[:, 2]
-            Jg[:, 1, 3] = ret[:, 2]
-            Jg[:, 0, 5] = ret[:, 1]
-            Jg[:, 2, 3] = -ret[:, 1]
-            Jg[:, 1, 5] = -ret[:, 0]
-            Jg[:, 2, 4] = ret[:, 0]
-            # Jacobians for point
-            Jpnt = self[:, :, :3].transpose(1, 2).expand(batch_size, 3, 3)
-
-            jacobians.extend([Jg, Jpnt])
-
-        return ret
+        p = point if isinstance(point, torch.Tensor) else point.tensor
+        return Point3(SE3_base.untransform(self.tensor, p, jacobians=jacobians))
 
     # The returned tensor will have 7 elements, [x, y, z, qw, qx, qy, qz] where
     # [x y z] corresponds to the translation and [qw qx qy qz] to the quaternion

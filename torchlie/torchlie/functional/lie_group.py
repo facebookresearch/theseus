@@ -298,9 +298,7 @@ class LieGroupFns:
         self.compose, self.jcompose = BinaryOperatorFactory(module, "compose")
         self.left_act = GradientOperatorFactory(module, "left_act")[0]
         self.left_project = GradientOperatorFactory(module, "left_project")[0]
-        self.transform_from, self.jtransform_from = BinaryOperatorFactory(
-            module, "transform_from"
-        )
+        self.transform, self.jtransform = BinaryOperatorFactory(module, "transform")
         if hasattr(module, "QuaternionToRotation"):
             (
                 self.quaternion_to_rotation,

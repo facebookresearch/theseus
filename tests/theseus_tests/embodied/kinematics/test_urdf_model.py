@@ -121,20 +121,16 @@ def test_jacobian(dataset, autograd_jacobians, batch_size):
     robot_model = th.eb.UrdfRobotModel(URDF_PATH, device=device, link_names=[ee_name])
     joint_state = dataset["joint_states"][0:batch_size, ...].view(batch_size, -1)
 
-    ee_pose_target = dataset["ee_poses"][0:batch_size, ...]
-    ee_se3_target = th.SE3(x_y_z_quaternion=ee_pose_target)
     # Compute analytical manipulator jacobian
     jacobians = {}
-    ee_se3 = robot_model.forward_kinematics(
+    robot_model.forward_kinematics(
         joint_state, jacobians=jacobians, use_body_jacobians=True
     )[ee_name]
     jacobian_analytical = jacobians[ee_name]
-    dlocal = []
-    ee_se3_target.local(ee_se3, dlocal)
 
     assert torch.allclose(
         autograd_jacobians[0:batch_size, ...],
-        dlocal[1] @ jacobian_analytical,
+        jacobian_analytical,
         atol=1e-6,
         rtol=1e-3,
     )

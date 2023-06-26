@@ -44,10 +44,12 @@ class _TheseusGlobalParams:
         self.so2_norm_eps_float32 = 1e-12
         self.so2_matrix_eps_float32 = 1e-5
         self.se2_near_zero_eps_float32 = 3e-2
+        self.se2_d_near_zero_eps_float32 = 1e-1
 
         self.so2_norm_eps_float32 = 1e-12
         self.so2_matrix_eps_float64 = 4e-7
         self.se2_near_zero_eps_float64 = 1e-6
+        self.se2_d_near_zero_eps_float64 = 1e-3
 
 
 _THESEUS_GLOBAL_PARAMS = _TheseusGlobalParams()

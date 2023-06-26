@@ -33,6 +33,7 @@ URDF_REL_PATH = (
 )
 urdf_path = os.path.join(os.path.dirname(__file__), URDF_REL_PATH)
 robot = Robot.from_urdf_file(urdf_path, dtype)
+selected_links = ["panda_virtual_ee_link"]
 
 # We can get differentiable forward kinematics functions for specific links
 # by using `get_forward_kinematics_fns`. This function creates three differentiable
@@ -43,14 +44,12 @@ robot = Robot.from_urdf_file(urdf_path, dtype)
 # - fk: return poses of selected links
 # - jfk_b: return body jacobians and poses of selected links
 # - jfk_s: return spatial jacobians and poses of selected links
-fk, jfk_b, jfk_s = get_forward_kinematics_fns(robot, ["panda_virtual_ee_link"])
+fk, jfk_b, jfk_s = get_forward_kinematics_fns(robot, selected_links)
 
 
 # ********************************************************
 # ** INVERSE KINEMATICS WITH Body/Spatial Jacobian
 # ********************************************************
-
-
 # If jfk is body jacobian, delta_theta is computed by
 #          pose * exp(jfk * delta_theta) = targeted_pose,
 # which has a closed-form solution:
@@ -121,7 +120,7 @@ def targeted_pose_error(optim_vars, aux_vars):
     (theta,) = optim_vars
     (targeted_pose,) = aux_vars
     pose = th.SE3(tensor=fk(theta.tensor)[0])
-    return (pose.inverse().compose(targeted_pose)).log_map()
+    return pose.local(targeted_pose)
 
 
 target_theta = torch.rand(10, robot.dof, dtype=dtype)

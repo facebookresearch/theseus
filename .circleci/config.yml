@@ -284,6 +284,7 @@ jobs:
       - <<: *install_suitesparse
       - <<: *install_torch
       - <<: *build_baspacho_cpu
+      - <<: *install_torchlie_torchkin
       - <<: *run_optimizer_tests
 
   py39_optimizer_tests:
@@ -295,6 +296,7 @@ jobs:
       - <<: *install_suitesparse
       - <<: *install_torch
       - <<: *build_baspacho_cpu
+      - <<: *install_torchlie_torchkin
       - <<: *run_optimizer_tests
 
   py310_optimizer_tests:
@@ -306,6 +308,7 @@ jobs:
       - <<: *install_suitesparse
       - <<: *install_torch
       - <<: *build_baspacho_cpu
+      - <<: *install_torchlie_torchkin
       - <<: *run_optimizer_tests
 
   # Lie group tests

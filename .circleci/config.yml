@@ -155,7 +155,7 @@ setup_project: &setup_project
         pip install -r requirements/dev.txt
         BASPACHO_ROOT_DIR=~/baspacho pip install --progress-bar off -e .
 
-install_torchlie_torchkin: &run_pre_commit
+install_torchlie_torchkin: &install_torchlie_torchkin
   - run:
       name: Installing torchlie and torchkin
       working_directory: ~/project

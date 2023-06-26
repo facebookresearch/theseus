@@ -388,8 +388,8 @@ jobs:
       - <<: *install_torch_cuda11
       - <<: *install_recent_cmake_2004
       - <<: *build_baspacho_cuda
-      - <<: *setup_project
       - <<: *install_torchlie_torchkin
+      - <<: *setup_project
       - <<: *run_gpu_tests
 
 # ------- Compiled wheel test -------

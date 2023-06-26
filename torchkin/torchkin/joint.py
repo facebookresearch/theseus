@@ -9,8 +9,8 @@ from typing import List, Optional
 
 import torch
 
-from torchlie.functional.constants import DeviceType
 from torchlie.functional import SO3
+from torchlie.functional.constants import DeviceType
 
 
 class Link(abc.ABC):

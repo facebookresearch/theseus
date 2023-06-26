@@ -11,7 +11,10 @@ import torch
 from theseus.constants import DeviceType
 from theseus.geometry import SE3, LieGroup, Point2, Vector
 
-from .robot import Robot, get_forward_kinematics_fns
+# The type check below passes when running mypy but not when running pre-commit
+# Life is too short to spend hours figuring out how to tell pre-commit to do the
+# right thing.
+from torchkin import Robot, get_forward_kinematics_fns  # type: ignore
 
 RobotModelInput = Union[torch.Tensor, Vector]
 

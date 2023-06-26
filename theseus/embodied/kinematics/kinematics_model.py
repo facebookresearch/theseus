@@ -107,21 +107,19 @@ class UrdfRobotModel(KinematicsModel):
                 "Valid types are torch.Tensor and th.Vector."
             )
 
-        # Compute forward kinematics for all links
-        fk_output = self.fk(joint_states_input)
+        # Compute jacobians
+        poses_list = []
+        if jacobians is not None:
+            jfk_fn = self.jfk_b if use_body_jacobians else self.jfk_s
+            jac_links, poses_list = jfk_fn(joint_states_input)
+            for i, name in enumerate(self.link_names):
+                jacobians[name] = jac_links[i]
+
+        # Do forward kinematics for all links (if not done by jacobians function)
+        poses_list = poses_list or self.fk(joint_states_input)
 
         link_poses = {}
         for i, name in enumerate(self.link_names):
-            link_poses[name] = SE3(tensor=fk_output[i], strict_checks=False)
-
-        # Compute jacobians
-        if jacobians is not None:
-            jacs_out = (
-                self.jfk_b(joint_states_input)
-                if use_body_jacobians
-                else self.jfk_s(joint_states_input)
-            )
-            for i, name in enumerate(self.link_names):
-                jacobians[name] = jacs_out[0][i]
+            link_poses[name] = SE3(tensor=poses_list[i], strict_checks=False)
 
         return link_poses

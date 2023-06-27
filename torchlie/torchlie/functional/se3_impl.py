@@ -822,7 +822,7 @@ def _juntransform_impl(
     return [jacobian_g, jacobian_p], ret
 
 
-class UntransformFrom(lie_group.BinaryOperator):
+class Untransform(lie_group.BinaryOperator):
     @classmethod
     def _forward_impl(cls, group, tensor):
         group: torch.Tensor = cast(torch.Tensor, group)
@@ -853,7 +853,7 @@ class UntransformFrom(lie_group.BinaryOperator):
         return grad_input0, grad_input1.squeeze(-1)
 
 
-_untransform_autograd_fn = UntransformFrom.apply
+_untransform_autograd_fn = Untransform.apply
 _juntransform_autograd_fn = _juntransform_impl
 
 

@@ -1,3 +1,5 @@
+# torchlie
+
 <p align="center">
     <!-- License -->
     <a href="https://github.com/facebookresearch/theseus/blob/main/torchlie/LICENSE">
@@ -33,7 +35,38 @@
     <i>A library for differentiable Lie groups</i>
 </p>
 
-## Examples
+-----
+
+## Getting Started
+
+### Prerequisites
+- We *strongly* recommend you install torchlie in a venv or conda environment with Python 3.8-3.10.
+- torchlie requires `torch` installation. To install for your particular CPU/CUDA configuration, follow the instructions in the PyTorch [website](https://pytorch.org/get-started/locally/).
+
+### Installing
+
+- **pypi**
+    ```bash
+    pip install torchlie
+    ```
+
+- #### **From source**
+    The simplest way to install torchlie from source is by running the following
+    ```bash
+    git clone https://github.com/facebookresearch/theseus.git && cd theseus/torchlie
+    pip install -e .
+    ```
+    If you are interested in contributing to torchlie, also install
+    ```bash
+    pip install -r ../requirements/dev.txt
+    pre-commit install
+    ```
+    and follow the more detailed instructions in [CONTRIBUTING](https://github.com/facebookresearch/theseus/blob/main/CONTRIBUTING.md).
+
+
+## Example
+
+The example below is also available as a [script](https://github.com/facebookresearch/theseus/blob/main/examples/torchlie_api.py).
 
 ```python
 import torch
@@ -176,3 +209,29 @@ for i in range(10):
     opt.step()
     print(f"Iter {i}. Loss: {loss.item(): .3f}")
 ```
+
+
+## Citing torchlie
+
+If you use torchlie in your work, please cite the [paper](https://arxiv.org/abs/2207.09442) with the BibTeX below.
+
+```bibtex
+@article{pineda2022theseus,
+  title   = {{Theseus: A Library for Differentiable Nonlinear Optimization}},
+  author  = {Luis Pineda and Taosha Fan and Maurizio Monge and Shobha Venkataraman and Paloma Sodhi and Ricky TQ Chen and Joseph Ortiz and Daniel DeTone and Austin Wang and Stuart Anderson and Jing Dong and Brandon Amos and Mustafa Mukadam},
+  journal = {Advances in Neural Information Processing Systems},
+  year    = {2022}
+}
+```
+
+
+## License
+
+torchlie is MIT licensed. See the [LICENSE](https://github.com/facebookresearch/theseus/blob/main/torchlie/LICENSE) for details.
+
+
+## Additional Information
+
+- Join the community on [Github Discussions](https://github.com/facebookresearch/theseus/discussions) for questions and sugesstions.
+- Use [Github Issues](https://github.com/facebookresearch/theseus/issues/new/choose) for bugs and features.
+- See [CONTRIBUTING](https://github.com/facebookresearch/theseus/blob/main/CONTRIBUTING.md) if interested in helping out.

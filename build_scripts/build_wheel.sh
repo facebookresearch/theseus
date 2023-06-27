@@ -124,7 +124,7 @@ for PYTHON_VERSION in 3.10; do
         /bin/bash ~/miniconda.sh -b -p /opt/conda
     ENV PATH \$CONDA_DIR/bin:\$PATH
     RUN conda create --name theseus python=${PYTHON_VERSION}
-    RUN source activate theseus
+    ENV PATH \$CONDA_DIR/envs/theseus/bin:\$PATH
 
     # --- Install torch
     ENV CUDA_HOME /usr/local/cuda-${CUDA_VERSION}

@@ -401,6 +401,7 @@ jobs:
       - <<: *install_suitesparse
       - <<: *setup_cuda11_libs
       - <<: *setup_environment_310
+      - <<: *install_torch_cuda11
       - <<: *build_cuda11_wheel
       - <<: *run_tests_from_wheel
 

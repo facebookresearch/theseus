@@ -83,17 +83,6 @@ setup_environment: &setup_environment
         pip install --progress-bar off --upgrade pip
         pip install --progress-bar off --upgrade setuptools
 
-setup_environment_310: &setup_environment_310
-  - run:
-      name: Setup virtualenv and tools
-      working_directory: ~/project
-      command: |
-        export PATH=~/conda/bin:$PATH
-        conda create --name theseus python=3.10
-        source activate theseus
-        pip install --progress-bar off --upgrade pip
-        pip install --progress-bar off --upgrade setuptools
-
 install_torch_cuda11: &install_torch_cuda11
   - run:
       name: Install Torch for cuda11
@@ -400,7 +389,7 @@ jobs:
       - <<: *update_and_install_conda
       - <<: *install_suitesparse
       - <<: *setup_cuda11_libs
-      - <<: *setup_environment_310
+      - <<: *setup_environment
       - <<: *install_torch_cuda11
       - <<: *build_cuda11_wheel
       - <<: *run_tests_from_wheel

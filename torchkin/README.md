@@ -66,7 +66,7 @@
 
 ## Example
 
-#### An inverse kinematics example is available in [script](https://github.com/facebookresearch/theseus/blob/main/examples/inverse_kinematics.py).
+An inverse kinematics example is available in [script](https://github.com/facebookresearch/theseus/blob/main/examples/inverse_kinematics.py).
 
 ```python
 import torch

@@ -102,6 +102,10 @@ class UrdfRobotModel(KinematicsModel):
         # Compute jacobians
         poses_list = []
         if jacobians is not None:
+            Warning(
+                "The kinematics jacobian is different from our previous implementation based ",
+                "on DRM, which rotates body jacobian to be aligned with the base.",
+            )
             jfk_fn = self.jfk_b if use_body_jacobians else self.jfk_s
             jac_links, poses_list = jfk_fn(joint_states_input)
             for i, name in enumerate(self.link_names):

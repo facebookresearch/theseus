@@ -38,11 +38,10 @@ link_names = ["panda_virtual_ee_link"]
 # the selected links, in that order. The return types of these functions are as
 # follows:
 #
-# - fk: return a tuple of link poses in the order of link names
-# - jfk_b: return a tuple returns a tuple where the first is a list of link body jacobians, and
+# - fk: returns a tuple of link poses in the order of link names
+# - jfk_b: returns a tuple where the first is a list of link body jacobians, and
 #          the second is a tuple of link poses---both are in the order of link names
-# - jfk_s: return a tuple returns a tuple where the first is a list of link spatial jacobians, and
-#          the second is a tuple of link poses---both are in the order of link names
+# - jfk_s: same as jfk_b except returning the spatial jacobians
 fk, jfk_b, jfk_s = get_forward_kinematics_fns(robot, link_names)
 
 

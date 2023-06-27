@@ -76,11 +76,33 @@ setup_environment: &setup_environment
         pip install --progress-bar off --upgrade pip
         pip install --progress-bar off --upgrade setuptools
 
+# The following two are only used by the build wheel test
+update_and_install_conda: &update_and_install_conda
+  - run:
+      name: "Preparing environment: python"
+      command: |
+        wget --quiet https://repo.anaconda.com/miniconda/Miniconda3-latest-Linux-x86_64.sh -O ~/miniconda.sh
+        /bin/bash ~/miniconda.sh -b -p ~/conda
+
+setup_environment_310: &setup_environment_310
+  - run:
+      name: Setup virtualenv and tools
+      working_directory: ~/project
+      command: |
+        export PATH=~/conda/bin:$PATH
+        conda create --name theseus python=3.10
+        source activate theseus
+        pip install --progress-bar off --upgrade pip
+        pip install --progress-bar off --upgrade setuptools
+
 install_torch_cuda11: &install_torch_cuda11
   - run:
       name: Install Torch for cuda11
       working_directory: ~/project
       command: |
+        export PATH=~/conda/bin:$PATH
+        source activate theseus
+        which python && which pip
         pip install --progress-bar off torch torchvision torchaudio --extra-index-url https://download.pytorch.org/whl/cu117
         python -c 'import torch; print("Torch version:", torch.__version__); assert torch.cuda.is_available()'
 
@@ -199,7 +221,7 @@ build_cuda11_wheel: &build_cuda11_wheel
       command: |
         THESEUS_GIT_COMMIT=$(git --git-dir project/.git log --format="%H" -n 1)
         THESEUS_VERSION=$(grep -Eo  "[0-9].[0-9].[0-9][.0-9a-z]*" project/theseus/_version.py | tail -n 1)
-        ./project/build_scripts/build_wheel.sh . ${THESEUS_GIT_COMMIT} 11.6 ${THESEUS_VERSION}
+        ./project/build_scripts/build_wheel.sh . ${THESEUS_GIT_COMMIT} 11.7 ${THESEUS_VERSION}
         . ~/theseus_venv/bin/activate
         pip install $(ls */*.whl)
         pip install -r project/requirements/dev.txt
@@ -382,7 +404,7 @@ jobs:
       - <<: *update_and_install_python
       - <<: *install_suitesparse
       - <<: *setup_cuda11_libs
-      - <<: *setup_environment
+      - <<: *setup_environment_310
       - <<: *install_torch_cuda11
       - <<: *build_cuda11_wheel
       - <<: *run_tests_from_wheel

@@ -60,12 +60,14 @@ Differentiable nonlinear optimization provides a general scheme to encode induct
 ### Application agnostic interface
 Our implementation provides an easy to use interface to build custom optimization layers and plug them into any neural architecture. Following differentiable features are currently available:
 - [Second-order nonlinear optimizers](https://github.com/facebookresearch/theseus/tree/main/theseus/optimizer/nonlinear)
-    - Gauss-Newton, Levenberg–Marquardt
+    - Gauss-Newton (GN), Levenberg–Marquardt (LM), Trust Region, Dogleg
+- [Other nonlinear optimizers](https://github.com/facebookresearch/theseus/tree/main/theseus/optimizer/nonlinear)
+    - Cross Entropy Method (CEM)
 - [Linear solvers](https://github.com/facebookresearch/theseus/tree/main/theseus/optimizer/linear)
     - Dense: Cholesky, LU; Sparse: CHOLMOD, LU (GPU-only), [BaSpaCho](https://github.com/facebookresearch/baspacho)
 - [Commonly used costs](https://github.com/facebookresearch/theseus/tree/main/theseus/embodied), [AutoDiffCostFunction](https://github.com/facebookresearch/theseus/blob/main/theseus/core/cost_function.py), [RobustCostFunction](https://github.com/facebookresearch/theseus/blob/main/theseus/core/robust_cost_function.py)
-- [Lie groups](https://github.com/facebookresearch/theseus/tree/main/theseus/geometry)
-- [Robot kinematics](https://github.com/facebookresearch/theseus/blob/main/theseus/embodied/kinematics/kinematics_model.py)
+- [Lie groups](https://github.com/facebookresearch/theseus/tree/main/theseus/geometry) based on [torchlie](https://github.com/facebookresearch/theseus/tree/main/torchlie)
+- [Robot kinematics](https://github.com/facebookresearch/theseus/blob/main/theseus/embodied/kinematics) based on [torchkin](https://github.com/facebookresearch/theseus/tree/main/torchkin)
 
 ### Efficiency based design
 We support several features that improve computation times and memory consumption:
@@ -108,6 +110,7 @@ We support several features that improve computation times and memory consumptio
     If you are interested in contributing to Theseus, instead install
     ```bash
     pip install -e ".[dev]"
+    pre-commit install
     ```
     and follow the more detailed instructions in [CONTRIBUTING](https://github.com/facebookresearch/theseus/blob/main/CONTRIBUTING.md).
 

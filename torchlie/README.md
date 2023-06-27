@@ -49,8 +49,6 @@
     ```bash
     pip install torchlie
     ```
-    We currently provide wheels compiled using Python 3.10.
-    For other versions, consider installing from source.
 
 - #### **From source**
     The simplest way to install torchlie from source is by running the following
@@ -58,12 +56,12 @@
     git clone https://github.com/facebookresearch/theseus.git && cd theseus/torchlie
     pip install -e .
     ```
-    If you are interested in contributing to torchlie, instead install
+    If you are interested in contributing to torchlie, also install
     ```bash
-    pip install -e ".[dev]"
+    pip install -r ../requirements/dev.txt
+    pre-commit install
     ```
     and follow the more detailed instructions in [CONTRIBUTING](https://github.com/facebookresearch/theseus/blob/main/CONTRIBUTING.md).
-
 
 
 ## Example

@@ -197,18 +197,23 @@ class SE2(LieGroup):
             theta2 = theta**2
             theta3 = theta * theta2
 
-            theta_nz = torch.where(small_theta, non_zero, theta)
-            one_minus_cosine_nz = torch.where(small_theta, non_zero, 1 - cosine)
+            d_small_theta = theta.abs() < _THESEUS_GLOBAL_PARAMS.get_eps(
+                "se2", "d_near_zero", theta.dtype
+            )
+            theta_nz = torch.where(d_small_theta, non_zero, theta)
+            one_minus_cosine_nz = torch.where(d_small_theta, non_zero, 1 - cosine)
 
             half_theta_sine_by_one_minus_cosine = torch.where(
-                small_theta, 1 - theta2 / 12.0, half_theta * sine / one_minus_cosine_nz
+                d_small_theta,
+                1 - theta2 / 12.0,
+                half_theta * sine / one_minus_cosine_nz,
             )
             jac[:, [0, 1], [0, 1]] = half_theta_sine_by_one_minus_cosine.view(-1, 1)
             jac[:, 0, 1] = -half_theta
             jac[:, 1, 0] = half_theta
 
             coeff = torch.where(
-                small_theta,
+                d_small_theta,
                 theta / 12.0 + theta3 / 720.0,
                 1.0 / theta_nz - 0.5 * sine / one_minus_cosine_nz,
             )

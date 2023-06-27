@@ -66,14 +66,58 @@
 
 ## Example
 
+#### An inverse kinematics example is available in [script](https://github.com/facebookresearch/theseus/blob/main/examples/inverse_kinematics.py).
+
 ```python
 import torch
 
 import torchkin as kin
 
-# TBD
-```
+# We can load a robot model from a URDF file
+dtype = torch.float64
+device = "cuda"
+robot = kin.Robot.from_urdf_file(YOUR_URDF_FILE, dtype=dtype, device=device)
 
+# Print robot name, number of links and degrees of freedom
+print(f"{robot.name} has {len(robot.get_links())} links and {robot.dof} degrees of freedom.\n")
+
+# Print joint id and name
+for id, name in enumerate(robot.joint_map):
+    # A joint is not fixed if and only if id < robot.dof
+    print(f"joint {id}: {name} is {'not fixed' if id < robot.dof else 'fixed'}")
+print("\n")
+
+# Print link id and name
+for link in robot.get_links():
+    print(f"link {link.id}: {link.name}")
+
+# We can get differentiable forward kinematics functions for specific links
+# by using `get_forward_kinematics_fns`. This function creates three differentiable
+# functions for evaluating forward kinematics, body jacobian and spatial jacobian of
+# the selected links, in that order. The return types of these functions are as
+# follows:
+#
+# - fk: return a tuple of link poses in the order of link names
+# - jfk_b: returns a tuple where the first is a list of link body jacobians, and the
+#          second is a tuple of link poses---both are in the order of link names
+# - jfk_s: same as jfk_b except returning the spatial jacobians
+link_names = [LINK1, LINK2, LINK3]
+fk, jfk_b, jfk_s = kin.get_forward_kinematics_fns(
+    robot=robot, link_names=link_names)
+
+batch_size = 10
+# The joint states are in the order of the joint ids
+joint_states = torch.rand(batch_size, robot.dof, dtype=dtype, device=device)
+
+# Get link poses
+link_poses = fk(joint_states)
+
+# Get body jacobians and link poses
+jacs_b, link_poses = jfk_b(joint_states) 
+
+# Get spatial jacobians and link poses
+jacs_s, link_poses = jfk_s(joint_states) 
+```
 
 ## Citing torchkin
 
@@ -87,7 +131,6 @@ If you use torchkin in your work, please cite the [paper](https://arxiv.org/abs/
   year    = {2022}
 }
 ```
-
 
 ## License
 

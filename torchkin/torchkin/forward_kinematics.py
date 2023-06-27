@@ -140,7 +140,7 @@ def get_forward_kinematics_fns(robot: Robot, link_names: Optional[List[str]] = N
 
     def forward_kinematics(angles: torch.Tensor):
         output = ForwardKinematics.apply(angles)
-        return output[:-1]
+        return [*output[:-1]]
 
     def forward_kinematics_spatial_jacobian(angles: torch.Tensor):
         selected_poses: torch.Tensor = SelectedForwardKinematics.apply(angles)

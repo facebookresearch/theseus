@@ -17,11 +17,8 @@ import os
 import torch
 
 import theseus as th
+from torchkin.forward_kinematics import Robot, get_forward_kinematics_fns
 from torchlie.functional import SE3 as SE3_Func
-from theseus.labs.embodied.robot.forward_kinematics import (
-    Robot,
-    get_forward_kinematics_fns,
-)
 
 dtype = torch.float64
 
@@ -33,7 +30,7 @@ URDF_REL_PATH = (
 )
 urdf_path = os.path.join(os.path.dirname(__file__), URDF_REL_PATH)
 robot = Robot.from_urdf_file(urdf_path, dtype)
-selected_links = ["panda_virtual_ee_link"]
+link_names = ["panda_virtual_ee_link"]
 
 # We can get differentiable forward kinematics functions for specific links
 # by using `get_forward_kinematics_fns`. This function creates three differentiable
@@ -41,10 +38,10 @@ selected_links = ["panda_virtual_ee_link"]
 # the selected links, in that order. The return types of these functions are as
 # follows:
 #
-# - fk: return poses of selected links
-# - jfk_b: return body jacobians and poses of selected links
-# - jfk_s: return spatial jacobians and poses of selected links
-fk, jfk_b, jfk_s = get_forward_kinematics_fns(robot, selected_links)
+# - fk: return a list of selected link poses in the order of link names
+# - jfk_b: return a tuple of body jacobians and poses of selected links, both are lists in the order of link names
+# - jfk_s: return a tuple of spatial jacobians and poses of selected links, both are lists in the order of link names
+fk, jfk_b, jfk_s = get_forward_kinematics_fns(robot, link_names)
 
 
 # ********************************************************

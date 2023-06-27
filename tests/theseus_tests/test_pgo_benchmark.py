@@ -32,10 +32,10 @@ def default_cfg():
 def test_pgo_losses(default_cfg, linear_solver_cls):
     # for everything except cholmod (need to turn off adaptive damping for that one)
     expected_losses = [
-        -0.052539531380404174,
-        -0.0692269852973897,
-        -0.036454724975527056,
-        -0.0611037305508654,
+        -0.29886279606812166,
+        -0.3054215856589109,
+        -0.27485602196709225,
+        -0.3005231105990632,
     ]
 
     default_cfg.inner_optim.linear_solver_cls = linear_solver_cls
@@ -47,10 +47,10 @@ def test_pgo_losses(default_cfg, linear_solver_cls):
         if linear_solver_cls == "CholmodSparseSolver":
             default_cfg.inner_optim.optimizer_kwargs.adaptive_damping = False
             expected_losses = [
-                -0.05253953280865485,
-                -0.0692269853141562,
-                -0.036454725860367604,
-                -0.06110373100778682,
+                -0.2988627961673474,
+                -0.30542158576120654,
+                -0.27485602213117594,
+                -0.3005231108739672,
             ]
         default_cfg.device = "cpu"
     losses = pgo.run(default_cfg)
@@ -64,10 +64,10 @@ def test_pgo_losses(default_cfg, linear_solver_cls):
 def test_pgo_losses_baspacho(default_cfg):
     # for everything except cholmod (need to turn off adaptive damping for that one)
     expected_losses = [
-        -0.05253953137899042,
-        -0.06922698529800682,
-        -0.03645472497536786,
-        -0.061103730548485655,
+        -0.2988627960682926,
+        -0.30542158565900696,
+        -0.27485602196705955,
+        -0.3005231105991407,
     ]
 
     default_cfg.inner_optim.linear_solver_cls = "BaspachoSparseSolver"

@@ -288,9 +288,7 @@ class SO3(LieGroup):
     ) -> Point3:
         self._rotate_shape_check(point)
         p = point if isinstance(point, torch.Tensor) else point.tensor
-        return Point3(
-            tensor=SO3_base.transform_from(self.tensor, p, jacobians=jacobians)
-        )
+        return Point3(tensor=SO3_base.transform(self.tensor, p, jacobians=jacobians))
 
     def unrotate(
         self,

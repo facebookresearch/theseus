@@ -17,11 +17,11 @@ from .lie_tensor import (  # usort: skip
     jcompose,
     jinv,
     jlog,
-    jtransform_from,
+    jtransform,
     left_act,
     left_project,
     local,
     log,
-    transform_from,
+    transform,
 )
 from .types import SE3, SO3, ltype

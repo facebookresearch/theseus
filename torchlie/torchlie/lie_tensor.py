@@ -283,8 +283,8 @@ class LieTensor(_LieTensorBase):
             self.ltype._fn_lib.compose(self._t, other._t), self.ltype
         )
 
-    def transform_from(self, point: torch.Tensor) -> torch.Tensor:
-        return self.ltype._fn_lib.transform_from(self._t, point)
+    def transform(self, point: torch.Tensor) -> torch.Tensor:
+        return self.ltype._fn_lib.transform(self._t, point)
 
     def left_act(self, matrix: torch.Tensor) -> torch.Tensor:
         return self.ltype._fn_lib.left_act(self._t, matrix)
@@ -321,9 +321,9 @@ class LieTensor(_LieTensorBase):
         )
         return jacs, op_res
 
-    def jtransform_from(self, point: torch.Tensor) -> _JFnReturnType:
+    def jtransform(self, point: torch.Tensor) -> _JFnReturnType:
         jacs: List[torch.Tensor] = []
-        op_res = self.ltype._fn_lib.transform_from(self._t, point, jacobians=jacs)
+        op_res = self.ltype._fn_lib.transform(self._t, point, jacobians=jacs)
         return jacs, op_res
 
     def _no_jop(self, input0: TensorType) -> _JFnReturnType:
@@ -374,7 +374,7 @@ class LieTensor(_LieTensorBase):
                 "Incorrect argument for '@' operator. "
                 "Expected a torch.Tensor (x, y, z), but got a LieTensor."
             )
-        return self.transform_from(point)
+        return self.transform(point)
 
     def set_(self, tensor: "LieTensor"):  # type: ignore
         if not isinstance(tensor, LieTensor):
@@ -563,8 +563,8 @@ def compose(group1: LieTensor, group2: LieTensor) -> LieTensor:
     return group1.compose(group2)
 
 
-def transform_from(group1: LieTensor, tensor: torch.Tensor) -> torch.Tensor:
-    return group1.transform_from(tensor)
+def transform(group1: LieTensor, tensor: torch.Tensor) -> torch.Tensor:
+    return group1.transform(tensor)
 
 
 def left_act(group: LieTensor, matrix: torch.Tensor) -> torch.Tensor:
@@ -587,8 +587,8 @@ def jcompose(group1: LieTensor, group2: LieTensor) -> _JFnReturnType:
     return group1.jcompose(group2)
 
 
-def jtransform_from(group1: LieTensor, tensor: torch.Tensor) -> _JFnReturnType:
-    return group1.jtransform_from(tensor)
+def jtransform(group1: LieTensor, tensor: torch.Tensor) -> _JFnReturnType:
+    return group1.jtransform(tensor)
 
 
 def retract(group: LieTensor, delta: TensorType) -> LieTensor:

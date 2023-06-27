@@ -58,18 +58,27 @@ def test_jacobian(batch_size: int, dtype: torch.dtype):
     selected_links = ["panda_link2", "panda_link5", "panda_virtual_ee_link"]
     fk, jfk_b, _ = get_forward_kinematics_fns(robot, selected_links)
 
+    def fk_vmap(t):
+        return tuple(pose.squeeze(0) for pose in fk(t.unsqueeze(0)))
+
     rng = torch.Generator()
     rng.manual_seed(0)
     angles = torch.rand(batch_size, robot.dof, generator=rng, dtype=dtype)
 
     jacs_actual, poses = jfk_b(angles)
 
-    sels = range(batch_size)
     jacs_dense = torch.autograd.functional.jacobian(fk, angles, vectorize=True)
+    jacs_vmap = torch.vmap(torch.func.jacrev(fk_vmap))(angles)
+
     jacs_expected = []
-    for pose, jac_dense in zip(poses, jacs_dense):
-        jac_dense = jac_dense[sels, :, :, sels].transpose(-1, 1).transpose(-1, -2)
-        jac_expected = SE3.left_project(pose, jac_dense).transpose(-1, -2)
+    sels = range(batch_size)
+    for pose, jac_dense, jac_vmap in zip(poses, jacs_dense, jacs_vmap):
+        jac_sparse = jac_dense[sels, :, :, sels]
+        torch.testing.assert_close(
+            actual=jac_vmap, expected=jac_sparse, atol=1e-6, rtol=1e-5
+        )
+        jac_sparse_t = jac_sparse.transpose(-1, 1).transpose(-1, -2)
+        jac_expected = SE3.left_project(pose, jac_sparse_t).transpose(-1, -2)
         jac_expected[:, 3:] *= 0.5
         jacs_expected.append(jac_expected)
 

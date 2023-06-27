@@ -66,6 +66,8 @@
 
 ## Example
 
+#### An inverse kinematics example is available in [script](https://github.com/facebookresearch/theseus/blob/main/examples/inverse_kinematics.py).
+
 ```python
 import torch
 
@@ -96,10 +98,9 @@ for link in robot.get_links():
 # follows:
 #
 # - fk: return a tuple of link poses in the order of link names
-# - jfk_b: return a tuple returns a tuple where the first is a list of link body jacobians, and
-#          the second is a tuple of link poses---both are in the order of link names
-# - jfk_s: return a tuple returns a tuple where the first is a list of link spatial jacobians, and
-#          the second is a tuple of link poses---both are in the order of link names
+# - jfk_b: returns a tuple where the first is a list of link body jacobians, and the
+#          second is a tuple of link poses---both are in the order of link names
+# - jfk_s: same as jfk_b except returning the spatial jacobians
 link_names = [LINK1, LINK2, LINK3]
 fk, jfk_b, jfk_s = kin.get_forward_kinematics_fns(
     robot=robot, link_names=link_names)
@@ -118,7 +119,6 @@ jacs_b, link_poses = jfk_b(joint_states)
 jacs_s, link_poses = jfk_s(joint_states) 
 ```
 
-
 ## Citing torchkin
 
 If you use torchkin in your work, please cite the [paper](https://arxiv.org/abs/2207.09442) with the BibTeX below.
@@ -131,7 +131,6 @@ If you use torchkin in your work, please cite the [paper](https://arxiv.org/abs/
   year    = {2022}
 }
 ```
-
 
 ## License
 

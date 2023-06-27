@@ -86,7 +86,7 @@ update_and_install_conda: &update_and_install_conda
 
 setup_environment_310: &setup_environment_310
   - run:
-      name: Setup virtualenv and tools
+      name: Setup virtualenv and tools for python 3.10
       working_directory: ~/project
       command: |
         export PATH=~/conda/bin:$PATH
@@ -401,7 +401,7 @@ jobs:
     executor: gpu_cuda11
     steps:
       - checkout
-      - <<: *update_and_install_python
+      - <<: *update_and_install_conda
       - <<: *install_suitesparse
       - <<: *setup_cuda11_libs
       - <<: *setup_environment_310

@@ -66,6 +66,8 @@
 
 ## Example
 
+The example below is also available as a [script](https://github.com/facebookresearch/theseus/blob/main/examples/torchlie_api.py).
+
 ```python
 import torch
 

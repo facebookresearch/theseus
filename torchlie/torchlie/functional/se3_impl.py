@@ -795,6 +795,69 @@ _jtransform_autograd_fn = _jtransform_impl
 
 
 # -----------------------------------------------------------------------------
+# Untransform
+# -----------------------------------------------------------------------------
+def _untransform_impl(group: torch.Tensor, tensor: torch.Tensor) -> torch.Tensor:
+    check_group_tensor(group)
+    check_transform_tensor(tensor)
+    ret = group[..., :3].transpose(-1, -2) @ (tensor.unsqueeze(-1) - group[..., -1:])
+    return ret.squeeze(-1)
+
+
+def _juntransform_impl(
+    group: torch.Tensor, tensor: torch.Tensor
+) -> Tuple[List[torch.Tensor], torch.Tensor]:
+    check_group_tensor(group)
+    check_transform_tensor(tensor)
+    ret = _untransform_impl(group, tensor)
+    size = get_transform_tensor_size(ret)
+    jacobian_g = group.new_zeros(*size, 3, 6)
+    jacobian_g[..., 0, 0] = -1
+    jacobian_g[..., 1, 1] = -1
+    jacobian_g[..., 2, 2] = -1
+    jacobian_g[..., 3:] = SO3._hat_autograd_fn(ret)
+    jacobian_p = group[..., :3].transpose(-1, -2)
+    jacobian_g = jacobian_g.expand(*size, 3, 6).clone()
+    jacobian_p = jacobian_p.expand(*size, 3, 3).clone()
+    return [jacobian_g, jacobian_p], ret
+
+
+class Untransform(lie_group.BinaryOperator):
+    @classmethod
+    def _forward_impl(cls, group, tensor):
+        group: torch.Tensor = cast(torch.Tensor, group)
+        tensor: torch.Tensor = cast(torch.Tensor, tensor)
+        ret = _untransform_impl(group, tensor)
+        return ret
+
+    @classmethod
+    def setup_context(cls, ctx, inputs, outputs):
+        # inputs is (group, tensor)
+        ctx.save_for_backward(inputs[0], inputs[1])
+
+    @classmethod
+    def backward(cls, ctx, grad_output):
+        group: torch.Tensor = ctx.saved_tensors[0]
+        tensor: torch.Tensor = ctx.saved_tensors[1]
+        tmp_tensor = tensor.unsqueeze(-1) - group[..., -1:]
+        grad_output: torch.Tensor = grad_output.unsqueeze(-1)
+        tensor_size = get_transform_tensor_size(tensor)
+        grad_input1 = group[..., :3] @ grad_output
+        grad_input0 = torch.cat(
+            (
+                tmp_tensor.view(*tensor_size, 3, 1) @ grad_output.transpose(-1, -2),
+                -grad_input1,
+            ),
+            dim=-1,
+        )
+        return grad_input0, grad_input1.squeeze(-1)
+
+
+_untransform_autograd_fn = Untransform.apply
+_juntransform_autograd_fn = _juntransform_impl
+
+
+# -----------------------------------------------------------------------------
 # Lift
 # -----------------------------------------------------------------------------
 def _lift_impl(tensor: torch.Tensor) -> torch.Tensor:

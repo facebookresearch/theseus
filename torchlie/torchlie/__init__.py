@@ -18,10 +18,12 @@ from .lie_tensor import (  # usort: skip
     jinv,
     jlog,
     jtransform,
+    juntransform,
     left_act,
     left_project,
     local,
     log,
     transform,
+    untransform,
 )
 from .types import SE3, SO3, ltype

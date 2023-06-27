@@ -27,7 +27,7 @@ def get_test_cfg(op_name, dtype, dim, data_shape, module=None):
         all_input_types.append((("group", module),))
     if op_name == "compose":
         all_input_types.append((("group", module),) * 2)
-    if op_name == "transform":
+    if op_name in ["transform", "untransform"]:
         for shape in [(3,)]:
             all_input_types.append((("group", module), ("matrix", shape)))
     if op_name == "lift":
@@ -216,13 +216,13 @@ def check_jacrev_unary(group_fns, dim, batch_size, name):
 
 
 # This function checks that vmap(jacrevc) works for the `group_fns.name`, where
-# name can be "compose" or "transform".
+# name can be "compose", "transform" and "untransform".
 # Requires torch >= 2.0
 # Compares the output of vmap(jacrev(log(fn(x)))) to jfn(x).
 # For all group inputs, the output of vmap has to be left-projected,
 # to make get a Riemannian jacobian.
 def check_jacrev_binary(group_fns, batch_size, name):
-    assert name in ["compose", "transform"]
+    assert name in ["compose", "transform", "untransform"]
     if not hasattr(torch, "vmap"):
         return
 
@@ -230,7 +230,7 @@ def check_jacrev_binary(group_fns, batch_size, name):
 
     fn_inputs = (
         (group_fns.rand(batch_size), torch.randn(batch_size, 3))
-        if name == "transform"
+        if name in ["transform", "untransform"]
         else (group_fns.rand(batch_size), group_fns.rand(batch_size))
     )
 
@@ -274,7 +274,7 @@ def _expand_flat(tensor, broadcast_size, group_size):
 
 
 def check_binary_op_broadcasting(group_fns, op_name, group_size, bs1, bs2, dtype, rng):
-    assert op_name in ["compose", "transform"]
+    assert op_name in ["compose", "transform", "untransform"]
     g1 = group_fns.rand(*bs1, generator=rng, dtype=dtype)
     if op_name == "compose":
         t2 = group_fns.rand(*bs2, generator=rng, dtype=dtype)

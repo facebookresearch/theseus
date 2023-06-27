@@ -296,29 +296,8 @@ class SO3(LieGroup):
         jacobians: Optional[List[torch.Tensor]] = None,
     ) -> Point3:
         self._rotate_shape_check(point)
-        batch_size = max(self.shape[0], point.shape[0])
-        if isinstance(point, torch.Tensor):
-            p = point.view(-1, 3, 1)
-        else:
-            p = point.tensor.view(-1, 3, 1)
-
-        ret = Point3(tensor=(self.tensor.transpose(1, 2) @ p).view(-1, 3))
-        if jacobians is not None:
-            self._check_jacobians_list(jacobians)
-            # Left jacobians for SO3 are computed
-            Jrot = self.tensor.new_zeros(batch_size, 3, 3)
-            Jrot[:, 0, 1] = -ret[:, 2]
-            Jrot[:, 1, 0] = ret[:, 2]
-            Jrot[:, 0, 2] = ret[:, 1]
-            Jrot[:, 2, 0] = -ret[:, 1]
-            Jrot[:, 1, 2] = -ret[:, 0]
-            Jrot[:, 2, 1] = ret[:, 0]
-            # Jacobians for point
-            Jpnt = self.to_matrix().transpose(1, 2).expand(batch_size, 3, 3)
-
-            jacobians.extend([Jrot, Jpnt])
-
-        return ret
+        p = point if isinstance(point, torch.Tensor) else point.tensor
+        return Point3(tensor=SO3_base.untransform(self.tensor, p, jacobians=jacobians))
 
 
 rand_so3 = SO3.rand

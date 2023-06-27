@@ -9,8 +9,8 @@ from typing import Dict, List, Optional
 import torch
 import urdf_parser_py.urdf as urdf
 
-from theseus.constants import DeviceType
 from torchlie.functional import SE3
+from torchlie.functional.constants import DeviceType
 
 from .joint import FixedJoint, Joint, Link, PrismaticJoint, RevoluteJoint
 

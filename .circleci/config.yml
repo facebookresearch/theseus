@@ -25,13 +25,6 @@ update_and_install_python: &update_and_install_python
         sudo apt-get update
         sudo apt-get install -y python3.9 python3.9-dev
 
-update_and_install_conda: &update_and_install_conda
-  - run:
-      name: "Preparing environment: python"
-      command: |
-        wget --quiet https://repo.anaconda.com/miniconda/Miniconda3-latest-Linux-x86_64.sh -O ~/miniconda.sh
-        /bin/bash ~/miniconda.sh -b -p ~/conda
-
 install_suitesparse: &install_suitesparse
   - run:
       name: "Preparing environment: suitesparse"
@@ -83,9 +76,16 @@ setup_environment: &setup_environment
         pip install --progress-bar off --upgrade pip
         pip install --progress-bar off --upgrade setuptools
 
+# The following two are only used by the build wheel test
+update_and_install_conda: &update_and_install_conda
+  - run:
+      name: "Preparing environment: python"
+      command: |
+        wget --quiet https://repo.anaconda.com/miniconda/Miniconda3-latest-Linux-x86_64.sh -O ~/miniconda.sh
+        /bin/bash ~/miniconda.sh -b -p ~/conda
 setup_environment_310: &setup_environment_310
   - run:
-      name: Setup virtualenv and tools
+      name: Setup virtualenv and tools for python 3.10
       working_directory: ~/project
       command: |
         export PATH=~/conda/bin:$PATH
@@ -99,6 +99,9 @@ install_torch_cuda11: &install_torch_cuda11
       name: Install Torch for cuda11
       working_directory: ~/project
       command: |
+        export PATH=~/conda/bin:$PATH
+        source activate theseus
+        which python && which pip
         pip install --progress-bar off torch torchvision torchaudio --extra-index-url https://download.pytorch.org/whl/cu117
         python -c 'import torch; print("Torch version:", torch.__version__); assert torch.cuda.is_available()'
 
@@ -155,6 +158,16 @@ setup_project: &setup_project
         pip install -r requirements/dev.txt
         BASPACHO_ROOT_DIR=~/baspacho pip install --progress-bar off -e .
 
+install_torchlie_torchkin: &install_torchlie_torchkin
+  - run:
+      name: Installing torchlie and torchkin
+      working_directory: ~/project
+      command: |
+        cd torchlie
+        pip install -e .
+        cd ../torchkin
+        pip install -e .
+
 run_pre_commit: &run_pre_commit
   - run:
       name: Running precommit checks
@@ -205,10 +218,12 @@ build_cuda11_wheel: &build_cuda11_wheel
       name: Building wheel for CUDA 11
       working_directory: /home/circleci
       command: |
+        export PATH=~/conda/bin:$PATH
+        source activate theseus
+        which python && which pip
         THESEUS_GIT_COMMIT=$(git --git-dir project/.git log --format="%H" -n 1)
         THESEUS_VERSION=$(grep -Eo  "[0-9].[0-9].[0-9][.0-9a-z]*" project/theseus/_version.py | tail -n 1)
-        ./project/build_scripts/build_wheel.sh . ${THESEUS_GIT_COMMIT} 11.6 ${THESEUS_VERSION}
-        source ~/conda/bin/activate theseus
+        ./project/build_scripts/build_wheel.sh . ${THESEUS_GIT_COMMIT} 11.7 ${THESEUS_VERSION}
         pip install $(ls */*.whl)
         pip install -r project/requirements/dev.txt
 
@@ -218,7 +233,9 @@ run_tests_from_wheel: &run_tests_from_wheel
       working_directory: ~/project
       command: |
           mv theseus theseus_tmp
-          source ~/conda/bin/activate theseus
+          export PATH=~/conda/bin:$PATH
+          source activate theseus
+          which python && which pip
           python -m pytest tests/theseus_tests/test_theseus_layer.py
           pytest -s tests/theseus_tests/ -m "cudaext"
 
@@ -239,6 +256,7 @@ jobs:
       - <<: *install_suitesparse
       - <<: *install_torch
       - <<: *build_baspacho_cpu
+      - <<: *install_torchlie_torchkin
       - <<: *run_pre_commit
 
   py39_precommit:
@@ -249,6 +267,7 @@ jobs:
       - <<: *install_suitesparse
       - <<: *install_torch
       - <<: *build_baspacho_cpu
+      - <<: *install_torchlie_torchkin
       - <<: *run_pre_commit
 
   py310_precommit:
@@ -259,6 +278,7 @@ jobs:
       - <<: *install_suitesparse
       - <<: *install_torch
       - <<: *build_baspacho_cpu
+      - <<: *install_torchlie_torchkin
       - <<: *run_pre_commit
 
   # End-to-end tests
@@ -271,6 +291,7 @@ jobs:
       - <<: *install_suitesparse
       - <<: *install_torch
       - <<: *build_baspacho_cpu
+      - <<: *install_torchlie_torchkin
       - <<: *run_optimizer_tests
 
   py39_optimizer_tests:
@@ -282,6 +303,7 @@ jobs:
       - <<: *install_suitesparse
       - <<: *install_torch
       - <<: *build_baspacho_cpu
+      - <<: *install_torchlie_torchkin
       - <<: *run_optimizer_tests
 
   py310_optimizer_tests:
@@ -293,6 +315,7 @@ jobs:
       - <<: *install_suitesparse
       - <<: *install_torch
       - <<: *build_baspacho_cpu
+      - <<: *install_torchlie_torchkin
       - <<: *run_optimizer_tests
 
   # Lie group tests
@@ -304,6 +327,7 @@ jobs:
       - checkout
       - <<: *install_suitesparse
       - <<: *install_torch
+      - <<: *install_torchlie_torchkin
       - <<: *run_lie_group_tests
 
   py39_lie_tests:
@@ -314,6 +338,7 @@ jobs:
       - checkout
       - <<: *install_suitesparse
       - <<: *install_torch
+      - <<: *install_torchlie_torchkin
       - <<: *run_lie_group_tests
 
   py310_lie_tests:
@@ -324,6 +349,7 @@ jobs:
       - checkout
       - <<: *install_suitesparse
       - <<: *install_torch
+      - <<: *install_torchlie_torchkin
       - <<: *run_lie_group_tests
 
   # Other unit tests
@@ -334,6 +360,7 @@ jobs:
       - checkout
       - <<: *install_suitesparse
       - <<: *install_torch
+      - <<: *install_torchlie_torchkin
       - <<: *run_other_unit_tests
 
   py39_other_unit_tests:
@@ -343,6 +370,7 @@ jobs:
       - checkout
       - <<: *install_suitesparse
       - <<: *install_torch
+      - <<: *install_torchlie_torchkin
       - <<: *run_other_unit_tests
 
   py310_other_unit_tests:
@@ -352,6 +380,7 @@ jobs:
       - checkout
       - <<: *install_suitesparse
       - <<: *install_torch
+      - <<: *install_torchlie_torchkin
       - <<: *run_other_unit_tests
 
 # ------- GPU only jobs -------
@@ -366,6 +395,7 @@ jobs:
       - <<: *install_torch_cuda11
       - <<: *install_recent_cmake_2004
       - <<: *build_baspacho_cuda
+      - <<: *install_torchlie_torchkin
       - <<: *setup_project
       - <<: *run_gpu_tests
 
@@ -378,6 +408,7 @@ jobs:
       - <<: *install_suitesparse
       - <<: *setup_cuda11_libs
       - <<: *setup_environment_310
+      - <<: *install_torch_cuda11
       - <<: *build_cuda11_wheel
       - <<: *run_tests_from_wheel
 

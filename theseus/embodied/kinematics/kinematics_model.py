@@ -4,12 +4,18 @@
 # LICENSE file in the root directory of this source tree.
 
 import abc
-from typing import Dict, Optional, Union
+import warnings
+from typing import Dict, List, Optional, Union
 
 import torch
 
 from theseus.constants import DeviceType
 from theseus.geometry import SE3, LieGroup, Point2, Vector
+
+# The type check below passes when running mypy but not when running pre-commit
+# Life is too short to spend hours figuring out how to tell pre-commit to do the
+# right thing.
+from torchkin import Robot, get_forward_kinematics_fns  # type: ignore
 
 RobotModelInput = Union[torch.Tensor, Vector]
 
@@ -19,7 +25,11 @@ class KinematicsModel(abc.ABC):
         pass
 
     @abc.abstractmethod
-    def forward_kinematics(self, robot_pose: RobotModelInput) -> Dict[str, LieGroup]:
+    def forward_kinematics(
+        self,
+        robot_pose: RobotModelInput,
+        **kwargs,
+    ) -> Dict[str, LieGroup]:
         pass
 
 
@@ -27,7 +37,9 @@ class IdentityModel(KinematicsModel):
     def __init__(self):
         super().__init__()
 
-    def forward_kinematics(self, robot_pose: RobotModelInput) -> Dict[str, LieGroup]:
+    def forward_kinematics(  # type: ignore
+        self, robot_pose: RobotModelInput
+    ) -> Dict[str, LieGroup]:
         if isinstance(robot_pose, Point2) or isinstance(robot_pose, Vector):
             assert robot_pose.dof() == 2
             return {"state": robot_pose}
@@ -37,46 +49,45 @@ class IdentityModel(KinematicsModel):
 
 
 class UrdfRobotModel(KinematicsModel):
-    def __init__(self, urdf_path: str, device: DeviceType = None):
-        try:
-            import differentiable_robot_model as drm
-        except ModuleNotFoundError as e:
-            print(
-                "UrdfRobotModel requires installing differentiable-robot-model. "
-                "Please run `pip install differentiable-robot-model`."
-            )
-            raise e
-
-        self.drm_model = drm.DifferentiableRobotModel(urdf_path, device=device)
-
-    def _postprocess_quaternion(self, quat):
-        # Convert quaternion convention (DRM uses xyzw, Theseus uses wxyz)
-        quat_converted = torch.cat([quat[..., 3:], quat[..., :3]], dim=-1)
-
-        # Normalize quaternions
-        quat_normalized = quat_converted / torch.linalg.norm(
-            quat_converted, dim=-1, keepdim=True
+    def __init__(
+        self,
+        urdf_path: str,
+        device: DeviceType = None,
+        dtype: torch.dtype = torch.float32,
+        link_names: Optional[List[str]] = None,
+    ):
+        self.robot = Robot.from_urdf_file(urdf_path, dtype=dtype, device=device)
+        self.fk, self.jfk_b, self.jfk_s = get_forward_kinematics_fns(
+            self.robot, link_names
         )
+        self.link_names = link_names
 
-        return quat_normalized
-
-    def forward_kinematics(
+    def forward_kinematics(  # type: ignore
         self,
         joint_states: RobotModelInput,
-        jacobians: Optional[Dict[str, Optional[torch.Tensor]]] = None,
-    ) -> Dict[str, LieGroup]:
-        """Computes forward kinematics
+        jacobians: Optional[Dict[str, torch.Tensor]] = None,
+        use_body_jacobians: bool = True,
+    ) -> Dict[str, SE3]:  # type: ignore
+        """Computes forward kinematics for the robot's selected links.
+
         Args:
-            joint_states: Vector of all joint angles
+            joint_states (tensor or theseus.Vector): Vector of all joint angles
+            jacobians (dict[str, tensor], optional): If an empty dict is given,
+                it's filled with jacobians mapped to their link names.
+            use_body_jacobian (bool): If true, jacobians are body jacobians, otherwise
+                they are spatial jacobians.
         Outputs:
-            Dictionary that maps link name to link pose
+            Dictionary that maps link name to link pose.
         """
+        if jacobians is not None and len(jacobians) > 0:
+            raise ValueError("Jacobians dictionary must be empty on input.")
+
         # Check input dimensions
-        robot_model_dofs = len(self.drm_model.get_joint_limits())
-        assert joint_states.shape[-1] == robot_model_dofs, (
-            f"Robot model dofs ({robot_model_dofs}) incompatible with "
-            f"input joint state dimensions ({joint_states.shape[-1]})."
-        )
+        if joint_states.shape[-1] != self.robot.dof:
+            raise ValueError(
+                f"Robot model dofs ({self.robot.dof}) incompatible with "
+                f"input joint state dimensions ({joint_states.shape[-1]})."
+            )
 
         # Parse input
         if isinstance(joint_states, torch.Tensor):
@@ -89,26 +100,28 @@ class UrdfRobotModel(KinematicsModel):
                 "Valid types are torch.Tensor and th.Vector."
             )
 
-        # Compute forward kinematics for all links
-        fk_output = self.drm_model.compute_forward_kinematics_all_links(
-            joint_states_input
-        )
-
-        link_poses: Dict[str, LieGroup] = {}
-        for link_name in self.drm_model.get_link_names():
-            pos, quat = fk_output[link_name]
-            quat_processed = self._postprocess_quaternion(quat)
-
-            link_poses[link_name] = SE3(
-                x_y_z_quaternion=torch.cat([pos, quat_processed], dim=-1)
-            )
-
         # Compute jacobians
+        poses_list = []
         if jacobians is not None:
-            for link_name in jacobians.keys():
-                jac_lin, jac_rot = self.drm_model.compute_endeffector_jacobian(
-                    joint_states_input, link_name
-                )
-                jacobians[link_name] = torch.cat([jac_lin, jac_rot], dim=-2)
+            warnings.warn(
+                "As of v0.2.0, the kinematics jacobian has changed, and we no longer "
+                "rotate the body jacobian to be aligned with the base. Instead, "
+                "we compute the classical body jacobian, where each jacobian is in "
+                "the local frame of its corresponding link. To get spatial jacobians "
+                "completely aligned (translation/rotation) with the base, "
+                "set `use_body_jacobian=False.",
+                UserWarning,
+            )
+            jfk_fn = self.jfk_b if use_body_jacobians else self.jfk_s
+            jac_links, poses_list = jfk_fn(joint_states_input)
+            for i, name in enumerate(self.link_names):
+                jacobians[name] = jac_links[i]
+
+        # Do forward kinematics for all links (if not done by jacobians function)
+        poses_list = poses_list or self.fk(joint_states_input)
+
+        link_poses = {}
+        for i, name in enumerate(self.link_names):
+            link_poses[name] = SE3(tensor=poses_list[i], strict_checks=False)
 
         return link_poses

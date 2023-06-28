@@ -109,6 +109,7 @@ def _maybe_get_cuda_max_mem_alloc():
 
 
 def run(cfg: omegaconf.OmegaConf):
+    # SE(3) convention in this example is translation then rotation
     log.info((subprocess.check_output("lscpu", shell=True).strip()).decode())
 
     torch.manual_seed(cfg.seed)

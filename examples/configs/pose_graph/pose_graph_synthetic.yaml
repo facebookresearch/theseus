@@ -4,8 +4,8 @@ profile: True
 savemat: True
 
 num_poses: 256
-rotation_noise: 0.02
 translation_noise: 0.05
+rotation_noise: 0.02
 loop_closure_ratio: 0.2
 loop_closure_outlier_ratio: 0.25
 dataset_size: 256 

@@ -3,6 +3,8 @@
 # This source code is licensed under the MIT license found in the
 # LICENSE file in the root directory of this source tree.
 
+# SE(3) convention in this example is translation then rotation
+
 import cProfile
 import io
 import logging
@@ -109,7 +111,6 @@ def _maybe_get_cuda_max_mem_alloc():
 
 
 def run(cfg: omegaconf.OmegaConf):
-    # SE(3) convention in this example is translation then rotation
     log.info((subprocess.check_output("lscpu", shell=True).strip()).decode())
 
     torch.manual_seed(cfg.seed)

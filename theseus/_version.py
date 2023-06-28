@@ -14,4 +14,4 @@ if Version(_torch_version) < Version("2.0.0"):
         FutureWarning,
     )
 
-__version__ = "0.2.0rc2"
+__version__ = "0.2.0"

@@ -66,7 +66,6 @@ def test_jacobian(batch_size: int, dtype: torch.dtype):
     angles = torch.rand(batch_size, robot.dof, generator=rng, dtype=dtype)
 
     jacs_actual, poses = jfk_b(angles)
-
     jacs_dense = torch.autograd.functional.jacobian(fk, angles, vectorize=True)
     jacs_vmap = torch.vmap(torch.func.jacrev(fk_vmap))(angles)
 
@@ -86,3 +85,30 @@ def test_jacobian(batch_size: int, dtype: torch.dtype):
         torch.testing.assert_close(
             actual=jac_actual, expected=jac_expected, atol=1e-6, rtol=1e-5
         )
+
+
+@pytest.mark.parametrize("batch_size", [1, 20, 40])
+@pytest.mark.parametrize("dtype", [torch.float32, torch.float64])
+def test_vmap_for_jacobian(batch_size: int, dtype: torch.dtype):
+    robot = Robot.from_urdf_file(urdf_path, dtype)
+    selected_links = ["panda_virtual_ee_link"]
+    fk, jfk_b, _ = get_forward_kinematics_fns(robot, selected_links)
+
+    def fun(angles):
+        jac_b = jfk_b(angles)[0][0]
+        return jac_b.sum(dim=(-1, -2)).unsqueeze(-1)
+
+    def fun_vmap(angles):
+        return fun(angles.unsqueeze(0)).squeeze(0)
+
+    rng = torch.Generator()
+    rng.manual_seed(0)
+    angles = torch.rand(batch_size, robot.dof, generator=rng, dtype=dtype)
+
+    sels = range(batch_size)
+    grad = torch.autograd.functional.jacobian(fun, angles, vectorize=True)
+    grad_vmap = torch.vmap(torch.func.jacrev(fun_vmap))(angles)
+
+    torch.testing.assert_close(
+        actual=grad[sels, :, sels], expected=grad_vmap, atol=1e-6, rtol=1e-5
+    )

@@ -90,10 +90,12 @@ def ForwardKinematicsFactory(robot: Robot, link_names: Optional[List[str]] = Non
                 ctx.jposes: torch.Tensor = _forward_kinematics_backward_helper(
                     ctx.poses
                 )
-            grad_pose = grad_outputs[0].new_zeros(
-                grad_outputs[0].shape[0], 6, robot.dof
+            grad_pose = grad_outputs[-2].new_zeros(
+                grad_outputs[-2].shape[0], 6, robot.dof
             )
-            grad_input = grad_outputs[0].new_zeros(grad_outputs[0].shape[0], robot.dof)
+            grad_input = grad_outputs[-2].new_zeros(
+                grad_outputs[-2].shape[0], robot.dof
+            )
 
             for link_id, ret, grad_output in zip(link_ids, rets, grad_outputs):
                 ancestor_non_fixed_joint_ids = robot.links[

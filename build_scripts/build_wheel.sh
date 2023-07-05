@@ -5,7 +5,7 @@
 # to install theseus.
 #
 # To use this script, from root theesus folder run 
-#    ./build_scripts/build_wheel.sh ROOT_DIR COMMIT CUDA_VERSION THESEUS_VERSION(optional) INCLUDE_LABS(optional) NIGHTLY(optional)
+#    ./build_scripts/build_wheel.sh ROOT_DIR COMMIT CUDA_VERSION THESEUS_VERSION(optional, ${COMMIT}) INCLUDE_LABS(optional, 0) NIGHTLY(optional, 0) PYTHON_VERSION(optional, 3.10)
 #
 # ROOT_DIR: is the directory where the Dockerfile, tar.gz and .whl files will be stored
 #   (under a new subdirectory named theseus_docker_3.9)
@@ -19,23 +19,25 @@
 # NIGHTLY: if !=0, compiles a wheel for the nightly package (forces INCLUDE_LABS=1).
 #   THESEUS_VERSION and COMMIT are also ignored, since version is set to YYYY.MM.DD.
 #   and commit is set to `main`.
+# PYTHON_VERSION: which python version to use (defaults 3.10). Can pass multiple with 'V1 V2', the script will loop over them.
 #   
-#   will run and store results under ./theseus_docker_3.10
+#   will run and store results under ./theseus_docker_${PYTHON_VERSION}
 # -----------------
 
-# Ensure that 3-6 arguments 
-# (ROOT_DIR, COMMIT, CUDA_VERSION, THESEUS_VERSION - optional) are provided.
+# Ensure that 3-7 arguments 
+# (ROOT_DIR, COMMIT, CUDA_VERSION, optional: THESEUS_VERSION, INCLUDE_LABS, NIGHTLY, PYTHON_VERSION) are provided.
 die () {
     echo >&2 "$@"
     exit 1
 }
-[ "$#" -ge 3 ] && [ "$#" -le 6 ] || die "3-6 arguments required, $# provided"
+[ "$#" -ge 3 ] && [ "$#" -le 7 ] || die "3-7 arguments required, $# provided"
 ROOT_DIR=$1
 COMMIT=$2
 CUDA_VERSION=$3
 TH_VERSION=${4:-${COMMIT}}
 INCLUDE_LABS=${5:-0}
 NIGHTLY=${6:-0}
+PY_VER=${7:-3.10}
 
 if [[ ${INCLUDE_LABS} != 0 ]]
 then
@@ -93,7 +95,7 @@ else
     BASPACHO_CUDA_ARGS="-DCMAKE_CUDA_COMPILER=/usr/local/cuda-${CUDA_VERSION}/bin/nvcc -DBASPACHO_CUDA_ARCHS='${BASPACHO_CUDA_ARCHS}'"
 fi
 
-for PYTHON_VERSION in 3.10; do
+for PYTHON_VERSION in ${PY_VER}; do
     # Create dockerfile to build in manylinux container
     DOCKER_DIR=${ROOT_DIR}/theseus_docker_${PYTHON_VERSION}
     mkdir -p ${DOCKER_DIR}

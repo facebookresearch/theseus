@@ -363,7 +363,7 @@ class _PrismaticJointImpl(Joint):
 
     def translation(self, angle: torch.Tensor) -> torch.Tensor:
         _PrismaticJointImpl._check_input(angle)
-        return self.translation(angle.view(-1, 1))
+        return self._translation_impl(angle.view(-1, 1))
 
     def _relative_pose_impl(self, angle: torch.Tensor) -> torch.Tensor:
         trans = self.translation(angle)

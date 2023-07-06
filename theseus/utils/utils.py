@@ -2,6 +2,9 @@
 #
 # This source code is licensed under the MIT license found in the
 # LICENSE file in the root directory of this source tree.
+import cProfile
+import io
+import pstats
 import time
 from typing import Any, Callable, List, Optional, Type
 
@@ -218,3 +221,26 @@ class Timer:
             self.elapsed_time = self._start_event.elapsed_time(self._end_event) / 1e3
         else:
             self.elapsed_time = (time.perf_counter_ns() - self._start_time) / 1e9
+
+
+# Wrapper for cProfile.Profile for easily make optional, turn on/off and printing
+class Profiler:
+    def __init__(self, active: bool):
+        self.c_profiler = cProfile.Profile()
+        self.active = active
+
+    def enable(self):
+        if self.active:
+            self.c_profiler.enable()
+
+    def disable(self):
+        if self.active:
+            self.c_profiler.disable()
+
+    def print(self):
+        if self.active:
+            s = io.StringIO()
+            sortby = pstats.SortKey.CUMULATIVE
+            ps = pstats.Stats(self.c_profiler, stream=s).sort_stats(sortby)
+            ps.print_stats()
+            print(s.getvalue())

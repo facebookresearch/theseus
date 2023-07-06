@@ -491,7 +491,7 @@ def test_send_to_device():
     input_values = {"coefficients": torch.ones(batch_size, 2, device=device) * 0.5}
     with torch.no_grad():
         if device != "cpu":
-            with pytest.raises(RuntimeError):
+            with pytest.raises(ValueError):
                 layer.forward(input_values)
             layer.to(device)
             output_values, _ = layer.forward(input_values)

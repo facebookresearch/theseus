@@ -42,7 +42,7 @@ def test_pgo_losses(default_cfg, linear_solver_cls):
     if linear_solver_cls == "LUCudaSparseSolver":
         if not torch.cuda.is_available():
             return
-        default_cfg.device = "cuda"
+        default_cfg.device = "cuda:0"
     else:
         if linear_solver_cls == "CholmodSparseSolver":
             default_cfg.inner_optim.optimizer_kwargs.adaptive_damping = False
@@ -71,7 +71,7 @@ def test_pgo_losses_baspacho(default_cfg):
     ]
 
     default_cfg.inner_optim.linear_solver_cls = "BaspachoSparseSolver"
-    default_cfg.device = "cuda" if torch.cuda.is_available() else "cpu"
+    default_cfg.device = "cuda:0" if torch.cuda.is_available() else "cpu"
     losses = pgo.run(default_cfg)
     print(losses)
 

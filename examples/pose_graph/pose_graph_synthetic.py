@@ -3,6 +3,8 @@
 # This source code is licensed under the MIT license found in the
 # LICENSE file in the root directory of this source tree.
 
+# SE(3) convention in this example is translation then rotation
+
 import cProfile
 import io
 import logging
@@ -121,8 +123,8 @@ def run(cfg: omegaconf.OmegaConf):
     dtype = torch.float64
     pg, _ = theg.PoseGraphDataset.generate_synthetic_3D(
         num_poses=cfg.num_poses,
-        rotation_noise=cfg.rotation_noise,
         translation_noise=cfg.translation_noise,
+        rotation_noise=cfg.rotation_noise,
         loop_closure_ratio=cfg.loop_closure_ratio,
         loop_closure_outlier_ratio=cfg.loop_closure_outlier_ratio,
         batch_size=cfg.batch_size,

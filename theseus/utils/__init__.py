@@ -13,6 +13,7 @@ from .sparse_matrix_utils import (
     tmat_vec,
 )
 from .utils import (
+    Profiler,
     Timer,
     build_mlp,
     check_jacobians,

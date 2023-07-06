@@ -5,10 +5,7 @@
 
 # SE(3) convention in this example is translation then rotation
 
-import cProfile
-import io
 import logging
-import pstats
 import random
 import subprocess
 from typing import Dict, List, Type, Union, cast
@@ -21,33 +18,10 @@ from scipy.io import savemat
 
 import theseus as th
 import theseus.utils.examples as theg
-from theseus.utils import Timer
+from theseus.utils import Profiler, Timer
 
 # Logger
 log = logging.getLogger(__name__)
-
-
-# Simple wrapper to make cProfile profiler optional
-class Profiler:
-    def __init__(self, c_profiler: cProfile.Profile, active: bool):
-        self.c_profiler = c_profiler
-        self.active = active
-
-    def enable(self):
-        if self.active:
-            self.c_profiler.enable()
-
-    def disable(self):
-        if self.active:
-            self.c_profiler.disable()
-
-    def print(self):
-        if self.active:
-            s = io.StringIO()
-            sortby = pstats.SortKey.CUMULATIVE
-            ps = pstats.Stats(self.c_profiler, stream=s).sort_stats(sortby)
-            ps.print_stats()
-            print(s.getvalue())
 
 
 def print_histogram(
@@ -135,7 +109,7 @@ def run(cfg: omegaconf.OmegaConf):
 
     device = torch.device(cfg.device)
     dtype = torch.float64
-    profiler = Profiler(cProfile.Profile(), cfg.profile)
+    profiler = Profiler(cfg.profile)
     pg.to(device=device)
 
     with torch.no_grad():

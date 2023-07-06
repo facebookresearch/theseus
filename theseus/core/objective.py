@@ -772,6 +772,12 @@ class Objective:
                     f"one ore more data dimensions, but tensor.ndim={tensor.ndim} for "
                     f"tensor with name {var_name}."
                 )
+            if tensor.device != self.device or tensor.dtype != self.dtype:
+                raise ValueError(
+                    f"Attempted to update variable {var_name} with a "
+                    f"({tensor.device},{tensor.dtype}) tensor, which is inconsistent "
+                    f"with objective's expected ({self.device},{self.dtype})."
+                )
             if var_name in self.optim_vars:
                 self.optim_vars[var_name].update(
                     tensor, batch_ignore_mask=batch_ignore_mask

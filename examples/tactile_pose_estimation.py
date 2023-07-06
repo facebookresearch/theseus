@@ -31,7 +31,7 @@ logger = logging.getLogger(__name__)
 EXP_PATH = pathlib.Path.cwd() / "expts" / "tactile-pushing"
 torch.set_default_dtype(torch.double)
 
-device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
 seed = 0
 torch.random.manual_seed(seed)
 random.seed(seed)

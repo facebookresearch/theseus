@@ -20,16 +20,15 @@
 # LIABLE FOR ANY CLAIM, DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION
 # OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION
 # WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
-
 import numpy as np
 import numpy.random as npr
 import torch
-from semantic_version import Version
 from torch.autograd import Function, Variable, grad
 from torch.nn import Module
 
-version = Version(".".join(torch.__version__.split(".")[:3]))
-old_torch = version < Version("0.4.0")
+from theseus._version import lt_version
+
+old_torch = lt_version(torch.__version__, "0.4.0")
 
 
 def bdot(x, y):

@@ -4,13 +4,14 @@
 # LICENSE file in the root directory of this source tree.
 import re
 import warnings
+from typing import Tuple
 
 import torch
 
 
 # Returns True/False if version string v1 is less than version string v2
 def lt_version(v1: str, v2: str) -> bool:
-    def _as_tuple(s: str) -> tuple[int, int, int]:
+    def _as_tuple(s: str) -> Tuple[int, int, int]:
         pattern = r"^[\d.]+"
         match = re.match(pattern, s)
         try:

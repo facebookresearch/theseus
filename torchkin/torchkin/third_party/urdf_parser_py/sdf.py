@@ -1,9 +1,9 @@
-import torchkin.third_party.urdf_parser_py.xml_reflection as xmlr
 from torchkin.third_party.urdf_parser_py.xml_reflection.basics import *
+import torchkin.third_party.urdf_parser_py.xml_reflection as xmlr
 
 # What is the scope of plugins? Model, World, Sensor?
 
-xmlr.start_namespace("sdf")
+xmlr.start_namespace('sdf')
 
 
 class Pose(xmlr.Object):
@@ -18,9 +18,7 @@ class Pose(xmlr.Object):
             else:
                 self.from_vec(vec)
         elif extra is not None:
-            assert (
-                xyz is None
-            ), "Cannot specify 6-length vector and 3-length vector"  # noqa
+            assert xyz is None, "Cannot specify 6-length vector and 3-length vector"  # noqa
             assert len(extra) == 3, "Invalid length"
             self.rpy = extra
 
@@ -36,19 +34,19 @@ class Pose(xmlr.Object):
 
     def read_xml(self, node):
         # Better way to do this? Define type?
-        vec = get_type("vector6").read_xml(node)
+        vec = get_type('vector6').read_xml(node)
         self.load_vec(vec)
 
     def write_xml(self, node):
         vec = self.as_vec()
-        get_type("vector6").write_xml(node, vec)
+        get_type('vector6').write_xml(node, vec)
 
     def check_valid(self):
         assert self.xyz is not None or self.rpy is not None
 
 
-name_attribute = xmlr.Attribute("name", str)
-pose_element = xmlr.Element("pose", Pose, False)
+name_attribute = xmlr.Attribute('name', str)
+pose_element = xmlr.Element('pose', Pose, False)
 
 
 class Entity(xmlr.Object):
@@ -57,11 +55,14 @@ class Entity(xmlr.Object):
         self.pose = pose
 
 
-xmlr.reflect(Entity, params=[name_attribute, pose_element])
+xmlr.reflect(Entity, params=[
+    name_attribute,
+    pose_element
+])
 
 
 class Inertia(xmlr.Object):
-    KEYS = ["ixx", "ixy", "ixz", "iyy", "iyz", "izz"]
+    KEYS = ['ixx', 'ixy', 'ixz', 'iyy', 'iyz', 'izz']
 
     def __init__(self, ixx=0.0, ixy=0.0, ixz=0.0, iyy=0.0, iyz=0.0, izz=0.0):
         self.ixx = ixx
@@ -75,11 +76,11 @@ class Inertia(xmlr.Object):
         return [
             [self.ixx, self.ixy, self.ixz],
             [self.ixy, self.iyy, self.iyz],
-            [self.ixz, self.iyz, self.izz],
-        ]
+            [self.ixz, self.iyz, self.izz]]
 
 
-xmlr.reflect(Inertia, params=[xmlr.Element(key, float) for key in Inertia.KEYS])
+xmlr.reflect(Inertia,
+             params=[xmlr.Element(key, float) for key in Inertia.KEYS])
 
 # Pretty much copy-paste... Better method?
 # Use multiple inheritance to separate the objects out so they are unique?
@@ -92,14 +93,11 @@ class Inertial(xmlr.Object):
         self.pose = pose
 
 
-xmlr.reflect(
-    Inertial,
-    params=[
-        xmlr.Element("mass", float),
-        xmlr.Element("inertia", Inertia),
-        pose_element,
-    ],
-)
+xmlr.reflect(Inertial, params=[
+    xmlr.Element('mass', float),
+    xmlr.Element('inertia', Inertia),
+    pose_element
+])
 
 
 class Link(Entity):
@@ -109,16 +107,12 @@ class Link(Entity):
         self.kinematic = kinematic
 
 
-xmlr.reflect(
-    Link,
-    parent_cls=Entity,
-    params=[
-        xmlr.Element("inertial", Inertial),
-        xmlr.Attribute("kinematic", bool, False),
-        xmlr.AggregateElement("visual", Visual, var="visuals"),
-        xmlr.AggregateElement("collision", Collision, var="collisions"),
-    ],
-)
+xmlr.reflect(Link, parent_cls=Entity, params=[
+    xmlr.Element('inertial', Inertial),
+    xmlr.Attribute('kinematic', bool, False),
+    xmlr.AggregateElement('visual', Visual, var='visuals'),
+    xmlr.AggregateElement('collision', Collision, var='collisions')
+])
 
 
 class Model(Entity):
@@ -129,14 +123,10 @@ class Model(Entity):
         self.plugins = []
 
 
-xmlr.reflect(
-    Model,
-    parent_cls=Entity,
-    params=[
-        xmlr.AggregateElement("link", Link, var="links"),
-        xmlr.AggregateElement("joint", Joint, var="joints"),
-        xmlr.AggregateElement("plugin", Plugin, var="plugins"),
-    ],
-)
+xmlr.reflect(Model, parent_cls=Entity, params=[
+    xmlr.AggregateElement('link', Link, var='links'),
+    xmlr.AggregateElement('joint', Joint, var='joints'),
+    xmlr.AggregateElement('plugin', Plugin, var='plugins')
+])
 
-xmlr.end_namespace("sdf")
+xmlr.end_namespace('sdf')

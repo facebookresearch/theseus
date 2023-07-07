@@ -1,3 +1,7 @@
+# Copyright (c) Meta Platforms, Inc. and affiliates.
+#
+# This source code is licensed under the MIT license found in the
+# LICENSE file in the root directory of this source tree.
 import torch
 
 import torchlie as lie
@@ -107,11 +111,14 @@ print(f"    Which for compose is a {type(out).__name__}.")
 out2 = g1 * g2
 torch.testing.assert_close(out1, out2, check_dtype=True)
 
-# Transfrom from (from local to world coordinate frame)
+# Transfrom (from local to world coordinate frame)
+# Untransfrom (from world to local coordinate frame)
 p = torch.randn(batch_size, 3)
-pt1 = g1.transform_from(p)
+pt1 = g1.transform(p)
 pt2 = g1 @ p
 torch.testing.assert_close(pt1, pt2)
+pback = g1.untransform(pt1)
+torch.testing.assert_close(p, pback)
 
 # For convenience, we provide a context to drop all ltype checks, and operate
 # on raw tensor data. However, keep in mind that this is prone to error.

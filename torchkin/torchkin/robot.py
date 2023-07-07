@@ -7,7 +7,11 @@ import abc
 from typing import Dict, List, Optional
 
 import torch
-import urdf_parser_py.urdf as urdf
+
+try:
+    import urdf_parser_py.urdf as urdf
+except ModuleNotFoundError:
+    import torchkin.third_party.urdf_parser_py.urdf as urdf
 
 from torchlie.functional import SE3
 from torchlie.functional.constants import DeviceType

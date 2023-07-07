@@ -4,8 +4,9 @@
 # LICENSE file in the root directory of this source tree.
 import warnings
 
-from semantic_version import Version
 from torch import __version__ as _torch_version
+
+from theseus.third_party.semantic_version import Version  # type: ignore
 
 if Version(_torch_version) < Version("2.0.0"):
     warnings.warn(

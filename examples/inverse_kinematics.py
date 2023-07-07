@@ -25,9 +25,7 @@ dtype = torch.float64
 # First we load the URDF file describing the robot and create a `Robot` object to
 # represent it in Python. The `Robot` class can be used to build a kinematics tree
 # of the robot.
-URDF_REL_PATH = (
-    "../../tests/theseus_tests/embodied/kinematics/data/panda_no_gripper.urdf"
-)
+URDF_REL_PATH = "../tests/theseus_tests/embodied/kinematics/data/panda_no_gripper.urdf"
 urdf_path = os.path.join(os.path.dirname(__file__), URDF_REL_PATH)
 robot = Robot.from_urdf_file(urdf_path, dtype)
 link_names = ["panda_virtual_ee_link"]

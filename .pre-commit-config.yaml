@@ -1,4 +1,4 @@
-exclude: "setup.py|torchlie/setup.py|torchkin/setup.py"
+exclude: "setup.py|torchlie/setup.py|torchkin/setup.py|third_party"
 
 repos:
   - repo: https://github.com/psf/black

@@ -50,3 +50,64 @@ class HuberLoss(RobustLoss):
     @staticmethod
     def _linearize_impl(x: torch.Tensor, radius: torch.Tensor) -> torch.Tensor:
         return torch.sqrt(radius / torch.max(x, radius) + _LOSS_EPS)
+
+
+class HingeLoss(RobustLoss):
+    @staticmethod
+    def _evaluate_impl(x: torch.Tensor, radius: torch.Tensor) -> torch.Tensor:
+        return torch.where(x > radius, torch.sqrt(x) - torch.sqrt(radius), _LOSS_EPS)
+
+    @staticmethod
+    def _linearize_impl(x: torch.Tensor, radius: torch.Tensor) -> torch.Tensor:
+        return torch.where(x > radius, 1.0 / (2 * torch.sqrt(x) + _LOSS_EPS), 0.0)
+
+
+class GNCRobustLoss(RobustLoss, abc.ABC):
+    @classmethod
+    def evaluate(  # type: ignore
+        cls, x: torch.Tensor, log_radius: torch.Tensor, mu: torch.Tensor
+    ) -> torch.Tensor:
+        return cls._evaluate_impl(x, log_radius.exp(), mu)
+
+    @classmethod
+    def linearize(  # type: ignore
+        cls, x: torch.Tensor, log_radius: torch.Tensor, mu: torch.Tensor
+    ) -> torch.Tensor:
+        return cls._linearize_impl(x, log_radius.exp(), mu)
+
+    @staticmethod
+    @abc.abstractmethod
+    def _evaluate_impl(  # type: ignore
+        x: torch.Tensor, radius: torch.Tensor, mu: torch.Tensor
+    ) -> torch.Tensor:
+        pass
+
+    @staticmethod
+    @abc.abstractmethod
+    def _linearize_impl(  # type: ignore
+        x: torch.Tensor, raidus: torch.Tensor, mu: torch.Tensor
+    ) -> torch.Tensor:
+        pass
+
+
+# Geman-McClure loss is one common robust loss that can be adaptively tuned
+# with a continous control parameter `mu`, hence very suited for GNC.
+# More context on adaptive robust loss at https://arxiv.org/pdf/1701.03077.pdf
+class GemanMcClureLoss(GNCRobustLoss):
+    @staticmethod
+    def _evaluate_impl(  # type: ignore
+        x: torch.Tensor, radius: torch.Tensor, mu: torch.Tensor
+    ) -> torch.Tensor:
+        """
+        x: squared loss (i.e., r^2)
+        radius: scale of quadratic bowl (also squared)
+        mu: GNC control parameter ranging from 1 (full Geman McClure) to
+            positive infinity (full Quadratic)
+        """
+        return mu * radius * x / (mu * radius + x + _LOSS_EPS)
+
+    @staticmethod
+    def _linearize_impl(  # type: ignore
+        x: torch.Tensor, radius: torch.Tensor, mu: torch.Tensor
+    ) -> torch.Tensor:
+        return (mu * radius) ** 2 / ((mu * radius + x) ** 2 + _LOSS_EPS)

@@ -9,7 +9,7 @@ import torch
 
 from .cost_function import CostFunction
 from .cost_weight import CostWeight
-from .robust_loss import RobustLoss
+from .robust_loss import GNCRobustLoss, RobustLoss
 from .variable import Variable
 
 
@@ -89,7 +89,7 @@ class RobustCostFunction(CostFunction):
         if self.flatten_dims:
             weighted_error = weighted_error.reshape(-1, 1)
         squared_norm = torch.sum(weighted_error**2, dim=1, keepdim=True)
-        error_loss = self.loss.evaluate(squared_norm, self.log_loss_radius.tensor)
+        error_loss = self._evaluate_loss(squared_norm)
 
         if self.flatten_dims:
             return (error_loss.reshape(-1, self.dim()) + RobustCostFunction._EPS).sqrt()
@@ -122,10 +122,7 @@ class RobustCostFunction(CostFunction):
             for i, wj in enumerate(weighted_jacobians):
                 weighted_jacobians[i] = wj.view(-1, 1, wj.shape[2])
         squared_norm = torch.sum(weighted_error**2, dim=1, keepdim=True)
-        rescale = (
-            self.loss.linearize(squared_norm, self.log_loss_radius.tensor)
-            + RobustCostFunction._EPS
-        ).sqrt()
+        rescale = (self._linearize(squared_norm) + RobustCostFunction._EPS).sqrt()
 
         rescaled_jacobians = [
             rescale.view(-1, 1, 1) * jacobian for jacobian in weighted_jacobians
@@ -149,6 +146,12 @@ class RobustCostFunction(CostFunction):
             flatten_dims=self.flatten_dims,
         )
 
+    def _evaluate_loss(self, squared_norm: torch.Tensor) -> torch.Tensor:
+        return self.loss.evaluate(squared_norm, self.log_loss_radius.tensor)
+
+    def _linearize(self, squared_norm: torch.Tensor) -> torch.Tensor:
+        return self.loss.linearize(squared_norm, self.log_loss_radius.tensor)
+
     @property
     def weight(self) -> CostWeight:
         return self.cost_function.weight
@@ -165,3 +168,56 @@ class RobustCostFunction(CostFunction):
     def _supports_masking(self, val: bool):
         self.cost_function._supports_masking = val
         self.__supports_masking__ = val
+
+
+# Graduated non-convexity (GNC) is a classic annealing method for approximating the
+# global solution for nonconvex minimization of unconstrained, continuous problems,
+# and still be adapted in recent works e.g., https://arxiv.org/abs/1909.08605
+class GNCRobustCostFunction(RobustCostFunction):
+    def __init__(
+        self,
+        cost_function: CostFunction,
+        loss_cls: Type[GNCRobustLoss],
+        log_loss_radius: Variable,
+        gnc_control_val: Variable,
+        flatten_dims: bool = False,
+        name: Optional[str] = None,
+    ):
+        if not issubclass(loss_cls, GNCRobustLoss):
+            raise RuntimeError(
+                f"{loss_cls} must be GNCRobustLoss type to initialize GNCRobustCostFunction."
+            )
+
+        super().__init__(
+            cost_function,
+            loss_cls,
+            log_loss_radius=log_loss_radius,
+            flatten_dims=flatten_dims,
+            name=name,
+        )
+        self.gnc_control_val = gnc_control_val
+        self.register_aux_var("gnc_control_val")
+
+    def _evaluate_loss(self, squared_norm: torch.Tensor) -> torch.Tensor:
+        return self.loss.evaluate(  # type: ignore
+            squared_norm,
+            self.log_loss_radius.tensor,
+            self.gnc_control_val.tensor,
+        )
+
+    def _linearize(self, squared_norm: torch.Tensor) -> torch.Tensor:
+        return self.loss.linearize(  # type: ignore
+            squared_norm,
+            self.log_loss_radius.tensor,
+            self.gnc_control_val.tensor,
+        )
+
+    def _copy_impl(self, new_name: Optional[str] = None) -> "GNCRobustCostFunction":
+        return GNCRobustCostFunction(
+            self.cost_function.copy(),
+            type(self.loss),  # type: ignore
+            self.log_loss_radius.copy(),
+            self.gnc_control_val.copy(),
+            name=new_name,
+            flatten_dims=self.flatten_dims,
+        )

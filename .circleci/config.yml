@@ -76,6 +76,24 @@ setup_environment: &setup_environment
         pip install --progress-bar off --upgrade pip
         pip install --progress-bar off --upgrade setuptools
 
+create_conda_env_py38: &create_conda_env_py38
+  - run:
+      name: Setup virtualenv and tools for python 3.10
+      working_directory: ~/project
+      command: |
+        export PATH=~/conda/bin:$PATH
+        conda create --name theseus python=3.8
+
+activate_theseus: &activate_theseus
+  - run:
+      name: Activate theseus env and install some dependencies
+      working_directory: ~/project
+      command: |
+        source activate theseus
+        pip install --progress-bar off --upgrade pip
+        pip install --progress-bar off --upgrade setuptools
+        conda install -c conda-forge scikit-sparse
+
 # The following two are only used by the build wheel test
 update_and_install_conda: &update_and_install_conda
   - run:
@@ -110,6 +128,7 @@ install_torch: &install_torch
       name: Install Torch
       working_directory: ~/project
       command: |
+        which python
         pip install torch
 
 install_recent_cmake_2004: &install_recent_cmake_2004
@@ -254,6 +273,8 @@ jobs:
     steps:
       - checkout
       - <<: *install_suitesparse
+      - <<: *update_and_install_conda
+      - <<: *activate_theseus
       - <<: *install_torch
       - <<: *build_baspacho_cpu
       - <<: *install_torchlie_torchkin

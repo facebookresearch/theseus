@@ -195,7 +195,7 @@ install_theseus: &install_theseus
         conda install -c conda-forge scikit-sparse
         BASPACHO_ROOT_DIR=~/baspacho pip install -e ".[dev]"
 
-install_theseus: &install_theseus_no_baspacho
+install_theseus_no_baspacho: &install_theseus_no_baspacho
   - run:
       name: Setting up project
       working_directory: ~/project

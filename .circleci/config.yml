@@ -185,15 +185,15 @@ build_baspacho_cuda: &build_baspacho_cuda
           -DBASPACHO_BUILD_TESTS=OFF -DBASPACHO_BUILD_EXAMPLES=OFF
         cmake --build build -- -j16
 
-setup_project: &setup_project
+install_theseus: &install_theseus
   - run:
       name: Setting up project
       working_directory: ~/project
       command: |
         export PATH=~/conda/bin:$PATH
+        source activate theseus
         conda install -c conda-forge scikit-sparse
-        pip install -r requirements/dev.txt
-        BASPACHO_ROOT_DIR=~/baspacho pip install --progress-bar off -e .
+        BASPACHO_ROOT_DIR=~/baspacho pip install -e ".[dev]"
 
 install_torchlie_torchkin: &install_torchlie_torchkin
   - run:
@@ -215,8 +215,6 @@ run_pre_commit: &run_pre_commit
         export PATH=~/conda/bin:$PATH
         source activate theseus
         pip install pre-commit
-        conda install -c conda-forge scikit-sparse
-        BASPACHO_ROOT_DIR=~/baspacho pip install -e ".[dev]"
         pre-commit install-hooks
         pre-commit run --all-files
 
@@ -227,8 +225,6 @@ run_optimizer_tests: &run_optimizer_tests
       command: |
         export PATH=~/conda/bin:$PATH
         source activate theseus
-        conda install -c conda-forge scikit-sparse
-        BASPACHO_ROOT_DIR=~/baspacho pip install -e ".[dev]"
         python -m pytest tests/theseus_tests/optimizer -m "not cudaext"
         python -m pytest tests/theseus_tests/test_theseus_layer.py -m "not cudaext"
 
@@ -239,8 +235,6 @@ run_lie_group_tests: &run_lie_group_tests
       command: |
         export PATH=~/conda/bin:$PATH
         source activate theseus
-        conda install -c conda-forge scikit-sparse
-        pip install -e ".[dev]"
         python -m pytest tests/theseus_tests/geometry -m "not cudaext" 
         python -m pytest tests/torchlie_tests -m "not cudaext" 
 
@@ -251,8 +245,6 @@ run_other_unit_tests: &run_other_unit_tests
       command: |
         export PATH=~/conda/bin:$PATH
         source activate theseus
-        conda install -c conda-forge scikit-sparse
-        pip install -e ".[dev]"
         python -m pytest tests -m "not cudaext" -s --ignore=tests/theseus_tests/geometry/ --ignore=tests/optimizer --ignore-glob=tests/theseus_tests/test_theseus_layer.py --ignore=tests/lie_tests
 
 run_gpu_tests: &run_gpu_tests
@@ -313,6 +305,7 @@ jobs:
       - <<: *install_torch
       - <<: *build_baspacho_cpu
       - <<: *install_torchlie_torchkin
+      - <<: *install_theseus
       - <<: *run_pre_commit
 
   py39_precommit:
@@ -326,6 +319,7 @@ jobs:
       - <<: *install_torch
       - <<: *build_baspacho_cpu
       - <<: *install_torchlie_torchkin
+      - <<: *install_theseus
       - <<: *run_pre_commit
 
   py310_precommit:
@@ -339,6 +333,7 @@ jobs:
       - <<: *install_torch
       - <<: *build_baspacho_cpu
       - <<: *install_torchlie_torchkin
+      - <<: *install_theseus
       - <<: *run_pre_commit
 
   # End-to-end tests
@@ -354,6 +349,7 @@ jobs:
       - <<: *install_torch
       - <<: *build_baspacho_cpu
       - <<: *install_torchlie_torchkin
+      - <<: *install_theseus
       - <<: *run_optimizer_tests
 
   py39_optimizer_tests:
@@ -368,6 +364,7 @@ jobs:
       - <<: *install_torch
       - <<: *build_baspacho_cpu
       - <<: *install_torchlie_torchkin
+      - <<: *install_theseus
       - <<: *run_optimizer_tests
 
   py310_optimizer_tests:
@@ -382,6 +379,7 @@ jobs:
       - <<: *install_torch
       - <<: *build_baspacho_cpu
       - <<: *install_torchlie_torchkin
+      - <<: *install_theseus
       - <<: *run_optimizer_tests
 
   # Lie group tests
@@ -396,6 +394,7 @@ jobs:
       - <<: *create_conda_env_py38
       - <<: *install_torch
       - <<: *install_torchlie_torchkin
+      - <<: *install_theseus
       - <<: *run_lie_group_tests
 
   py39_lie_tests:
@@ -409,6 +408,7 @@ jobs:
       - <<: *create_conda_env_py39
       - <<: *install_torch
       - <<: *install_torchlie_torchkin
+      - <<: *install_theseus
       - <<: *run_lie_group_tests
 
   py310_lie_tests:
@@ -422,6 +422,7 @@ jobs:
       - <<: *create_conda_env_py310
       - <<: *install_torch
       - <<: *install_torchlie_torchkin
+      - <<: *install_theseus
       - <<: *run_lie_group_tests
 
   # Other unit tests
@@ -435,6 +436,7 @@ jobs:
       - <<: *create_conda_env_py38
       - <<: *install_torch
       - <<: *install_torchlie_torchkin
+      - <<: *install_theseus
       - <<: *run_other_unit_tests
 
   py39_other_unit_tests:
@@ -447,6 +449,7 @@ jobs:
       - <<: *create_conda_env_py39
       - <<: *install_torch
       - <<: *install_torchlie_torchkin
+      - <<: *install_theseus
       - <<: *run_other_unit_tests
 
   py310_other_unit_tests:
@@ -459,22 +462,23 @@ jobs:
       - <<: *create_conda_env_py310
       - <<: *install_torch
       - <<: *install_torchlie_torchkin
+      - <<: *install_theseus
       - <<: *run_other_unit_tests
 
 # ------- GPU only jobs -------
-  unittests_gpu17_cuda11:
+  unittests_gpu:
     executor: gpu_cuda11
     steps:
       - checkout
       - <<: *update_and_install_python
       - <<: *install_suitesparse
       - <<: *setup_cuda11_libs
-      - <<: *setup_environment
+      - <<: *create_conda_env_py39
       - <<: *install_torch_cuda11
       - <<: *install_recent_cmake_2004
       - <<: *build_baspacho_cuda
       - <<: *install_torchlie_torchkin
-      - <<: *setup_project
+      - <<: *install_theseus
       - <<: *run_gpu_tests
 
 # ------- Compiled wheel test -------
@@ -496,7 +500,7 @@ workflows:
   version: 2
   build:
     jobs:
-      - unittests_gpu17_cuda11
+      - unittests_gpu
       - test_cuda11_wheel
       - py38_precommit
       - py39_precommit

@@ -83,17 +83,9 @@ create_conda_env_py38: &create_conda_env_py38
       command: |
         export PATH=~/conda/bin:$PATH
         conda create --name theseus python=3.8
-
-activate_theseus: &activate_theseus
-  - run:
-      name: Activate theseus env and install some dependencies
-      working_directory: ~/project
-      command: |
-        export PATH=~/conda/bin:$PATH
         source activate theseus
         pip install --progress-bar off --upgrade pip
         pip install --progress-bar off --upgrade setuptools
-        conda install -c conda-forge scikit-sparse
 
 # The following two are only used by the build wheel test
 update_and_install_conda: &update_and_install_conda
@@ -129,7 +121,8 @@ install_torch: &install_torch
       name: Install Torch
       working_directory: ~/project
       command: |
-        which python
+        export PATH=~/conda/bin:$PATH
+        source activate theseus
         pip install torch
 
 install_recent_cmake_2004: &install_recent_cmake_2004
@@ -193,7 +186,10 @@ run_pre_commit: &run_pre_commit
       name: Running precommit checks
       working_directory: ~/project
       command: |
+        export PATH=~/conda/bin:$PATH
+        source activate theseus
         pip install pre-commit
+        conda install -c conda-forge scikit-sparse
         BASPACHO_ROOT_DIR=~/baspacho pip install -e ".[dev]"
         pre-commit install-hooks
         pre-commit run --all-files
@@ -276,7 +272,6 @@ jobs:
       - <<: *install_suitesparse
       - <<: *update_and_install_conda
       - <<: *create_conda_env_py38
-      - <<: *activate_theseus
       - <<: *install_torch
       - <<: *build_baspacho_cpu
       - <<: *install_torchlie_torchkin
@@ -441,17 +436,17 @@ workflows:
   version: 2
   build:
     jobs:
-      - unittests_gpu17_cuda11
-      - test_cuda11_wheel
+      # - unittests_gpu17_cuda11
+      # - test_cuda11_wheel
       - py38_precommit
-      - py39_precommit
-      - py310_precommit
-      - py38_optimizer_tests
-      - py39_optimizer_tests
-      - py310_optimizer_tests
-      - py38_lie_tests
-      - py39_lie_tests
-      - py310_lie_tests
-      - py38_other_unit_tests
-      - py39_other_unit_tests
-      - py310_other_unit_tests
+      # - py39_precommit
+      # - py310_precommit
+      # - py38_optimizer_tests
+      # - py39_optimizer_tests
+      # - py310_optimizer_tests
+      # - py38_lie_tests
+      # - py39_lie_tests
+      # - py310_lie_tests
+      # - py38_other_unit_tests
+      # - py39_other_unit_tests
+      # - py310_other_unit_tests

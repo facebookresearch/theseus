@@ -195,6 +195,16 @@ install_theseus: &install_theseus
         conda install -c conda-forge scikit-sparse
         BASPACHO_ROOT_DIR=~/baspacho pip install -e ".[dev]"
 
+install_theseus: &install_theseus_no_baspacho
+  - run:
+      name: Setting up project
+      working_directory: ~/project
+      command: |
+        export PATH=~/conda/bin:$PATH
+        source activate theseus
+        conda install -c conda-forge scikit-sparse
+        pip install -e ".[dev]"
+
 install_torchlie_torchkin: &install_torchlie_torchkin
   - run:
       name: Installing torchlie and torchkin
@@ -394,7 +404,7 @@ jobs:
       - <<: *create_conda_env_py38
       - <<: *install_torch
       - <<: *install_torchlie_torchkin
-      - <<: *install_theseus
+      - <<: *install_theseus_no_baspacho
       - <<: *run_lie_group_tests
 
   py39_lie_tests:
@@ -408,7 +418,7 @@ jobs:
       - <<: *create_conda_env_py39
       - <<: *install_torch
       - <<: *install_torchlie_torchkin
-      - <<: *install_theseus
+      - <<: *install_theseus_no_baspacho
       - <<: *run_lie_group_tests
 
   py310_lie_tests:
@@ -422,7 +432,7 @@ jobs:
       - <<: *create_conda_env_py310
       - <<: *install_torch
       - <<: *install_torchlie_torchkin
-      - <<: *install_theseus
+      - <<: *install_theseus_no_baspacho
       - <<: *run_lie_group_tests
 
   # Other unit tests
@@ -436,7 +446,7 @@ jobs:
       - <<: *create_conda_env_py38
       - <<: *install_torch
       - <<: *install_torchlie_torchkin
-      - <<: *install_theseus
+      - <<: *install_theseus_no_baspacho
       - <<: *run_other_unit_tests
 
   py39_other_unit_tests:
@@ -449,7 +459,7 @@ jobs:
       - <<: *create_conda_env_py39
       - <<: *install_torch
       - <<: *install_torchlie_torchkin
-      - <<: *install_theseus
+      - <<: *install_theseus_no_baspacho
       - <<: *run_other_unit_tests
 
   py310_other_unit_tests:
@@ -462,7 +472,7 @@ jobs:
       - <<: *create_conda_env_py310
       - <<: *install_torch
       - <<: *install_torchlie_torchkin
-      - <<: *install_theseus
+      - <<: *install_theseus_no_baspacho
       - <<: *run_other_unit_tests
 
 # ------- GPU only jobs -------
@@ -471,6 +481,7 @@ jobs:
     steps:
       - checkout
       - <<: *update_and_install_python
+      - <<: *update_and_install_conda
       - <<: *install_suitesparse
       - <<: *setup_cuda11_libs
       - <<: *create_conda_env_py39

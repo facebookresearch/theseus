@@ -89,6 +89,7 @@ activate_theseus: &activate_theseus
       name: Activate theseus env and install some dependencies
       working_directory: ~/project
       command: |
+        export PATH=~/conda/bin:$PATH
         source activate theseus
         pip install --progress-bar off --upgrade pip
         pip install --progress-bar off --upgrade setuptools

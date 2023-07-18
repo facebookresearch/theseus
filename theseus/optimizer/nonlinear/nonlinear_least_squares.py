@@ -124,10 +124,15 @@ class NonlinearLeastSquares(NonlinearOptimizer, abc.ABC):
                     # Well, technically full Newton, this is hard to implement and GN
                     # is working well so far.
                     #
-                    # We also need to detach the hessian when computing
+                    # As shown above, we also need to detach the hessian when computing
                     # linearization above, as higher order terms introduce errors
                     # in the derivative if the fixed point is not accurate enough.
-                    delta = self.linear_solver.solve()
+                    try:
+                        delta = self.linear_solver.solve()
+                    except RuntimeError as e:  # fallback to regular step if GN fails
+                        if kwargs.get("__strict_implicit_final_gn__", False):
+                            raise e
+                        delta = self.compute_delta(**kwargs)
                 else:
                     delta = self.compute_delta(**kwargs)
             except RuntimeError as run_err:

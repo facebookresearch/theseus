@@ -212,3 +212,32 @@ def test_backwards_quartic(linear_solver_cls):
     # Equality should hold exactly even in floating point
     # because of how the derivatives cancel
     assert da_dx.item() == 1.5
+
+
+def test_implicit_fallback_linear_solver():
+    # Create a singular system that can only be solved if damping added
+    x = th.Vector(2, name="x")
+    t = th.Vector(2, name="t")
+
+    o = th.Objective()
+    w = th.DiagonalCostWeight(torch.FloatTensor([1, 0]).view(1, 2))
+    o.add(th.Difference(x, t, w, name="cost"))
+    opt = th.TheseusLayer(th.LevenbergMarquardt(o, max_iterations=5))
+
+    input_dict = {"x": torch.ones(1, 2), "t": torch.zeros(1, 2)}
+
+    # __strict_implicit_final_gn__ = True shows that this problem leads to errors
+    with pytest.raises(RuntimeError):
+        opt.forward(
+            input_dict,
+            optimizer_kwargs={
+                "damping": 0.1,
+                "backward_mode": "implicit",
+                "__strict_implicit_final_gn__": True,
+            },
+        )
+    # No error is raised by default
+    opt.forward(
+        input_dict,
+        optimizer_kwargs={"damping": 0.1, "backward_mode": "implicit"},
+    )

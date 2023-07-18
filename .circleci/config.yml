@@ -78,7 +78,7 @@ setup_environment: &setup_environment
 
 create_conda_env_py38: &create_conda_env_py38
   - run:
-      name: Setup virtualenv and tools for python 3.10
+      name: Setup conda env for python 3.8
       working_directory: ~/project
       command: |
         export PATH=~/conda/bin:$PATH
@@ -275,6 +275,7 @@ jobs:
       - checkout
       - <<: *install_suitesparse
       - <<: *update_and_install_conda
+      - <<: *create_conda_env_py38
       - <<: *activate_theseus
       - <<: *install_torch
       - <<: *build_baspacho_cpu

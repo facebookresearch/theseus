@@ -190,6 +190,8 @@ setup_project: &setup_project
       name: Setting up project
       working_directory: ~/project
       command: |
+        export PATH=~/conda/bin:$PATH
+        conda install -c conda-forge scikit-sparse
         pip install -r requirements/dev.txt
         BASPACHO_ROOT_DIR=~/baspacho pip install --progress-bar off -e .
 
@@ -275,6 +277,7 @@ build_cuda11_wheel: &build_cuda11_wheel
         THESEUS_GIT_COMMIT=$(git --git-dir project/.git log --format="%H" -n 1)
         THESEUS_VERSION=$(grep -Eo  "[0-9].[0-9].[0-9][.0-9a-z]*" project/theseus/_version.py | tail -n 1)
         ./project/build_scripts/build_wheel.sh . ${THESEUS_GIT_COMMIT} 11.7 ${THESEUS_VERSION}
+        conda install -c conda-forge scikit-sparse
         pip install $(ls */*.whl)
         pip install -r project/requirements/dev.txt
 

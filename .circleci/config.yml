@@ -31,28 +31,6 @@ install_suitesparse: &install_suitesparse
       command: |
         sudo apt-get update && sudo apt-get install -y libsuitesparse-dev
 
-setup_cuda10_libs: &setup_cuda10_libs
-  - run:
-      name: Setup CUDA 10 drivers and libraries
-      working_directory: ~/
-      command: |
-        # ubuntu's default gcc9.3 is too recent for cuda10.2
-        sudo apt-get install -y gcc-8 g++-8
-        sudo update-alternatives --install /usr/bin/gcc gcc /usr/bin/gcc-9 10
-        sudo update-alternatives --install /usr/bin/gcc gcc /usr/bin/gcc-8 20
-        sudo update-alternatives --install /usr/bin/g++ g++ /usr/bin/g++-9 10
-        sudo update-alternatives --install /usr/bin/g++ g++ /usr/bin/g++-8 20
-        sudo update-alternatives --install /usr/bin/x86_64-linux-gnu-gcc x86_64-linux-gnu-gcc /usr/bin/x86_64-linux-gnu-gcc-9 10
-        sudo update-alternatives --install /usr/bin/x86_64-linux-gnu-gcc x86_64-linux-gnu-gcc /usr/bin/x86_64-linux-gnu-gcc-8 20
-        sudo update-alternatives --install /usr/bin/x86_64-linux-gnu-g++ x86_64-linux-gnu-g++ /usr/bin/x86_64-linux-gnu-g++-9 10
-        sudo update-alternatives --install /usr/bin/x86_64-linux-gnu-g++ x86_64-linux-gnu-g++ /usr/bin/x86_64-linux-gnu-g++-8 20
-        # download and install nvidia drivers, cuda, etc
-        wget --quiet --no-clobber -P ~/nvidia-downloads https://developer.download.nvidia.com/compute/cuda/10.2/Prod/local_installers/cuda_10.2.89_440.33.01_linux.run
-        time sudo /bin/bash nvidia-downloads/cuda_10.2.89_440.33.01_linux.run --no-drm --silent --driver --toolkit
-        sudo ldconfig /usr/local/cuda/lib64
-        echo "Done installing NVIDIA drivers and CUDA libraries."
-        nvidia-smi
-
 setup_cuda11_libs: &setup_cuda11_libs
   - run:
       name: Setup CUDA 11 drivers and libraries
@@ -65,17 +43,13 @@ setup_cuda11_libs: &setup_cuda11_libs
         echo "Done installing NVIDIA drivers and CUDA libraries."
         nvidia-smi
 
-setup_environment: &setup_environment
+update_and_install_conda: &update_and_install_conda
   - run:
-      name: Setup virtualenv and tools
-      working_directory: ~/project
+      name: "Preparing environment: python"
       command: |
-        virtualenv ~/theseus_venv -p /usr/bin/python3.9
-        echo ". ~/theseus_venv/bin/activate" >> $BASH_ENV
-        . ~/theseus_venv/bin/activate
-        pip install --progress-bar off --upgrade pip
-        pip install --progress-bar off --upgrade setuptools
-
+        wget --quiet https://repo.anaconda.com/miniconda/Miniconda3-latest-Linux-x86_64.sh -O ~/miniconda.sh
+        /bin/bash ~/miniconda.sh -b -p ~/conda
+        
 create_conda_env_py38: &create_conda_env_py38
   - run:
       name: Setup conda env for python 3.8
@@ -101,24 +75,6 @@ create_conda_env_py39: &create_conda_env_py39
 create_conda_env_py310: &create_conda_env_py310
   - run:
       name: Setup conda env for python 3.10
-      working_directory: ~/project
-      command: |
-        export PATH=~/conda/bin:$PATH
-        conda create --name theseus python=3.10
-        source activate theseus
-        pip install --progress-bar off --upgrade pip
-        pip install --progress-bar off --upgrade setuptools
-
-# The following two are only used by the build wheel test
-update_and_install_conda: &update_and_install_conda
-  - run:
-      name: "Preparing environment: python"
-      command: |
-        wget --quiet https://repo.anaconda.com/miniconda/Miniconda3-latest-Linux-x86_64.sh -O ~/miniconda.sh
-        /bin/bash ~/miniconda.sh -b -p ~/conda
-setup_environment_310: &setup_environment_310
-  - run:
-      name: Setup virtualenv and tools for python 3.10
       working_directory: ~/project
       command: |
         export PATH=~/conda/bin:$PATH
@@ -500,7 +456,7 @@ jobs:
       - <<: *update_and_install_conda
       - <<: *install_suitesparse
       - <<: *setup_cuda11_libs
-      - <<: *setup_environment_310
+      - <<: *create_conda_env_py310
       - <<: *install_torch_cuda11
       - <<: *build_cuda11_wheel
       - <<: *run_tests_from_wheel

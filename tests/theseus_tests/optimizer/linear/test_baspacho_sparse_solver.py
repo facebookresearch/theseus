@@ -39,6 +39,8 @@ def check_sparse_solver(
         atb_check = ata @ solved_xi_cpu + damping * solved_xi_cpu
         torch.testing.assert_close(atb, atb_check, atol=1e-3, rtol=1e-3)
 
+    del solver
+
 
 @run_if_baspacho()
 @pytest.mark.parametrize("batch_size", [1, 32])

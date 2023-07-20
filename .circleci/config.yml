@@ -148,7 +148,6 @@ install_theseus: &install_theseus
       command: |
         export PATH=~/conda/bin:$PATH
         source activate theseus
-        conda install -c conda-forge scikit-sparse
         BASPACHO_ROOT_DIR=~/baspacho pip install -e ".[dev]"
 
 install_theseus_no_baspacho: &install_theseus_no_baspacho
@@ -158,7 +157,6 @@ install_theseus_no_baspacho: &install_theseus_no_baspacho
       command: |
         export PATH=~/conda/bin:$PATH
         source activate theseus
-        conda install -c conda-forge scikit-sparse
         pip install -e ".[dev]"
 
 install_torchlie_torchkin: &install_torchlie_torchkin
@@ -236,7 +234,6 @@ build_cuda11_wheel: &build_cuda11_wheel
         THESEUS_GIT_COMMIT=$(git --git-dir project/.git log --format="%H" -n 1)
         THESEUS_VERSION=$(grep -Eo  "[0-9].[0-9].[0-9][.0-9a-z]*" project/theseus/_version.py | tail -n 1)
         ./project/build_scripts/build_wheel.sh . ${THESEUS_GIT_COMMIT} 11.7 ${THESEUS_VERSION}
-        conda install -c conda-forge scikit-sparse
         pip install $(ls */*.whl)
         pip install -r project/requirements/dev.txt
 

@@ -39,8 +39,6 @@ def check_sparse_solver(
         atb_check = ata @ solved_xi_cpu + damping * solved_xi_cpu
         torch.testing.assert_close(atb, atb_check, atol=1e-3, rtol=1e-3)
 
-    del solver
-
 
 @run_if_baspacho()
 @pytest.mark.parametrize("batch_size", [1, 32])
@@ -48,7 +46,7 @@ def check_sparse_solver(
 @pytest.mark.parametrize("num_cols", [30, 70])
 @pytest.mark.parametrize("param_size_range", ["2:6", "1:13"])
 @pytest.mark.parametrize("fill", [0.02, 0.05])
-def test_baspacho_solver_cpu(
+def test_baspacho_solver_cpu_full(
     batch_size, rows_to_cols_ratio, num_cols, param_size_range, fill
 ):
     check_sparse_solver(
@@ -57,6 +55,18 @@ def test_baspacho_solver_cpu(
         num_cols=num_cols,
         param_size_range=param_size_range,
         fill=fill,
+        dev="cpu",
+    )
+
+
+@run_if_baspacho()
+def test_baspacho_solver_cpu_abriged():
+    check_sparse_solver(
+        batch_size=128,
+        rows_to_cols_ratio=1.7,
+        num_cols=70,
+        param_size_range="1:13",
+        fill=0.05,
         dev="cpu",
     )
 

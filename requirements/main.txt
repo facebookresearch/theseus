@@ -1,6 +1,6 @@
 numpy>=1.19.2
 scipy>=1.5.3
-scikit-sparse>=0.4.9
+scikit-sparse>=0.4.5
 pytest>=6.2.1
 pybind11>=2.7.1
 semantic-version==2.10.0

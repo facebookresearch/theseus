@@ -45,8 +45,6 @@ def parse_requirements_file(path):
                 # Don't install functorch 0.2.1 if torch 1.13 already
                 # installed
                 continue
-            if "scikit-sparse" in line:
-                continue  # version <= 0.4.8 broken in pypi, and 0.4.9 not uploaded
             line = line.strip()
             reqs.append(line)
     return reqs
@@ -94,9 +92,6 @@ def maybe_create_baspacho_extension(has_cuda):
 
 reqs_main = parse_requirements_file("requirements/main.txt")
 reqs_dev = parse_requirements_file("requirements/dev.txt")
-reqs_main += [
-    "scikit-sparse @ https://github.com/scikit-sparse/scikit-sparse/archive/refs/tags/v0.4.9.zip"
-]
 root_dir = Path(__file__).parent
 
 is_nightly = False

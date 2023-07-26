@@ -1,5 +1,5 @@
 seed: 1
-device: "cuda"
+device: "cuda:0"
 profile: True
 savemat: True
 
@@ -13,7 +13,7 @@ batch_size: 128
 
 inner_optim:
   optimizer_cls: LevenbergMarquardt
-  linear_solver_cls: LUCudaSparseSolver
+  linear_solver_cls: BaspachoSparseSolver # LUCudaSparseSolver
   optimizer_kwargs:
     backward_mode: implicit
     verbose: true

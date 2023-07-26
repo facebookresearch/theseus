@@ -1,6 +1,6 @@
 seed: 1
 solver_device: "cpu"
-device: "cuda"
+device: "cuda:0"
 
 num_poses: 256
 dataset_size: 256 

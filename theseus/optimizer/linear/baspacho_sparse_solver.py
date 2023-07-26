@@ -9,7 +9,6 @@ import numpy as np
 import torch
 from scipy.sparse import csr_matrix
 
-from theseus.constants import DeviceType
 from theseus.core import Objective
 from theseus.optimizer import Linearization, SparseLinearization
 from theseus.optimizer.autograd import BaspachoSolveFunction
@@ -27,7 +26,6 @@ class BaspachoSparseSolver(LinearSolver):
         objective: Objective,
         linearization_cls: Optional[Type[Linearization]] = None,
         linearization_kwargs: Optional[Dict[str, Any]] = None,
-        dev: DeviceType = DEFAULT_DEVICE,
         **kwargs,
     ):
         linearization_cls = linearization_cls or SparseLinearization
@@ -42,13 +40,14 @@ class BaspachoSparseSolver(LinearSolver):
 
         self._has_been_reset = False
         if self.linearization.structure().num_rows:
-            self.reset(dev)
+            self.reset()
 
-    def reset(self, dev: DeviceType = DEFAULT_DEVICE, **kwargs):
+    def reset(self, **kwargs):
+        dev = self.linearization.objective.device.type
         if self._has_been_reset:
             return
         self._has_been_reset = True
-        if dev == "cuda" and not torch.cuda.is_available():
+        if "cuda" in dev and not torch.cuda.is_available():
             raise RuntimeError(
                 "BaspachoSparseSolver: Cuda requested (dev='cuda') but not\n"
                 "available in torch, use dev='cpu' to create a Cpu-based solver"

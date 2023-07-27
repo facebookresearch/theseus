@@ -69,7 +69,8 @@ def check_sparse_backward_step(
     linearization.A_val.requires_grad = True
     linearization.b.requires_grad = True
     # Only need this line for the test since the objective is a mock
-    solver.reset(dev=dev)
+    # No need to reset manually when running a Theseus optimizer
+    solver.reset(device=dev)
     alpha = torch.rand(batch_size, device=dev, dtype=torch.double, generator=rng)
     if torch.rand(1, device=rng.device, generator=rng).item() < 0.5:
         alpha = torch.zeros_like(alpha)  # also test non-ellipsoidal

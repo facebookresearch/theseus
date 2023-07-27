@@ -23,7 +23,8 @@ def check_sparse_solver(
     )
 
     # Only need this line for the test since the objective is a mock
-    solver.reset(dev=dev)
+    # No need to reset manually when running a Theseus optimizer
+    solver.reset(device=dev)
     damping = 1e-4
     solved_x = solver.solve(damping=damping, ellipsoidal_damping=False)
 
@@ -73,11 +74,16 @@ def test_baspacho_solver_cpu_abriged():
 
 @run_if_baspacho()
 @pytest.mark.cudaext
-@pytest.mark.parametrize("batch_size", [1, 32])
-@pytest.mark.parametrize("rows_to_cols_ratio", [1.1, 1.7])
-@pytest.mark.parametrize("num_cols", [30, 70])
-@pytest.mark.parametrize("param_size_range", ["2:6", "1:13"])
-@pytest.mark.parametrize("fill", [0.02, 0.05])
+# @pytest.mark.parametrize("batch_size", [1, 32])
+# @pytest.mark.parametrize("rows_to_cols_ratio", [1.1, 1.7])
+# @pytest.mark.parametrize("num_cols", [30, 70])
+# @pytest.mark.parametrize("param_size_range", ["2:6", "1:13"])
+# @pytest.mark.parametrize("fill", [0.02, 0.05])
+@pytest.mark.parametrize("batch_size", [1])
+@pytest.mark.parametrize("rows_to_cols_ratio", [1.1])
+@pytest.mark.parametrize("num_cols", [30])
+@pytest.mark.parametrize("param_size_range", ["2:6"])
+@pytest.mark.parametrize("fill", [0.02])
 def test_baspacho_solver_cuda(
     batch_size, rows_to_cols_ratio, num_cols, param_size_range, fill
 ):

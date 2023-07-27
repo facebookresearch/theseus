@@ -31,21 +31,36 @@ class BaspachoSparseSolver(LinearSolver):
         linearization_cls = linearization_cls or SparseLinearization
         if not linearization_cls == SparseLinearization:
             raise RuntimeError(
-                "BaspachoSparseSolver only works with theseus.optimizer.SparseLinearization,"
+                "BaspachoSparseSolver only works with "
+                "theseus.optimizer.SparseLinearization,"
                 + f" got {type(self.linearization)}"
             )
 
         super().__init__(objective, linearization_cls, linearization_kwargs, **kwargs)
         self.linearization: SparseLinearization = self.linearization
 
+        self.device = ""
         self._has_been_reset = False
         if self.linearization.structure().num_rows:
             self.reset()
 
-    def reset(self, **kwargs):
-        dev = self.linearization.objective.device.type
-        if self._has_been_reset:
+    def _resolve_device_str(self, device: Optional[str] = None) -> str:
+        if device is None:
+            raw_device = self.linearization.objective.device
+            if raw_device is None:
+                device = "cpu"
+            elif isinstance(raw_device, torch.device):
+                device = raw_device.type
+            else:
+                device = raw_device
+        return device
+
+    def reset(self, device: Optional[str] = None, **kwargs):
+        dev = device or self._resolve_device_str()
+        needs_reset = dev != self.device or not self._has_been_reset
+        if not needs_reset:
             return
+        self.device = dev
         self._has_been_reset = True
         if "cuda" in dev and not torch.cuda.is_available():
             raise RuntimeError(

@@ -74,16 +74,11 @@ def test_baspacho_solver_cpu_abriged():
 
 @run_if_baspacho()
 @pytest.mark.cudaext
-# @pytest.mark.parametrize("batch_size", [1, 32])
-# @pytest.mark.parametrize("rows_to_cols_ratio", [1.1, 1.7])
-# @pytest.mark.parametrize("num_cols", [30, 70])
-# @pytest.mark.parametrize("param_size_range", ["2:6", "1:13"])
-# @pytest.mark.parametrize("fill", [0.02, 0.05])
-@pytest.mark.parametrize("batch_size", [1])
-@pytest.mark.parametrize("rows_to_cols_ratio", [1.1])
-@pytest.mark.parametrize("num_cols", [30])
-@pytest.mark.parametrize("param_size_range", ["2:6"])
-@pytest.mark.parametrize("fill", [0.02])
+@pytest.mark.parametrize("batch_size", [1, 32])
+@pytest.mark.parametrize("rows_to_cols_ratio", [1.1, 1.7])
+@pytest.mark.parametrize("num_cols", [30, 70])
+@pytest.mark.parametrize("param_size_range", ["2:6", "1:13"])
+@pytest.mark.parametrize("fill", [0.02, 0.05])
 def test_baspacho_solver_cuda(
     batch_size, rows_to_cols_ratio, num_cols, param_size_range, fill
 ):

@@ -12,7 +12,14 @@ from .cost_function import (
 )
 from .cost_weight import CostWeight, DiagonalCostWeight, ScaleCostWeight
 from .objective import Objective
-from .robust_cost_function import RobustCostFunction
-from .robust_loss import HuberLoss, RobustLoss, WelschLoss
+from .robust_cost_function import GNCRobustCostFunction, RobustCostFunction
+from .robust_loss import (
+    GemanMcClureLoss,
+    GNCRobustLoss,
+    HingeLoss,
+    HuberLoss,
+    RobustLoss,
+    WelschLoss,
+)
 from .variable import Variable, as_variable, masked_variables
 from .vectorizer import Vectorize

@@ -405,7 +405,7 @@ class LieTensor(_LieTensorBase):
             raise RuntimeError(_LIE_TENSOR_GRAD_ERROR_MSG(self.add_))
 
     def addcdiv_(
-        self, tensor1: torch.Tensor, tensor2: torch.Tensor, value: Number = 1.0
+        self, tensor1: torch.Tensor, tensor2: torch.Tensor, value: Number = 1.0  # type: ignore
     ):
         can_do = False
         for t in [tensor1, tensor2]:
@@ -417,7 +417,7 @@ class LieTensor(_LieTensorBase):
             raise RuntimeError(_LIE_TENSOR_GRAD_ERROR_MSG(self.addcdiv_))
 
     def addcmul_(
-        self, tensor1: torch.Tensor, tensor2: torch.Tensor, value: Number = 1.0
+        self, tensor1: torch.Tensor, tensor2: torch.Tensor, value: Number = 1.0  # type: ignore
     ):
         can_do = False
         for t in [tensor1, tensor2]:

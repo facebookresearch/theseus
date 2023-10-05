@@ -11,7 +11,7 @@ executors:
       CUDA_HOME: "/usr/local/cuda"
       PYTHONUNBUFFERED: 1
     machine:
-      image: ubuntu-2004:202107-02
+      image: linux-cuda-11:default
     resource_class: gpu.nvidia.small.multi # NVIDIA Tesla T4 2 GPU 4 vCPUs 15 GB RAM
 
 # -------------------------------------------------------------------------------------

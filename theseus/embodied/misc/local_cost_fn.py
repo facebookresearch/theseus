@@ -38,8 +38,8 @@ class Local(CostFunction):
 
     def jacobians(self) -> Tuple[List[torch.Tensor], torch.Tensor]:
         Jlist: List[torch.Tensor] = []
-        self.target.local(self.var, jacobians=Jlist)
-        return [Jlist[1]], self.error()
+        error = self.target.local(self.var, jacobians=Jlist)
+        return [Jlist[1]], error
 
     def dim(self) -> int:
         return self.var.dof()

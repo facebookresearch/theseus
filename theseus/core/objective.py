@@ -408,6 +408,7 @@ class Objective:
             del self_var_to_fn_map[variable][cost_fn_idx]
             # if the variable has no other functions, remove it also
             if not self_var_to_fn_map[variable]:
+                del self._all_variables[variable.name]
                 del self_var_to_fn_map[variable]
                 del self_vars_of_this_type[variable.name]
 

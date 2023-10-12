@@ -547,3 +547,18 @@ def test_to_dtype():
                 assert var.dtype == dtype
             for aux in cf.aux_vars:
                 assert aux.dtype == dtype
+
+def test_cost_delete_and_add():
+    x = th.Variable(torch.zeros(1), name="x")
+    y = th.Variable(torch.zeros(1), name="y")
+
+    def error_fn(optim_vars, aux_vars):
+        return 0
+
+    objective = th.Objective()
+    cost_function = th.AutoDiffCostFunction([x], error_fn, 1, aux_vars=[y], cost_weight=th.ScaleCostWeight(1.0))
+    
+    # Add a cost function, erase it, and add it again to make sure we don't have any bugs.
+    objective.add(cost_function)
+    objective.erase(cost_function.name)
+    objective.add(cost_function)

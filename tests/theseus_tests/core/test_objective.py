@@ -549,16 +549,30 @@ def test_to_dtype():
                 assert aux.dtype == dtype
 
 def test_cost_delete_and_add():
-    x = th.Variable(torch.zeros(1), name="x")
-    y = th.Variable(torch.zeros(1), name="y")
+    x = th.Variable(torch.zeros(2), name="x")
+    y = th.Variable(torch.zeros(3), name="y")
 
     def error_fn(optim_vars, aux_vars):
         return 0
 
     objective = th.Objective()
+    assert len(objective.aux_vars) == 0
     cost_function = th.AutoDiffCostFunction([x], error_fn, 1, aux_vars=[y], cost_weight=th.ScaleCostWeight(1.0))
-    
+
     # Add a cost function, erase it, and add it again to make sure we don't have any bugs.
     objective.add(cost_function)
+    assert x.name in objective.optim_vars
+    assert y.name in objective.aux_vars
+
     objective.erase(cost_function.name)
+    assert x.name not in objective.optim_vars
+    assert y.name not in objective.aux_vars
+
+    # The following statement failed before this fix: https://github.com/facebookresearch/theseus/pull/612
     objective.add(cost_function)
+    assert x.name in objective.optim_vars
+    assert y.name in objective.aux_vars
+
+    # If we are here, the test passed, do a few more sanity checks.
+    assert len(objective.cost_functions) == 1
+    assert objective.cost_functions[cost_function.name] == cost_function

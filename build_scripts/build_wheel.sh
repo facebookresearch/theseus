@@ -10,12 +10,12 @@
 # ROOT_DIR: is the directory where the Dockerfile, tar.gz and .whl files will be stored
 #   (under a new subdirectory named theseus_docker_3.9)
 # COMMIT: is a theseus commit hash or tag (e.g., 0.1.3).
-# CUDA_VERSION: the version of CUDA to use. We have tested 11.3, 11.6, and 11.7.
+# CUDA_VERSION: the version of CUDA to use. We have tested 11.8.
 #   You can also pass "cpu" to compile without CUDA extensions.
 # THESEUS_VERSION: defaults to COMMIT, otherwise it must match the version in the commit.
 # INCLUDE_LABS: if !=0, the compiled wheel also includes Theseus Labs.
 #   For example
-#    ./build_scripts/build_wheel.sh . 0.1.4 11.3
+#    ./build_scripts/build_wheel.sh . 0.1.4 11.8
 # NIGHTLY: if !=0, compiles a wheel for the nightly package (forces INCLUDE_LABS=1).
 #   THESEUS_VERSION and COMMIT are also ignored, since version is set to YYYY.MM.DD.
 #   and commit is set to `main`.
@@ -59,14 +59,14 @@ else
     GIT_CMD="git checkout ${COMMIT} -b tmp_build"
 fi
 
-SUPPORTED_CUDA_VERSIONS="11.3 11.6 11.7"
+SUPPORTED_CUDA_VERSIONS="11.8"
 CUDA_VERSION_IS_SUPPORTED=$(echo "cpu ${SUPPORTED_CUDA_VERSIONS}" | grep -w ${CUDA_VERSION})
 [ "${CUDA_VERSION_IS_SUPPORTED}" ] || die "CUDA_VERSION must be one of (cpu ${SUPPORTED_CUDA_VERSIONS})"
 
 
 CUDA_SUFFIX=$(echo ${CUDA_VERSION} | sed 's/[.]//g')
 
-TORCH_VERSION='"torch>=1.13"'
+TORCH_VERSION='"torch>=2.0.0"'
 if [[ ${CUDA_VERSION} == "cpu" ]]
 then 
     DEVICE_TAG=cpu
@@ -85,11 +85,11 @@ else
         BASPACHO_CUDA_ARCHS="${BASPACHO_CUDA_ARCHS};80"
         TORCH_CUDA_ARCH_LIST="${TORCH_CUDA_ARCH_LIST};8.0"
     fi
-    DEPRECATED_TORCH_CUDA="10.2 11.3"
+    DEPRECATED_TORCH_CUDA="11.3 11.6 11.7"
     CUDA_IS_TORCH_DEPRECATED=$(echo "${DEPRECATED_TORCH_CUDA}" | grep -w ${CUDA_VERSION})
     if [[ ${CUDA_IS_TORCH_DEPRECATED} ]]
     then
-        TORCH_VERSION='"torch<1.13"'
+        TORCH_VERSION='"torch<=2.0.0"'
     fi
 
     BASPACHO_CUDA_ARGS="-DCMAKE_CUDA_COMPILER=/usr/local/cuda-${CUDA_VERSION}/bin/nvcc -DBASPACHO_CUDA_ARCHS='${BASPACHO_CUDA_ARCHS}'"
@@ -160,9 +160,9 @@ for PYTHON_VERSION in ${PY_VER}; do
     # Copy the wheel to host
     CP_STR="cp"$(echo ${PYTHON_VERSION} | sed 's/[.]//g')
     DOCKER_WHL="theseus/dist/${WHL_NAME}-${TH_VERSION}-${CP_STR}-${CP_STR}-linux_x86_64.whl"
-    if [[ ${CUDA_VERSION} == "11.7" ]]
+    if [[ ${CUDA_VERSION} == "11.8" ]]
     then
-        PLUS_CU_TAG=""  # 11.7 will be the pypi version, so don't add +cu117
+        PLUS_CU_TAG=""  # 11.8 will be the pypi version, so don't add +cu118
     else
         PLUS_CU_TAG="+${DEVICE_TAG}"
     fi

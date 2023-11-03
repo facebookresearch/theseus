@@ -139,7 +139,7 @@ def get_tactile_nn_measurements_inputs(
     if model is not None:
         images_feat_meas = batch["img_feats"].to(device)
         class_label_vec = (
-            nn.functional.one_hot(torch.tensor(class_label), torch.tensor(num_classes))
+            nn.functional.one_hot(torch.tensor(class_label), num_classes)
             .view(1, -1)
             .to(device)
         )

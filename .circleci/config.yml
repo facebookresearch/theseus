@@ -91,7 +91,7 @@ install_torch_cuda11: &install_torch_cuda11
         export PATH=~/conda/bin:$PATH
         source activate theseus
         which python && which pip
-        pip install --progress-bar off torch torchvision torchaudio --extra-index-url https://download.pytorch.org/whl/cu117
+        pip install --progress-bar off torch torchvision torchaudio --extra-index-url https://download.pytorch.org/whl/cu118
         python -c 'import torch; print("Torch version:", torch.__version__); assert torch.cuda.is_available()'
 
 install_torch: &install_torch
@@ -233,7 +233,7 @@ build_cuda11_wheel: &build_cuda11_wheel
         which python && which pip
         THESEUS_GIT_COMMIT=$(git --git-dir project/.git log --format="%H" -n 1)
         THESEUS_VERSION=$(grep -Eo  "[0-9].[0-9].[0-9][.0-9a-z]*" project/theseus/_version.py | tail -n 1)
-        ./project/build_scripts/build_wheel.sh . ${THESEUS_GIT_COMMIT} 11.7 ${THESEUS_VERSION}
+        ./project/build_scripts/build_wheel.sh . ${THESEUS_GIT_COMMIT} 11.8 ${THESEUS_VERSION}
         pip install $(ls */*.whl)
         pip install -r project/requirements/dev.txt
 

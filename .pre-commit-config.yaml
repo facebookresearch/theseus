@@ -2,19 +2,19 @@ exclude: "setup.py|torchlie/setup.py|torchkin/setup.py|third_party"
 
 repos:
   - repo: https://github.com/psf/black
-    rev: 23.3.0
+    rev: 23.9.1
     hooks:
       - id: black
         files: "^theseus|^examples|^tests|^torchlie|^torchkin"
 
   - repo: https://github.com/pycqa/flake8
-    rev: 6.0.0
+    rev: 6.1.0
     hooks:
       - id: flake8
         files: "^theseus|^torchlie|^torchkin"
 
   - repo: https://github.com/pre-commit/mirrors-mypy
-    rev: v1.4.0
+    rev: v1.5.1
     hooks:
       - id: mypy
         additional_dependencies: [torch, tokenize-rt==3.2.0, types-PyYAML, types-mock]

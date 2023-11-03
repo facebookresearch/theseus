@@ -361,8 +361,7 @@ def run(
         max_iterations=max_iterations,
         step_size=step_size,
     )
-    theseus_layer = th.TheseusLayer(inner_optim)
-    theseus_layer.to(device)
+    theseus_layer = th.TheseusLayer(inner_optim).to(device)
 
     # Set up outer loop optimization.
     outer_optim = torch.optim.Adam(cnn_model.parameters(), lr=outer_lr)

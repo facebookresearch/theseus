@@ -135,9 +135,10 @@ class TheseusLayer(nn.Module):
         return x_samples
 
     # Applies to() with given args to all tensors in the objective
-    def to(self, *args, **kwargs):
+    def to(self, *args, **kwargs) -> "TheseusLayer":
         super().to(*args, **kwargs)
         self.objective.to(*args, **kwargs)
+        return self
 
     @property
     def device(self) -> DeviceType:

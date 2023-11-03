@@ -82,8 +82,6 @@ def run(
 
     objective.add(pose_prior_cost)
 
-    objective.to(cfg.device)
-
     linear_solver_cls: Type[LinearSolver] = cast(
         Type[LinearSolver],
         th.LUCudaSparseSolver
@@ -91,7 +89,7 @@ def run(
         else th.CholmodSparseSolver,
     )
     optimizer = th.GaussNewton(
-        objective,
+        objective.to(cfg.device),
         max_iterations=cfg.inner_optim.max_iters,
         step_size=cfg.inner_optim.step_size,
         abs_err_tolerance=0,

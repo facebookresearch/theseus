@@ -59,9 +59,8 @@ def main(cfg):
     )
     objective.add(pose_prior)
 
-    objective.to(dtype)
     optimizer = th.LevenbergMarquardt(
-        objective,
+        objective.to(dtype),
         max_iterations=10,
         step_size=1,
         linearization_cls=th.SparseLinearization,

@@ -204,8 +204,9 @@ class TactilePoseEstimator:
             abs_err_tolerance=0 if force_max_iters else 1e-10,
             rel_err_tolerance=0 if force_max_iters else 1e-8,
         )
-        self.theseus_layer = th.TheseusLayer(nl_optimizer)
-        self.theseus_layer.to(device=device, dtype=torch.double)
+        self.theseus_layer = th.TheseusLayer(nl_optimizer).to(
+            device=device, dtype=torch.double
+        )
 
         self.forward = self.theseus_layer.forward
 

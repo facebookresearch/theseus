@@ -86,8 +86,7 @@ def test_backward_pass_se3_runs():
 
     objective = th.Objective()
     objective.add(th.Difference(var, target, th.ScaleCostWeight(1.0)))
-    objective.to(dtype=dtype)
-    optimizer = th.GaussNewton(objective)
+    optimizer = th.GaussNewton(objective.to(dtype=dtype))
     layer = th.TheseusLayer(optimizer)
 
     target_data = torch.nn.Parameter(th.rand_se3(batch_size, dtype=dtype).tensor)

@@ -153,6 +153,8 @@ class Objective:
 
         self._allow_mixed_optim_aux_vars = __allow_mixed_optim_aux_vars__
 
+        self.__tensor_ref = torch.empty(1, device=self.device, dtype=self.dtype)
+
     def _add_function_variables(
         self,
         function: TheseusFunction,
@@ -841,15 +843,16 @@ class Objective:
         # No vectorization is used, just serve from cost functions
         return iter(cf for cf in self.cost_functions.values())
 
-    def to(self, *args, **kwargs):
+    def to(self, *args, **kwargs) -> "Objective":
         """Applies torch.Tensor.to() to all cost functions in the objective."""
         for cost_function in self.cost_functions.values():
             cost_function.to(*args, **kwargs)
-        device, dtype, *_ = torch._C._nn._parse_to(*args, **kwargs)
-        self.device = device or self.device
-        self.dtype = dtype or self.dtype
+        self.__tensor_ref = self.__tensor_ref.to(*args, **kwargs)
+        self.device = self.__tensor_ref.device
+        self.dtype = self.__tensor_ref.dtype
         if self._vectorization_to is not None:
             self._vectorization_to(*args, **kwargs)
+        return self
 
     @staticmethod
     def _retract_base(

@@ -538,8 +538,7 @@ def test_pass_optimizer_kwargs():
         ys,
         nonlinear_optimizer_cls=th.GaussNewton,
         linear_solver_cls=th.CholmodSparseSolver,
-    )
-    layer.to("cpu")
+    ).to("cpu")
     input_values = {"coefficients": torch.ones(batch_size, 2) * 0.5}
     for tbs in [True, False]:
         _, info = layer.forward(

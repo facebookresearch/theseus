@@ -175,9 +175,8 @@ def run(cfg: omegaconf.OmegaConf):
         th, cfg.inner_optim.optimizer_cls
     )
 
-    objective.to(device)
     optimizer = optimizer_cls(
-        objective,
+        objective.to(device),
         max_iterations=cfg.inner_optim.max_iters,
         step_size=cfg.inner_optim.step_size,
         linear_solver_cls=getattr(th, cfg.inner_optim.linear_solver_cls),

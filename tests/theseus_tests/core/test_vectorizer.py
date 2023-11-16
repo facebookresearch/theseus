@@ -355,8 +355,7 @@ def _solve_fn_for_masked_jacobians(
     layer = th.TheseusLayer(
         th.LevenbergMarquardt(obj, step_size=0.1, max_iterations=5),
         vectorize=vectorize,
-    )
-    layer.to(device=device)
+    ).to(device=device)
     sol, _ = layer.forward(input_tensors)
 
     # Check that we can backprop through this without errors

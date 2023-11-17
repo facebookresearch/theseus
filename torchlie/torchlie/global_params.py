@@ -30,6 +30,7 @@ class _TorchLieGlobalParams:
     so3_quat_eps_float64: float = 0
     so3_hat_eps_float64: float = 0
     se3_hat_eps_float64: float = 0
+    _allow_passthrough_ops: bool = False
 
     def __init__(self):
         self.reset()

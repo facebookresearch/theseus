@@ -48,6 +48,42 @@ def LeftProjectImplFactory(module):
     return _left_project_impl
 
 
+# This class is used by `UnaryOperatorFactory` to
+# avoid computing the operator twice in function calls of the form
+#      op(group, jacobians_list=jlist).
+# This is functionally equivalent to `UnaryOperator` objects, but
+# it receives the operator's result and jacobian as extra inputs.
+# Usage is then:
+#    jac, res = _jop_impl(group)
+#    op_result = passthrough_fn(group, res, jac)
+# This connects `op_result` to the compute graph with custom
+# backward implementation, while `jac` uses torch default autograd.
+class _UnaryPassthroughFn(torch.autograd.Function):
+    generate_vmap_rule = True
+
+    @classmethod
+    @abc.abstractmethod
+    def _backward_impl(
+        cls, group: torch.Tensor, jacobian: torch.Tensor, grad_output: torch.Tensor
+    ) -> torch.Tensor:
+        pass
+
+    @classmethod
+    def forward(cls, group, op_result, jacobian):
+        return op_result
+
+    @classmethod
+    def setup_context(cls, ctx, inputs, outputs):
+        ctx.save_for_backward(inputs[0], inputs[2])
+
+    @classmethod
+    def backward(cls, ctx, grad_output):
+        grad = cls._backward_impl(
+            ctx.saved_tensors[0], ctx.saved_tensors[1], grad_output
+        )
+        return grad, None, None
+
+
 class UnaryOperator(torch.autograd.Function):
     generate_vmap_rule = True
 

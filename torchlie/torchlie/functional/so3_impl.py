@@ -488,24 +488,12 @@ class Log(lie_group.UnaryOperator):
         return _log_backward(group, _jlog_impl(group)[0][0], grad_output)
 
 
-# This class is used by `UnaryOperatorFactory` in lie_group.py to
-# avoid computing the log map twice when jacobians list is passed as an
-# argument to the `log()` operator.
-class _LogPassthroughWrapper(torch.autograd.Function):
-    generate_vmap_rule = True
-
-    @staticmethod
-    def forward(group, tangent, jac):
-        return tangent
-
-    @staticmethod
-    def setup_context(ctx, inputs, outputs):
-        ctx.save_for_backward(inputs[0], inputs[2])
-
-    @staticmethod
-    def backward(ctx, grad_output):
-        grad = _log_backward(ctx.saved_tensors[0], ctx.saved_tensors[1], grad_output)
-        return grad, None, None
+class _LogPassthroughWrapper(lie_group._UnaryPassthroughFn):
+    @classmethod
+    def _backward_impl(
+        cls, group: torch.Tensor, jacobian: torch.Tensor, grad_output: torch.Tensor
+    ) -> torch.Tensor:
+        return _log_backward(group, jacobian, grad_output)
 
 
 # TODO: Implement analytic backward for _jlog_impl

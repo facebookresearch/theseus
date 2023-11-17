@@ -7,6 +7,8 @@ from typing import Any, Callable, List, Optional, Protocol, Tuple
 
 import torch
 
+from torchlie.global_params import _TORCHLIE_GLOBAL_PARAMS as LIE_PARAMS
+
 from .constants import DeviceType
 from .utils import check_jacobians_list
 
@@ -18,6 +20,10 @@ from .utils import check_jacobians_list
 # _jxxx_autograd_fn: simply equivalent to _jxxx_impl for now
 # ----------------------------------------------------------------------------------
 # Note that _jxxx_impl might not exist for some operators.
+#
+# Some operators support a _xxx_passthrough_fn, which returns the same values as
+# _xxx_autograd_fn in forward pass, but takes the output of _jxxx_autograd_fn as
+# extra non-differentiable inputs to avoid computing operators twice.
 
 
 def JInverseImplFactory(module):
@@ -95,8 +101,9 @@ def UnaryOperatorFactory(
     module, op_name
 ) -> Tuple[UnaryOperatorOpFnType, UnaryOperatorJOpFnType]:
     # Get autograd.Function wrapper of op and its jacobian
-    op_autograd_fn = getattr(module, "_" + op_name + "_autograd_fn")
-    jop_autograd_fn = getattr(module, "_j" + op_name + "_autograd_fn")
+    op_autograd_fn = getattr(module, f"_{op_name}_autograd_fn")
+    jop_autograd_fn = getattr(module, f"_j{op_name}_autograd_fn")
+    op_passthrough_fn = getattr(module, f"_{op_name}_passthrough_fn", None)
 
     def op(
         input: torch.Tensor,
@@ -105,8 +112,10 @@ def UnaryOperatorFactory(
         if jacobians is not None:
             _check_jacobians_supported(jop_autograd_fn, module.NAME, op_name)
             check_jacobians_list(jacobians)
-            jacobians_op = jop_autograd_fn(input)[0]
+            jacobians_op, ret = jop_autograd_fn(input)
             jacobians.append(jacobians_op[0])
+            if LIE_PARAMS._allow_passthrough_ops and op_passthrough_fn is not None:
+                return op_passthrough_fn(input, ret, jacobians_op[0])
         return op_autograd_fn(input)
 
     def jop(input: torch.Tensor) -> Tuple[List[torch.Tensor], torch.Tensor]:

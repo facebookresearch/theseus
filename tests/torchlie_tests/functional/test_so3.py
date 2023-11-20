@@ -8,8 +8,8 @@ import pytest
 import torch
 
 import torchlie.functional.so3_impl as so3_impl
-from torchlie.global_params import set_global_params
 from torchlie.functional import SO3
+from torchlie.global_params import set_global_params
 
 from .common import (
     BATCH_SIZES_TO_TEST,
@@ -19,6 +19,7 @@ from .common import (
     check_lie_group_function,
     check_jacrev_binary,
     check_jacrev_unary,
+    check_log_map_passt,
     run_test_op,
 )
 
@@ -103,3 +104,7 @@ def test_left_project_broadcasting():
     rng.manual_seed(0)
     batch_sizes = [tuple(), (1, 2), (1, 1, 2), (2, 1), (2, 2), (2, 2, 2)]
     check_left_project_broadcasting(SO3, batch_sizes, [0, 1, 2], (3, 3), rng)
+
+
+def test_log_map_passt():
+    check_log_map_passt(SO3, so3_impl)

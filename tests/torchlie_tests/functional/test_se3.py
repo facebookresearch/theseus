@@ -18,6 +18,7 @@ from .common import (
     check_lie_group_function,
     check_jacrev_binary,
     check_jacrev_unary,
+    check_log_map_passt,
     run_test_op,
 )
 
@@ -43,7 +44,7 @@ from .common import (
 @pytest.mark.parametrize("batch_size", BATCH_SIZES_TO_TEST)
 @pytest.mark.parametrize("dtype", [torch.float32, torch.float64])
 def test_op(op_name, batch_size, dtype):
-    rng = torch.Generator()
+    rng = torch.Generator(device="cuda:0" if torch.cuda.is_available() else "cpu")
     rng.manual_seed(0)
     run_test_op(op_name, batch_size, dtype, rng, 6, (3, 4), se3_impl)
 
@@ -101,3 +102,7 @@ def test_left_project_broadcasting():
     rng.manual_seed(0)
     batch_sizes = [tuple(), (1, 2), (1, 1, 2), (2, 1), (2, 2), (2, 2, 2)]
     check_left_project_broadcasting(SE3, batch_sizes, [0, 1, 2], (3, 4), rng)
+
+
+def test_log_map_passt():
+    check_log_map_passt(SE3, se3_impl)

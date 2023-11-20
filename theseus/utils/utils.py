@@ -6,7 +6,8 @@ import cProfile
 import io
 import pstats
 import time
-from typing import Any, Callable, List, Optional, Type
+from collections import defaultdict
+from typing import Any, Callable, Dict, List, Optional, Type
 
 import numpy as np
 import torch
@@ -188,8 +189,8 @@ def check_jacobians(cf: th.CostFunction, num_checks: int = 1, tol: float = 1.0e-
                     )
 
 
-# A basic timer utility that adapts to the device. Useful for removing
-# boilerplate code when benchmarking tasks.
+# A timer utility that adapts to the device. Useful for removing
+# boilerplate code when benchmarking tasks, and collect statistics.
 # For CPU it uses time.perf_counter_ns()
 # For GPU it uses torch.cuda.Event()
 #
@@ -200,27 +201,67 @@ def check_jacobians(cf: th.CostFunction, num_checks: int = 1, tol: float = 1.0e-
 # with Timer("cuda:0") as timer:
 #    do_some_stuff()
 # print(timer.elapsed_time)
+##
+# timer = Timer("cuda:0")
+# timer.start()
+# do_some_stuff()
+# timer.end()
+# print(timer.elapsed_time)
+#
+# The timer can also optionally collect history of times in a dictionary
+# by adding caller ids to each context or start() calls.
+# For example,
+#
+# timer.start("f1")
+# f1()
+# timer.end()
+# with timer("f2"):
+#   f2()
+# print(timer.stats())
 class Timer:
-    def __init__(self, device: th.DeviceType) -> None:
+    def __init__(self, device: th.DeviceType, active: bool = True) -> None:
+        self.active = active
         self.device = torch.device(device)
         self.elapsed_time = 0.0
+        self._stats: Dict[str, List[float]] = defaultdict(list)
+        self._caller: Optional[str] = None
 
-    def __enter__(self) -> "Timer":
+    def start(self, caller: Optional[str] = None) -> "Timer":
+        if not self.active:
+            return self
         if self.device.type == "cuda":
             self._start_event = torch.cuda.Event(enable_timing=True)
             self._end_event = torch.cuda.Event(enable_timing=True)
             self._start_event.record()
         else:
             self._start_time = time.perf_counter_ns()
+        self._caller = caller
         return self
 
-    def __exit__(self, exc_type: Any, exc_value: Any, traceback: Any) -> None:
+    def end(self) -> None:
+        if not self.active:
+            return
         if self.device.type == "cuda":
             self._end_event.record()
             torch.cuda.synchronize()
             self.elapsed_time = self._start_event.elapsed_time(self._end_event) / 1e3
         else:
             self.elapsed_time = (time.perf_counter_ns() - self._start_time) / 1e9
+        if self._caller is not None:
+            self._stats[self._caller].append(self.elapsed_time)
+
+    def __call__(self, caller: Optional[str] = None) -> "Timer":
+        self.start(caller=caller)
+        return self
+
+    def __enter__(self) -> "Timer":
+        return self
+
+    def __exit__(self, exc_type: Any, exc_value: Any, traceback: Any) -> None:
+        self.end()
+
+    def stats(self) -> Dict[str, List[float]]:
+        return self._stats
 
 
 # Wrapper for cProfile.Profile for easily make optional, turn on/off and printing

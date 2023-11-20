@@ -66,7 +66,7 @@ def get_test_cfg(op_name, dtype, dim, data_shape, module=None):
 #
 # `batch_size` can be a tuple.
 def sample_inputs(input_types, batch_size, dtype, rng):
-    dev = "cuda:0" if torch.cuda.is_available else "cpu"
+    dev = "cuda:0" if torch.cuda.is_available() else "cpu"
     if isinstance(batch_size, int):
         batch_size = (batch_size,)
 

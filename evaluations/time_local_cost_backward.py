@@ -60,6 +60,7 @@ if __name__ == "__main__":
 
     for p in [True, False]:
         set_global_params({"_allow_passthrough_ops": p})
+        set_global_params({"_faster_log_maps": p})
         for i in tqdm.tqdm(range(args.reps + args.w)):
             run(
                 args.g,

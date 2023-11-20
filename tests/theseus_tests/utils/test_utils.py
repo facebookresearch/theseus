@@ -168,3 +168,35 @@ def test_jacobians_check():
 
     cf = th.eb.DoubleIntegrator(se3s[0], th.Vector(6), se3s[1], th.Vector(6), 1.0, w)
     thutils.check_jacobians(cf, 1)
+
+
+def test_timer():
+    with thutils.Timer("cpu") as timer:
+        torch.randn(1)
+    assert timer.elapsed_time > 0
+
+    with thutils.Timer("cpu", active=False) as timer:
+        torch.randn(1)
+    assert timer.elapsed_time == 0
+
+    timer = thutils.Timer("cpu")
+    with timer:
+        torch.randn(1)
+    assert timer.elapsed_time > 0
+
+    timer = thutils.Timer("cpu", active=False)
+    with timer:
+        torch.randn(1)
+    assert timer.elapsed_time == 0
+
+    timer = thutils.Timer("cpu")
+    with timer("randn"):
+        torch.randn(1)
+    with timer("randn"):
+        torch.randn(1)
+    with timer("mult"):
+        torch.ones(1) * torch.zeros(1)
+    stats = timer.stats()
+    assert "randn" in stats and "mult" in stats
+    assert len(stats["randn"]) == 2
+    assert len(stats["mult"]) == 1

@@ -251,10 +251,11 @@ class Timer:
             self._stats[self._caller].append(self.elapsed_time)
 
     def __call__(self, caller: Optional[str] = None) -> "Timer":
-        self.start(caller=caller)
+        self._caller = caller
         return self
 
     def __enter__(self) -> "Timer":
+        self.start(caller=self._caller)
         return self
 
     def __exit__(self, exc_type: Any, exc_value: Any, traceback: Any) -> None:

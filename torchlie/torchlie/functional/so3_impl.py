@@ -364,7 +364,7 @@ if torch.cuda.is_available():
 
 
 def _sine_axis_fn(group: torch.Tensor, size: torch.Size) -> torch.Tensor:
-    if LIE_PARAMS._allow_passthrough_ops:
+    if LIE_PARAMS._faster_log_maps:
         if group.is_cuda:
             g_minus_gt = 0.5 * (group.adjoint() - group)
             upper_idx = _UPPER_IDX_3x3_CUDA[str(group.device)]

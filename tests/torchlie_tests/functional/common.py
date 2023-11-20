@@ -64,6 +64,7 @@ def get_test_cfg(op_name, dtype, dim, data_shape, module=None):
 #
 # `batch_size` can be a tuple.
 def sample_inputs(input_types, batch_size, dtype, rng):
+    dev = "cuda:0" if torch.cuda.is_available else "cpu"
     if isinstance(batch_size, int):
         batch_size = (batch_size,)
 
@@ -71,17 +72,19 @@ def sample_inputs(input_types, batch_size, dtype, rng):
         type_str, param = input_type
 
         def _quat_sample():
-            q = torch.rand(*batch_size, param, dtype=dtype, generator=rng)
+            q = torch.rand(*batch_size, param, device=dev, dtype=dtype, generator=rng)
             return q / torch.norm(q, dim=-1, keepdim=True)
 
         sample_fns = {
             "tangent": lambda: torch.rand(
-                *batch_size, param, dtype=dtype, generator=rng
+                *batch_size, param, device=dev, dtype=dtype, generator=rng
             ),
-            "group": lambda: param.rand(*batch_size, generator=rng, dtype=dtype),
+            "group": lambda: param.rand(
+                *batch_size, device=dev, generator=rng, dtype=dtype
+            ),
             "quat": lambda: _quat_sample(),
             "matrix": lambda: torch.rand(
-                (*batch_size,) + param, generator=rng, dtype=dtype
+                (*batch_size,) + param, device=dev, generator=rng, dtype=dtype
             ),
         }
         return sample_fns[type_str]()

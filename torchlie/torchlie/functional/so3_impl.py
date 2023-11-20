@@ -361,9 +361,10 @@ _jexp_autograd_fn = _jexp_impl
 def _log_impl_helper(group: torch.Tensor):
     size = get_group_size(group)
     sine_axis = group.new_zeros(*size, 3)
-    sine_axis[..., 0] = 0.5 * (group[..., 2, 1] - group[..., 1, 2])
-    sine_axis[..., 1] = 0.5 * (group[..., 0, 2] - group[..., 2, 0])
-    sine_axis[..., 2] = 0.5 * (group[..., 1, 0] - group[..., 0, 1])
+    sine_axis[..., 0] = group[..., 2, 1] - group[..., 1, 2]
+    sine_axis[..., 1] = group[..., 0, 2] - group[..., 2, 0]
+    sine_axis[..., 2] = group[..., 1, 0] - group[..., 0, 1]
+    sine_axis *= 0.5
     cosine = 0.5 * (group.diagonal(dim1=-1, dim2=-2).sum(dim=-1) - 1)
     sine = sine_axis.norm(dim=-1)
     theta = torch.atan2(sine, cosine)

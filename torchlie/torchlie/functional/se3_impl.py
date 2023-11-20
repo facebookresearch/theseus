@@ -487,11 +487,10 @@ def _jlog_impl(group: torch.Tensor) -> Tuple[List[torch.Tensor], torch.Tensor]:
 def _log_backward(
     group: torch.Tensor, jacobian: torch.Tensor, grad_output: torch.Tensor
 ) -> torch.Tensor:
-    jacobian[..., 3:] *= 0.5
-    temp: torch.Tensor = lift(
-        (jacobian.transpose(-1, -2) @ grad_output.unsqueeze(-1)).squeeze(-1)
-    )
-    return group[..., :3] @ temp
+    jac_by_g = (jacobian.transpose(-1, -2) @ grad_output.unsqueeze(-1)).squeeze(-1)
+    jac_by_g[..., 3:] *= 0.5
+    temp2: torch.Tensor = lift(jac_by_g)
+    return group[..., :3] @ temp2
 
 
 class Log(lie_group.UnaryOperator):

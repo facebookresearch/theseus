@@ -285,3 +285,11 @@ class Profiler:
             ps = pstats.Stats(self.c_profiler, stream=s).sort_stats(sortby)
             ps.print_stats()
             print(s.getvalue())
+
+    def create_stats(self):
+        if self.active:
+            self.c_profiler.create_stats()
+
+    def dump_stats(self, filename: str):
+        if self.active:
+            self.c_profiler.dump_stats(filename)

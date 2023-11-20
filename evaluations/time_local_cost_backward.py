@@ -11,6 +11,7 @@ from theseus.utils import Timer
 
 
 def run(
+    backward: bool,
     group_type: str,
     dev: str,
     batch_size: int,
@@ -33,13 +34,23 @@ def run(
     layer.to(dev)
     timer.start(timer_label)
     for i in range(10):
-        adam.zero_grad()
-        layer.forward(input_tensors={"a": p.clone()}, optimizer_kwargs={"damping": 0.1})
-        loss = o.error_metric().sum()
-        if verbose:
-            print(loss.item())
-        loss.backward()
-        adam.step()
+
+        def _do():
+            layer.forward(
+                input_tensors={"a": p.clone()}, optimizer_kwargs={"damping": 0.1}
+            )
+
+        if backward:
+            adam.zero_grad()
+            _do()
+            loss = o.error_metric().sum()
+            if verbose:
+                print(loss.item())
+            loss.backward()
+            adam.step()
+        else:
+            with torch.no_grad():
+                _do()
     timer.end()
 
 
@@ -58,24 +69,29 @@ if __name__ == "__main__":
     timer = Timer(args.dev)
     print(f"Timing device {timer.device}")
 
-    for p in [True, False]:
-        set_global_params({"_allow_passthrough_ops": p})
-        set_global_params({"_faster_log_maps": p})
-        for i in tqdm.tqdm(range(args.reps + args.w)):
-            run(
-                args.g,
-                args.dev,
-                args.b,
-                rng,
-                args.v,
-                timer,
-                f"run-{p}" if i > args.w else f"warmup-{p}",
-            )
+    for backward in [True, False]:
+        for p in [True, False]:
+            label = f"b{backward:1d}-p{p:1d}"
+            set_global_params({"_allow_passthrough_ops": p})
+            set_global_params({"_faster_log_maps": p})
+            for i in tqdm.tqdm(range(args.reps + args.w)):
+                run(
+                    backward,
+                    args.g,
+                    args.dev,
+                    args.b,
+                    rng,
+                    args.v,
+                    timer,
+                    f"run-{label}" if i > args.w else f"warmup-{label}",
+                )
     time_stats = timer.stats()
     results = {}
     for k, v in time_stats.items():
-        print([f"{x:.3f}" for x in v])
         results[k] = (np.mean(v), np.std(v) / np.sqrt(len(v)))
         print(k, results[k])
-    print(1 - results["run-True"][0] / results["run-False"][0])
+        print([f"{x:.3f}" for x in v])
+        print("...............")
+    print("With backward pass", 1 - results["run-b1-p1"][0] / results["run-b1-p0"][0])
+    print("Only forward pass", 1 - results["run-b0-p1"][0] / results["run-b0-p0"][0])
     print("-----------------------------")

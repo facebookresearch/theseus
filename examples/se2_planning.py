@@ -17,7 +17,7 @@ import theseus.utils.examples as theg
 
 torch.set_default_dtype(torch.double)
 
-device = "cuda:0" if torch.cuda.is_available else "cpu"
+device = "cuda:0" if torch.cuda.is_available() else "cpu"
 torch.random.manual_seed(1)
 random.seed(1)
 np.random.seed(1)

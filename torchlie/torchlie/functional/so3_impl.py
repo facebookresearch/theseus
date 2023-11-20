@@ -3,7 +3,7 @@
 # This source code is licensed under the MIT license found in the
 # LICENSE file in the root directory of this source tree.
 
-from typing import List, Optional, Tuple, cast
+from typing import Dict, List, Optional, Tuple, cast
 
 import torch
 
@@ -355,16 +355,41 @@ _exp_autograd_fn = Exp.apply
 _jexp_autograd_fn = _jexp_impl
 
 
+_UPPER_IDX_3x3_CUDA: Dict[str, torch.Tensor] = None
+if torch.cuda.is_available():
+    _UPPER_IDX_3x3_CUDA = {
+        f"cuda:{i}": torch.triu_indices(3, 3, offset=1).to(f"cuda:{i}").flip(-1)
+        for i in range(torch.cuda.device_count())
+    }
+
+
+def _sine_axis_fn(group: torch.Tensor, size: torch.Size) -> torch.Tensor:
+    if LIE_PARAMS._allow_passthrough_ops:
+        if group.is_cuda:
+            g_minus_gt = 0.5 * (group.adjoint() - group)
+            upper_idx = _UPPER_IDX_3x3_CUDA[str(group.device)]
+            sine_axis = g_minus_gt[..., upper_idx[0], upper_idx[1]]
+            sine_axis[..., 1] *= -1
+        else:
+            sine_axis = group.new_zeros(*size, 3)
+            sine_axis[..., 0] = group[..., 2, 1] - group[..., 1, 2]
+            sine_axis[..., 1] = group[..., 0, 2] - group[..., 2, 0]
+            sine_axis[..., 2] = group[..., 1, 0] - group[..., 0, 1]
+            sine_axis *= 0.5
+    else:
+        sine_axis = group.new_zeros(*size, 3)
+        sine_axis[..., 0] = 0.5 * (group[..., 2, 1] - group[..., 1, 2])
+        sine_axis[..., 1] = 0.5 * (group[..., 0, 2] - group[..., 2, 0])
+        sine_axis[..., 2] = 0.5 * (group[..., 1, 0] - group[..., 0, 1])
+    return sine_axis
+
+
 # -----------------------------------------------------------------------------
 # Logarithm Map
 # -----------------------------------------------------------------------------
 def _log_impl_helper(group: torch.Tensor):
     size = get_group_size(group)
-    sine_axis = group.new_zeros(*size, 3)
-    sine_axis[..., 0] = group[..., 2, 1] - group[..., 1, 2]
-    sine_axis[..., 1] = group[..., 0, 2] - group[..., 2, 0]
-    sine_axis[..., 2] = group[..., 1, 0] - group[..., 0, 1]
-    sine_axis *= 0.5
+    sine_axis = _sine_axis_fn(group, size)
     cosine = 0.5 * (group.diagonal(dim1=-1, dim2=-2).sum(dim=-1) - 1)
     sine = sine_axis.norm(dim=-1)
     theta = torch.atan2(sine, cosine)

@@ -8,8 +8,8 @@ import pytest
 import torch
 
 import torchlie.functional.so3_impl as so3_impl
+from torchlie.global_params import set_global_params
 from torchlie.functional import SO3
-
 
 from .common import (
     BATCH_SIZES_TO_TEST,
@@ -45,7 +45,8 @@ from .common import (
 @pytest.mark.parametrize("batch_size", BATCH_SIZES_TO_TEST)
 @pytest.mark.parametrize("dtype", [torch.float32, torch.float64])
 def test_op(op_name, batch_size, dtype):
-    rng = torch.Generator()
+    set_global_params({"_allow_passthrough_ops": True})
+    rng = torch.Generator(device="cuda:0" if torch.cuda.is_available() else "cpu")
     rng.manual_seed(0)
     run_test_op(op_name, batch_size, dtype, rng, 3, (3, 3), so3_impl)
 

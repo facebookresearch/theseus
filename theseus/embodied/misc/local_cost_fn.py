@@ -9,6 +9,7 @@ import torch
 
 from theseus import CostFunction, CostWeight
 from theseus.geometry import LieGroup
+from theseus.global_params import _THESEUS_GLOBAL_PARAMS
 
 
 class Local(CostFunction):
@@ -33,13 +34,31 @@ class Local(CostFunction):
         self.register_optim_vars(["var"])
         self.register_aux_vars(["target"])
 
+        self._jac_cache: torch.Tensor = None
+
     def error(self) -> torch.Tensor:
         return self.target.local(self.var)
 
     def jacobians(self) -> Tuple[List[torch.Tensor], torch.Tensor]:
-        Jlist: List[torch.Tensor] = []
-        error = self.target.local(self.var, jacobians=Jlist)
-        return [Jlist[1]], error
+        if _THESEUS_GLOBAL_PARAMS.fast_approx_log_maps:
+            if (
+                self._jac_cache is not None
+                and self._jac_cache.shape[0] == self.var.shape[0]
+            ):
+                jacobian = self._jac_cache
+            else:
+                jacobian = torch.eye(
+                    self.dim(), device=self.var.device, dtype=self.var.dtype
+                ).repeat(self.var.shape[0], 1, 1)
+                self._jac_cache = jacobian
+            return (
+                [jacobian],
+                self.target.local(self.var),
+            )
+        else:
+            Jlist: List[torch.Tensor] = []
+            error = self.target.local(self.var, jacobians=Jlist)
+            return [Jlist[1]], error
 
     def dim(self) -> int:
         return self.var.dof()

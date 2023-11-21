@@ -5,8 +5,9 @@ import theseus as th
 import torch
 import tqdm
 import torchlie.functional as lieF
+from theseus.global_params import set_global_params as set_th_global_params
 from torchlie.functional.lie_group import LieGroupFns
-from torchlie.global_params import set_global_params
+from torchlie.global_params import set_global_params as set_lie_global_params
 from theseus.utils import Timer
 
 
@@ -16,7 +17,7 @@ def run(
     dev: str,
     batch_size: int,
     rng: torch.Generator,
-    verbose: bool,
+    verbose_level: int,
     timer: Timer,
     timer_label: str,
 ):
@@ -37,14 +38,15 @@ def run(
 
         def _do():
             layer.forward(
-                input_tensors={"a": p.clone()}, optimizer_kwargs={"damping": 0.1}
+                input_tensors={"a": p.clone()},
+                optimizer_kwargs={"damping": 0.1, "verbose": verbose_level > 1},
             )
 
         if backward:
             adam.zero_grad()
             _do()
             loss = o.error_metric().sum()
-            if verbose:
+            if verbose_level > 0:
                 print(loss.item())
             loss.backward()
             adam.step()
@@ -58,7 +60,7 @@ if __name__ == "__main__":
     parser = argparse.ArgumentParser()
     parser.add_argument("reps", type=int, default=1)
     parser.add_argument("--b", type=int, default=1, help="batch size")
-    parser.add_argument("--v", action="store_true", help="verbose")
+    parser.add_argument("--v", type=int, help="verbosity_level", default=0)
     parser.add_argument("--g", choices=["SO3", "SE3"], default="SE3", help="group type")
     parser.add_argument("--w", type=int, default=1, help="warmup iters")
     parser.add_argument("--dev", type=str, default="cpu", help="device")
@@ -72,8 +74,9 @@ if __name__ == "__main__":
     for backward in [True, False]:
         for p in [True, False]:
             label = f"b{backward:1d}-p{p:1d}"
-            set_global_params({"_allow_passthrough_ops": p})
-            set_global_params({"_faster_log_maps": p})
+            set_lie_global_params({"_allow_passthrough_ops": p})
+            set_lie_global_params({"_faster_log_maps": p})
+            set_th_global_params({"fast_approx_log_maps": p})
             for i in tqdm.tqdm(range(args.reps + args.w)):
                 run(
                     backward,

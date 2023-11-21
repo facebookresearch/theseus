@@ -108,3 +108,18 @@ def test_left_project_broadcasting():
 
 def test_log_map_passt():
     check_log_map_passt(SO3, so3_impl)
+
+
+# This tests that the CUDA implementation of sine axis returns the same result
+# as the CPU implementation
+@pytest.mark.parametrize("batch_size", [[1], [10], [2, 10]])
+def test_sine_axis(batch_size):
+    set_global_params({"_faster_log_maps": True})
+    if not torch.cuda.is_available():
+        return
+    for _ in range(10):
+        g = so3_impl.rand(*batch_size)
+        g_cuda = g.to("cuda:0")
+        sa_1 = so3_impl._sine_axis_fn(g, g.shape[:-2])
+        sa_2 = so3_impl._sine_axis_fn(g_cuda, g.shape[:-2])
+        torch.testing.assert_close(sa_1, sa_2.cpu())

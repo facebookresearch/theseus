@@ -76,7 +76,7 @@ if __name__ == "__main__":
             label = f"b{backward:1d}-p{p:1d}"
             set_lie_global_params({"_allow_passthrough_ops": p})
             set_lie_global_params({"_faster_log_maps": p})
-            set_th_global_params({"fast_approx_log_maps": p})
+            set_th_global_params({"fast_approx_local_jacobians": p})
             for i in tqdm.tqdm(range(args.reps + args.w)):
                 run(
                     backward,

@@ -40,7 +40,7 @@ class Local(CostFunction):
         return self.target.local(self.var)
 
     def jacobians(self) -> Tuple[List[torch.Tensor], torch.Tensor]:
-        if _THESEUS_GLOBAL_PARAMS.fast_approx_log_maps:
+        if _THESEUS_GLOBAL_PARAMS.fast_approx_local_jacobians:
             if (
                 self._jac_cache is not None
                 and self._jac_cache.shape[0] == self.var.shape[0]

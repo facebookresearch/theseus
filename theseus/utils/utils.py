@@ -218,6 +218,10 @@ def check_jacobians(cf: th.CostFunction, num_checks: int = 1, tol: float = 1.0e-
 # with timer("f2"):
 #   f2()
 # print(timer.stats())
+#
+# The timer can also be set inactive either via constructor
+# (i.e., Timer(device, active=False))
+# or via start method (i.e., timer.start(call_id, deactivate=True)).
 class Timer:
     def __init__(self, device: th.DeviceType, active: bool = True) -> None:
         self.active = active
@@ -225,9 +229,11 @@ class Timer:
         self.elapsed_time = 0.0
         self._stats: Dict[str, List[float]] = defaultdict(list)
         self._caller: Optional[str] = None
+        self._tmp_deactivated = False
 
-    def start(self, caller: Optional[str] = None) -> "Timer":
-        if not self.active:
+    def start(self, caller: Optional[str] = None, deactivate: bool = False) -> "Timer":
+        if not self.active or deactivate:
+            self._tmp_deactivated = deactivate
             return self
         if self.device.type == "cuda":
             self._start_event = torch.cuda.Event(enable_timing=True)
@@ -239,7 +245,8 @@ class Timer:
         return self
 
     def end(self) -> None:
-        if not self.active:
+        if not self.active or self._tmp_deactivated:
+            self._tmp_deactivated = False
             return
         if self.device.type == "cuda":
             self._end_event.record()
@@ -250,12 +257,15 @@ class Timer:
         if self._caller is not None:
             self._stats[self._caller].append(self.elapsed_time)
 
-    def __call__(self, caller: Optional[str] = None) -> "Timer":
+    def __call__(
+        self, caller: Optional[str] = None, deactivate: bool = False
+    ) -> "Timer":
         self._caller = caller
+        self._tmp_deactivated = deactivate
         return self
 
     def __enter__(self) -> "Timer":
-        self.start(caller=self._caller)
+        self.start(caller=self._caller, deactivate=self._tmp_deactivated)
         return self
 
     def __exit__(self, exc_type: Any, exc_value: Any, traceback: Any) -> None:

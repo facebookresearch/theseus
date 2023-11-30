@@ -171,6 +171,7 @@ def test_jacobians_check():
 
 
 def test_timer():
+    # Check different ways of instantiating work correctly
     with thutils.Timer("cpu") as timer:
         torch.randn(1)
     assert timer.elapsed_time > 0
@@ -189,11 +190,21 @@ def test_timer():
         torch.randn(1)
     assert timer.elapsed_time == 0
 
+    # Checking that deactivate keyword works correctly
     timer = thutils.Timer("cpu")
+    with timer("randn", deactivate=True):
+        torch.randn(1)
+    assert timer.elapsed_time == 0
+    timer.start("randn", deactivate=True)
+    torch.randn(1)
+    timer.end()
+    assert timer.elapsed_time == 0
+    # Checking that stats accumulation works correctly
     with timer("randn"):
         torch.randn(1)
-    with timer("randn"):
-        torch.randn(1)
+    timer.start("randn")
+    torch.randn(1)
+    timer.end()
     with timer("mult"):
         torch.ones(1) * torch.zeros(1)
     stats = timer.stats()

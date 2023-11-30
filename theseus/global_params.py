@@ -28,6 +28,7 @@ class _TheseusGlobalParams:
     so2_norm_eps_float64: float = 0
     so2_matrix_eps_float64: float = 0
     se2_near_zero_eps_float64: float = 0
+    fast_approx_local_jacobians: bool = False
 
     def __init__(self):
         self.reset()
@@ -50,6 +51,7 @@ class _TheseusGlobalParams:
         self.so2_matrix_eps_float64 = 4e-7
         self.se2_near_zero_eps_float64 = 1e-6
         self.se2_d_near_zero_eps_float64 = 1e-3
+        self.fast_approx_local_jacobians = False
 
 
 _THESEUS_GLOBAL_PARAMS = _TheseusGlobalParams()

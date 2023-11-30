@@ -6,6 +6,8 @@ from functools import reduce
 
 import torch
 
+from torchlie.global_params import set_global_params
+
 
 BATCH_SIZES_TO_TEST = [1, 20, (1, 2), (3, 4, 5), tuple()]
 TEST_EPS = 5e-7
@@ -64,6 +66,7 @@ def get_test_cfg(op_name, dtype, dim, data_shape, module=None):
 #
 # `batch_size` can be a tuple.
 def sample_inputs(input_types, batch_size, dtype, rng):
+    dev = "cuda:0" if torch.cuda.is_available() else "cpu"
     if isinstance(batch_size, int):
         batch_size = (batch_size,)
 
@@ -71,17 +74,19 @@ def sample_inputs(input_types, batch_size, dtype, rng):
         type_str, param = input_type
 
         def _quat_sample():
-            q = torch.rand(*batch_size, param, dtype=dtype, generator=rng)
+            q = torch.rand(*batch_size, param, device=dev, dtype=dtype, generator=rng)
             return q / torch.norm(q, dim=-1, keepdim=True)
 
         sample_fns = {
             "tangent": lambda: torch.rand(
-                *batch_size, param, dtype=dtype, generator=rng
+                *batch_size, param, device=dev, dtype=dtype, generator=rng
             ),
-            "group": lambda: param.rand(*batch_size, generator=rng, dtype=dtype),
+            "group": lambda: param.rand(
+                *batch_size, device=dev, generator=rng, dtype=dtype
+            ),
             "quat": lambda: _quat_sample(),
             "matrix": lambda: torch.rand(
-                (*batch_size,) + param, generator=rng, dtype=dtype
+                (*batch_size,) + param, device=dev, generator=rng, dtype=dtype
             ),
         }
         return sample_fns[type_str]()
@@ -321,3 +326,19 @@ def check_left_project_broadcasting(
                 torch.autograd.gradcheck(
                     lie_group_fns.left_project, (g, t, out_dim), raise_exception=True
                 )
+
+
+def check_log_map_passt(lie_group_fns, impl_module):
+    set_global_params({"_allow_passthrough_ops": True})
+    group = lie_group_fns.rand(
+        4, device="cuda:0" if torch.cuda.is_available() else "cpu", requires_grad=True
+    )
+    jlist = []
+    log_map_pt = lie_group_fns.log(group, jacobians=jlist)
+    grad_pt = torch.autograd.grad(log_map_pt.sum(), group)
+    log_map_ref = impl_module._log_autograd_fn(group)
+    jac_ref = impl_module._jlog_impl(group)[0][0]
+    grad_ref = torch.autograd.grad(log_map_ref.sum(), group)
+    torch.testing.assert_close(log_map_pt, log_map_ref)
+    torch.testing.assert_close(jlist[0], jac_ref)
+    torch.testing.assert_close(grad_pt, grad_ref)

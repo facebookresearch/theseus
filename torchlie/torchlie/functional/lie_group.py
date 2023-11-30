@@ -7,6 +7,8 @@ from typing import Any, Callable, List, Optional, Protocol, Tuple
 
 import torch
 
+from torchlie.global_params import _TORCHLIE_GLOBAL_PARAMS as LIE_PARAMS
+
 from .constants import DeviceType
 from .utils import check_jacobians_list
 
@@ -18,6 +20,10 @@ from .utils import check_jacobians_list
 # _jxxx_autograd_fn: simply equivalent to _jxxx_impl for now
 # ----------------------------------------------------------------------------------
 # Note that _jxxx_impl might not exist for some operators.
+#
+# Some operators support a _xxx_passthrough_fn, which returns the same values as
+# _xxx_autograd_fn in forward pass, but takes the output of _jxxx_autograd_fn as
+# extra non-differentiable inputs to avoid computing operators twice.
 
 
 def JInverseImplFactory(module):
@@ -40,6 +46,42 @@ def LeftProjectImplFactory(module):
         )
 
     return _left_project_impl
+
+
+# This class is used by `UnaryOperatorFactory` to
+# avoid computing the operator twice in function calls of the form
+#      op(group, jacobians_list=jlist).
+# This is functionally equivalent to `UnaryOperator` objects, but
+# it receives the operator's result and jacobian as extra inputs.
+# Usage is then:
+#    jac, res = _jop_impl(group)
+#    op_result = passthrough_fn(group, res, jac)
+# This connects `op_result` to the compute graph with custom
+# backward implementation, while `jac` uses torch default autograd.
+class _UnaryPassthroughFn(torch.autograd.Function):
+    generate_vmap_rule = True
+
+    @classmethod
+    @abc.abstractmethod
+    def _backward_impl(
+        cls, group: torch.Tensor, jacobian: torch.Tensor, grad_output: torch.Tensor
+    ) -> torch.Tensor:
+        pass
+
+    @classmethod
+    def forward(cls, group, op_result, jacobian):
+        return op_result
+
+    @classmethod
+    def setup_context(cls, ctx, inputs, outputs):
+        ctx.save_for_backward(inputs[0], inputs[2])
+
+    @classmethod
+    def backward(cls, ctx, grad_output):
+        grad = cls._backward_impl(
+            ctx.saved_tensors[0], ctx.saved_tensors[1], grad_output
+        )
+        return grad, None, None
 
 
 class UnaryOperator(torch.autograd.Function):
@@ -95,8 +137,9 @@ def UnaryOperatorFactory(
     module, op_name
 ) -> Tuple[UnaryOperatorOpFnType, UnaryOperatorJOpFnType]:
     # Get autograd.Function wrapper of op and its jacobian
-    op_autograd_fn = getattr(module, "_" + op_name + "_autograd_fn")
-    jop_autograd_fn = getattr(module, "_j" + op_name + "_autograd_fn")
+    op_autograd_fn = getattr(module, f"_{op_name}_autograd_fn")
+    jop_autograd_fn = getattr(module, f"_j{op_name}_autograd_fn")
+    op_passthrough_fn = getattr(module, f"_{op_name}_passthrough_fn", None)
 
     def op(
         input: torch.Tensor,
@@ -105,8 +148,10 @@ def UnaryOperatorFactory(
         if jacobians is not None:
             _check_jacobians_supported(jop_autograd_fn, module.NAME, op_name)
             check_jacobians_list(jacobians)
-            jacobians_op = jop_autograd_fn(input)[0]
+            jacobians_op, ret = jop_autograd_fn(input)
             jacobians.append(jacobians_op[0])
+            if LIE_PARAMS._allow_passthrough_ops and op_passthrough_fn is not None:
+                return op_passthrough_fn(input, ret, jacobians_op[0])
         return op_autograd_fn(input)
 
     def jop(input: torch.Tensor) -> Tuple[List[torch.Tensor], torch.Tensor]:

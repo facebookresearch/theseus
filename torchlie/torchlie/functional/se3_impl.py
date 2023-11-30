@@ -484,6 +484,15 @@ def _jlog_impl(group: torch.Tensor) -> Tuple[List[torch.Tensor], torch.Tensor]:
     return [jac], tangent_vector
 
 
+def _log_backward(
+    group: torch.Tensor, jacobian: torch.Tensor, grad_output: torch.Tensor
+) -> torch.Tensor:
+    jac_by_g = (jacobian.transpose(-1, -2) @ grad_output.unsqueeze(-1)).squeeze(-1)
+    jac_by_g[..., 3:] *= 0.5
+    temp2: torch.Tensor = lift(jac_by_g)
+    return group[..., :3] @ temp2
+
+
 class Log(lie_group.UnaryOperator):
     @classmethod
     def _forward_impl(cls, group):
@@ -499,17 +508,21 @@ class Log(lie_group.UnaryOperator):
     @classmethod
     def backward(cls, ctx, grad_output):
         group: torch.Tensor = ctx.saved_tensors[1]
-        jacobians = _jlog_impl(group)[0][0]
-        jacobians[..., 3:] *= 0.5
-        temp: torch.Tensor = lift(
-            (jacobians.transpose(-1, -2) @ grad_output.unsqueeze(-1)).squeeze(-1)
-        )
-        return group[..., :3] @ temp
+        return _log_backward(group, _jlog_impl(group)[0][0], grad_output)
+
+
+class _LogPassthroughWrapper(lie_group._UnaryPassthroughFn):
+    @classmethod
+    def _backward_impl(
+        cls, group: torch.Tensor, jacobian: torch.Tensor, grad_output: torch.Tensor
+    ) -> torch.Tensor:
+        return _log_backward(group, jacobian, grad_output)
 
 
 # TODO: Implement analytic backward for _jlog_impl
 _log_autograd_fn = Log.apply
 _jlog_autograd_fn = _jlog_impl
+_log_passthrough_fn = _LogPassthroughWrapper.apply
 
 
 # -----------------------------------------------------------------------------

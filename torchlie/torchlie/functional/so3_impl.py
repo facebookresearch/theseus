@@ -3,7 +3,7 @@
 # This source code is licensed under the MIT license found in the
 # LICENSE file in the root directory of this source tree.
 
-from typing import List, Optional, Tuple, cast
+from typing import Dict, List, Optional, Tuple, cast
 
 import torch
 
@@ -355,15 +355,41 @@ _exp_autograd_fn = Exp.apply
 _jexp_autograd_fn = _jexp_impl
 
 
+_UPPER_IDX_3x3_CUDA: Dict[str, torch.Tensor] = None
+if torch.cuda.is_available():
+    _UPPER_IDX_3x3_CUDA = {
+        f"cuda:{i}": torch.triu_indices(3, 3, offset=1).to(f"cuda:{i}").flip(-1)
+        for i in range(torch.cuda.device_count())
+    }
+
+
+def _sine_axis_fn(group: torch.Tensor, size: torch.Size) -> torch.Tensor:
+    if LIE_PARAMS._faster_log_maps:
+        if group.is_cuda:
+            g_minus_gt = 0.5 * (group.adjoint() - group)
+            upper_idx = _UPPER_IDX_3x3_CUDA[str(group.device)]
+            sine_axis = g_minus_gt[..., upper_idx[0], upper_idx[1]]
+            sine_axis[..., 1] *= -1
+        else:
+            sine_axis = group.new_zeros(*size, 3)
+            sine_axis[..., 0] = group[..., 2, 1] - group[..., 1, 2]
+            sine_axis[..., 1] = group[..., 0, 2] - group[..., 2, 0]
+            sine_axis[..., 2] = group[..., 1, 0] - group[..., 0, 1]
+            sine_axis *= 0.5
+    else:
+        sine_axis = group.new_zeros(*size, 3)
+        sine_axis[..., 0] = 0.5 * (group[..., 2, 1] - group[..., 1, 2])
+        sine_axis[..., 1] = 0.5 * (group[..., 0, 2] - group[..., 2, 0])
+        sine_axis[..., 2] = 0.5 * (group[..., 1, 0] - group[..., 0, 1])
+    return sine_axis
+
+
 # -----------------------------------------------------------------------------
 # Logarithm Map
 # -----------------------------------------------------------------------------
 def _log_impl_helper(group: torch.Tensor):
     size = get_group_size(group)
-    sine_axis = group.new_zeros(*size, 3)
-    sine_axis[..., 0] = 0.5 * (group[..., 2, 1] - group[..., 1, 2])
-    sine_axis[..., 1] = 0.5 * (group[..., 0, 2] - group[..., 2, 0])
-    sine_axis[..., 2] = 0.5 * (group[..., 1, 0] - group[..., 0, 1])
+    sine_axis = _sine_axis_fn(group, size)
     cosine = 0.5 * (group.diagonal(dim1=-1, dim2=-2).sum(dim=-1) - 1)
     sine = sine_axis.norm(dim=-1)
     theta = torch.atan2(sine, cosine)
@@ -460,6 +486,16 @@ def _jlog_impl(group: torch.Tensor) -> Tuple[List[torch.Tensor], torch.Tensor]:
     return [jac], tangent_vector
 
 
+def _log_backward(
+    group: torch.Tensor, jacobian: torch.Tensor, grad_output: torch.Tensor
+) -> torch.Tensor:
+    jacobian = 0.5 * jacobian
+    temp = _lift_autograd_fn(
+        (jacobian.transpose(-2, -1) @ grad_output.unsqueeze(-1)).squeeze(-1)
+    )
+    return group @ temp
+
+
 class Log(lie_group.UnaryOperator):
     @classmethod
     def _forward_impl(cls, group):
@@ -475,16 +511,21 @@ class Log(lie_group.UnaryOperator):
     @classmethod
     def backward(cls, ctx, grad_output):
         group: torch.Tensor = ctx.saved_tensors[1]
-        jacobians = 0.5 * _jlog_impl(group)[0][0]
-        temp: torch.Tensor = _lift_autograd_fn(
-            (jacobians.transpose(-2, -1) @ grad_output.unsqueeze(-1)).squeeze(-1)
-        )
-        return group @ temp
+        return _log_backward(group, _jlog_impl(group)[0][0], grad_output)
+
+
+class _LogPassthroughWrapper(lie_group._UnaryPassthroughFn):
+    @classmethod
+    def _backward_impl(
+        cls, group: torch.Tensor, jacobian: torch.Tensor, grad_output: torch.Tensor
+    ) -> torch.Tensor:
+        return _log_backward(group, jacobian, grad_output)
 
 
 # TODO: Implement analytic backward for _jlog_impl
 _log_autograd_fn = Log.apply
 _jlog_autograd_fn = _jlog_impl
+_log_passthrough_fn = _LogPassthroughWrapper.apply
 
 
 # -----------------------------------------------------------------------------

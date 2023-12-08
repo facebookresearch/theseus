@@ -45,15 +45,21 @@ class SO3(LieGroup):
     def rand(
         *size: int,
         generator: Optional[torch.Generator] = None,
+        scale: Optional[Union[float, torch.Tensor]] = None,
         dtype: Optional[torch.dtype] = None,
         device: theseus.constants.DeviceType = None,
         requires_grad: bool = False,
     ) -> "SO3":
         if len(size) != 1:
             raise ValueError("The size should be 1D.")
+        if isinstance(scale, torch.Tensor) and scale.shape != (4,):
+            raise ValueError(f"The scale must be None, or a float, or a 4 element 1D tensor.")
+        elif scale is None:
+            scale = 1.0
         tensor = SO3_base.rand(
             *size,
             generator=generator,
+            scale=scale,
             dtype=dtype,
             device=device,
             requires_grad=requires_grad,
@@ -64,15 +70,21 @@ class SO3(LieGroup):
     def randn(
         *size: int,
         generator: Optional[torch.Generator] = None,
+        scale: Optional[Union[float, torch.Tensor]] = None,
         dtype: Optional[torch.dtype] = None,
         device: theseus.constants.DeviceType = None,
         requires_grad: bool = False,
     ) -> "SO3":
         if len(size) != 1:
             raise ValueError("The size should be 1D.")
+        if isinstance(scale, torch.Tensor) and scale.shape != (4,):
+            raise ValueError(f"The scale must be None, or a float, or a 4 element 1D tensor.")
+        elif scale is None:
+            scale = 1.0
         tensor = SO3_base.randn(
             *size,
             generator=generator,
+            scale=scale,
             dtype=dtype,
             device=device,
             requires_grad=requires_grad,

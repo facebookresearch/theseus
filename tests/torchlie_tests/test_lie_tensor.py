@@ -13,7 +13,7 @@ from .functional.common import get_test_cfg, sample_inputs
 
 @pytest.fixture
 def rng():
-    rng_ = torch.Generator()
+    rng_ = torch.Generator(device="cuda:0" if torch.cuda.is_available() else "cpu")
     rng_.manual_seed(0)
     return rng_
 

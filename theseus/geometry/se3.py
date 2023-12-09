@@ -53,7 +53,7 @@ class SE3(LieGroup):
         if len(size) != 1:
             raise ValueError("The size should be 1D.")
         if isinstance(scale, torch.Tensor) and scale.shape != (4,):
-            raise ValueError(f"The scale must be None, or a float, or a 4 element 1D tensor.")
+            raise ValueError("The scale must be None, or a float, or a 4 element 1D tensor.")
         elif scale is None:
             scale = 1.0
         tensor = SE3_base.rand(
@@ -78,7 +78,7 @@ class SE3(LieGroup):
         if len(size) != 1:
             raise ValueError("The size should be 1D.")
         if isinstance(scale, torch.Tensor) and scale.shape != (4,):
-            raise ValueError(f"The scale must be None, or a float, or a 4 element 1D tensor.")
+            raise ValueError("The scale must be None, or a float, or a 4 element 1D tensor.")
         elif scale is None:
             scale = 1.0
         tensor = SE3_base.randn(

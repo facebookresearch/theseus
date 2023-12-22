@@ -13,7 +13,7 @@ from .functional.common import get_test_cfg, sample_inputs
 
 @pytest.fixture
 def rng():
-    rng_ = torch.Generator()
+    rng_ = torch.Generator(device="cuda:0" if torch.cuda.is_available() else "cpu")
     rng_.manual_seed(0)
     return rng_
 
@@ -124,14 +124,25 @@ def test_op(op_name, ltype_str, batch_size, rng):
 
 
 def test_backward_works():
-    # Run optimization to check that the compute graph is not broken
+    # Runs optimization to check that the compute graph is not broken
+    def _check(opt_tensor, target_tensor, tensor_fn):
+        opt = torch.optim.Adam([opt_tensor])
+        losses = []
+        for i in range(2):
+            opt.zero_grad()
+            d = tensor_fn(opt_tensor).local(target_tensor)
+            loss = torch.sum(d**2)
+            losses.append(loss.detach().clone())
+            loss.backward()
+            opt.step()
+        assert not losses[0].allclose(losses[-1])
+
+    # Check local op from a random tensor
     g1 = lie.SE3.rand(1, requires_grad=True)
     g2 = lie.SE3.rand(1)
-    opt = torch.optim.Adam([g1], lr=0.1)
-    for i in range(10):
-        opt.zero_grad()
-        d = g1.local(g2)
-        loss = torch.sum(d**2)
-        loss.backward()
-        opt.step()
-        print(f"Iter {i}. Loss: {loss.item(): .3f}")
+    _check(g1, g2, lambda x: x)
+
+    # Check local op from exp map
+    vec = torch.randn((2, 6), requires_grad=True)
+    eye = lie.SE3.identity(2)
+    _check(vec, eye, lambda x: lie.SE3.exp(x))

@@ -242,13 +242,15 @@ class NonlinearOptimizer(Optimizer, abc.ABC):
             best_solution = {}
             best_err_no_grad = info.best_err
             best_err_grad = grad_loop_info.best_err
-            idx_no_grad = (best_err_no_grad < best_err_grad).cpu().view(-1, 1)
+            idx_no_grad = (best_err_no_grad < best_err_grad).cpu()
             best_err = torch.minimum(best_err_no_grad, best_err_grad)
             for var_name in info.best_solution:
                 sol_no_grad = info.best_solution[var_name]
                 sol_grad = grad_loop_info.best_solution[var_name]
                 best_solution[var_name] = torch.where(
-                    idx_no_grad, sol_no_grad, sol_grad
+                    idx_no_grad.view((-1,) + (1,) * (sol_grad.ndim - 1)),
+                    sol_no_grad,
+                    sol_grad,
                 )
             info.best_solution = best_solution
             info.best_err = best_err

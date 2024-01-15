@@ -4,6 +4,7 @@
 # LICENSE file in the root directory of this source tree.
 
 import pytest  # noqa: F401
+import torch
 
 import theseus as th
 
@@ -34,3 +35,17 @@ def test_state_history(var_type, batch_size):
         assert info.state_history[var.name].shape == (objective.batch_size,) + tuple(
             var.shape[1:]
         ) + (max_iters + 1,)
+
+
+@pytest.mark.parametrize("batch_size", [1, 10])
+def test_track_best_solution_matrix_vars(batch_size):
+    x = th.SO3(name="x")
+    y = th.SO3(name="y")
+    objective = th.Objective()
+    objective.add(th.Difference(x, y, th.ScaleCostWeight(1.0), name="cf"))
+    optim = th.LevenbergMarquardt(objective, vectorize=True)
+    objective.update({"x": torch.randn(batch_size, 3, 3)})
+    info = optim.optimize(track_best_solution=True, backward_mode="implicit")
+    assert info.best_solution["x"].shape == (batch_size, 3, 3)
+    # Call to optimize  with track_best_solution=True used to fail
+    # when tracking matrix vars (e.g., SO3/SE3)

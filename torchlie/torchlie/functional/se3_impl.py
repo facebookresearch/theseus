@@ -3,7 +3,7 @@
 # This source code is licensed under the MIT license found in the
 # LICENSE file in the root directory of this source tree.
 
-from typing import List, Optional, Tuple, cast
+from typing import List, Optional, Tuple, Union, cast
 
 import torch
 
@@ -121,14 +121,17 @@ def get_transform_tensor_size(transform_tensor: torch.Tensor):
 def rand(
     *size: int,
     generator: Optional[torch.Generator] = None,
+    scale: Optional[Union[float, torch.Tensor]] = None,
     dtype: Optional[torch.dtype] = None,
     device: constants.DeviceType = None,
     requires_grad: bool = False,
 ) -> torch.Tensor:
-    rotation = SO3.rand(*size, generator=generator, dtype=dtype, device=device)
+    if scale is None:
+        scale = 1.0
+    rotation = SO3.rand(*size, generator=generator, scale=scale, dtype=dtype, device=device)
     translation = torch.rand(
         *size, 3, 1, generator=generator, dtype=dtype, device=device
-    )
+    ) * scale if not isinstance(scale, torch.Tensor) else scale[:-1]
     ret = torch.cat((rotation, translation), dim=-1)
     ret.requires_grad_(requires_grad)
     return ret
@@ -140,14 +143,17 @@ def rand(
 def randn(
     *size: int,
     generator: Optional[torch.Generator] = None,
+    scale: Optional[Union[float, torch.Tensor]] = None,
     dtype: Optional[torch.dtype] = None,
     device: constants.DeviceType = None,
     requires_grad: bool = False,
 ) -> torch.Tensor:
-    rotation = SO3.randn(*size, generator=generator, dtype=dtype, device=device)
+    if scale is None:
+        scale = 1.0
+    rotation = SO3.randn(*size, generator=generator, scale=scale, dtype=dtype, device=device)
     translation = torch.randn(
         *size, 3, 1, generator=generator, dtype=dtype, device=device
-    )
+    ) * scale if not isinstance(scale, torch.Tensor) else scale[:-1]
     ret = torch.cat((rotation, translation), dim=-1)
     ret.requires_grad_(requires_grad)
     return ret

@@ -50,12 +50,17 @@ class SO2(LieGroup):
     def rand(
         *size: int,
         generator: Optional[torch.Generator] = None,
+        scale: Optional[Union[float, torch.Tensor]] = None,
         dtype: Optional[torch.dtype] = None,
         device: theseus.constants.DeviceType = None,
         requires_grad: bool = False,
     ) -> "SO2":
         if len(size) != 1:
             raise ValueError("The size should be 1D.")
+        if isinstance(scale, torch.Tensor) and scale.shape != (1,):
+            raise ValueError("The scale must be None, or a float, or a single element tensor.")
+        elif scale is None:
+            scale = 1.0
         return SO2.exp_map(
             2
             * theseus.constants.PI
@@ -66,7 +71,7 @@ class SO2(LieGroup):
                 dtype=dtype,
                 device=device,
                 requires_grad=requires_grad,
-            )
+            ) * scale
             - theseus.constants.PI
         )
 
@@ -74,12 +79,17 @@ class SO2(LieGroup):
     def randn(
         *size: int,
         generator: Optional[torch.Generator] = None,
+        scale: Optional[Union[float, torch.Tensor]] = None,
         dtype: Optional[torch.dtype] = None,
         device: theseus.constants.DeviceType = None,
         requires_grad: bool = False,
     ) -> "SO2":
         if len(size) != 1:
             raise ValueError("The size should be 1D.")
+        if isinstance(scale, torch.Tensor) and scale.shape != (1,):
+            raise ValueError("The scale must be None, or a float, or a single element tensor.")
+        elif scale is None:
+            scale = 1.0
         return SO2.exp_map(
             theseus.constants.PI
             * torch.randn(
@@ -89,7 +99,7 @@ class SO2(LieGroup):
                 dtype=dtype,
                 device=device,
                 requires_grad=requires_grad,
-            )
+            ) * scale
         )
 
     @staticmethod

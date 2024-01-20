@@ -46,12 +46,17 @@ class Vector(LieGroup):
     def rand(
         *size: int,
         generator: Optional[torch.Generator] = None,
+        scale: Optional[Union[float, torch.Tensor]] = None,
         dtype: Optional[torch.dtype] = None,
         device: DeviceType = None,
         requires_grad: bool = False,
     ) -> "Vector":
         if len(size) != 2:
             raise ValueError("The size should be 2D.")
+        if isinstance(scale, torch.Tensor) and (scale.shape[0] != size[0] or scale.shape[1] != size[1]):
+            raise ValueError(f"The scale must be None, or a float, or a tensor of shape {size}.")
+        elif scale is None:
+            scale = 1.0
         return Vector(
             tensor=torch.rand(
                 size,
@@ -59,19 +64,24 @@ class Vector(LieGroup):
                 dtype=dtype,
                 device=device,
                 requires_grad=requires_grad,
-            )
+            ) * scale
         )
 
     @staticmethod
     def randn(
         *size: int,
         generator: Optional[torch.Generator] = None,
+        scale: Optional[Union[float, torch.Tensor]] = None,
         dtype: Optional[torch.dtype] = None,
         device: DeviceType = None,
         requires_grad: bool = False,
     ) -> "Vector":
         if len(size) != 2:
             raise ValueError("The size should be 2D.")
+        if isinstance(scale, torch.Tensor) and (scale.shape[0] != size[0] or scale.shape[1] != size[1]):
+            raise ValueError(f"The scale must be None, or a float, or a tensor of shape {size}.")
+        elif scale is None:
+            scale = 1.0
         return Vector(
             tensor=torch.randn(
                 size,
@@ -79,7 +89,7 @@ class Vector(LieGroup):
                 dtype=dtype,
                 device=device,
                 requires_grad=requires_grad,
-            )
+            ) * scale
         )
 
     def __repr__(self) -> str:

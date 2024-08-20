@@ -17,7 +17,7 @@ class SparseStructure(abc.ABC):
         row_ptr: np.ndarray,
         num_rows: int,
         num_cols: int,
-        dtype: np.dtype = np.float_,  # type: ignore
+        dtype: np.dtype = np.float64,  # type: ignore
     ):
         self.col_ind = col_ind
         self.row_ptr = row_ptr

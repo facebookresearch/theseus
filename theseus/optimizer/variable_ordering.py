@@ -36,7 +36,7 @@ class VariableOrdering:
         return iter(self._var_order)
 
     def append(self, var: Variable):
-        if var in self._var_order:
+        if var.name in self._var_name_to_index:
             raise ValueError(
                 f"Variable {var.name} has already been added to the order."
             )

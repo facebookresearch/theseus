@@ -14,7 +14,7 @@
         <img src="https://img.shields.io/pypi/v/theseus-ai" alt="pypi"
         heigh="20">
     <!-- Downloads counter -->
-    <a href="https://pypi.org/project/theseus-ai/">
+    <a href="https://pepy.tech/project/theseus-ai">
         <img src="https://pepy.tech/badge/theseus-ai" alt="PyPi Downloads" height="20">
     </a>
     <!-- Python -->

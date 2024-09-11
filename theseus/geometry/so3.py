@@ -227,7 +227,7 @@ class SO3(LieGroup):
         )
         sqrt_eps = _THESEUS_GLOBAL_PARAMS.get_eps("so3", "to_quaternion_sqrt", w.dtype)
         sine_half_theta = (
-            ((0.5 * (1 - cosine_near_pi)).clamp(0, 1) + sqrt_eps).sqrt().view(-1, 1)
+            (0.5 * (1 - cosine_near_pi)).clamp(sqrt_eps, 1).sqrt().view(-1, 1)
         )
         ret[:, 1:] = torch.where(
             near_pi.view(-1, 1), axis * sine_half_theta, ret[:, 1:]

@@ -25,9 +25,11 @@ class _TheseusGlobalParams:
     so2_norm_eps_float32: float = 0
     so2_matrix_eps_float32: float = 0
     se2_near_zero_eps_float32: float = 0
+    so3_to_quaternion_sqrt_eps_float32: float = 0
     so2_norm_eps_float64: float = 0
     so2_matrix_eps_float64: float = 0
     se2_near_zero_eps_float64: float = 0
+    so3_to_quaternion_sqrt_eps_float64: float = 0
     fast_approx_local_jacobians: bool = False
 
     def __init__(self):
@@ -46,11 +48,14 @@ class _TheseusGlobalParams:
         self.so2_matrix_eps_float32 = 1e-5
         self.se2_near_zero_eps_float32 = 3e-2
         self.se2_d_near_zero_eps_float32 = 1e-1
-
+        self.so3_to_quaternion_sqrt_eps_float32 = 1e-6
         self.so2_norm_eps_float32 = 1e-12
+
         self.so2_matrix_eps_float64 = 4e-7
         self.se2_near_zero_eps_float64 = 1e-6
         self.se2_d_near_zero_eps_float64 = 1e-3
+        self.so3_to_quaternion_sqrt_eps_float64 = 1e-6
+
         self.fast_approx_local_jacobians = False
 
 

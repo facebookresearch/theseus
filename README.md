@@ -14,7 +14,7 @@
         <img src="https://img.shields.io/pypi/v/theseus-ai" alt="pypi"
         heigh="20">
     <!-- Downloads counter -->
-    <a href="https://pypi.org/project/theseus-ai/">
+    <a href="https://pepy.tech/project/theseus-ai">
         <img src="https://pepy.tech/badge/theseus-ai" alt="PyPi Downloads" height="20">
     </a>
     <!-- Python -->
@@ -41,17 +41,19 @@
 
 <p align="center">
     <a href="https://arxiv.org/abs/2207.09442">Paper</a> •
-    <a href="https://ai.facebook.com/blog/theseus-a-library-for-encoding-domain-knowledge-in-end-to-end-ai-models/">Blog</a> •
+    <a href="https://youtu.be/zIbPHXegNn8">Video</a> •
+    <a href="https://x.com/mukadammh/status/1549773856738615297">Twitter</a> •
     <a href="https://sites.google.com/view/theseus-ai/">Webpage</a> •
-    <a href="https://github.com/facebookresearch/theseus/tree/main/tutorials">Tutorials</a> •
-    <a href="https://theseus-ai.readthedocs.io/">Docs</a>
+    <a href="https://github.com/facebookresearch/theseus/tree/main/tutorials">Tutorials</a>
 </p>
 
 Theseus is an efficient application-agnostic library for building custom nonlinear optimization layers in PyTorch to support constructing various problems in robotics and vision as end-to-end differentiable architectures.
 
-![](https://raw.githubusercontent.com/facebookresearch/theseus/main/docs/source/img/theseuslayer.png)
+![](https://raw.githubusercontent.com/facebookresearch/theseus/main/docs/source/img/theseuslayer.gif)
 
 Differentiable nonlinear optimization provides a general scheme to encode inductive priors, as the objective function can be partly parameterized by neural models and partly with expert domain-specific differentiable models. The ability to compute gradients end-to-end is retained by differentiating through the optimizer which allows neural models to train on the final task loss, while also taking advantage of priors captured by the optimizer.
+
+See [list of papers](https://github.com/facebookresearch/theseus/blob/main/papers.md) published using Theseus for  examples across various application domains.
 
 -----
 

@@ -170,7 +170,7 @@ class NonlinearLeastSquares(NonlinearOptimizer, abc.ABC):
 
             # For now, step size is combined with delta. If we add more sophisticated
             # line search, will probably need to pass it separately, or compute inside.
-            err, all_rejected = self._step(
+            err, all_rejected, reject_indices = self._step(
                 delta * steps_tensor,
                 info.last_err,
                 converged_indices,
@@ -196,6 +196,8 @@ class NonlinearLeastSquares(NonlinearOptimizer, abc.ABC):
                         f"Error: {err.mean().item()}"
                     )
                 converged_indices = self._check_convergence(err, info.last_err)
+                if (reject_indices is not None) and reject_indices.any():
+                    converged_indices[reject_indices] = False
                 info.status[
                     converged_indices.cpu().numpy()
                 ] = NonlinearOptimizerStatus.CONVERGED
@@ -355,14 +357,18 @@ class NonlinearLeastSquares(NonlinearOptimizer, abc.ABC):
         else:
             reject_indices = self._complete_step(delta, err, previous_err, **kwargs)
 
+        # If the step is converged, it should not be considered as rejected
+        if reject_indices is not None:
+            reject_indices[converged_indices] = False
+            
         if reject_indices is not None and reject_indices.all():
-            return previous_err, True
+            return previous_err, True, reject_indices
 
         self.objective.update(tensor_dict, batch_ignore_mask=reject_indices)
         if reject_indices is not None and reject_indices.any():
             # Some steps were rejected so the error computed above is not accurate
             err = self.objective.error_metric()
-        return err, False
+        return err, False, reject_indices
 
     # Resets any internal state needed by the optimizer for a new optimization
     # problem. Optimizer loop will pass all optimizer kwargs to this method.

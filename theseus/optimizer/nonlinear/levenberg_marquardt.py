@@ -190,10 +190,17 @@ class LevenbergMarquardt(NonlinearLeastSquares):
         den = (delta * (damping * delta + linearization.Atb.squeeze(2))).sum(dim=1) / 2
         rho = (previous_err - err) / den
         reject_indices = rho <= damping_accept
+        previous_damping = self._damping.clone()
         self._damping = torch.where(
             reject_indices,
             self._damping * up_damping_ratio,
             self._damping / down_damping_ratio,
+        )
+        # If some batch have already converged, the damping factor should not be updated
+        self._damping = torch.where(
+            rho.abs() < 1e-16,
+            previous_damping,
+            self._damping,
         )
         self._damping = self._damping.clamp(
             LevenbergMarquardt._MIN_DAMPING, LevenbergMarquardt._MAX_DAMPING

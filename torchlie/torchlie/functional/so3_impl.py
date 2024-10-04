@@ -3,7 +3,7 @@
 # This source code is licensed under the MIT license found in the
 # LICENSE file in the root directory of this source tree.
 
-from typing import Dict, List, Optional, Tuple, cast
+from typing import Dict, List, Optional, Tuple, Union, cast
 
 import torch
 
@@ -155,13 +155,16 @@ def get_transform_tensor_size(transform_tensor: torch.Tensor):
 def rand(
     *size: int,
     generator: Optional[torch.Generator] = None,
+    scale: Optional[Union[float, torch.Tensor]] = None,
     dtype: Optional[torch.dtype] = None,
     device: constants.DeviceType = None,
     requires_grad: bool = False,
 ) -> torch.Tensor:
     # Reference:
     # https://web.archive.org/web/20211105205926/http://planning.cs.uiuc.edu/node198.html
-    u = torch.rand(3, *size, generator=generator, dtype=dtype, device=device)
+    if scale is None:
+        scale = 1.0
+    u = torch.rand(3, *size, generator=generator, dtype=dtype, device=device) * scale if not isinstance(scale, torch.Tensor) else scale[-1]
     u1 = u[0]
     u2, u3 = u[1:3] * 2 * constants.PI
 
@@ -188,13 +191,17 @@ def rand(
 def randn(
     *size: int,
     generator: Optional[torch.Generator] = None,
+    scale: Optional[Union[float, torch.Tensor]] = None,
     dtype: Optional[torch.dtype] = None,
     device: constants.DeviceType = None,
     requires_grad: bool = False,
 ) -> torch.Tensor:
+    if scale is None:
+        scale = 1.0
     ret = _exp_autograd_fn(
         constants.PI
         * torch.randn(*size, 3, generator=generator, dtype=dtype, device=device)
+        * scale if not isinstance(scale, torch.Tensor) else scale[-1]
     )
     ret.requires_grad_(requires_grad)
     return ret

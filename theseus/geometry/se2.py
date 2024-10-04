@@ -46,12 +46,17 @@ class SE2(LieGroup):
     def rand(
         *size: int,
         generator: Optional[torch.Generator] = None,
+        scale: Optional[Union[float, torch.Tensor]] = None,
         dtype: Optional[torch.dtype] = None,
         device: theseus.constants.DeviceType = None,
         requires_grad: bool = False,
     ) -> "SE2":
         if len(size) != 1:
             raise ValueError("The size should be 1D.")
+        if isinstance(scale, torch.Tensor) and scale.shape != (3,):
+            raise ValueError("The scale must be None, a float, or a 3 element 1D tensor.")
+        elif scale is None:
+            scale = 1.0
         x_y_theta = torch.rand(
             size[0],
             3,
@@ -59,7 +64,7 @@ class SE2(LieGroup):
             dtype=dtype,
             device=device,
             requires_grad=requires_grad,
-        )
+        ) * scale
         x_y_theta[:, 2] = 2 * theseus.constants.PI * (x_y_theta[:, 2] - 0.5)
 
         return SE2(x_y_theta=x_y_theta)
@@ -68,12 +73,17 @@ class SE2(LieGroup):
     def randn(
         *size: int,
         generator: Optional[torch.Generator] = None,
+        scale: Optional[Union[float, torch.Tensor]] = None,
         dtype: Optional[torch.dtype] = None,
         device: theseus.constants.DeviceType = None,
         requires_grad: bool = False,
     ) -> "SE2":
         if len(size) != 1:
             raise ValueError("The size should be 1D.")
+        if isinstance(scale, torch.Tensor) and scale.shape != (3,):
+            raise ValueError("The scale must be None, a float, or a 3 element 1D tensor.")
+        elif scale is None:
+            scale = 1.0
         x_y_theta = torch.randn(
             size[0],
             3,
@@ -81,7 +91,7 @@ class SE2(LieGroup):
             dtype=dtype,
             device=device,
             requires_grad=requires_grad,
-        )
+        ) * scale
         x_y_theta[:, 2] *= theseus.constants.PI
 
         return SE2(x_y_theta=x_y_theta)

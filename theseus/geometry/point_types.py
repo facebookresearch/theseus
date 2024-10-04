@@ -42,12 +42,17 @@ class Point2(Vector):
     def rand(
         *size: int,
         generator: Optional[torch.Generator] = None,
+        scale: Optional[Union[float, torch.Tensor]] = None,
         dtype: Optional[torch.dtype] = None,
         device: DeviceType = None,
         requires_grad: bool = False,
     ) -> "Point2":
         if len(size) != 1:
             raise ValueError("The size should be 1D.")
+        if isinstance(scale, torch.Tensor) and scale.shape != (2,):
+            raise ValueError("The scale must be None, a float, or a 2 element 1D tensor.")
+        elif scale is None:
+            scale = 1.0
         return Point2(
             tensor=torch.rand(
                 size[0],
@@ -56,19 +61,24 @@ class Point2(Vector):
                 dtype=dtype,
                 device=device,
                 requires_grad=requires_grad,
-            )
+            ) * scale
         )
 
     @staticmethod
     def randn(
         *size: int,
         generator: Optional[torch.Generator] = None,
+        scale: Optional[Union[float, torch.Tensor]] = None,
         dtype: Optional[torch.dtype] = None,
         device: DeviceType = None,
         requires_grad: bool = False,
     ) -> "Point2":
         if len(size) != 1:
             raise ValueError("The size should be 1D.")
+        if isinstance(scale, torch.Tensor) and scale.shape != (2,):
+            raise ValueError("The scale must be None, a float, or a 2 element 1D tensor.")
+        elif scale is None:
+            scale = 1.0
         return Point2(
             tensor=torch.randn(
                 size[0],
@@ -77,7 +87,7 @@ class Point2(Vector):
                 dtype=dtype,
                 device=device,
                 requires_grad=requires_grad,
-            )
+            ) * scale
         )
 
     @staticmethod
@@ -144,12 +154,17 @@ class Point3(Vector):
     def rand(
         *size: int,
         generator: Optional[torch.Generator] = None,
+        scale: Optional[Union[float, torch.Tensor]] = None,
         dtype: Optional[torch.dtype] = None,
         device: DeviceType = None,
         requires_grad: bool = False,
     ) -> "Point3":
         if len(size) != 1:
             raise ValueError("The size should be 1D.")
+        if isinstance(scale, torch.Tensor) and scale.shape != (3,):
+            raise ValueError("The scale must be None, a float, or a 3D vector.")
+        elif scale is None:
+            scale = 1.0
         return Point3(
             tensor=torch.rand(
                 size[0],
@@ -158,19 +173,24 @@ class Point3(Vector):
                 dtype=dtype,
                 device=device,
                 requires_grad=requires_grad,
-            )
+            ) * scale
         )
 
     @staticmethod
     def randn(
         *size: int,
         generator: Optional[torch.Generator] = None,
+        scale: Optional[Union[float, torch.Tensor]] = None,
         dtype: Optional[torch.dtype] = None,
         device: DeviceType = None,
         requires_grad: bool = False,
     ) -> "Point3":
         if len(size) != 1:
             raise ValueError("The size should be 1D.")
+        if isinstance(scale, torch.Tensor) and scale.shape != (3,):
+            raise ValueError("The scale must be None, a float, or a 3D vector.")
+        elif scale is None:
+            scale = 1.0
         return Point3(
             tensor=torch.randn(
                 size[0],
@@ -179,7 +199,7 @@ class Point3(Vector):
                 dtype=dtype,
                 device=device,
                 requires_grad=requires_grad,
-            )
+            ) * scale
         )
 
     @staticmethod

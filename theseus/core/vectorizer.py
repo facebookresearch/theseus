@@ -122,12 +122,16 @@ class Vectorize:
             _CostFunctionSchema, List[_CostFunctionWrapper]
         ] = defaultdict(list)
 
+        schema_cf_names_dict: Dict[_CostFunctionSchema, List[str]] = defaultdict(list)
+
         # Create wrappers for all cost functions and also get their schemas
         for cost_fn in objective.cost_functions.values():
             wrapper = _CostFunctionWrapper(cost_fn)
             self._cost_fn_wrappers.append(wrapper)
             schema = _get_cost_function_schema(cost_fn)
             self._schema_dict[schema].append(wrapper)
+
+            schema_cf_names_dict[schema].append(cost_fn.name)
 
         # Now create a vectorized cost function for each unique schema
         self._vectorized_cost_fns: Dict[_CostFunctionSchema, CostFunction] = {}
@@ -152,6 +156,8 @@ class Vectorize:
             self._vectorize,
             self._to,
             self._vectorized_retract_optim_vars,
+            list(self._vectorized_cost_fns.values()),
+            list(schema_cf_names_dict.values()),
             self._get_vectorized_error_iter,
             self,
         )
@@ -397,10 +403,10 @@ class Vectorize:
             }
             ret = [cf for cf_list in schema_dict.values() for cf in cf_list]
         for schema, cost_fn_wrappers in schema_dict.items():
-            if len(cost_fn_wrappers) == 1:
-                self._handle_singleton_wrapper(schema, cost_fn_wrappers, mode)
-            else:
-                self._handle_schema_vectorization(schema, cost_fn_wrappers, mode)
+            # if len(cost_fn_wrappers) == 1:
+            #     self._handle_singleton_wrapper(schema, cost_fn_wrappers, mode)
+            # else:
+            self._handle_schema_vectorization(schema, cost_fn_wrappers, mode)
         return ret
 
     def _get_vectorized_error_iter(self) -> Iterable[_CostFunctionWrapper]:

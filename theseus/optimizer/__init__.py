@@ -9,3 +9,4 @@ from .manifold_gaussian import ManifoldGaussian, local_gaussian, retract_gaussia
 from .optimizer import Optimizer, OptimizerInfo
 from .sparse_linearization import SparseLinearization
 from .variable_ordering import VariableOrdering
+from .gbp import GaussianBeliefPropagation, GBPSchedule

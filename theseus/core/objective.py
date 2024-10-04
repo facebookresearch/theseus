@@ -134,6 +134,10 @@ class Objective:
         # If vectorization is on, this will also handle vectorized containers
         self._vectorization_to: Optional[Callable] = None
 
+        self.vectorized_cost_fns: Optional[List[CostFunction]] = None
+        # nested list of name of each base cost function in the vectorized cfs
+        self.vectorized_cf_names: Optional[List[List[str]]] = None
+
         # If vectorization is on, this gets replaced by a vectorized version
         self._retract_method = Objective._retract_base
 
@@ -919,6 +923,8 @@ class Objective:
         vectorization_run_fn: Callable,
         vectorized_to: Callable,
         vectorized_retract_fn: Callable,
+        vectorized_cost_fns: List[CostFunction],
+        vectorized_cf_names: List[List[str]],
         error_iter_fn: Callable[[], Iterable[CostFunction]],
         enabler: Any,
     ):
@@ -931,6 +937,8 @@ class Objective:
         self._vectorization_run = vectorization_run_fn
         self._vectorization_to = vectorized_to
         self._retract_method = vectorized_retract_fn
+        self.vectorized_cost_fns = vectorized_cost_fns
+        self.vectorized_cf_names = vectorized_cf_names
         self._get_error_iter = error_iter_fn
         self._vectorized = True
 
@@ -940,6 +948,8 @@ class Objective:
         self._vectorization_run = None
         self._vectorization_to = None
         self._retract_method = Objective._retract_base
+        self.vectorized_cost_fns = None
+        self.vectorized_cf_names = None
         self._get_error_iter = self._get_error_iter_base
         self._vectorized = False
 
@@ -950,6 +960,9 @@ class Objective:
             == (self._vectorized_jacobians_iter is None)
             == (self._vectorization_run is None)
             == (self._vectorization_to is None)
+            == (self._retract_method is Objective._retract_base)
+            == (self.vectorized_cost_fns is None)
+            == (self.vectorized_cf_names is None)
             == (self._get_error_iter == self._get_error_iter_base)
             == (self._retract_method == Objective._retract_base)
         )

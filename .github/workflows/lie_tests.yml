@@ -1,0 +1,55 @@
+name: test-lie-groups
+on:
+  pull_request:
+    branches:
+    - main
+  
+jobs:
+  test_lie_groups:
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        python-version: [3.8, 3.9, 3.10.15]
+    steps:
+      - uses: actions/checkout@v4.1.3
+      - name: Set up Python ${{ matrix.python-version }}
+        uses: actions/setup-python@v5.2.0
+        with:
+          python-version: ${{ matrix.python-version }}
+      - uses: actions/checkout@v4.1.3
+      - name: Install suitesparse
+        run: |
+          sudo apt-get update && sudo apt-get install -y libsuitesparse-dev
+      - name: Create Conda env
+        run: |
+          wget --quiet https://repo.anaconda.com/miniconda/Miniconda3-latest-Linux-x86_64.sh -O ~/miniconda.sh
+          /bin/bash ~/miniconda.sh -b -p ~/conda
+          export PATH=~/conda/bin:$PATH
+          conda create --name theseus python=${{ matrix.python-version }}
+          source activate theseus
+          pip install --progress-bar off --upgrade pip
+          pip install --progress-bar off --upgrade setuptools
+      - name: Install Torch
+        run: |
+          export PATH=~/conda/bin:$PATH
+          source activate theseus
+          pip install torch
+      - name: Install torchlie and torchkin
+        run:  |
+          export PATH=~/conda/bin:$PATH
+          source activate theseus
+          cd torchlie
+          pip install -e .
+          cd ../torchkin
+          pip install -e .
+      - name: Install theseus without Baspacho
+        run: |
+          export PATH=~/conda/bin:$PATH
+          source activate theseus
+          pip install -e ".[dev]"
+      - name: Run Lie groups tests
+        run: |
+          export PATH=~/conda/bin:$PATH
+          source activate theseus
+          python -m pytest tests/theseus_tests/geometry -m "not cudaext" 
+          python -m pytest tests/torchlie_tests -m "not cudaext" 

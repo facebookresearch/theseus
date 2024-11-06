@@ -1,11 +1,11 @@
-name: test-optimizers
+name: test-others
 on:
   pull_request:
     branches:
     - main
   
 jobs:
-  test_optimizers:
+  test_others:
     runs-on: ubuntu-latest
     strategy:
       matrix:
@@ -34,13 +34,6 @@ jobs:
           export PATH=~/conda/bin:$PATH
           source activate theseus
           pip install torch
-      - name: Build Baspacho GPU
-        run: |
-          sudo apt-get install -y libopenblas-pthread-dev
-          git clone https://github.com/facebookresearch/baspacho.git
-          cd baspacho
-          cmake -S . -B build -DCMAKE_BUILD_TYPE=Release -DBLA_STATIC=ON -DBASPACHO_USE_CUBLAS=0 -DBUILD_SHARED_LIBS=OFF -DBASPACHO_BUILD_TESTS=OFF -DBASPACHO_BUILD_EXAMPLES=OFF
-          cmake --build build -- -j16
       - name: Install torchlie and torchkin
         run: |
           export PATH=~/conda/bin:$PATH
@@ -54,7 +47,7 @@ jobs:
           export PATH=~/conda/bin:$PATH
           source activate theseus
           pip install -e ".[dev]"
-      - name: Run Optimizer tests
+      - name: Run other tests
         run: |
           export PATH=~/conda/bin:$PATH
           source activate theseus

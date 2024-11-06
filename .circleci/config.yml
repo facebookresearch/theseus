@@ -467,9 +467,6 @@ workflows:
     jobs:
       - unittests_gpu
       - test_cuda11_wheel
-      - py38_optimizer_tests
-      - py39_optimizer_tests
-      - py310_optimizer_tests
       - py38_other_unit_tests
       - py39_other_unit_tests
       - py310_other_unit_tests

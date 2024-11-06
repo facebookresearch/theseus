@@ -39,6 +39,7 @@ jobs:
           sudo apt-get install -y libopenblas-pthread-dev
           git clone https://github.com/facebookresearch/baspacho.git
           cd baspacho
+          echo $(pwd)
           cmake -S . -B build -DCMAKE_BUILD_TYPE=Release -DBLA_STATIC=ON -DBASPACHO_USE_CUBLAS=0 -DBUILD_SHARED_LIBS=OFF -DBASPACHO_BUILD_TESTS=OFF -DBASPACHO_BUILD_EXAMPLES=OFF
           cmake --build build -- -j16
       - name: Install torchlie and torchkin
@@ -49,11 +50,12 @@ jobs:
           pip install -e .
           cd ../torchkin
           pip install -e .
-      - name: Install theseus without Baspacho
+      - name: Install theseus
         run: |
           export PATH=~/conda/bin:$PATH
           source activate theseus
-          pip install -e ".[dev]"
+          echo $(pwd)
+          BASPACHO_ROOT_DIR=./baspacho pip install -e ".[dev]"
       - name: Run Optimizer tests
         run: |
           export PATH=~/conda/bin:$PATH

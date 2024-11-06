@@ -3,6 +3,7 @@ on:
   pull_request:
     branches:
     - main
+    
 jobs:
   precommit:
     runs-on: ubuntu-latest

@@ -467,9 +467,6 @@ workflows:
     jobs:
       - unittests_gpu
       - test_cuda11_wheel
-      - py38_precommit
-      - py39_precommit
-      - py310_precommit
       - py38_optimizer_tests
       - py39_optimizer_tests
       - py310_optimizer_tests

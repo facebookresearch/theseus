@@ -34,7 +34,7 @@ jobs:
           export PATH=~/conda/bin:$PATH
           source activate theseus
           pip install torch
-      - name: Build Baspacho GPU
+      - name: Build Baspacho CPU
         run: |
           sudo apt-get install -y libopenblas-pthread-dev
           git clone https://github.com/facebookresearch/baspacho.git

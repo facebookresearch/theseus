@@ -114,7 +114,7 @@ class DCEM(NonlinearOptimizer):
 
         assert fX.shape == (n_batch, self.n_samples)
 
-        if self.temp is not None and self.temp < np.infty:
+        if self.temp is not None and self.temp < np.inf:
             if self.normalize:
                 fX_mu = fX.mean(dim=1).unsqueeze(1)
                 fX_sigma = fX.std(dim=1).unsqueeze(1)

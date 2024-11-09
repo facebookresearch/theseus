@@ -50,12 +50,12 @@ then
     TH_VERSION=$(date +"%Y.%-m.%-d")
     NIGHTLY_STR="THESEUS_NIGHTLY='${TH_VERSION}'"
     WHL_NAME="theseus_ai_nightly"
-    TAR_NAME="theseus-ai-nightly"
+    TAR_NAME="theseus_ai-nightly"
     GIT_CMD="git pull origin main"
 else
     NIGHTLY_STR=""
     WHL_NAME="theseus_ai"
-    TAR_NAME="theseus-ai"
+    TAR_NAME="theseus_ai"
     GIT_CMD="git checkout ${COMMIT} -b tmp_build"
 fi
 

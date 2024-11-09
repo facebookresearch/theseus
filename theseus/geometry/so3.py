@@ -129,7 +129,7 @@ class SO3(LieGroup):
         if quaternion.ndim != 2 or quaternion.shape[1] != 4:
             raise ValueError("Quaternions can only be 4-D vectors.")
 
-        checks_enabled, silent_unchecks = _LieGroupCheckContext.get_context()
+        checks_enabled, silent_unchecks, _ = _LieGroupCheckContext.get_context()
         if checks_enabled:
             SO3_base.check_unit_quaternion(quaternion)
         elif not silent_unchecks:
@@ -144,7 +144,7 @@ class SO3(LieGroup):
         if matrix.ndim != 3 or matrix.shape[1:] != (3, 3):
             raise ValueError("Hat matrices of SO(3) can only be 3x3 matrices")
 
-        checks_enabled, silent_unchecks = _LieGroupCheckContext.get_context()
+        checks_enabled, silent_unchecks, _ = _LieGroupCheckContext.get_context()
         if checks_enabled:
             SO3_base.check_hat_tensor(matrix)
         elif not silent_unchecks:

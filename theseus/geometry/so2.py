@@ -148,7 +148,7 @@ class SO2(LieGroup):
     def _hat_matrix_check(matrix: torch.Tensor):
         _check = matrix.ndim == 3 and matrix.shape[1:] == (2, 2)
 
-        checks_enabled, silent_unchecks = _LieGroupCheckContext.get_context()
+        checks_enabled, silent_unchecks, _ = _LieGroupCheckContext.get_context()
         if checks_enabled:
             _check &= matrix[:, 0, 0].abs().max().item() < theseus.constants.EPS
             _check &= matrix[:, 1, 1].abs().max().item() < theseus.constants.EPS

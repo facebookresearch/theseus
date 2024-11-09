@@ -4,7 +4,7 @@
 # LICENSE file in the root directory of this source tree.
 
 import threading
-from typing import Any
+from contextlib import contextmanager
 
 
 class _LieGroupCheckContext:
@@ -15,10 +15,17 @@ class _LieGroupCheckContext:
         if not hasattr(cls.contexts, "check_lie_group"):
             cls.contexts.check_lie_group = True
             cls.contexts.silent = False
-        return cls.contexts.check_lie_group, cls.contexts.silent
+            cls.contexts.silence_internal_warnings = False
+        return (
+            cls.contexts.check_lie_group,
+            cls.contexts.silent,
+            cls.contexts.silence_internal_warnings,
+        )
 
     @classmethod
-    def set_context(cls, check_lie_group: bool, silent: bool):
+    def set_context(
+        cls, check_lie_group: bool, silent: bool, silence_internal_warnings: bool
+    ):
         if not check_lie_group and not silent:
             print(
                 "Warnings for disabled Lie group checks can be turned "
@@ -26,40 +33,50 @@ class _LieGroupCheckContext:
             )
         cls.contexts.check_lie_group = check_lie_group
         cls.contexts.silent = silent
+        cls.contexts.silence_internal_warnings = silence_internal_warnings
 
 
-class set_lie_group_check_enabled:
-    def __init__(self, mode: bool, silent: bool = False) -> None:
-        self.prev = _LieGroupCheckContext.get_context()
-        _LieGroupCheckContext.set_context(mode, silent)
+@contextmanager
+def set_lie_group_check_enabled(
+    mode: bool, silent: bool = False, silence_internal_warnings: bool = False
+):
+    """Sets whether or not Lie group checks are enabled within a context.
 
-    def __enter__(self) -> None:
-        pass
-
-    def __exit__(self, exc_type: Any, exc_value: Any, traceback: Any) -> None:
-        _LieGroupCheckContext.set_context(*self.prev)
-
-
-class enable_lie_group_check(_LieGroupCheckContext):
-    def __init__(self, silent: bool = False) -> None:
-        self._silent = silent
-
-    def __enter__(self) -> None:
-        self.prev = _LieGroupCheckContext.get_context()
-        _LieGroupCheckContext.set_context(True, self._silent)
-
-    def __exit__(self, typ, value, traceback) -> None:
-        _LieGroupCheckContext.set_context(*self.prev)
+    :param check_lie_group: Disables Lie group checks if false.
+    :param silent: Disables a warning that Lie group checks are disabled.
+    :param silence_internal_warnings: Whether to suppress recoverable
+        warning messages during Lie group checks, e.g. when normalization
+        is performed automatically.
+    """
+    prev = _LieGroupCheckContext.get_context()
+    _LieGroupCheckContext.set_context(mode, silent, silence_internal_warnings)
+    yield
+    _LieGroupCheckContext.set_context(*prev)
 
 
-class no_lie_group_check(_LieGroupCheckContext):
-    def __init__(self, silent: bool = False) -> None:
-        self._silent = silent
+@contextmanager
+def enable_lie_group_check(
+    silent: bool = False, silence_internal_warnings: bool = False
+):
+    """Enables Lie group checks while the context is active.
 
-    def __enter__(self):
-        self.prev = super().get_context()
-        _LieGroupCheckContext.set_context(False, self._silent)
-        return self
+    :param silent: Disables a warning that Lie group checks are disabled.
+    :param silence_internal_warnings: Whether to suppress recoverable
+        warning messages during Lie group checks, e.g. when normalization
+        is performed automatically.
+    """
+    with set_lie_group_check_enabled(True, silent, silence_internal_warnings):
+        yield
 
-    def __exit__(self, typ, value, traceback):
-        _LieGroupCheckContext.set_context(*self.prev)
+
+@contextmanager
+def no_lie_group_check(silent: bool = False, silence_internal_warnings: bool = False):
+    """Disables Lie group checks while the context is active.
+
+    :param silent: Disables a warning that Lie group checks are disabled.
+    :param silence_internal_warnings: Whether to suppress recoverable
+        warning messages during Lie group checks, e.g. when normalization
+        is performed automatically.
+    """
+    with set_lie_group_check_enabled(False, silent, silence_internal_warnings):
+        yield

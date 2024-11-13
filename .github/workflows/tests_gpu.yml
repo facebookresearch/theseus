@@ -44,25 +44,16 @@ jobs:
           which python && which pip
           pip install --progress-bar off torch torchvision torchaudio --extra-index-url https://download.pytorch.org/whl/cu118
           python -c 'import torch; print("Torch version:", torch.__version__); assert torch.cuda.is_available()'
-      # - name: Install recent cmake
-      #   run: |
-      #     sudo apt-get update
-      #     sudo apt-get install ca-certificates gpg wget
-      #     test -f /usr/share/doc/kitware-archive-keyring/copyright || wget -O - https://apt.kitware.com/keys/kitware-archive-latest.asc 2>/dev/null | gpg --dearmor - | sudo tee /usr/share/keyrings/kitware-archive-keyring.gpg >/dev/null
-      #     echo 'deb [signed-by=/usr/share/keyrings/kitware-archive-keyring.gpg] https://apt.kitware.com/ubuntu/ jammy main' | sudo tee /etc/apt/sources.list.d/kitware.list >/dev/null
-      #     sudo apt-get update
-      #     test -f /usr/share/doc/kitware-archive-keyring/copyright || sudo rm /usr/share/keyrings/kitware-archive-keyring.gpg
-      #     sudo apt-get install kitware-archive-keyring
-      #     sudo apt-get install cmake
+      - name: Install recent cmake
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y cmake
       - name: Build Baspacho GPU
         run: |
           sudo apt-get install -y libopenblas-pthread-dev
           git clone https://github.com/facebookresearch/baspacho.git
           cd baspacho
-          cmake -S . -B build -DCMAKE_BUILD_TYPE=Release -DBLA_STATIC=ON \
-            -DCMAKE_CUDA_COMPILER=/usr/local/cuda/bin/nvcc \
-            -DBUILD_SHARED_LIBS=OFF -DBASPACHO_CUDA_ARCHS='detect' \
-            -DBASPACHO_BUILD_TESTS=OFF -DBASPACHO_BUILD_EXAMPLES=OFF
+          cmake -S . -B build -DCMAKE_BUILD_TYPE=Release -DBLA_STATIC=ON -DCMAKE_CUDA_COMPILER=/usr/local/cuda/bin/nvcc -DBUILD_SHARED_LIBS=OFF -DBASPACHO_CUDA_ARCHS='detect' -DBASPACHO_BUILD_TESTS=OFF -DBASPACHO_BUILD_EXAMPLES=OFF
           cmake --build build -- -j16
       - name: Install torchlie and torchkin
         run:  |

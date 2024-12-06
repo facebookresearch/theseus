@@ -80,3 +80,19 @@ def no_lie_group_check(silent: bool = False, silence_internal_warnings: bool = F
     """
     with set_lie_group_check_enabled(False, silent, silence_internal_warnings):
         yield
+
+
+@contextmanager
+def silence_internal_warnings():
+    """Silences internal warnings if they would be emitted.
+
+    Code that should be silenced should accomplish silencing via:
+
+        _, _, silence_internal_warnings = _LieGroupCheckContext.get_context()
+        if not silence_internal_warnings:
+            emit_warning("warning message")
+    """
+    mode, silent, prev_silence_internal_warnings = _LieGroupCheckContext.get_context()
+    _LieGroupCheckContext.set_context(mode, silent, silence_internal_warnings=True)
+    yield
+    _LieGroupCheckContext.set_context(mode, silent, prev_silence_internal_warnings)

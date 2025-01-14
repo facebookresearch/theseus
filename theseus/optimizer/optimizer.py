@@ -13,6 +13,7 @@ import torch
 
 from theseus.constants import __FROM_THESEUS_LAYER_TOKEN__
 from theseus.core import Objective, Vectorize
+from theseus.geometry.lie_group_check import silence_internal_warnings
 
 
 # All info information is batched
@@ -48,4 +49,5 @@ class Optimizer(abc.ABC):
                 "The objective was modified after optimizer construction, which is "
                 "currently not supported."
             )
-        return self._optimize_impl(**kwargs)
+        with silence_internal_warnings():
+            return self._optimize_impl(**kwargs)

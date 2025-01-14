@@ -44,11 +44,21 @@ class Manifold(Variable, abc.ABC):
             dtype = torch.get_default_dtype()
         if tensor is not None:
             if disable_checks:
-                checks_enabled, silent_unchecks = False, True
+                checks_enabled = False
+                silent_unchecks = True
+                disable_internal_warnings = True
             else:
-                checks_enabled, silent_unchecks = _LieGroupCheckContext.get_context()
+                (
+                    checks_enabled,
+                    silent_unchecks,
+                    disable_internal_warnings,
+                ) = _LieGroupCheckContext.get_context()
             if checks_enabled:
-                tensor = self._check_tensor(tensor, strict_checks)
+                tensor = self._check_tensor(
+                    tensor,
+                    strict_checks,
+                    silent_normalization=disable_internal_warnings,
+                )
             elif not silent_unchecks:
                 warnings.warn(
                     f"Manifold consistency checks are disabled "
@@ -113,7 +123,12 @@ class Manifold(Variable, abc.ABC):
         pass
 
     @classmethod
-    def _check_tensor(cls, tensor: torch.Tensor, strict: bool = True) -> torch.Tensor:
+    def _check_tensor(
+        cls,
+        tensor: torch.Tensor,
+        strict: bool = True,
+        silent_normalization: bool = False,
+    ) -> torch.Tensor:
         check = cls._check_tensor_impl(tensor)
 
         if not check:
@@ -121,10 +136,11 @@ class Manifold(Variable, abc.ABC):
                 raise ValueError(f"The input tensor is not valid for {cls.__name__}.")
             else:
                 tensor = cls.normalize(tensor)
-                warnings.warn(
-                    f"The input tensor is not valid for {cls.__name__} "
-                    f"and has been normalized."
-                )
+                if not silent_normalization:
+                    warnings.warn(
+                        f"The input tensor is not valid for {cls.__name__} "
+                        f"and has been normalized."
+                    )
 
         return tensor
 

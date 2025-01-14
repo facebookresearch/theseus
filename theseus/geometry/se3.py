@@ -148,7 +148,7 @@ class SE3(LieGroup):
         if matrix.ndim != 3 or matrix.shape[1:] != (4, 4):
             raise ValueError("Hat matrices of SE3 can only be 4x4 matrices")
 
-        checks_enabled, silent_unchecks = _LieGroupCheckContext.get_context()
+        checks_enabled, silent_unchecks, _ = _LieGroupCheckContext.get_context()
         if checks_enabled:
             return SE3_base.check_hat_tensor(matrix)
         elif not silent_unchecks:

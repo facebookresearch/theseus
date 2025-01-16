@@ -10,8 +10,14 @@ import torch
 # rename Cholesky `Factor` to CholeskyDecomposition to
 # prevent confusion with the factors of the factor graph,
 # when using the probabilistic naming convention
-from sksparse.cholmod import Factor as CholeskyDecomposition
-from sksparse.cholmod import analyze_AAt
+try:
+    from sksparse.cholmod import Factor as CholeskyDecomposition
+    from sksparse.cholmod import analyze_AAt
+except ModuleNotFoundError:
+    import warnings
+
+    warnings.warn("Couldn't import skparse.cholmod. Cholmod solver won't work.")
+
 
 from theseus.core import Objective
 from theseus.optimizer import Linearization, SparseLinearization

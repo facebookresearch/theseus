@@ -33,4 +33,4 @@ if lt_version(torch.__version__, "2.0.0"):
         FutureWarning,
     )
 
-__version__ = "0.2.2"
+__version__ = "0.2.3"

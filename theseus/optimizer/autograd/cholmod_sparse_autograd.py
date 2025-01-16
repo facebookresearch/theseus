@@ -5,8 +5,13 @@
 from typing import Any, Tuple
 
 import torch
-from sksparse.cholmod import Factor as CholeskyDecomposition
 
+try:
+    from sksparse.cholmod import Factor as CholeskyDecomposition
+except ModuleNotFoundError:
+    import warnings
+
+    warnings.warn("Couldn't import skparse.cholmod. Cholmod solver won't work.")
 from ..linear_system import SparseStructure
 from .common import compute_A_grad
 
@@ -22,7 +27,7 @@ class CholmodSolveFunction(torch.autograd.Function):
         At_val: torch.Tensor,
         b: torch.Tensor,
         sparse_structure: SparseStructure,
-        symbolic_decomposition: CholeskyDecomposition,
+        symbolic_decomposition: "CholeskyDecomposition",
         damping: float,
         detach_hessian: bool = False,
     ) -> torch.Tensor:

@@ -197,11 +197,11 @@ run_lie_group_tests: &run_lie_group_tests
   - run:
       name: Running Lie Groups tests
       working_directory: ~/project
-              command: |
-                export PATH=~/conda/bin:$PATH
-                source activate theseus
-                python -m pytest tests/theseus_tests/geometry -m "not cudaext" 
-                python -m pytest tests/torchlie_tests -m "not cudaext" 
+      command: |
+        export PATH=~/conda/bin:$PATH
+        source activate theseus
+        python -m pytest tests/theseus_tests/geometry -m "not cudaext" 
+        python -m pytest tests/torchlie_tests -m "not cudaext" 
 
 run_other_unit_tests: &run_other_unit_tests
   - run:
@@ -467,6 +467,15 @@ workflows:
     jobs:
       - unittests_gpu
       - test_cuda11_wheel
+      - py38_precommit
+      - py39_precommit
+      - py310_precommit
+      - py38_optimizer_tests
+      - py39_optimizer_tests
+      - py310_optimizer_tests
+      - py38_lie_tests
+      - py39_lie_tests
+      - py310_lie_tests
       - py38_other_unit_tests
       - py39_other_unit_tests
       - py310_other_unit_tests

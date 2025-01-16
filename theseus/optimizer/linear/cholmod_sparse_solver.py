@@ -15,6 +15,7 @@ try:
     from sksparse.cholmod import analyze_AAt
 except ModuleNotFoundError:
     import warnings
+
     warnings.warn("Couldn't import skparse.cholmod. Cholmod solver won't work.")
 
 

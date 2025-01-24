@@ -71,6 +71,7 @@ from .geometry import (  # usort: skip
 )
 from .optimizer import (  # usort: skip
     DenseLinearization,
+    GaussianBeliefPropagation,
     Linearization,
     ManifoldGaussian,
     OptimizerInfo,

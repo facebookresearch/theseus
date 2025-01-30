@@ -4,7 +4,7 @@
 # LICENSE file in the root directory of this source tree.
 
 import abc
-from typing import Any, List, Optional, Tuple, cast
+from typing import Any, List, Optional, Tuple, Union, cast
 
 import torch
 
@@ -59,6 +59,7 @@ class LieGroup(Manifold):
     def rand(
         *size: int,
         generator: Optional[torch.Generator] = None,
+        scale: Optional[Union[float, torch.Tensor]] = None,
         dtype: Optional[torch.dtype] = None,
         device: DeviceType = None,
         requires_grad: bool = False,
@@ -70,6 +71,7 @@ class LieGroup(Manifold):
     def randn(
         *size: int,
         generator: Optional[torch.Generator] = None,
+        scale: Optional[Union[float, torch.Tensor]] = None,
         dtype: Optional[torch.dtype] = None,
         device: DeviceType = None,
         requires_grad: bool = False,

@@ -198,7 +198,7 @@ Theseus is MIT licensed. See the [LICENSE](https://github.com/facebookresearch/t
 
 ## Additional Information
 
-- Join the community on [Github Discussions](https://github.com/facebookresearch/theseus/discussions) for questions and sugesstions.
+- Join the community on [Github Discussions](https://github.com/facebookresearch/theseus/discussions) for questions and suggestions.
 - Use [Github Issues](https://github.com/facebookresearch/theseus/issues/new/choose) for bugs and features.
 - See [CONTRIBUTING](https://github.com/facebookresearch/theseus/blob/main/CONTRIBUTING.md) if interested in helping out.
 

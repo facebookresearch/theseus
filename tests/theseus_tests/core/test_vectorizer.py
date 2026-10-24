@@ -402,3 +402,75 @@ def test_masked_jacobians_called(monkeypatch):
 
     _solve_fn_for_masked_jacobians(128, 2, 16, th.ScaleCostWeight, True, "cpu")
     assert called[0]
+
+
+def test_schema_distinguishes_optim_and_aux_vars():
+    # Issue #660: Cost functions with the same sequence of variable types
+    # but different partitioning between optim_vars and aux_vars must not
+    # share the same vectorization schema.
+    from theseus.core.vectorizer import _get_cost_function_schema
+
+    v0 = th.SE3(name="VERTEX_0")  # aux_var
+    v1 = th.SE3(name="VERTEX_1")  # optim_var
+    v2 = th.SE3(name="VERTEX_2")  # optim_var
+
+    g_12 = th.Variable(torch.randn(1, 10, 3), name="g_12")
+    g_01 = th.Variable(torch.randn(1, 10, 3), name="g_01")
+
+    def err_fn(optim_vars, aux_vars):
+        if len(optim_vars) == 2:
+            return (optim_vars[0].inverse().compose(optim_vars[1])).log_map()
+        else:
+            return (optim_vars[0].inverse().compose(aux_vars[0])).log_map()
+
+    # cf1 has 2 optim_vars (v1, v2) and 1 aux_var (g_12)
+    cf1 = th.AutoDiffCostFunction(
+        optim_vars=[v1, v2],
+        err_fn=err_fn,
+        dim=6,
+        aux_vars=[g_12],
+        name="cf1",
+    )
+
+    # cf2 has 1 optim_var (v1) and 2 aux_vars (v0, g_01)
+    cf2 = th.AutoDiffCostFunction(
+        optim_vars=[v1],
+        err_fn=err_fn,
+        dim=6,
+        aux_vars=[v0, g_01],
+        name="cf2",
+    )
+
+    # Schemas must be distinct despite identical concatenated var types
+    schema1 = _get_cost_function_schema(cf1)
+    schema2 = _get_cost_function_schema(cf2)
+    assert schema1 != schema2
+
+    obj = th.Objective()
+    obj.add(cf1)
+    obj.add(cf2)
+    obj.update()
+
+    vectorization = th.Vectorize(obj)
+    assert len(vectorization._schema_dict) == 2
+
+    # Verify both sparse and dense linearizations succeed without IndexError
+    sparse_lin = th.SparseLinearization(obj)
+    sparse_lin.linearize()
+
+    dense_lin = th.DenseLinearization(obj)
+    dense_lin.linearize()
+
+    # Verify optimizer forward pass succeeds
+    optimizer = th.GaussNewton(
+        objective=obj,
+        linearization_cls=th.DenseLinearization,
+        linear_solver_cls=th.CholeskyDenseSolver,
+        vectorize=True,
+    )
+    layer = th.TheseusLayer(optimizer)
+    _, info = layer.forward()
+    assert (
+        info.status[0] == th.NonlinearOptimizerStatus.CONVERGED
+        or info.converged_iter[0] >= 1
+    )

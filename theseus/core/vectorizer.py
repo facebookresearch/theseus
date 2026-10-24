@@ -34,10 +34,16 @@ def _get_cost_function_schema(cost_function: CostFunction) -> _CostFunctionSchem
     def _varinfo(var) -> str:
         return f"{_fullname(var)}{tuple(var.shape[1:])}"
 
+    optim_vars_info = tuple(_varinfo(v) for v in cost_function.optim_vars)
+    aux_vars_info = tuple(_varinfo(v) for v in cost_function.aux_vars)
+    cost_fn_name = (
+        f"{_fullname(cost_function)}__{len(optim_vars_info)}__{len(aux_vars_info)}"
+    )
+
     return (
-        (_fullname(cost_function),)
-        + tuple(_varinfo(v) for v in cost_function.optim_vars)
-        + tuple(_varinfo(v) for v in cost_function.aux_vars)
+        (cost_fn_name,)
+        + optim_vars_info
+        + aux_vars_info
         + (_fullname(cost_function.weight),)
         + tuple(_varinfo(v) for v in cost_function.weight.aux_vars)
     )

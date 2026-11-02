@@ -409,9 +409,9 @@ def _log_impl_helper(group: torch.Tensor):
 
     # # theta ~ pi
     ddiag = torch.diagonal(group, dim1=-1, dim2=-2)
-    # Find the index of major columns and diagonals
+    # Select a largest diagonal even when entries 1 and 2 tie above entry 0.
     major = torch.logical_and(
-        ddiag[..., 1] > ddiag[..., 0], ddiag[..., 1] > ddiag[..., 2]
+        ddiag[..., 1] > ddiag[..., 0], ddiag[..., 1] >= ddiag[..., 2]
     ) + 2 * torch.logical_and(
         ddiag[..., 2] > ddiag[..., 0], ddiag[..., 2] > ddiag[..., 1]
     )
